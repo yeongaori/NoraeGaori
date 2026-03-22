@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  noraedev:
+    build: .
+    image: noraedev:latest
+    container_name: noraedev-bot
+    restart: unless-stopped
+
+    # Environment variables (or use .env file)
+    environment:
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - DEBUG_MODE=${DEBUG_MODE:-false}
+
+    # Mount volumes for persistence
+    volumes:
+      - ./config:/app/config:ro          # Config files (read-only)
+      - ./data:/app/data                 # Database (read-write)
+
+    # Resource limits (optional)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 256M
+        reservations:
+          cpus: '0.5'
+          memory: 128M
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "pgrep", "noraedev"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s

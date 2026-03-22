@@ -1,0 +1,588 @@
+{
+  "errors": {
+    "not_in_voice_channel": "먼저 음성 채널에 참가해야 합니다",
+    "empty_queue": "현재 대기열에 노래가 없습니다",
+    "song_not_found": "노래를 찾을 수 없습니다",
+    "permission_denied": "이 명령어는 봇 관리자만 사용할 수 있습니다",
+    "admin_only": "이 명령어는 관리자만 사용할 수 있습니다",
+    "already_voted": "이미 스킵 투표를 하셨습니다",
+    "duplicate_song": "이미 대기열에 있는 곡입니다",
+    "unknown_command": "알 수 없는 명령어입니다.",
+    "command_execution_error": "명령어 실행 중 오류가 발생했습니다: %v",
+    "must_be_in_bot_channel": "봇이 재생 중인 음성 채널에 입장해야 합니다!"
+  },
+
+  "titles": {
+    "added": "대기열에 추가됨",
+    "success": "성공",
+    "removed": "제거 완료",
+    "skipped": "스킵됨",
+    "resumed": "재개됨",
+    "paused": "일시 정지",
+    "repeat_all": "전체 반복 활성화",
+    "repeat_single": "한곡 반복 활성화",
+    "repeat_off": "반복 비활성화",
+    "searching": "검색 중...",
+    "loading": "로딩 중...",
+    "now_playing": "현재 재생 중",
+    "queue": "음악 대기열",
+    "help": "봇 명령어 도움말",
+    "search_results": "검색 결과",
+    "playlist_found": "플레이리스트 발견",
+    "playlist_added": "플레이리스트 추가 완료",
+    "playlist_start": "플레이리스트 재생 시작",
+    "skip_vote": "스킵 투표",
+    "stop_vote": "정지 투표",
+    "system_info": "시스템 정보",
+    "warning": "경고",
+    "duplicate": "중복된 곡",
+    "unavailable": "재생 불가능한 곡",
+    "error": "오류",
+    "empty_queue": "빈 대기열",
+    "no_song": "재생할 노래 없음",
+    "no_permission": "권한 없음",
+    "already_voted": "이미 투표함"
+  },
+
+  "fields": {
+    "uploader": "업로더",
+    "duration": "길이",
+    "requester": "요청자",
+    "next_song": "다음 곡",
+    "total_songs": "전체 곡 수",
+    "current_vote": "현재 투표",
+    "required_vote": "필요한 투표",
+    "vote_result": "투표 결과",
+    "removed_songs": "제거된 곡",
+    "current_prefix": "현재 Prefix",
+    "total_commands": "총 명령어",
+    "cpu_info": "CPU 정보",
+    "cpu_usage": "CPU 사용량",
+    "total_memory": "총 메모리",
+    "memory_usage": "메모리 사용량",
+    "bot_memory": "봇 메모리 사용량",
+    "server_memory": "현재 서버 메모리",
+    "playing_servers": "재생 중인 서버"
+  },
+
+  "descriptions": {
+    "searching": "`%s`를 검색하고 있습니다...",
+    "loading": "오디오를 로드하고 있습니다...",
+    "playlist_confirm": "전체 플레이리스트(**%d**곡)를 대기열에 추가하시겠습니까?",
+    "playlist_adding": "첫 번째 곡이 재생을 시작합니다.\n나머지 %d곡은 순서대로 대기열에 추가 중입니다...",
+    "playlist_skipped": "%d곡은 재생할 수 없어 건너뛰었습니다.",
+    "vote_added": "스킵 투표가 추가되었습니다.",
+    "skipped": "**%s**이(가) 스킵되었습니다.",
+    "paused": "노래를 일시 정지하고 채널에서 나갔습니다. 대기열과 재생 위치는 보존됩니다.",
+    "resumed": "노래가 다시 재생됩니다.",
+    "repeat_all": "대기열 반복이 **활성화됨**으로 설정되었습니다.\n현재 재생중인 곡이 끝나면 대기열에 다시 추가됩니다.",
+    "repeat_single": "한곡 반복이 **활성화됨**으로 설정되었습니다.\n현재 재생중인 곡이 끝나면 같은 곡이 다시 재생됩니다.",
+    "repeat_off": "대기열 반복이 **비활성화됨**으로 설정되었습니다.",
+    "repeat_off_removed": "대기열 반복이 **비활성화됨**으로 설정되었습니다.\n대기열에서 중복된 %d곡이 제거되었습니다.",
+    "songs_removed": "**%d**곡이 대기열에서 제거되었습니다.",
+    "empty_queue": "현재 대기열이 비어있습니다.",
+    "search_prompt": "`%s`에 대한 검색 결과입니다. 재생할 노래를 선택하세요.",
+    "system_status": "봇의 현재 시스템 상태"
+  },
+
+  "footers": {
+    "pagination": "페이지 %d/%d | 총 %d곡",
+    "help_pagination": "페이지 %d/%d",
+    "playlist_confirm": "✅ 반응으로 전체 추가 | 30초 후 자동 취소",
+    "requested_by": "요청자: %s",
+    "vote_reaction": "%s 반응으로도 투표 가능 | %d초 후 투표 만료"
+  },
+
+  "buttons": {
+    "previous": "◀️ 이전",
+    "next": "다음 ▶️"
+  },
+
+  "select_menus": {
+    "placeholder": "재생할 노래를 선택하세요"
+  },
+
+  "votes": {
+    "more": "%d표 더",
+    "expired": "투표가 만료되었습니다.",
+    "stop_already_voted": "이미 정지 투표를 하셨습니다."
+  },
+
+  "help": {
+    "command_format": "**%d. %s**\n%s\n메시지: `%s%s%s`\n별칭: `%s`\n슬래시: `/%s`\n예시: `%s%s %s`\n\n",
+    "admin_marker": "🔴 ",
+    "no_commands_title": "명령어 없음",
+    "no_commands_desc": "사용 가능한 명령어가 없습니다.",
+    "message_label": "메시지: `%s%s`",
+    "alias_label": "별칭: `%s`",
+    "slash_label": "슬래시: `/%s`",
+    "example_label": "예시: `%s%s`",
+    "total_commands_value": "%d개"
+  },
+
+  "commands": {
+    "play": {
+      "description": "지정한 URL 또는 검색어로 노래를 재생합니다.",
+      "options": { "query": "노래 제목 또는 YouTube URL" },
+      "usage": "play <제목|URL>",
+      "example": "play 하츠네 미쿠",
+      "aliases": ["play", "p", "재생"]
+    },
+    "playnext": {
+      "description": "다음 곡으로 노래를 추가합니다",
+      "options": { "query": "노래 제목 또는 YouTube URL" },
+      "usage": "playnext <제목|URL>",
+      "example": "playnext 하츠네 미쿠",
+      "aliases": ["playnext", "pn"]
+    },
+    "search": {
+      "description": "YouTube에서 노래를 검색합니다",
+      "options": { "query": "검색할 내용" },
+      "usage": "search <검색어>",
+      "example": "search 하츠네 미쿠",
+      "aliases": ["search", "s"]
+    },
+    "pause": {
+      "description": "현재 노래를 일시 정지하고, 상태를 저장한 채 채널을 나갑니다.",
+      "options": {},
+      "usage": "pause",
+      "example": "pause",
+      "aliases": ["pause", "일시정지"]
+    },
+    "resume": {
+      "description": "대기열의 노래를 재생하거나 일시 정지된 노래를 이어서 재생합니다.",
+      "options": {},
+      "usage": "resume",
+      "example": "resume",
+      "aliases": ["resume", "재개", "이어서"]
+    },
+    "skip": {
+      "description": "현재 재생 중인 노래를 건너뜁니다 (투표)",
+      "options": {},
+      "usage": "skip",
+      "example": "skip",
+      "aliases": ["skip"]
+    },
+    "stop": {
+      "description": "노래 재생을 멈추고 대기열을 초기화합니다.",
+      "options": {},
+      "usage": "stop",
+      "example": "stop",
+      "aliases": ["stop", "st", "정지", "멈춤"]
+    },
+    "nowplaying": {
+      "description": "현재 재생 중인 노래를 보여줍니다",
+      "options": {},
+      "usage": "nowplaying",
+      "example": "nowplaying",
+      "aliases": ["nowplaying", "np"]
+    },
+    "volume": {
+      "description": "볼륨을 설정합니다",
+      "options": { "level": "볼륨 레벨 (0-1000, 소수점 가능)" },
+      "usage": "volume [0-1000]",
+      "example": "volume, volume 50, volume 200, volume 150.5",
+      "aliases": ["volume", "vol", "v"]
+    },
+    "repeat": {
+      "description": "반복 모드를 설정합니다. (on/single/off)",
+      "options": { "mode": "반복 모드 (on/single/off)" },
+      "usage": "repeat [on|single|off]",
+      "example": "repeat, repeat on, repeat single, repeat off",
+      "aliases": ["repeat", "반복"]
+    },
+    "queue": {
+      "description": "현재 대기열을 보여줍니다",
+      "options": { "page": "페이지 번호" },
+      "usage": "queue [페이지 번호]",
+      "example": "queue 2",
+      "aliases": ["queue", "q"]
+    },
+    "remove": {
+      "description": "대기열에서 노래를 제거합니다",
+      "options": { "position": "위치, 범위(1-5), 또는 ALL" },
+      "usage": "remove <위치|시작위치-마지막위치|ALL>",
+      "example": "remove 3, remove 1-5, remove ALL",
+      "aliases": ["remove", "rm"]
+    },
+    "swap": {
+      "description": "두 노래의 위치를 교환합니다",
+      "options": { "position1": "첫 번째 위치", "position2": "두 번째 위치" },
+      "usage": "swap <위치1> <위치2>",
+      "example": "swap 1 3",
+      "aliases": ["swap"]
+    },
+    "skipto": {
+      "description": "지정된 노래로 건너뜁니다",
+      "options": { "position": "건너뛸 노래의 위치" },
+      "usage": "skipto <위치>",
+      "example": "skipto 3",
+      "aliases": ["skipto", "st"]
+    },
+    "join": {
+      "description": "지정된 음성 채널에 참가합니다",
+      "options": { "channel": "참가할 음성 채널" },
+      "usage": "join [채널명]",
+      "example": "join, join 일반",
+      "aliases": ["join", "j", "참가"]
+    },
+    "leave": {
+      "description": "봇을 음성 채널에서 나가게 합니다.",
+      "options": {},
+      "usage": "leave",
+      "example": "leave",
+      "aliases": ["leave", "disconnect", "dc"]
+    },
+    "switchvc": {
+      "description": "봇을 다른 음성 채널로 이동시킵니다",
+      "options": { "channel": "이동할 음성 채널" },
+      "usage": "switchvc [채널명]",
+      "example": "switchvc, switchvc 일반",
+      "aliases": ["switchvc", "switch", "move"]
+    },
+    "sponsorblock": {
+      "description": "SponsorBlock 설정",
+      "options": { "setting": "설정 값" },
+      "usage": "sponsorblock [on|off]",
+      "example": "sponsorblock, sponsorblock on, sponsorblock off",
+      "aliases": ["sponsorblock", "sb"]
+    },
+    "showstartedtrack": {
+      "description": "노래 재생 시작 알림 설정",
+      "options": { "setting": "설정 값" },
+      "usage": "showstartedtrack [on|off]",
+      "example": "showstartedtrack, showstartedtrack on, showstartedtrack off",
+      "aliases": ["showstartedtrack", "showtrack"]
+    },
+    "normalization": {
+      "description": "음량 정규화 설정",
+      "options": { "setting": "설정 값" },
+      "usage": "normalization [on|off]",
+      "example": "normalization, normalization on, normalization off",
+      "aliases": ["normalization", "normalize"]
+    },
+    "setprefix": {
+      "description": "명령어 prefix를 설정합니다 (관리자 전용)",
+      "options": { "prefix": "새로운 prefix (비워두면 !로 초기화)" },
+      "usage": "setprefix [새로운 prefix]",
+      "example": "setprefix ?, setprefix !",
+      "aliases": ["setprefix", "prefix"]
+    },
+    "forceskip": {
+      "description": "현재 재생 중인 노래를 강제로 건너뜁니다 (관리자 전용)",
+      "options": {},
+      "usage": "forceskip",
+      "example": "forceskip",
+      "aliases": ["forceskip", "fs"]
+    },
+    "forceremove": {
+      "description": "관리자가 특정 유저의 모든 노래를 제거합니다",
+      "options": { "target": "제거할 대상 (유저 멘션)" },
+      "usage": "forceremove <@유저|위치>",
+      "example": "forceremove @유저, forceremove 3",
+      "aliases": ["forceremove", "fr", "강제삭제"]
+    },
+    "forcestop": {
+      "description": "노래 재생을 강제로 중지하고 대기열을 초기화합니다 (관리자 전용)",
+      "options": {},
+      "usage": "forcestop",
+      "example": "forcestop",
+      "aliases": ["forcestop", "fstop"]
+    },
+    "movetrack": {
+      "description": "관리자가 노래의 위치를 이동합니다",
+      "options": { "from": "이동할 노래의 위치", "to": "이동할 목표 위치" },
+      "usage": "movetrack <원본위치> <새위치>",
+      "example": "movetrack 3 1",
+      "aliases": ["movetrack", "mt"]
+    },
+    "status": {
+      "description": "서버 및 디스코드 봇의 상태를 확인합니다 (관리자 전용)",
+      "options": {},
+      "usage": "status",
+      "example": "status",
+      "aliases": ["status"]
+    },
+    "help": {
+      "description": "모든 명령어의 도움말을 보여줍니다",
+      "options": { "page": "페이지 번호" },
+      "usage": "help [페이지번호]",
+      "example": "help, help 2",
+      "aliases": ["help", "h", "도움말"]
+    }
+  },
+
+  "voice": {
+    "enter_voice_channel": "음성 채널에 먼저 입장해주세요.",
+    "enter_voice_or_specify": "음성 채널에 먼저 입장하거나 채널을 지정해주세요.",
+    "join_failed_title": "참가 실패",
+    "join_failed_desc": "음성 채널 참가 중 오류가 발생했습니다.",
+    "join_success_title": "참가 완료",
+    "join_success_desc": "음성 채널에 참가했습니다.",
+    "join_success_channel": "**%s**에 참가했습니다.",
+    "leave_failed_title": "나가기 실패",
+    "leave_failed_desc": "음성 채널 나가기 중 오류가 발생했습니다.",
+    "leave_success_title": "퇴장 완료",
+    "leave_success_desc": "음성 채널에서 나갔습니다.",
+    "switch_failed_title": "전환 실패",
+    "switch_failed_channel": "음성 채널 전환 중 오류가 발생했습니다.",
+    "switch_failed_queue": "대기열 업데이트 중 오류가 발생했습니다.",
+    "switch_success_title": "전환 완료",
+    "switch_success_desc": "음성 채널을 전환했습니다.",
+    "switch_success_channel": "**%s**(으)로 이동했습니다."
+  },
+
+  "admin": {
+    "mention_target": "삭제할 대상 유저를 멘션해주세요. (예: @유저)",
+    "no_songs_to_delete": "대기열에 삭제할 노래가 없습니다.",
+    "invalid_mention": "올바른 대상(유저 멘션)을 입력해주세요. (예: @유저)",
+    "user_not_found": "유저를 찾을 수 없습니다.",
+    "user_no_songs": "**%s**님이 추가한 노래가 대기열에 없습니다.",
+    "excluding_current": " (현재 재생 중인 노래는 제외)",
+    "remove_failed": "제거 실패: %v",
+    "delete_complete_title": "삭제 완료",
+    "delete_complete_desc": "**%s**님의 노래 **%d**곡을 대기열에서 삭제했습니다.",
+    "enter_positions": "이동할 위치와 목표 위치를 입력해주세요. (예: movetrack 3 1)",
+    "enter_valid_range": "1부터 %d 사이의 숫자를 입력해주세요.",
+    "same_position": "같은 위치로는 이동할 수 없습니다.",
+    "cannot_move_playing": "현재 재생 중인 노래는 이동할 수 없습니다.",
+    "move_failed": "이동 실패: %v",
+    "move_complete_title": "이동 완료",
+    "move_complete_desc": "**%s**\n\n%d번 → %d번으로 이동했습니다.",
+    "no_songs_title": "재생할 노래 없음",
+    "no_songs_desc": "현재 대기열에 노래가 없습니다.",
+    "stop_failed": "정지 실패: %v",
+    "force_stop_title": "재생 중지",
+    "force_stop_desc": "관리자에 의해 재생이 강제로 중지되었습니다."
+  },
+
+  "settings": {
+    "status_on": "켜짐",
+    "status_off": "꺼짐",
+    "sponsorblock_error": "SponsorBlock 설정 중 오류가 발생했습니다: %v",
+    "sponsorblock_title": "%s SponsorBlock %s",
+    "sponsorblock_desc": "SponsorBlock 기능이 **%s**되었습니다.",
+    "sponsorblock_what_title": "SponsorBlock이란?",
+    "sponsorblock_what_desc": "YouTube 영상의 스폰서, 광고 등을 자동으로 건너뛰는 기능입니다.",
+    "note_title": "참고",
+    "setting_apply_next": "이 설정은 다음에 재생되는 노래부터 적용됩니다.",
+    "showtrack_error": "시작 알림 설정 중 오류가 발생했습니다: %v",
+    "showtrack_title": "%s 재생 시작 알림 %s",
+    "showtrack_desc": "재생 시작 알림이 **%s**되었습니다.",
+    "showtrack_what_title": "설명",
+    "showtrack_what_desc": "노래가 재생될 때 `Now Playing` 메시지를 표시합니다.",
+    "normalization_error": "음량 정규화 설정 중 오류가 발생했습니다: %v",
+    "normalization_title": "%s 음량 정규화 %s",
+    "normalization_desc": "음량 정규화가 **%s**으로 설정되었습니다.",
+    "normalization_what_title": "설명",
+    "normalization_what_desc": "모든 노래의 음량을 일정하게 유지하여 노래마다 볼륨을 조절할 필요가 없습니다.",
+    "current_prefix_title": "현재 접두사",
+    "current_prefix_desc": "현재 접두사: **%s**\n\n사용법: `/setprefix <새접두사>` 또는 `%ssetprefix <새접두사>`",
+    "prefix_empty": "접두사는 비워둘 수 없습니다.",
+    "prefix_too_long": "접두사는 5자 이하여야 합니다.",
+    "prefix_error": "접두사 설정 중 오류가 발생했습니다: %v",
+    "prefix_changed_title": "접두사 변경 완료",
+    "prefix_changed_desc": "접두사가 **%s**(으)로 변경되었습니다.",
+    "prefix_example_title": "사용 예시",
+    "prefix_example_value": "`%splay 노래제목`\n`%squeue`\n`%shelp`",
+    "prefix_slash_note": "슬래시 커맨드(`/play`)는 접두사 변경의 영향을 받지 않습니다."
+  },
+
+  "status": {
+    "loading_title": "시스템 정보 로딩 중...",
+    "loading_desc": "시스템 정보를 불러오고 있습니다...",
+    "title": "💻 시스템 정보",
+    "description": "봇의 현재 시스템 상태",
+    "cpu_info_value": "```%s\n(%d Cores)```",
+    "cpu_usage_value": "`%.2f%%`",
+    "total_memory_value": "`%.2f GB`",
+    "memory_usage_value": "`%.0f MB / %.2f GB (%.2f%%)`",
+    "bot_memory_value": "```Heap: %.2f MB\nRSS: %.2f MB```",
+    "server_memory_value": "`%.2f MB`",
+    "playing_servers_value": "`%d개 서버`"
+  },
+
+  "music": {
+    "enter_query": "재생할 곡의 제목이나 URL을 입력해주세요.",
+    "queue_create_failed": "큐 생성 실패",
+    "song_add_failed": "곡 추가 실패: %v",
+    "added_as_next": "다음 곡으로 추가됨",
+    "playlist_info_failed": "플레이리스트 정보를 가져올 수 없습니다.",
+    "playlist_confirm_desc": "**[%s](%s)**\n\n전체 플레이리스트(**%d**곡)를 대기열에 추가하시겠습니까?",
+    "playlist_confirm_footer": "✅ 반응으로 전체 추가 | 30초 후 자동 취소",
+    "video_unavailable_title": "영상을 사용할 수 없음",
+    "video_unavailable_desc": "선택한 영상을 재생할 수 없지만, 이 영상이 포함된 **플레이리스트**를 발견했습니다!\n\n플레이리스트의 곡들을 대기열에 추가하시겠습니까?\n(사용할 수 없는 곡은 자동으로 건너뜁니다)",
+    "video_unavailable_footer": "⬇️ 반응으로 플레이리스트 추가 | 30초 후 자동 취소",
+    "video_with_playlist_duplicate": "**[%s](%s)**\n\n이미 대기열에 있는 곡입니다.\n\n하지만 이 곡이 포함된 플레이리스트를 발견했습니다!\n플레이리스트의 나머지 곡들을 대기열에 추가하시겠습니까?",
+    "video_with_playlist_found": "**[%s](%s)**\n\n이 곡이 포함된 플레이리스트를 발견했습니다!\n플레이리스트의 나머지 곡들도 대기열에 추가하시겠습니까?",
+    "video_with_playlist_footer": "⬇️ 반응으로 플레이리스트 나머지 곡 추가 | 30초 후 자동 취소",
+    "not_playing_or_loading": "현재 재생 중이거나 로딩 중인 노래가 없습니다.",
+    "pause_failed": "일시 정지에 실패했습니다.",
+    "no_songs_to_resume": "이어서 재생할 노래가 없습니다.",
+    "already_playing": "이미 노래가 재생되고 있습니다.",
+    "playback_start_error": "재생 시작 중 오류가 발생했습니다.",
+    "queue_not_found": "대기열을 찾을 수 없습니다.",
+    "live_checking_title": "라이브 스트림 상태 확인 중...",
+    "live_checking_desc": "**[%s](%s)**\n\n라이브 방송 상태를 확인하고 있습니다...",
+    "live_ended_title": "종료된 라이브 스트림입니다",
+    "live_ended_no_queue": "이 라이브 방송은 이미 종료되었으며 대기열에 더 이상 재생할 노래가 없습니다.",
+    "live_ended_skip": "**[%s](%s)**\n\n이 라이브 방송은 이미 종료되어 다음 곡을 재생합니다.",
+    "live_start_title": "재생 시작",
+    "live_start_desc": "라이브 스트림을 재생합니다.",
+    "resume_start_title": "재생 시작",
+    "resume_start_desc": "대기열의 노래를 재생합니다.",
+    "enter_voice_channel": "음성 채널에 먼저 입장해주세요.",
+    "server_info_failed": "서버 정보를 가져올 수 없습니다.",
+    "skip_failed_title": "스킵 실패",
+    "skip_failed_desc": "스킵 중 오류가 발생했습니다: %v",
+    "playback_ended_title": "재생 종료",
+    "playback_ended_skip": "**%s**이(가) 스킵되었습니다.\n모든 노래 재생이 완료되어 음성 채널에서 나갑니다.",
+    "force_skipped": "관리자에 의해 **%s**이(가) 강제로 스킵되었습니다.",
+    "force_skipped_ended": "관리자에 의해 **%s**이(가) 강제로 스킵되었습니다.\n모든 노래 재생이 완료되어 음성 채널에서 나갑니다.",
+    "stop_failed_title": "정지 실패",
+    "stop_failed_desc": "정지 중 오류가 발생했습니다: %v",
+    "stop_success_title": "재생 중지",
+    "stop_success_desc": "재생을 중지하고 대기열을 모두 삭제했습니다.",
+    "stop_already_voted": "이미 정지 투표를 하셨습니다.",
+    "nowplaying_loading": "로딩 중",
+    "nowplaying_playing": "현재 재생 중",
+    "nowplaying_paused": "일시정지됨",
+    "volume_query_failed": "볼륨 조회 실패: %v",
+    "current_volume_title": "현재 볼륨",
+    "current_volume_desc": "현재 볼륨: **%g%%**",
+    "volume_not_number": "볼륨은 숫자여야 합니다.",
+    "volume_out_of_range": "볼륨은 0부터 1000 사이의 숫자여야 합니다.",
+    "volume_set_failed": "볼륨 설정 실패: %v",
+    "volume_set_title": "볼륨 설정됨",
+    "volume_set_desc": "볼륨이 **%g%%**로 설정되었습니다.",
+    "repeat_set_failed": "반복 설정 실패: %v",
+    "playlist_adding_title": "플레이리스트 추가 중...",
+    "playlist_adding_all": "플레이리스트의 곡들을 대기열에 추가하고 있습니다...",
+    "playlist_adding_rest": "플레이리스트의 나머지 곡들을 대기열에 추가하고 있습니다...",
+    "playlist_timeout_title": "시간 초과",
+    "playlist_timeout_desc": "플레이리스트 추가가 취소되었습니다.",
+    "playlist_complete_desc": "**[%s](%s)**\n\n첫 번째 곡이 재생을 시작합니다.\n나머지 곡들이 대기열에 추가되었습니다.",
+    "playlist_skipped_count": "%d곡은 재생할 수 없어 건너뛰었습니다.",
+    "playlist_skipped_or_dup": "%d곡은 재생할 수 없거나 중복으로 건너뛰었습니다.",
+    "playlist_added_count": "추가됨",
+    "playlist_added_songs": "추가된 곡 수",
+    "playlist_songs_unit": "%d곡",
+    "error_private_video": "비공개 동영상",
+    "error_deleted_video": "삭제된 동영상",
+    "error_age_restricted": "연령 제한 동영상",
+    "error_geo_restricted": "지역 제한 동영상",
+    "error_members_only": "멤버십 전용 동영상",
+    "error_premium_only": "프리미엄 전용 동영상",
+    "error_copyright": "저작권 문제로 차단됨",
+    "error_blocked": "차단된 동영상",
+    "error_unavailable": "재생할 수 없는 동영상"
+  },
+
+  "queue": {
+    "live_badge": "🔴 LIVE",
+    "enter_position": "삭제할 곡의 번호를 입력해주세요. (예: remove 1, remove 1-5, remove all)",
+    "no_user_songs": "대기열에 추가한 노래가 없습니다.",
+    "only_current_song": "현재 재생 중인 노래만 있습니다. `skip` 명령어를 사용해주세요.",
+    "no_songs_to_remove_title": "제거할 노래 없음",
+    "remove_failed": "제거 실패: %v",
+    "songs_removed_title": "노래 제거됨",
+    "songs_removed_all": "%s님이 추가한 %d곡이 제거되었습니다.",
+    "invalid_range": "올바른 범위를 입력해주세요. (예: 1-5)",
+    "range_includes_current": "범위에 현재 재생 중인 노래가 포함되어 있습니다. 2번부터 시작하거나 `skip` 명령어를 사용해주세요.",
+    "no_user_songs_in_range": "해당 범위에 본인이 추가한 노래가 없습니다.",
+    "range_removed": "범위 %d-%d에서 %d곡이 제거되었습니다.",
+    "enter_valid_range": "1부터 %d 사이의 숫자를 입력해주세요.",
+    "cannot_remove_current": "현재 재생 중인 노래는 제거할 수 없습니다. `skip` 명령어를 사용해주세요.",
+    "only_own_songs": "본인이 추가한 노래만 제거할 수 있습니다.",
+    "song_removed": "**%s**이(가) 대기열에서 제거되었습니다.",
+    "enter_search_query": "검색어를 입력해주세요.",
+    "searching_title": "검색 중...",
+    "searching_desc": "`%s`에 대해 검색하고 있습니다...",
+    "no_results_title": "검색 결과 없음",
+    "no_results_desc": "검색 결과를 찾을 수 없습니다.",
+    "search_results_title": "검색 결과",
+    "search_results_desc": "`%s`에 대한 검색 결과입니다. 재생할 노래를 선택하세요.",
+    "select_placeholder": "재생할 노래를 선택하세요",
+    "only_requester": "이 버튼은 명령어를 실행한 사용자만 사용할 수 있습니다.",
+    "already_selected_title": "이미 선택됨",
+    "already_selected_desc": "이미 선택되었습니다.",
+    "processing_title": "처리 중...",
+    "processing_desc": "**%s**을(를) 대기열에 추가하고 있습니다...",
+    "search_add_error": "선택한 노래를 대기열에 추가하는 중 오류가 발생했습니다.",
+    "search_timeout_title": "시간 만료",
+    "search_timeout_desc": "검색 결과 선택 시간이 만료되었습니다. 다시 검색해주세요.",
+    "skipto_enter_position": "이동할 곡의 번호를 입력해주세요. (예: skipto 3)",
+    "skipto_current": "현재 재생 중인 노래입니다.",
+    "skipto_failed": "건너뛰기 실패: %v",
+    "skipto_complete_title": "건너뛰기 완료",
+    "skipto_complete_desc": "**[%s](%s)**로 건너뛰었습니다.",
+    "skipto_skipped_songs": "건너뛴 노래",
+    "skipto_songs_count": "%d곡",
+    "swap_enter_positions": "교환할 두 곡의 번호를 입력해주세요. (예: swap 1 3)",
+    "cannot_swap_current": "현재 재생 중인 노래는 교환할 수 없습니다.",
+    "only_own_swap": "본인이 추가한 노래만 교환할 수 있습니다.",
+    "swap_failed": "교환 실패: %v",
+    "swap_complete_title": "교환 완료",
+    "swap_complete_desc": "**%d번**: %s\n**%d번**: %s\n\n위 두 노래가 교환되었습니다.",
+    "queue_next_button": "▶️ 다음"
+  },
+
+  "player": {
+    "playback_started": "재생 시작",
+    "now_playing": "현재 재생 중",
+    "stream_reconnected_title": "스트림 재연결 완료",
+    "stream_reconnected_desc": "같은 위치에서 다시 재생합니다.",
+    "stream_reconnecting_title": "스트림 재연결 중",
+    "stream_reconnecting_desc": "스트림 연결이 끊어져 같은 위치에서 다시 재생합니다.",
+    "playback_failed_title": "재생 실패",
+    "stream_reconnect_failed_title": "스트림 재연결 실패",
+    "stream_reconnect_failed_desc": "재연결에 실패하여 다음 곡으로 넘어갑니다.",
+    "max_retries_skipping": "재생 오류가 반복되어 건너뜁니다",
+    "leaving_empty_desc": "음성 채팅을 나갑니다",
+    "leaving_empty_footer": "대기열이 비어 있습니다",
+    "leaving_error_desc": "복구할 수 없는 오류 발생",
+    "leaving_error_footer": "음성 채팅을 나갑니다",
+    "leaving_default_desc": "음성 채팅을 나갑니다",
+    "error_private_video": "비공개 동영상",
+    "error_deleted_video": "삭제된 동영상",
+    "error_age_restricted": "연령 제한 동영상",
+    "error_geo_restricted": "지역 제한 동영상",
+    "error_members_only": "멤버십 전용 동영상",
+    "error_premium_only": "프리미엄 전용 동영상",
+    "error_copyright": "저작권 문제로 차단됨",
+    "error_blocked": "차단된 동영상",
+    "error_removed_by_uploader": "업로더에 의해 삭제됨",
+    "error_account_terminated": "계정 정지된 동영상",
+    "error_unavailable": "재생할 수 없는 동영상"
+  },
+
+  "youtube": {
+    "error_private_video": "비공개 동영상입니다.",
+    "error_age_restricted": "연령 제한이 있는 콘텐츠입니다. 이 영상은 재생할 수 없습니다.",
+    "error_geo_restricted": "이 영상은 귀하의 국가에서 재생할 수 없습니다.",
+    "error_members_only": "멤버십 전용 콘텐츠입니다.",
+    "error_premium_only": "프리미엄 전용 콘텐츠입니다.",
+    "error_copyright": "저작권 문제로 차단되었습니다.",
+    "error_unplayable": "이 영상은 재생할 수 없습니다.",
+    "error_unplayable_reason": "이 영상은 재생할 수 없습니다: %s",
+    "error_deleted_video": "삭제된 동영상입니다.",
+    "error_unavailable": "이 영상은 현재 재생할 수 없습니다.",
+    "error_unavailable_reason": "이 영상은 현재 재생할 수 없습니다: %s",
+    "error_content_check": "콘텐츠 확인이 필요합니다.",
+    "error_age_verification": "성인 인증이 필요한 콘텐츠입니다",
+    "error_region_restricted": "지역 제한이 있는 콘텐츠입니다",
+    "error_private_or_deleted": "비공개 또는 삭제된 영상입니다"
+  },
+
+  "voice_handler": {
+    "auto_pause_title": "자동 일시정지",
+    "auto_pause_desc": "음성 채널 **%s**이(가) 비어있어 재생을 일시정지했습니다.\n\n다시 채널에 들어오시면 `/resume` 명령어로 재생을 재개할 수 있습니다."
+  },
+
+  "rpc": {
+    "activity_music": "음악",
+    "activity_song": "노래",
+    "activity_playlist": "플레이리스트",
+    "activity_music_video": "뮤직비디오"
+  }
+}

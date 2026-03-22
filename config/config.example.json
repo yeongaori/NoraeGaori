@@ -1,0 +1,9 @@
+{
+  "prefix": "!",
+  "language": "en",
+  "show_started_track": true,
+  "default_volume": 100,
+  "precache_strategy": 1,
+  "max_precache_memory": 1,
+  "max_download_speed_mbps": 10
+}

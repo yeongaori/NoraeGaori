@@ -1,0 +1,190 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  OPUS_VERSION: "1.5.2"
+  LLVM_MINGW_VERSION: "20250114"
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x64
+          - { goos: linux, goarch: amd64, type: wasm, cc: gcc, name: linux-x64 }
+          - { goos: linux, goarch: amd64, type: native, cc: gcc, host: x86_64-linux-gnu, name: linux-x64-native-opus }
+          # Linux x86
+          - { goos: linux, goarch: "386", type: wasm, cc: gcc, name: linux-x86 }
+          - { goos: linux, goarch: "386", type: native, cc: gcc, host: i686-linux-gnu, name: linux-x86-native-opus }
+          # Linux arm64
+          - { goos: linux, goarch: arm64, type: wasm, cc: aarch64-linux-gnu-gcc, name: linux-arm64 }
+          - { goos: linux, goarch: arm64, type: native, cc: aarch64-linux-gnu-gcc, host: aarch64-linux-gnu, name: linux-arm64-native-opus }
+          # Windows x64
+          - { goos: windows, goarch: amd64, type: wasm, cc: x86_64-w64-mingw32-gcc, name: windows-x64 }
+          - { goos: windows, goarch: amd64, type: native, cc: x86_64-w64-mingw32-gcc, host: x86_64-w64-mingw32, name: windows-x64-native-opus }
+          # Windows x86
+          - { goos: windows, goarch: "386", type: wasm, cc: i686-w64-mingw32-gcc, name: windows-x86 }
+          - { goos: windows, goarch: "386", type: native, cc: i686-w64-mingw32-gcc, host: i686-w64-mingw32, name: windows-x86-native-opus }
+          # Windows arm64
+          - { goos: windows, goarch: arm64, type: wasm, cc: aarch64-w64-mingw32-gcc, name: windows-arm64 }
+          - { goos: windows, goarch: arm64, type: native, cc: aarch64-w64-mingw32-gcc, host: aarch64-w64-mingw32, name: windows-arm64-native-opus }
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Set version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "VERSION=${{ github.ref_name }}" >> $GITHUB_ENV
+          else
+            echo "VERSION=dev" >> $GITHUB_ENV
+          fi
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update -q
+
+          # Cross-compilers
+          case "${{ matrix.goos }}-${{ matrix.goarch }}" in
+            linux-386)
+              sudo apt-get install -y gcc-multilib
+              ;;
+            linux-arm64)
+              sudo apt-get install -y gcc-aarch64-linux-gnu
+              ;;
+            windows-amd64|windows-386)
+              sudo apt-get install -y mingw-w64
+              ;;
+            windows-arm64)
+              wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/${LLVM_MINGW_VERSION}/llvm-mingw-${LLVM_MINGW_VERSION}-ucrt-ubuntu-20.04-x86_64.tar.xz"
+              tar xf llvm-mingw-*.tar.xz
+              echo "${PWD}/llvm-mingw-${LLVM_MINGW_VERSION}-ucrt-ubuntu-20.04-x86_64/bin" >> $GITHUB_PATH
+              ;;
+          esac
+
+      - name: Build libopus
+        if: matrix.type == 'native'
+        run: |
+          OPUS_PREFIX="${{ github.workspace }}/opus-prefix"
+
+          wget -q "https://downloads.xiph.org/releases/opus/opus-${OPUS_VERSION}.tar.gz"
+          tar xzf "opus-${OPUS_VERSION}.tar.gz"
+          cd "opus-${OPUS_VERSION}"
+
+          CONFIGURE_CC="${{ matrix.cc }}"
+          EXTRA_CFLAGS=""
+          EXTRA_LDFLAGS=""
+          EXTRA_CONFIGURE=""
+
+          # 32-bit Linux needs explicit -m32 flags
+          if [ "${{ matrix.goos }}" = "linux" ] && [ "${{ matrix.goarch }}" = "386" ]; then
+            EXTRA_CFLAGS="-m32"
+            EXTRA_LDFLAGS="-m32"
+          fi
+
+          if [ "${{ matrix.goos }}" = "windows" ] && [ "${{ matrix.goarch }}" = "arm64" ]; then
+            EXTRA_CONFIGURE="--disable-rtcd --disable-intrinsics --disable-asm"
+          fi
+
+          CC="$CONFIGURE_CC" CFLAGS="$EXTRA_CFLAGS" LDFLAGS="$EXTRA_LDFLAGS" \
+            ./configure \
+              --host=${{ matrix.host }} \
+              --prefix="$OPUS_PREFIX" \
+              --disable-shared \
+              --enable-static \
+              --disable-doc \
+              --disable-extra-programs \
+              $EXTRA_CONFIGURE
+
+          make -j$(nproc)
+          make install
+
+          echo "OPUS_PREFIX=$OPUS_PREFIX" >> $GITHUB_ENV
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "1"
+          CC: ${{ matrix.cc }}
+        run: |
+          BINARY="noraegaori"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            BINARY="noraegaori.exe"
+          fi
+
+          if [ "${{ matrix.type }}" = "native" ]; then
+            export PKG_CONFIG=/bin/true
+            export CGO_CFLAGS="-I${OPUS_PREFIX}/include/opus"
+            export CGO_LDFLAGS="-L${OPUS_PREFIX}/lib -lopus -lm"
+            go build -ldflags="-s -w" -tags "opus_native nolibopusfile" -o "$BINARY" ./cmd/bot
+          else
+            go build -ldflags="-s -w" -o "$BINARY" ./cmd/bot
+          fi
+
+      - name: Package
+        run: |
+          BINARY="noraegaori"
+          EXT="tar.gz"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            BINARY="noraegaori.exe"
+            EXT="zip"
+          fi
+
+          DIR="noraegaori-${VERSION}-${{ matrix.name }}"
+          mkdir -p "$DIR/config" "$DIR/locales"
+
+          cp "$BINARY" "$DIR/"
+          cp locales/*.json "$DIR/locales/"
+          cp config/*.example.json "$DIR/config/"
+          cp .env.example "$DIR/"
+          cp README.md LICENSE "$DIR/"
+
+          if [ "$EXT" = "zip" ]; then
+            zip -rq "${DIR}.zip" "$DIR"
+          else
+            tar czf "${DIR}.tar.gz" "$DIR"
+          fi
+
+          # Generate checksum
+          sha256sum "${DIR}.${EXT}" > "${DIR}.${EXT}.sha256"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.name }}
+          path: |
+            noraegaori-*-${{ matrix.name }}.*
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          generateReleaseNotes: true
+          artifacts: "artifacts/*.tar.gz,artifacts/*.zip,artifacts/*.sha256"

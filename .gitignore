@@ -1,0 +1,46 @@
+# Binaries for programs and plugins
+*.exe
+yt-dlp.exe
+yt-dlp
+*.exe~
+*.dll
+*.so
+*.dylib
+noraegaori
+noraegaori.exe
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Dependency directories
+vendor/
+
+# Environment variables
+.env
+!.env.example
+
+# Database
+data/
+
+# Config files (user-specific, may contain secrets)
+config/config.json
+config/admins.json
+config/rpcConfig.json
+!config/*.example.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+error.log
