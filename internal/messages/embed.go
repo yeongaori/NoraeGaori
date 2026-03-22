@@ -1,0 +1,183 @@
+package messages
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/bwmarrin/discordgo"
+)
+
+// CreateEmbed creates a basic embed with title, description, and color
+func CreateEmbed(color int, title, description string) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       title,
+		Description: description,
+		Color:       color,
+	}
+}
+
+// CreateSongEmbed creates an embed for a song with thumbnail and fields
+func CreateSongEmbed(color int, title, description, songTitle, songURL, uploader, duration, requester, thumbnailURL string) *discordgo.MessageEmbed {
+	embed := &discordgo.MessageEmbed{
+		Title:       title,
+		Description: fmt.Sprintf("**[%s](%s)**", EscapeMarkdown(songTitle), songURL),
+		Color:       color,
+		Thumbnail: &discordgo.MessageEmbedThumbnail{
+			URL: thumbnailURL,
+		},
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   FieldUploader,
+				Value:  EscapeMarkdown(uploader),
+				Inline: true,
+			},
+			{
+				Name:   FieldDuration,
+				Value:  duration,
+				Inline: true,
+			},
+			{
+				Name:   FieldRequester,
+				Value:  EscapeMarkdown(requester),
+				Inline: true,
+			},
+		},
+	}
+
+	if description != "" {
+		embed.Description = description + "\n\n" + embed.Description
+	}
+
+	return embed
+}
+
+// CreateQueueEmbed creates an embed for queue display
+func CreateQueueEmbed(songs []QueueSong, page, totalPages, totalSongs int) *discordgo.MessageEmbed {
+	var desc strings.Builder
+
+	for i, song := range songs {
+		if i == 0 {
+			desc.WriteString(fmt.Sprintf("▶️ **[%s](%s)**\n   %s: %s | %s: %s | %s: %s\n\n",
+				EscapeMarkdown(song.Title),
+				song.URL,
+				FieldUploader, EscapeMarkdown(song.Uploader),
+				FieldDuration, song.Duration,
+				FieldRequester, EscapeMarkdown(song.Requester),
+			))
+		} else {
+			desc.WriteString(fmt.Sprintf("%d. **[%s](%s)**\n   %s: %s | %s: %s | %s: %s\n\n",
+				song.Position,
+				EscapeMarkdown(song.Title),
+				song.URL,
+				FieldUploader, EscapeMarkdown(song.Uploader),
+				FieldDuration, song.Duration,
+				FieldRequester, EscapeMarkdown(song.Requester),
+			))
+		}
+	}
+
+	return &discordgo.MessageEmbed{
+		Title:       TitleQueue,
+		Description: desc.String(),
+		Color:       ColorInfo,
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: fmt.Sprintf(FooterPagination, page, totalPages, totalSongs),
+		},
+	}
+}
+
+// QueueSong represents a song in the queue display
+type QueueSong struct {
+	Position  int
+	Title     string
+	URL       string
+	Uploader  string
+	Duration  string
+	Requester string
+}
+
+// CreateErrorEmbed creates a simple error embed
+func CreateErrorEmbed(title, description string) *discordgo.MessageEmbed {
+	if title == "" {
+		title = TitleError
+	}
+	return CreateEmbed(ColorError, title, description)
+}
+
+// CreateSuccessEmbed creates a simple success embed
+func CreateSuccessEmbed(title, description string) *discordgo.MessageEmbed {
+	return CreateEmbed(ColorSuccess, title, description)
+}
+
+// CreateWarningEmbed creates a simple warning embed
+func CreateWarningEmbed(title, description string) *discordgo.MessageEmbed {
+	return CreateEmbed(ColorWarning, title, description)
+}
+
+// CreateInfoEmbed creates a simple info embed
+func CreateInfoEmbed(title, description string) *discordgo.MessageEmbed {
+	return CreateEmbed(ColorInfo, title, description)
+}
+
+// EscapeMarkdown escapes Discord markdown special characters
+// Only escapes characters that actually trigger markdown formatting:
+// _ (italic/underline), ` (code), \ (escape char)
+// Note: * is NOT escaped to allow bold formatting in song titles
+// Note: | is NOT escaped - single pipe doesn't trigger markdown, only || (spoiler) does
+// Note: ~ is NOT escaped - single tilde doesn't trigger markdown, only ~~ (strikethrough) does
+func EscapeMarkdown(text string) string {
+	// Escape backslash first to avoid double-escaping
+	text = strings.ReplaceAll(text, "\\", "\\\\")
+	// Then escape other characters
+	text = strings.ReplaceAll(text, "_", "\\_")
+	text = strings.ReplaceAll(text, "`", "\\`")
+	return text
+}
+
+// CreateNavigationButtons creates Previous/Next buttons for pagination
+func CreateNavigationButtons(currentPage, totalPages int, commandPrefix string) []discordgo.MessageComponent {
+	return []discordgo.MessageComponent{
+		discordgo.ActionsRow{
+			Components: []discordgo.MessageComponent{
+				discordgo.Button{
+					Label:    ButtonPrevious,
+					Style:    discordgo.PrimaryButton,
+					CustomID: fmt.Sprintf("%s_prev_%d", commandPrefix, currentPage-1),
+					Disabled: currentPage <= 1,
+				},
+				discordgo.Button{
+					Label:    ButtonNext,
+					Style:    discordgo.PrimaryButton,
+					CustomID: fmt.Sprintf("%s_next_%d", commandPrefix, currentPage+1),
+					Disabled: currentPage >= totalPages,
+				},
+			},
+		},
+	}
+}
+
+// AddField adds a field to an embed
+func AddField(embed *discordgo.MessageEmbed, name, value string, inline bool) {
+	if embed.Fields == nil {
+		embed.Fields = []*discordgo.MessageEmbedField{}
+	}
+	embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+		Name:   name,
+		Value:  value,
+		Inline: inline,
+	})
+}
+
+// SetFooter sets the footer of an embed
+func SetFooter(embed *discordgo.MessageEmbed, text string) {
+	embed.Footer = &discordgo.MessageEmbedFooter{
+		Text: text,
+	}
+}
+
+// SetThumbnail sets the thumbnail of an embed
+func SetThumbnail(embed *discordgo.MessageEmbed, url string) {
+	embed.Thumbnail = &discordgo.MessageEmbedThumbnail{
+		URL: url,
+	}
+}

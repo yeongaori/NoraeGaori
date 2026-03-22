@@ -1,0 +1,24 @@
+{
+  "RPC_ENABLED": true,
+  "RPC_INTERVAL_SECONDS": 30,
+  "LOG_RPC_CHANGES": false,
+  "RANDOMIZE_RPC": true,
+  "activities": [
+    {
+      "name": "Music",
+      "type": "Playing"
+    },
+    {
+      "name": "Songs",
+      "type": "Listening"
+    },
+    {
+      "name": "Playlists",
+      "type": "Watching"
+    },
+    {
+      "name": "Music Videos",
+      "type": "Watching"
+    }
+  ]
+}

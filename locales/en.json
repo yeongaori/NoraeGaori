@@ -1,0 +1,588 @@
+{
+  "errors": {
+    "not_in_voice_channel": "You must join a voice channel first",
+    "empty_queue": "There are no songs in the queue",
+    "song_not_found": "Could not find the song",
+    "permission_denied": "This command can only be used by bot admins",
+    "admin_only": "This command can only be used by admins",
+    "already_voted": "You have already voted to skip",
+    "duplicate_song": "This song is already in the queue",
+    "unknown_command": "Unknown command.",
+    "command_execution_error": "An error occurred while executing the command: %v",
+    "must_be_in_bot_channel": "You must be in the same voice channel as the bot!"
+  },
+
+  "titles": {
+    "added": "Added to Queue",
+    "success": "Success",
+    "removed": "Removed",
+    "skipped": "Skipped",
+    "resumed": "Resumed",
+    "paused": "Paused",
+    "repeat_all": "Queue Repeat Enabled",
+    "repeat_single": "Single Repeat Enabled",
+    "repeat_off": "Repeat Disabled",
+    "searching": "Searching...",
+    "loading": "Loading...",
+    "now_playing": "Now Playing",
+    "queue": "Music Queue",
+    "help": "Bot Command Help",
+    "search_results": "Search Results",
+    "playlist_found": "Playlist Found",
+    "playlist_added": "Playlist Added",
+    "playlist_start": "Playlist Playback Started",
+    "skip_vote": "Skip Vote",
+    "stop_vote": "Stop Vote",
+    "system_info": "System Info",
+    "warning": "Warning",
+    "duplicate": "Duplicate Song",
+    "unavailable": "Unavailable Song",
+    "error": "Error",
+    "empty_queue": "Empty Queue",
+    "no_song": "No Song to Play",
+    "no_permission": "No Permission",
+    "already_voted": "Already Voted"
+  },
+
+  "fields": {
+    "uploader": "Uploader",
+    "duration": "Duration",
+    "requester": "Requested by",
+    "next_song": "Next Song",
+    "total_songs": "Total Songs",
+    "current_vote": "Current Votes",
+    "required_vote": "Required Votes",
+    "vote_result": "Vote Result",
+    "removed_songs": "Removed Songs",
+    "current_prefix": "Current Prefix",
+    "total_commands": "Total Commands",
+    "cpu_info": "CPU Info",
+    "cpu_usage": "CPU Usage",
+    "total_memory": "Total Memory",
+    "memory_usage": "Memory Usage",
+    "bot_memory": "Bot Memory Usage",
+    "server_memory": "Current Server Memory",
+    "playing_servers": "Playing Servers"
+  },
+
+  "descriptions": {
+    "searching": "Searching for `%s`...",
+    "loading": "Loading audio...",
+    "playlist_confirm": "Would you like to add the entire playlist (**%d** songs) to the queue?",
+    "playlist_adding": "The first song will start playing.\nThe remaining %d songs are being added to the queue...",
+    "playlist_skipped": "%d songs could not be played and were skipped.",
+    "vote_added": "Skip vote has been added.",
+    "skipped": "**%s** has been skipped.",
+    "paused": "Playback paused and left the channel. Queue and playback position are preserved.",
+    "resumed": "Playback has been resumed.",
+    "repeat_all": "Queue repeat has been **enabled**.\nWhen the current song ends, it will be re-added to the queue.",
+    "repeat_single": "Single repeat has been **enabled**.\nWhen the current song ends, it will play again.",
+    "repeat_off": "Queue repeat has been **disabled**.",
+    "repeat_off_removed": "Queue repeat has been **disabled**.\n%d duplicate songs have been removed from the queue.",
+    "songs_removed": "**%d** songs have been removed from the queue.",
+    "empty_queue": "The queue is currently empty.",
+    "search_prompt": "Search results for `%s`. Select a song to play.",
+    "system_status": "Current system status of the bot"
+  },
+
+  "footers": {
+    "pagination": "Page %d/%d | %d songs total",
+    "help_pagination": "Page %d/%d",
+    "playlist_confirm": "React with ✅ to add all | Auto-cancel after 30s",
+    "requested_by": "Requested by: %s",
+    "vote_reaction": "You can also vote by reacting with %s | Vote expires in %ds"
+  },
+
+  "buttons": {
+    "previous": "◀️ Previous",
+    "next": "Next ▶️"
+  },
+
+  "select_menus": {
+    "placeholder": "Select a song to play"
+  },
+
+  "votes": {
+    "more": "%d more votes",
+    "expired": "The vote has expired.",
+    "stop_already_voted": "You have already voted to stop."
+  },
+
+  "help": {
+    "command_format": "**%d. %s**\n%s\nMessage: `%s%s%s`\nAliases: `%s`\nSlash: `/%s`\nExample: `%s%s %s`\n\n",
+    "admin_marker": "🔴 ",
+    "no_commands_title": "No Commands",
+    "no_commands_desc": "No commands available.",
+    "message_label": "Message: `%s%s`",
+    "alias_label": "Aliases: `%s`",
+    "slash_label": "Slash: `/%s`",
+    "example_label": "Example: `%s%s`",
+    "total_commands_value": "%d commands"
+  },
+
+  "commands": {
+    "play": {
+      "description": "Plays a song from a URL or search query.",
+      "options": { "query": "Song title or YouTube URL" },
+      "usage": "play <title|URL>",
+      "example": "play Never Gonna Give You Up",
+      "aliases": ["play", "p"]
+    },
+    "playnext": {
+      "description": "Adds a song to play next",
+      "options": { "query": "Song title or YouTube URL" },
+      "usage": "playnext <title|URL>",
+      "example": "playnext Never Gonna Give You Up",
+      "aliases": ["playnext", "pn"]
+    },
+    "search": {
+      "description": "Searches for a song on YouTube",
+      "options": { "query": "Search query" },
+      "usage": "search <query>",
+      "example": "search Never Gonna Give You Up",
+      "aliases": ["search", "s"]
+    },
+    "pause": {
+      "description": "Pauses the current song and leaves the channel, saving state.",
+      "options": {},
+      "usage": "pause",
+      "example": "pause",
+      "aliases": ["pause"]
+    },
+    "resume": {
+      "description": "Resumes playback or continues a paused song.",
+      "options": {},
+      "usage": "resume",
+      "example": "resume",
+      "aliases": ["resume"]
+    },
+    "skip": {
+      "description": "Skips the current song (vote)",
+      "options": {},
+      "usage": "skip",
+      "example": "skip",
+      "aliases": ["skip"]
+    },
+    "stop": {
+      "description": "Stops playback and clears the queue.",
+      "options": {},
+      "usage": "stop",
+      "example": "stop",
+      "aliases": ["stop", "st"]
+    },
+    "nowplaying": {
+      "description": "Shows the currently playing song",
+      "options": {},
+      "usage": "nowplaying",
+      "example": "nowplaying",
+      "aliases": ["nowplaying", "np"]
+    },
+    "volume": {
+      "description": "Sets the volume",
+      "options": { "level": "Volume level (0-1000, decimals allowed)" },
+      "usage": "volume [0-1000]",
+      "example": "volume, volume 50, volume 200, volume 150.5",
+      "aliases": ["volume", "vol", "v"]
+    },
+    "repeat": {
+      "description": "Sets the repeat mode. (on/single/off)",
+      "options": { "mode": "Repeat mode (on/single/off)" },
+      "usage": "repeat [on|single|off]",
+      "example": "repeat, repeat on, repeat single, repeat off",
+      "aliases": ["repeat"]
+    },
+    "queue": {
+      "description": "Shows the current queue",
+      "options": { "page": "Page number" },
+      "usage": "queue [page number]",
+      "example": "queue 2",
+      "aliases": ["queue", "q"]
+    },
+    "remove": {
+      "description": "Removes a song from the queue",
+      "options": { "position": "Position, range (1-5), or ALL" },
+      "usage": "remove <position|start-end|ALL>",
+      "example": "remove 3, remove 1-5, remove ALL",
+      "aliases": ["remove", "rm"]
+    },
+    "swap": {
+      "description": "Swaps two songs in the queue",
+      "options": { "position1": "First position", "position2": "Second position" },
+      "usage": "swap <pos1> <pos2>",
+      "example": "swap 1 3",
+      "aliases": ["swap"]
+    },
+    "skipto": {
+      "description": "Skips to a specific song in the queue",
+      "options": { "position": "Position of the song to skip to" },
+      "usage": "skipto <position>",
+      "example": "skipto 3",
+      "aliases": ["skipto", "st"]
+    },
+    "join": {
+      "description": "Joins a voice channel",
+      "options": { "channel": "Voice channel to join" },
+      "usage": "join [channel]",
+      "example": "join, join General",
+      "aliases": ["join", "j"]
+    },
+    "leave": {
+      "description": "Makes the bot leave the voice channel.",
+      "options": {},
+      "usage": "leave",
+      "example": "leave",
+      "aliases": ["leave", "disconnect", "dc"]
+    },
+    "switchvc": {
+      "description": "Moves the bot to another voice channel",
+      "options": { "channel": "Voice channel to move to" },
+      "usage": "switchvc [channel]",
+      "example": "switchvc, switchvc General",
+      "aliases": ["switchvc", "switch", "move"]
+    },
+    "sponsorblock": {
+      "description": "SponsorBlock settings",
+      "options": { "setting": "Setting value" },
+      "usage": "sponsorblock [on|off]",
+      "example": "sponsorblock, sponsorblock on, sponsorblock off",
+      "aliases": ["sponsorblock", "sb"]
+    },
+    "showstartedtrack": {
+      "description": "Now playing notification settings",
+      "options": { "setting": "Setting value" },
+      "usage": "showstartedtrack [on|off]",
+      "example": "showstartedtrack, showstartedtrack on, showstartedtrack off",
+      "aliases": ["showstartedtrack", "showtrack"]
+    },
+    "normalization": {
+      "description": "Volume normalization settings",
+      "options": { "setting": "Setting value" },
+      "usage": "normalization [on|off]",
+      "example": "normalization, normalization on, normalization off",
+      "aliases": ["normalization", "normalize"]
+    },
+    "setprefix": {
+      "description": "Sets the command prefix (admin only)",
+      "options": { "prefix": "New prefix (leave empty to reset to !)" },
+      "usage": "setprefix [new prefix]",
+      "example": "setprefix ?, setprefix !",
+      "aliases": ["setprefix", "prefix"]
+    },
+    "forceskip": {
+      "description": "Force skips the current song (admin only)",
+      "options": {},
+      "usage": "forceskip",
+      "example": "forceskip",
+      "aliases": ["forceskip", "fs"]
+    },
+    "forceremove": {
+      "description": "Admin removes all songs by a specific user",
+      "options": { "target": "Target to remove (user mention)" },
+      "usage": "forceremove <@user|position>",
+      "example": "forceremove @user, forceremove 3",
+      "aliases": ["forceremove", "fr"]
+    },
+    "forcestop": {
+      "description": "Force stops playback and clears the queue (admin only)",
+      "options": {},
+      "usage": "forcestop",
+      "example": "forcestop",
+      "aliases": ["forcestop", "fstop"]
+    },
+    "movetrack": {
+      "description": "Admin moves a song to a different position",
+      "options": { "from": "Position of the song to move", "to": "Target position" },
+      "usage": "movetrack <from> <to>",
+      "example": "movetrack 3 1",
+      "aliases": ["movetrack", "mt"]
+    },
+    "status": {
+      "description": "Shows server and bot status (admin only)",
+      "options": {},
+      "usage": "status",
+      "example": "status",
+      "aliases": ["status"]
+    },
+    "help": {
+      "description": "Shows help for all commands",
+      "options": { "page": "Page number" },
+      "usage": "help [page]",
+      "example": "help, help 2",
+      "aliases": ["help", "h"]
+    }
+  },
+
+  "voice": {
+    "enter_voice_channel": "Please join a voice channel first.",
+    "enter_voice_or_specify": "Please join a voice channel or specify one.",
+    "join_failed_title": "Join Failed",
+    "join_failed_desc": "An error occurred while joining the voice channel.",
+    "join_success_title": "Joined",
+    "join_success_desc": "Joined the voice channel.",
+    "join_success_channel": "Joined **%s**.",
+    "leave_failed_title": "Leave Failed",
+    "leave_failed_desc": "An error occurred while leaving the voice channel.",
+    "leave_success_title": "Left Channel",
+    "leave_success_desc": "Left the voice channel.",
+    "switch_failed_title": "Switch Failed",
+    "switch_failed_channel": "An error occurred while switching voice channels.",
+    "switch_failed_queue": "An error occurred while updating the queue.",
+    "switch_success_title": "Switched",
+    "switch_success_desc": "Switched voice channels.",
+    "switch_success_channel": "Moved to **%s**."
+  },
+
+  "admin": {
+    "mention_target": "Please mention the user whose songs you want to delete. (e.g., @user)",
+    "no_songs_to_delete": "There are no songs in the queue to delete.",
+    "invalid_mention": "Please enter a valid target (user mention). (e.g., @user)",
+    "user_not_found": "User not found.",
+    "user_no_songs": "**%s** has no songs in the queue.",
+    "excluding_current": " (excluding the currently playing song)",
+    "remove_failed": "Remove failed: %v",
+    "delete_complete_title": "Deletion Complete",
+    "delete_complete_desc": "Removed **%d** songs by **%s** from the queue.",
+    "enter_positions": "Please enter the source and target positions. (e.g., movetrack 3 1)",
+    "enter_valid_range": "Please enter a number between 1 and %d.",
+    "same_position": "Cannot move to the same position.",
+    "cannot_move_playing": "Cannot move the currently playing song.",
+    "move_failed": "Move failed: %v",
+    "move_complete_title": "Move Complete",
+    "move_complete_desc": "**%s**\n\nMoved from #%d to #%d.",
+    "no_songs_title": "No Songs to Play",
+    "no_songs_desc": "There are no songs in the queue.",
+    "stop_failed": "Stop failed: %v",
+    "force_stop_title": "Playback Stopped",
+    "force_stop_desc": "Playback was force stopped by an admin."
+  },
+
+  "settings": {
+    "status_on": "On",
+    "status_off": "Off",
+    "sponsorblock_error": "An error occurred while setting SponsorBlock: %v",
+    "sponsorblock_title": "%s SponsorBlock %s",
+    "sponsorblock_desc": "SponsorBlock has been **%s**.",
+    "sponsorblock_what_title": "What is SponsorBlock?",
+    "sponsorblock_what_desc": "Automatically skips sponsors, ads, and other segments in YouTube videos.",
+    "note_title": "Note",
+    "setting_apply_next": "This setting will apply starting from the next song.",
+    "showtrack_error": "An error occurred while setting the notification: %v",
+    "showtrack_title": "%s Now Playing Notification %s",
+    "showtrack_desc": "Now playing notification has been **%s**.",
+    "showtrack_what_title": "Description",
+    "showtrack_what_desc": "Displays a `Now Playing` message when a song starts playing.",
+    "normalization_error": "An error occurred while setting normalization: %v",
+    "normalization_title": "%s Volume Normalization %s",
+    "normalization_desc": "Volume normalization has been set to **%s**.",
+    "normalization_what_title": "Description",
+    "normalization_what_desc": "Keeps the volume consistent across all songs so you don't need to adjust it for each song.",
+    "current_prefix_title": "Current Prefix",
+    "current_prefix_desc": "Current prefix: **%s**\n\nUsage: `/setprefix <new prefix>` or `%ssetprefix <new prefix>`",
+    "prefix_empty": "The prefix cannot be empty.",
+    "prefix_too_long": "The prefix must be 5 characters or less.",
+    "prefix_error": "An error occurred while setting the prefix: %v",
+    "prefix_changed_title": "Prefix Changed",
+    "prefix_changed_desc": "The prefix has been changed to **%s**.",
+    "prefix_example_title": "Usage Example",
+    "prefix_example_value": "`%splay song title`\n`%squeue`\n`%shelp`",
+    "prefix_slash_note": "Slash commands (`/play`) are not affected by prefix changes."
+  },
+
+  "status": {
+    "loading_title": "Loading System Info...",
+    "loading_desc": "Fetching system information...",
+    "title": "💻 System Info",
+    "description": "Current system status of the bot",
+    "cpu_info_value": "```%s\n(%d Cores)```",
+    "cpu_usage_value": "`%.2f%%`",
+    "total_memory_value": "`%.2f GB`",
+    "memory_usage_value": "`%.0f MB / %.2f GB (%.2f%%)`",
+    "bot_memory_value": "```Heap: %.2f MB\nRSS: %.2f MB```",
+    "server_memory_value": "`%.2f MB`",
+    "playing_servers_value": "`%d servers`"
+  },
+
+  "music": {
+    "enter_query": "Please enter a song title or URL to play.",
+    "queue_create_failed": "Failed to create queue",
+    "song_add_failed": "Failed to add song: %v",
+    "added_as_next": "Added as Next",
+    "playlist_info_failed": "Could not retrieve playlist information.",
+    "playlist_confirm_desc": "**[%s](%s)**\n\nWould you like to add the entire playlist (**%d** songs) to the queue?",
+    "playlist_confirm_footer": "React with ✅ to add all | Auto-cancel after 30s",
+    "video_unavailable_title": "Video Unavailable",
+    "video_unavailable_desc": "The selected video cannot be played, but a **playlist** containing this video was found!\n\nWould you like to add the playlist songs to the queue?\n(Unavailable songs will be automatically skipped)",
+    "video_unavailable_footer": "React with ⬇️ to add playlist | Auto-cancel after 30s",
+    "video_with_playlist_duplicate": "**[%s](%s)**\n\nThis song is already in the queue.\n\nHowever, a playlist containing this song was found!\nWould you like to add the remaining songs from the playlist?",
+    "video_with_playlist_found": "**[%s](%s)**\n\nA playlist containing this song was found!\nWould you like to add the remaining songs from the playlist?",
+    "video_with_playlist_footer": "React with ⬇️ to add remaining playlist songs | Auto-cancel after 30s",
+    "not_playing_or_loading": "No song is currently playing or loading.",
+    "pause_failed": "Failed to pause.",
+    "no_songs_to_resume": "No songs to resume.",
+    "already_playing": "A song is already playing.",
+    "playback_start_error": "An error occurred while starting playback.",
+    "queue_not_found": "Queue not found.",
+    "live_checking_title": "Checking live stream status...",
+    "live_checking_desc": "**[%s](%s)**\n\nChecking the live stream status...",
+    "live_ended_title": "Ended Live Stream",
+    "live_ended_no_queue": "This live stream has already ended and there are no more songs in the queue.",
+    "live_ended_skip": "**[%s](%s)**\n\nThis live stream has already ended. Playing the next song.",
+    "live_start_title": "Playback Started",
+    "live_start_desc": "Playing a live stream.",
+    "resume_start_title": "Playback Started",
+    "resume_start_desc": "Playing songs from the queue.",
+    "enter_voice_channel": "Please join a voice channel first.",
+    "server_info_failed": "Could not retrieve server information.",
+    "skip_failed_title": "Skip Failed",
+    "skip_failed_desc": "An error occurred while skipping: %v",
+    "playback_ended_title": "Playback Ended",
+    "playback_ended_skip": "**%s** has been skipped.\nAll songs have finished playing. Leaving the voice channel.",
+    "force_skipped": "**%s** has been force skipped by an admin.",
+    "force_skipped_ended": "**%s** has been force skipped by an admin.\nAll songs have finished playing. Leaving the voice channel.",
+    "stop_failed_title": "Stop Failed",
+    "stop_failed_desc": "An error occurred while stopping: %v",
+    "stop_success_title": "Playback Stopped",
+    "stop_success_desc": "Stopped playback and cleared the queue.",
+    "stop_already_voted": "You have already voted to stop.",
+    "nowplaying_loading": "Loading",
+    "nowplaying_playing": "Now Playing",
+    "nowplaying_paused": "Paused",
+    "volume_query_failed": "Failed to query volume: %v",
+    "current_volume_title": "Current Volume",
+    "current_volume_desc": "Current volume: **%g%%**",
+    "volume_not_number": "Volume must be a number.",
+    "volume_out_of_range": "Volume must be a number between 0 and 1000.",
+    "volume_set_failed": "Failed to set volume: %v",
+    "volume_set_title": "Volume Set",
+    "volume_set_desc": "Volume has been set to **%g%%**.",
+    "repeat_set_failed": "Failed to set repeat: %v",
+    "playlist_adding_title": "Adding Playlist...",
+    "playlist_adding_all": "Adding playlist songs to the queue...",
+    "playlist_adding_rest": "Adding remaining playlist songs to the queue...",
+    "playlist_timeout_title": "Timed Out",
+    "playlist_timeout_desc": "Playlist addition has been cancelled.",
+    "playlist_complete_desc": "**[%s](%s)**\n\nThe first song will start playing.\nThe remaining songs have been added to the queue.",
+    "playlist_skipped_count": "%d songs could not be played and were skipped.",
+    "playlist_skipped_or_dup": "%d songs were skipped due to being unavailable or duplicates.",
+    "playlist_added_count": "Added",
+    "playlist_added_songs": "Songs Added",
+    "playlist_songs_unit": "%d songs",
+    "error_private_video": "Private video",
+    "error_deleted_video": "Deleted video",
+    "error_age_restricted": "Age-restricted video",
+    "error_geo_restricted": "Region-restricted video",
+    "error_members_only": "Members-only video",
+    "error_premium_only": "Premium-only video",
+    "error_copyright": "Blocked due to copyright",
+    "error_blocked": "Blocked video",
+    "error_unavailable": "Unavailable video"
+  },
+
+  "queue": {
+    "live_badge": "🔴 LIVE",
+    "enter_position": "Please enter the song number to remove. (e.g., remove 1, remove 1-5, remove all)",
+    "no_user_songs": "You have no songs in the queue.",
+    "only_current_song": "Only the currently playing song remains. Use the `skip` command.",
+    "no_songs_to_remove_title": "No Songs to Remove",
+    "remove_failed": "Remove failed: %v",
+    "songs_removed_title": "Songs Removed",
+    "songs_removed_all": "%d songs by %s have been removed.",
+    "invalid_range": "Please enter a valid range. (e.g., 1-5)",
+    "range_includes_current": "The range includes the currently playing song. Start from #2 or use the `skip` command.",
+    "no_user_songs_in_range": "You have no songs in that range.",
+    "range_removed": "%d songs removed from range %d-%d.",
+    "enter_valid_range": "Please enter a number between 1 and %d.",
+    "cannot_remove_current": "Cannot remove the currently playing song. Use the `skip` command.",
+    "only_own_songs": "You can only remove songs that you added.",
+    "song_removed": "**%s** has been removed from the queue.",
+    "enter_search_query": "Please enter a search query.",
+    "searching_title": "Searching...",
+    "searching_desc": "Searching for `%s`...",
+    "no_results_title": "No Results",
+    "no_results_desc": "No search results found.",
+    "search_results_title": "Search Results",
+    "search_results_desc": "Search results for `%s`. Select a song to play.",
+    "select_placeholder": "Select a song to play",
+    "only_requester": "Only the user who ran this command can use this button.",
+    "already_selected_title": "Already Selected",
+    "already_selected_desc": "Already selected.",
+    "processing_title": "Processing...",
+    "processing_desc": "Adding **%s** to the queue...",
+    "search_add_error": "An error occurred while adding the selected song to the queue.",
+    "search_timeout_title": "Timed Out",
+    "search_timeout_desc": "Search selection has timed out. Please search again.",
+    "skipto_enter_position": "Please enter the song number to skip to. (e.g., skipto 3)",
+    "skipto_current": "That is the currently playing song.",
+    "skipto_failed": "Skip to failed: %v",
+    "skipto_complete_title": "Skipped To",
+    "skipto_complete_desc": "Skipped to **[%s](%s)**.",
+    "skipto_skipped_songs": "Songs Skipped",
+    "skipto_songs_count": "%d songs",
+    "swap_enter_positions": "Please enter the two song positions to swap. (e.g., swap 1 3)",
+    "cannot_swap_current": "Cannot swap the currently playing song.",
+    "only_own_swap": "You can only swap songs that you added.",
+    "swap_failed": "Swap failed: %v",
+    "swap_complete_title": "Swap Complete",
+    "swap_complete_desc": "**#%d**: %s\n**#%d**: %s\n\nThese two songs have been swapped.",
+    "queue_next_button": "▶️ Next"
+  },
+
+  "player": {
+    "playback_started": "Playback Started",
+    "now_playing": "Now Playing",
+    "stream_reconnected_title": "Stream Reconnected",
+    "stream_reconnected_desc": "Resuming playback from the same position.",
+    "stream_reconnecting_title": "Stream Reconnecting",
+    "stream_reconnecting_desc": "Stream disconnected. Resuming playback from the same position.",
+    "playback_failed_title": "Playback Failed",
+    "stream_reconnect_failed_title": "Stream Reconnection Failed",
+    "stream_reconnect_failed_desc": "Failed to reconnect. Skipping to the next song.",
+    "max_retries_skipping": "Repeated playback errors, skipping",
+    "leaving_empty_desc": "Leaving the voice channel",
+    "leaving_empty_footer": "The queue is empty",
+    "leaving_error_desc": "An unrecoverable error occurred",
+    "leaving_error_footer": "Leaving the voice channel",
+    "leaving_default_desc": "Leaving the voice channel",
+    "error_private_video": "Private video",
+    "error_deleted_video": "Deleted video",
+    "error_age_restricted": "Age-restricted video",
+    "error_geo_restricted": "Region-restricted video",
+    "error_members_only": "Members-only video",
+    "error_premium_only": "Premium-only video",
+    "error_copyright": "Blocked due to copyright",
+    "error_blocked": "Blocked video",
+    "error_removed_by_uploader": "Removed by uploader",
+    "error_account_terminated": "Account terminated video",
+    "error_unavailable": "Unavailable video"
+  },
+
+  "youtube": {
+    "error_private_video": "This is a private video.",
+    "error_age_restricted": "This content is age-restricted and cannot be played.",
+    "error_geo_restricted": "This video is not available in your country.",
+    "error_members_only": "This is members-only content.",
+    "error_premium_only": "This is premium-only content.",
+    "error_copyright": "This video has been blocked due to copyright.",
+    "error_unplayable": "This video cannot be played.",
+    "error_unplayable_reason": "This video cannot be played: %s",
+    "error_deleted_video": "This video has been deleted.",
+    "error_unavailable": "This video is currently unavailable.",
+    "error_unavailable_reason": "This video is currently unavailable: %s",
+    "error_content_check": "Content check required.",
+    "error_age_verification": "Age verification is required for this content",
+    "error_region_restricted": "This content is region-restricted",
+    "error_private_or_deleted": "This video is private or has been deleted"
+  },
+
+  "voice_handler": {
+    "auto_pause_title": "Auto-Paused",
+    "auto_pause_desc": "Voice channel **%s** is empty, so playback has been paused.\n\nRejoin the channel and use `/resume` to continue playback."
+  },
+
+  "rpc": {
+    "activity_music": "Music",
+    "activity_song": "Songs",
+    "activity_playlist": "Playlists",
+    "activity_music_video": "Music Videos"
+  }
+}
