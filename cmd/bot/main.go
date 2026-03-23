@@ -130,7 +130,7 @@ DEBUG_MODE=false
 		if err := os.WriteFile(envPath, []byte(exampleEnv), 0644); err != nil {
 			return fmt.Errorf("failed to create .env file: %w", err)
 		}
-		logger.Info("Created example .env file. Please configure it with your bot token.")
+		logger.Warn("Created example .env file. Please configure it with your bot token.")
 		return fmt.Errorf(".env file created - please add your bot token and restart")
 	}
 

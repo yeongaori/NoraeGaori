@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+
+	"noraegaori/locales"
 )
 
 // Locale represents a complete set of translated strings
@@ -444,17 +446,12 @@ func T() *Locale {
 	return currentLocale
 }
 
-// LoadLocale loads locale strings for the given language code.
-// English (en.json) is always loaded first as the base, then the requested
-// language is overlaid on top. Any missing translations fall back to English.
-// If the requested locale file doesn't exist or is invalid, English is used.
 func LoadLocale(lang string) error {
 	localesDir := "locales"
 
-	// Load English as the base (fallback)
 	enData, err := readLocaleFile(filepath.Join(localesDir, "en.json"))
 	if err != nil {
-		return fmt.Errorf("failed to load English fallback locale: %w", err)
+		enData = locales.EnglishLocale
 	}
 
 	var base Locale
@@ -462,7 +459,6 @@ func LoadLocale(lang string) error {
 		return fmt.Errorf("failed to parse English fallback locale: %w", err)
 	}
 
-	// If requested language is English, we're done
 	if lang == "en" {
 		currentLocale = &base
 		applyLocale(&base)
