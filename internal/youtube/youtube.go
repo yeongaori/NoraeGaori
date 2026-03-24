@@ -79,69 +79,6 @@ func (e *VideoError) Error() string {
 	return e.Message
 }
 
-// parseYtDlpError parses yt-dlp error messages and returns user-friendly error messages
-func parseYtDlpError(err error) error {
-	if err == nil {
-		return nil
-	}
-
-	errorLower := strings.ToLower(err.Error())
-
-	// Map of patterns to user-friendly localized messages
-	yt := messages.T().YouTube
-	errorMappings := []struct {
-		patterns []string
-		message  string
-	}{
-		{
-			patterns: []string{"sign in to confirm your age", "age-restricted", "age restricted"},
-			message:  yt.ErrorAgeRestricted,
-		},
-		{
-			patterns: []string{"not available in your country", "video is not available", "this video is not available"},
-			message:  yt.ErrorGeoRestricted,
-		},
-		{
-			patterns: []string{"private video", "[private video]"},
-			message:  yt.ErrorPrivateVideo,
-		},
-		{
-			patterns: []string{"deleted video", "[deleted video]"},
-			message:  yt.ErrorDeletedVideo,
-		},
-		{
-			patterns: []string{"video unavailable"},
-			message:  yt.ErrorUnavailable,
-		},
-		{
-			patterns: []string{"members-only", "members only", "join this channel"},
-			message:  yt.ErrorMembersOnly,
-		},
-		{
-			patterns: []string{"premium"},
-			message:  yt.ErrorPremiumOnly,
-		},
-		{
-			patterns: []string{"copyright"},
-			message:  yt.ErrorCopyright,
-		},
-	}
-
-	for _, mapping := range errorMappings {
-		for _, pattern := range mapping.patterns {
-			if strings.Contains(errorLower, pattern) {
-				return &VideoError{
-					Message: mapping.message,
-					Reason:  err.Error(),
-				}
-			}
-		}
-	}
-
-	// If no specific pattern matched, return the original error
-	return err
-}
-
 // Circuit breaker state
 type circuitState int
 
@@ -351,6 +288,7 @@ func CheckVideoAvailability(url string) (*AvailabilityResult, error) {
 		// Create ytdlp command with flags to skip download and get flat playlist info
 		cmd := ytdlp.New().
 			SetExecutable(ytdlpUpdater.GetBinaryPath()).
+			ExtractorArgs("youtube:lang=" + messages.Lang()).
 			DumpJSON().
 			FlatPlaylist().
 			JsRuntimes("node").
@@ -547,9 +485,8 @@ func GetVideoInfo(url, requesterName, requesterID string) (*Song, error) {
 	if err != nil {
 		logger.Warnf("Failed to check video availability (continuing anyway): %v", err)
 	} else if !availability.Available {
-		// Return parsed error message for unavailable videos
-		errMsg := fmt.Errorf("video is not available: %s", availability.Error)
-		return nil, parseYtDlpError(errMsg)
+		// Return error message for unavailable videos
+		return nil, fmt.Errorf("%s", availability.Error)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -562,6 +499,7 @@ func GetVideoInfo(url, requesterName, requesterID string) (*Song, error) {
 		// Create ytdlp command
 		cmd := ytdlp.New().
 			SetExecutable(ytdlpUpdater.GetBinaryPath()).
+			ExtractorArgs("youtube:lang=" + messages.Lang()).
 			DumpJSON().
 			NoPlaylist().
 			JsRuntimes("node").
@@ -577,8 +515,7 @@ func GetVideoInfo(url, requesterName, requesterID string) (*Song, error) {
 	}, "GetVideoInfo")
 
 	if retryErr != nil {
-		// Parse yt-dlp error to provide specific user-friendly message
-		return nil, parseYtDlpError(retryErr)
+		return nil, retryErr
 	}
 
 	// Parse extracted info
@@ -711,6 +648,7 @@ func GetStreamURL(url string, sponsorBlock bool, bitrate int) (string, error) {
 		// Create ytdlp command with optimal audio format
 		cmd := ytdlp.New().
 			SetExecutable(ytdlpUpdater.GetBinaryPath()).
+			ExtractorArgs("youtube:lang=" + messages.Lang()).
 			GetURL().
 			NoPlaylist().
 			JsRuntimes("node").
@@ -812,6 +750,7 @@ func IsLiveStreamActive(url string) (bool, error) {
 	// Create ytdlp command
 	cmd := ytdlp.New().
 		SetExecutable(ytdlpUpdater.GetBinaryPath()).
+		ExtractorArgs("youtube:lang=" + messages.Lang()).
 		DumpJSON().
 		NoPlaylist().
 		JsRuntimes("node").
@@ -868,6 +807,7 @@ func CheckIfLiveStreamEnded(url string) (bool, error) {
 		// Create ytdlp command with FlatPlaylist for fast checking
 		cmd := ytdlp.New().
 			SetExecutable(ytdlpUpdater.GetBinaryPath()).
+			ExtractorArgs("youtube:lang=" + messages.Lang()).
 			DumpJSON().
 			FlatPlaylist().
 			JsRuntimes("node").
@@ -984,6 +924,7 @@ func GetPlaylistInfo(url, requesterName, requesterID string) (*PlaylistInfo, err
 	// Use IgnoreErrors() to skip unavailable videos instead of failing the entire playlist
 	cmd := ytdlp.New().
 		SetExecutable(ytdlpUpdater.GetBinaryPath()).
+		ExtractorArgs("youtube:lang=" + messages.Lang()).
 		DumpJSON().
 		FlatPlaylist().
 		JsRuntimes("node").
@@ -1161,6 +1102,7 @@ func CheckAvailability(url string) (available bool, isLive bool, err error) {
 		// Create ytdlp command with minimal info extraction
 		cmd := ytdlp.New().
 			SetExecutable(ytdlpUpdater.GetBinaryPath()).
+			ExtractorArgs("youtube:lang=" + messages.Lang()).
 			DumpJSON().
 			NoPlaylist().
 			JsRuntimes("node").
