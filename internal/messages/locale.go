@@ -319,6 +319,15 @@ type MusicMessages struct {
 	PlaylistAddedCount    string `json:"playlist_added_count"`
 	PlaylistAddedSongs    string `json:"playlist_added_songs"`
 	PlaylistSongsUnit     string `json:"playlist_songs_unit"`
+	ErrorPrivateVideo     string `json:"error_private_video"`
+	ErrorDeletedVideo     string `json:"error_deleted_video"`
+	ErrorAgeRestricted    string `json:"error_age_restricted"`
+	ErrorGeoRestricted    string `json:"error_geo_restricted"`
+	ErrorMembersOnly      string `json:"error_members_only"`
+	ErrorPremiumOnly      string `json:"error_premium_only"`
+	ErrorCopyright        string `json:"error_copyright"`
+	ErrorBlocked          string `json:"error_blocked"`
+	ErrorUnavailable      string `json:"error_unavailable"`
 }
 
 type QueueMessages struct {
@@ -386,11 +395,32 @@ type PlayerMessages struct {
 	LeavingErrorDesc         string `json:"leaving_error_desc"`
 	LeavingErrorFooter       string `json:"leaving_error_footer"`
 	LeavingDefaultDesc       string `json:"leaving_default_desc"`
+	ErrorPrivateVideo        string `json:"error_private_video"`
+	ErrorDeletedVideo        string `json:"error_deleted_video"`
+	ErrorAgeRestricted       string `json:"error_age_restricted"`
+	ErrorGeoRestricted       string `json:"error_geo_restricted"`
+	ErrorMembersOnly         string `json:"error_members_only"`
+	ErrorPremiumOnly         string `json:"error_premium_only"`
+	ErrorCopyright           string `json:"error_copyright"`
+	ErrorBlocked             string `json:"error_blocked"`
+	ErrorRemovedByUploader   string `json:"error_removed_by_uploader"`
+	ErrorAccountTerminated   string `json:"error_account_terminated"`
+	ErrorUnavailable         string `json:"error_unavailable"`
 }
 
 type YouTubeMessages struct {
+	ErrorPrivateVideo     string `json:"error_private_video"`
 	ErrorAgeRestricted    string `json:"error_age_restricted"`
+	ErrorGeoRestricted    string `json:"error_geo_restricted"`
+	ErrorMembersOnly      string `json:"error_members_only"`
+	ErrorPremiumOnly      string `json:"error_premium_only"`
+	ErrorCopyright        string `json:"error_copyright"`
+	ErrorUnplayable       string `json:"error_unplayable"`
+	ErrorUnplayableReason string `json:"error_unplayable_reason"`
+	ErrorDeletedVideo     string `json:"error_deleted_video"`
 	ErrorUnavailable      string `json:"error_unavailable"`
+	ErrorUnavailableReason string `json:"error_unavailable_reason"`
+	ErrorContentCheck     string `json:"error_content_check"`
 	ErrorAgeVerification  string `json:"error_age_verification"`
 	ErrorRegionRestricted string `json:"error_region_restricted"`
 	ErrorPrivateOrDeleted string `json:"error_private_or_deleted"`

@@ -1197,6 +1197,36 @@ func isDefinitivePlaybackError(errMsg string) bool {
 	return false
 }
 
+// cleanPlaybackErrorMessage maps error strings to user-friendly messages
+func cleanPlaybackErrorMessage(errMsg string) string {
+	errorLower := strings.ToLower(errMsg)
+	t := messages.T()
+	errorMappings := map[string]string{
+		"private video":                 t.Player.ErrorPrivateVideo,
+		"deleted video":                 t.Player.ErrorDeletedVideo,
+		"age-restricted":                t.Player.ErrorAgeRestricted,
+		"age restricted":                t.Player.ErrorAgeRestricted,
+		"not available in your country": t.Player.ErrorGeoRestricted,
+		"geo":                           t.Player.ErrorGeoRestricted,
+		"members-only":                  t.Player.ErrorMembersOnly,
+		"members only":                  t.Player.ErrorMembersOnly,
+		"premium":                       t.Player.ErrorPremiumOnly,
+		"copyright":                     t.Player.ErrorCopyright,
+		"blocked":                       t.Player.ErrorBlocked,
+		"removed by the uploader":       t.Player.ErrorRemovedByUploader,
+		"account associated with this video has been terminated": t.Player.ErrorAccountTerminated,
+	}
+	for pattern, message := range errorMappings {
+		if strings.Contains(errorLower, pattern) {
+			return message
+		}
+	}
+	// Check generic "video unavailable" / "not available" last
+	if strings.Contains(errorLower, "video unavailable") || strings.Contains(errorLower, "not available") {
+		return t.Player.ErrorUnavailable
+	}
+	return t.Player.ErrorUnavailable
+}
 
 // sendReconnectMessage notifies the user that the stream stalled and we're reconnecting
 func sendReconnectMessage(session *discordgo.Session, guildID string, song *queue.Song) {
@@ -1275,7 +1305,7 @@ func handlePlaybackError(session *discordgo.Session, guildID string, song *queue
 
 	// Check for definitive errors first — no point retrying these
 	if isDefinitivePlaybackError(errMsg) {
-		reason := errMsg
+		reason := cleanPlaybackErrorMessage(errMsg)
 		logger.Warnf("[Play] Definitive error for song %s in guild %s: %s", song.Title, guildID, reason)
 		song.SetState(queue.SongStateFailed)
 		sendSongErrorMessage(session, guildID, song, reason)

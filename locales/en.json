@@ -466,7 +466,16 @@
     "playlist_skipped_or_dup": "%d songs were skipped due to being unavailable or duplicates.",
     "playlist_added_count": "Added",
     "playlist_added_songs": "Songs Added",
-    "playlist_songs_unit": "%d songs"
+    "playlist_songs_unit": "%d songs",
+    "error_private_video": "Private video",
+    "error_deleted_video": "Deleted video",
+    "error_age_restricted": "Age-restricted video",
+    "error_geo_restricted": "Region-restricted video",
+    "error_members_only": "Members-only video",
+    "error_premium_only": "Premium-only video",
+    "error_copyright": "Blocked due to copyright",
+    "error_blocked": "Blocked video",
+    "error_unavailable": "Unavailable video"
   },
 
   "queue": {
@@ -533,12 +542,33 @@
     "leaving_empty_footer": "The queue is empty",
     "leaving_error_desc": "An unrecoverable error occurred",
     "leaving_error_footer": "Leaving the voice channel",
-    "leaving_default_desc": "Leaving the voice channel"
+    "leaving_default_desc": "Leaving the voice channel",
+    "error_private_video": "Private video",
+    "error_deleted_video": "Deleted video",
+    "error_age_restricted": "Age-restricted video",
+    "error_geo_restricted": "Region-restricted video",
+    "error_members_only": "Members-only video",
+    "error_premium_only": "Premium-only video",
+    "error_copyright": "Blocked due to copyright",
+    "error_blocked": "Blocked video",
+    "error_removed_by_uploader": "Removed by uploader",
+    "error_account_terminated": "Account terminated video",
+    "error_unavailable": "Unavailable video"
   },
 
   "youtube": {
+    "error_private_video": "This is a private video.",
     "error_age_restricted": "This content is age-restricted and cannot be played.",
+    "error_geo_restricted": "This video is not available in your country.",
+    "error_members_only": "This is members-only content.",
+    "error_premium_only": "This is premium-only content.",
+    "error_copyright": "This video has been blocked due to copyright.",
+    "error_unplayable": "This video cannot be played.",
+    "error_unplayable_reason": "This video cannot be played: %s",
+    "error_deleted_video": "This video has been deleted.",
     "error_unavailable": "This video is currently unavailable.",
+    "error_unavailable_reason": "This video is currently unavailable: %s",
+    "error_content_check": "Content check required.",
     "error_age_verification": "Age verification is required for this content",
     "error_region_restricted": "This content is region-restricted",
     "error_private_or_deleted": "This video is private or has been deleted"

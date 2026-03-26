@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strings"
 	"time"
 
 	"noraegaori/internal/messages"
@@ -163,7 +164,7 @@ func (c *InnertubeClient) callPlayerEndpoint(ctx context.Context, videoID string
 	reqBody := innertubeRequest{}
 	reqBody.Context.Client.ClientName = c.clientName
 	reqBody.Context.Client.ClientVersion = c.clientVersion
-	reqBody.Context.Client.HL = messages.Lang()
+	reqBody.Context.Client.HL = "en"
 	reqBody.Context.Client.GL = "US"
 	reqBody.VideoID = videoID
 
@@ -243,7 +244,7 @@ func (c *InnertubeClient) CheckAvailability(url string) (bool, bool, error) {
 
 	// Video is unavailable - classify the restriction type
 	reason := resp.PlayabilityStatus.Reason
-	errorMsg := classifyRestriction(status, reason)
+	errorMsg := classifyRestriction(status, reason, resp.PlayabilityStatus.Messages)
 
 	logger.Debugf("[Innertube] Video unavailable: %s (status: %s, reason: %s)", videoID, status, reason)
 	return false, false, errors.New(errorMsg)
@@ -273,7 +274,7 @@ func (c *InnertubeClient) GetVideoInfo(url, requesterName, requesterID string) (
 	status := resp.PlayabilityStatus.Status
 	if status != "OK" {
 		reason := resp.PlayabilityStatus.Reason
-		errorMsg := classifyRestriction(status, reason)
+		errorMsg := classifyRestriction(status, reason, resp.PlayabilityStatus.Messages)
 		logger.Infof("[Innertube] Video unavailable: %s (%v)", errorMsg, duration)
 		return nil, &VideoError{
 			Message: errorMsg,
@@ -354,7 +355,7 @@ func (c *InnertubeClient) CheckVideoAvailability(url string) (*AvailabilityResul
 
 	// Video is unavailable - classify the restriction type
 	reason := resp.PlayabilityStatus.Reason
-	errorMsg := classifyRestriction(status, reason)
+	errorMsg := classifyRestriction(status, reason, resp.PlayabilityStatus.Messages)
 
 	logger.Infof("[Innertube] Video unavailable: %s (%v)", errorMsg, duration)
 	return &AvailabilityResult{
@@ -364,19 +365,62 @@ func (c *InnertubeClient) CheckVideoAvailability(url string) (*AvailabilityResul
 	}, nil
 }
 
-// classifyRestriction returns the YouTube-provided localized reason text.
-// The reason is already localized by YouTube based on the HL parameter.
-func classifyRestriction(status, reason string) string {
-	if reason != "" {
-		return reason
-	}
+// classifyRestriction classifies the restriction type and returns appropriate localized error message
+func classifyRestriction(status, reason string, msgs []string) string {
+	reasonLower := strings.ToLower(reason)
+	messagesStr := strings.ToLower(strings.Join(msgs, " "))
 	yt := messages.T().YouTube
+
 	switch status {
 	case "LOGIN_REQUIRED":
+		// Check if it's private or age-restricted
+		if strings.Contains(reasonLower, "private") || strings.Contains(messagesStr, "private") {
+			return yt.ErrorPrivateVideo
+		}
+		// Age-restricted content
 		return yt.ErrorAgeRestricted
+
+	case "UNPLAYABLE":
+		// Region/geo-blocking
+		if strings.Contains(reasonLower, "country") || strings.Contains(reasonLower, "region") {
+			return yt.ErrorGeoRestricted
+		}
+		// Members-only content
+		if strings.Contains(reasonLower, "members") || strings.Contains(reasonLower, "membership") {
+			return yt.ErrorMembersOnly
+		}
+		// Premium content
+		if strings.Contains(reasonLower, "premium") {
+			return yt.ErrorPremiumOnly
+		}
+		// Copyright
+		if strings.Contains(reasonLower, "copyright") {
+			return yt.ErrorCopyright
+		}
+		// Generic unplayable
+		if reason != "" {
+			return fmt.Sprintf(yt.ErrorUnplayableReason, reason)
+		}
+		return yt.ErrorUnplayable
+
 	case "ERROR":
+		// Deleted/unavailable video
+		if strings.Contains(reasonLower, "unavailable") {
+			return yt.ErrorDeletedVideo
+		}
+		if reason != "" {
+			return fmt.Sprintf(yt.ErrorUnavailableReason, reason)
+		}
 		return yt.ErrorUnavailable
+
+	case "CONTENT_CHECK_REQUIRED":
+		return yt.ErrorContentCheck
+
 	default:
+		// Unknown status
+		if reason != "" {
+			return fmt.Sprintf(yt.ErrorUnplayableReason, reason)
+		}
 		return yt.ErrorUnavailable
 	}
 }

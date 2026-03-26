@@ -48,6 +48,30 @@ func isDefinitiveUnavailableError(errorMsg string) bool {
 	return false
 }
 
+// cleanErrorMessage extracts the main error reason from verbose yt-dlp error messages
+func cleanErrorMessage(errorMsg string) string {
+	errorLower := strings.ToLower(errorMsg)
+	t := messages.T()
+	errorMappings := map[string]string{
+		"private video":              t.Music.ErrorPrivateVideo,
+		"deleted video":              t.Music.ErrorDeletedVideo,
+		"age-restricted":             t.Music.ErrorAgeRestricted,
+		"age restricted":             t.Music.ErrorAgeRestricted,
+		"not available in your country": t.Music.ErrorGeoRestricted,
+		"geo":                        t.Music.ErrorGeoRestricted,
+		"members-only":               t.Music.ErrorMembersOnly,
+		"members only":               t.Music.ErrorMembersOnly,
+		"premium":                    t.Music.ErrorPremiumOnly,
+		"copyright":                  t.Music.ErrorCopyright,
+		"blocked":                    t.Music.ErrorBlocked,
+	}
+	for pattern, message := range errorMappings {
+		if strings.Contains(errorLower, pattern) {
+			return message
+		}
+	}
+	return t.Music.ErrorUnavailable
+}
 
 // voteSession tracks an active vote with expiration support
 type voteSession struct {
@@ -1807,7 +1831,7 @@ func processRemainingPlaylistSongs(s *discordgo.Session, i *discordgo.Interactio
 		errorEmbed := &discordgo.MessageEmbed{
 			Color:       messages.ColorError,
 			Title:       messages.TitleUnavailable,
-			Description: fmt.Sprintf("**%s**\n%s", messages.EscapeMarkdown(skipped.Title), skipped.Error),
+			Description: fmt.Sprintf("**%s**\n%s", messages.EscapeMarkdown(skipped.Title), cleanErrorMessage(skipped.Error)),
 		}
 		if skipped.Thumbnail != "" {
 			errorEmbed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: skipped.Thumbnail}
@@ -1941,7 +1965,7 @@ func processAllPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreat
 		errorEmbed := &discordgo.MessageEmbed{
 			Color:       messages.ColorError,
 			Title:       messages.TitleUnavailable,
-			Description: fmt.Sprintf("**%s**\n%s", messages.EscapeMarkdown(skipped.Title), skipped.Error),
+			Description: fmt.Sprintf("**%s**\n%s", messages.EscapeMarkdown(skipped.Title), cleanErrorMessage(skipped.Error)),
 		}
 		if skipped.Thumbnail != "" {
 			errorEmbed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: skipped.Thumbnail}

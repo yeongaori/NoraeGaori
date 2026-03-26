@@ -466,7 +466,16 @@
     "playlist_skipped_or_dup": "%d곡은 재생할 수 없거나 중복으로 건너뛰었습니다.",
     "playlist_added_count": "추가됨",
     "playlist_added_songs": "추가된 곡 수",
-    "playlist_songs_unit": "%d곡"
+    "playlist_songs_unit": "%d곡",
+    "error_private_video": "비공개 동영상",
+    "error_deleted_video": "삭제된 동영상",
+    "error_age_restricted": "연령 제한 동영상",
+    "error_geo_restricted": "지역 제한 동영상",
+    "error_members_only": "멤버십 전용 동영상",
+    "error_premium_only": "프리미엄 전용 동영상",
+    "error_copyright": "저작권 문제로 차단됨",
+    "error_blocked": "차단된 동영상",
+    "error_unavailable": "재생할 수 없는 동영상"
   },
 
   "queue": {
@@ -533,12 +542,33 @@
     "leaving_empty_footer": "대기열이 비어 있습니다",
     "leaving_error_desc": "복구할 수 없는 오류 발생",
     "leaving_error_footer": "음성 채팅을 나갑니다",
-    "leaving_default_desc": "음성 채팅을 나갑니다"
+    "leaving_default_desc": "음성 채팅을 나갑니다",
+    "error_private_video": "비공개 동영상",
+    "error_deleted_video": "삭제된 동영상",
+    "error_age_restricted": "연령 제한 동영상",
+    "error_geo_restricted": "지역 제한 동영상",
+    "error_members_only": "멤버십 전용 동영상",
+    "error_premium_only": "프리미엄 전용 동영상",
+    "error_copyright": "저작권 문제로 차단됨",
+    "error_blocked": "차단된 동영상",
+    "error_removed_by_uploader": "업로더에 의해 삭제됨",
+    "error_account_terminated": "계정 정지된 동영상",
+    "error_unavailable": "재생할 수 없는 동영상"
   },
 
   "youtube": {
+    "error_private_video": "비공개 동영상입니다.",
     "error_age_restricted": "연령 제한이 있는 콘텐츠입니다. 이 영상은 재생할 수 없습니다.",
+    "error_geo_restricted": "이 영상은 귀하의 국가에서 재생할 수 없습니다.",
+    "error_members_only": "멤버십 전용 콘텐츠입니다.",
+    "error_premium_only": "프리미엄 전용 콘텐츠입니다.",
+    "error_copyright": "저작권 문제로 차단되었습니다.",
+    "error_unplayable": "이 영상은 재생할 수 없습니다.",
+    "error_unplayable_reason": "이 영상은 재생할 수 없습니다: %s",
+    "error_deleted_video": "삭제된 동영상입니다.",
     "error_unavailable": "이 영상은 현재 재생할 수 없습니다.",
+    "error_unavailable_reason": "이 영상은 현재 재생할 수 없습니다: %s",
+    "error_content_check": "콘텐츠 확인이 필요합니다.",
     "error_age_verification": "성인 인증이 필요한 콘텐츠입니다",
     "error_region_restricted": "지역 제한이 있는 콘텐츠입니다",
     "error_private_or_deleted": "비공개 또는 삭제된 영상입니다"
