@@ -580,9 +580,9 @@
   },
 
   "rpc": {
-    "activity_music": "Music",
-    "activity_song": "Songs",
-    "activity_playlist": "Playlists",
-    "activity_music_video": "Music Videos"
+    "activity_default_1": "Music",
+    "activity_default_2": "Songs",
+    "activity_default_3": "Playlists",
+    "activity_default_4": "Music Videos"
   }
 }

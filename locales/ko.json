@@ -580,9 +580,9 @@
   },
 
   "rpc": {
-    "activity_music": "음악",
-    "activity_song": "노래",
-    "activity_playlist": "플레이리스트",
-    "activity_music_video": "뮤직비디오"
+    "activity_default_1": "음악",
+    "activity_default_2": "노래",
+    "activity_default_3": "플레이리스트",
+    "activity_default_4": "뮤직비디오"
   }
 }

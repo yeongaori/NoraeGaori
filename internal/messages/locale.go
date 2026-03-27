@@ -432,10 +432,10 @@ type VoiceHandlerMessages struct {
 }
 
 type RPCMessages struct {
-	ActivityMusic      string `json:"activity_music"`
-	ActivitySong       string `json:"activity_song"`
-	ActivityPlaylist   string `json:"activity_playlist"`
-	ActivityMusicVideo string `json:"activity_music_video"`
+	ActivityDefault1 string `json:"activity_default_1"`
+	ActivityDefault2 string `json:"activity_default_2"`
+	ActivityDefault3 string `json:"activity_default_3"`
+	ActivityDefault4 string `json:"activity_default_4"`
 }
 
 // currentLocale holds the loaded locale (initialized to empty struct to avoid nil panics)
