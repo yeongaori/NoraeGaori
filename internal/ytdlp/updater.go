@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -328,6 +329,52 @@ func AutoUpdate() {
 	if err := UpdateLastCheckTime(); err != nil {
 		logger.Debugf("[yt-dlp] Failed to update check timestamp: %v", err)
 	}
+}
+
+var jsRuntime string
+
+// DetectJsRuntime checks for node (incl. nvm) → deno → bun, logs warnings
+func DetectJsRuntime() {
+	if _, err := exec.LookPath("node"); err == nil {
+		jsRuntime = "node"
+		return
+	}
+
+	if tryNvm() {
+		jsRuntime = "node"
+		return
+	}
+
+	for _, rt := range []string{"deno", "bun"} {
+		if _, err := exec.LookPath(rt); err == nil {
+			logger.Warnf("[yt-dlp] Node.js not found, using %s", rt)
+			jsRuntime = rt
+			return
+		}
+	}
+
+	logger.Warn("[yt-dlp] Node.js not found, using no JS runtime")
+}
+
+// tryNvm finds node under ~/.nvm and prepends its bin dir to PATH
+func tryNvm() bool {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+	matches, err := filepath.Glob(filepath.Join(home, ".nvm", "versions", "node", "*", "bin", "node"))
+	if err != nil || len(matches) == 0 {
+		return false
+	}
+	sort.Strings(matches)
+	nodeBin := filepath.Dir(matches[len(matches)-1])
+	os.Setenv("PATH", nodeBin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return true
+}
+
+// GetJsRuntime returns the detected runtime ("node", "deno", "bun", or "")
+func GetJsRuntime() string {
+	return jsRuntime
 }
 
 // copyFile copies a file from src to dst

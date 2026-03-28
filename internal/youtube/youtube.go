@@ -15,6 +15,13 @@ import (
 	"noraegaori/pkg/logger"
 )
 
+func applyJsRuntime(cmd *ytdlp.Command) *ytdlp.Command {
+	if rt := ytdlpUpdater.GetJsRuntime(); rt != "" {
+		return cmd.JsRuntimes(rt)
+	}
+	return cmd
+}
+
 // Song represents a YouTube song
 type Song struct {
 	URL           string
@@ -349,11 +356,10 @@ func CheckVideoAvailability(url string) (*AvailabilityResult, error) {
 		defer cancel()
 
 		// Create ytdlp command with flags to skip download and get flat playlist info
-		cmd := ytdlp.New().
+		cmd := applyJsRuntime(ytdlp.New().
 			SetExecutable(ytdlpUpdater.GetBinaryPath()).
 			DumpJSON().
-			FlatPlaylist().
-			JsRuntimes("node").
+			FlatPlaylist()).
 			SkipDownload()
 
 		// Run yt-dlp to get video information
@@ -563,8 +569,8 @@ func GetVideoInfo(url, requesterName, requesterID string) (*Song, error) {
 		cmd := ytdlp.New().
 			SetExecutable(ytdlpUpdater.GetBinaryPath()).
 			DumpJSON().
-			NoPlaylist().
-			JsRuntimes("node").
+			NoPlaylist()
+		cmd = applyJsRuntime(cmd).
 			Format("bestaudio/best")
 
 		// Run yt-dlp to get video information
@@ -712,8 +718,8 @@ func GetStreamURL(url string, sponsorBlock bool, bitrate int) (string, error) {
 		cmd := ytdlp.New().
 			SetExecutable(ytdlpUpdater.GetBinaryPath()).
 			GetURL().
-			NoPlaylist().
-			JsRuntimes("node").
+			NoPlaylist()
+		cmd = applyJsRuntime(cmd).
 			Format(audioFormat)
 
 		// Add SponsorBlock if enabled
@@ -813,8 +819,8 @@ func IsLiveStreamActive(url string) (bool, error) {
 	cmd := ytdlp.New().
 		SetExecutable(ytdlpUpdater.GetBinaryPath()).
 		DumpJSON().
-		NoPlaylist().
-		JsRuntimes("node").
+		NoPlaylist()
+	cmd = applyJsRuntime(cmd).
 		Format("bestaudio/best")
 
 	// Run yt-dlp to get video information
@@ -869,8 +875,8 @@ func CheckIfLiveStreamEnded(url string) (bool, error) {
 		cmd := ytdlp.New().
 			SetExecutable(ytdlpUpdater.GetBinaryPath()).
 			DumpJSON().
-			FlatPlaylist().
-			JsRuntimes("node").
+			FlatPlaylist()
+		cmd = applyJsRuntime(cmd).
 			NoPlaylist()
 
 		// Run yt-dlp to get video information
@@ -986,8 +992,8 @@ func GetPlaylistInfo(url, requesterName, requesterID string) (*PlaylistInfo, err
 		SetExecutable(ytdlpUpdater.GetBinaryPath()).
 		ExtractorArgs("youtube:lang=" + messages.Lang()).
 		DumpJSON().
-		FlatPlaylist().
-		JsRuntimes("node").
+		FlatPlaylist()
+	cmd = applyJsRuntime(cmd).
 		IgnoreErrors()
 
 	// Run yt-dlp to get playlist information
@@ -1163,8 +1169,8 @@ func CheckAvailability(url string) (available bool, isLive bool, err error) {
 		cmd := ytdlp.New().
 			SetExecutable(ytdlpUpdater.GetBinaryPath()).
 			DumpJSON().
-			NoPlaylist().
-			JsRuntimes("node").
+			NoPlaylist()
+		cmd = applyJsRuntime(cmd).
 			SkipDownload()
 
 		// Run yt-dlp to check availability
