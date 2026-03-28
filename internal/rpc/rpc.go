@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -47,11 +48,33 @@ func DefaultConfig() *Config {
 		LogRPCChanges:      false,
 		RandomizeRPC:       true,
 		Activities: []Activity{
-			{Name: messages.T().RPC.ActivityMusic, Type: "Playing"},
-			{Name: messages.T().RPC.ActivitySong, Type: "Listening"},
-			{Name: messages.T().RPC.ActivityPlaylist, Type: "Watching"},
-			{Name: messages.T().RPC.ActivityMusicVideo, Type: "Watching"},
+			{Name: "lang.activity_default_1", Type: "Playing"},
+			{Name: "lang.activity_default_2", Type: "Listening"},
+			{Name: "lang.activity_default_3", Type: "Watching"},
+			{Name: "lang.activity_default_4", Type: "Watching"},
 		},
+	}
+}
+
+// resolveActivityName resolves an activity name, replacing lang. prefixed
+// keys with the corresponding locale string.
+func resolveActivityName(name string) string {
+	if !strings.HasPrefix(name, "lang.") {
+		return name
+	}
+	key := strings.TrimPrefix(name, "lang.")
+	rpc := messages.T().RPC
+	switch key {
+	case "activity_default_1":
+		return rpc.ActivityDefault1
+	case "activity_default_2":
+		return rpc.ActivityDefault2
+	case "activity_default_3":
+		return rpc.ActivityDefault3
+	case "activity_default_4":
+		return rpc.ActivityDefault4
+	default:
+		return name
 	}
 }
 
@@ -198,11 +221,14 @@ func updateActivity(session *discordgo.Session, cfg *Config, currentIndex *int) 
 		return
 	}
 
+	// Resolve activity name (handles lang. prefix for locale strings)
+	name := resolveActivityName(activity.Name)
+
 	// Update presence
 	err := session.UpdateStatusComplex(discordgo.UpdateStatusData{
 		Activities: []*discordgo.Activity{
 			{
-				Name: activity.Name,
+				Name: name,
 				Type: activityType,
 			},
 		},
@@ -215,6 +241,6 @@ func updateActivity(session *discordgo.Session, cfg *Config, currentIndex *int) 
 	}
 
 	if cfg.LogRPCChanges {
-		logger.Infof("RPC updated to: %s %s", activity.Type, activity.Name)
+		logger.Infof("RPC updated to: %s %s", activity.Type, name)
 	}
 }

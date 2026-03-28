@@ -432,21 +432,30 @@ type VoiceHandlerMessages struct {
 }
 
 type RPCMessages struct {
-	ActivityMusic      string `json:"activity_music"`
-	ActivitySong       string `json:"activity_song"`
-	ActivityPlaylist   string `json:"activity_playlist"`
-	ActivityMusicVideo string `json:"activity_music_video"`
+	ActivityDefault1 string `json:"activity_default_1"`
+	ActivityDefault2 string `json:"activity_default_2"`
+	ActivityDefault3 string `json:"activity_default_3"`
+	ActivityDefault4 string `json:"activity_default_4"`
 }
 
 // currentLocale holds the loaded locale (initialized to empty struct to avoid nil panics)
 var currentLocale = &Locale{}
+
+// currentLang holds the language code of the loaded locale (e.g. "en", "ko")
+var currentLang = "en"
 
 // T returns the current locale. Returns nil if no locale has been loaded.
 func T() *Locale {
 	return currentLocale
 }
 
+// Lang returns the current language code (e.g. "en", "ko").
+func Lang() string {
+	return currentLang
+}
+
 func LoadLocale(lang string) error {
+	currentLang = lang
 	localesDir := "locales"
 
 	enData, err := readLocaleFile(filepath.Join(localesDir, "en.json"))

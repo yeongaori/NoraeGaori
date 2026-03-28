@@ -114,9 +114,12 @@ func GetStreamPipe(url string, sponsorBlock bool, bitrate int, seekTime int) (*S
 	args := []string{
 		"--no-warnings",
 		"--no-playlist",
-		"--js-runtimes", "node",
 		"--format", audioFormat,
 		"--output", "-", // Output to stdout
+	}
+
+	if rt := ytdlpUpdater.GetJsRuntime(); rt != "" {
+		args = append(args, "--js-runtimes", rt)
 	}
 
 	// Add download speed limit from config

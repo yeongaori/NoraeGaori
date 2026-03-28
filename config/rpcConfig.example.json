@@ -5,19 +5,19 @@
   "RANDOMIZE_RPC": true,
   "activities": [
     {
-      "name": "Music",
+      "name": "lang.activity_default_1",
       "type": "Playing"
     },
     {
-      "name": "Songs",
+      "name": "lang.activity_default_2",
       "type": "Listening"
     },
     {
-      "name": "Playlists",
+      "name": "lang.activity_default_3",
       "type": "Watching"
     },
     {
-      "name": "Music Videos",
+      "name": "lang.activity_default_4",
       "type": "Watching"
     }
   ]

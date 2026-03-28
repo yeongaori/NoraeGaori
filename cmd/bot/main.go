@@ -83,6 +83,7 @@ func main() {
 
 	// Update yt-dlp (always check on startup)
 	ytdlpUpdater.AutoUpdate()
+	ytdlpUpdater.DetectJsRuntime()
 
 	// Get bot token
 	token := os.Getenv("DISCORD_BOT_TOKEN")
