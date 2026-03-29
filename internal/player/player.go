@@ -583,6 +583,25 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 		}
 	}
 
+	// If no loading message exists (e.g., after skip), send one so the user sees feedback
+	if GetLoadingMessage(guildID) == nil && q.ShowStartedTrack {
+		loadingEmbed := messages.CreateSongEmbed(
+			messages.ColorWarning,
+			messages.TitleLoading,
+			messages.DescLoading,
+			song.Title,
+			song.URL,
+			song.Uploader,
+			song.Duration,
+			song.RequestedByTag,
+			song.Thumbnail,
+		)
+		msg, err := session.ChannelMessageSendEmbed(q.TextChannelID, loadingEmbed)
+		if err == nil && msg != nil {
+			SetLoadingMessage(guildID, msg)
+		}
+	}
+
 	// Get stream URL (check pre-cache first, then fetch from YouTube)
 	song.SetState(queue.SongStateLoading)
 	var streamURL string
@@ -652,7 +671,11 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 
 		_, err := session.ChannelMessageEditEmbed(loadingMsg.ChannelID, loadingMsg.ID, nowPlayingEmbed)
 		if err != nil {
-			logger.Debugf("[Play] Failed to update loading message: %v", err)
+			logger.Warnf("[Play] Failed to update loading message: %v", err)
+			// Edit failed (message deleted, permissions, etc.) — send a fresh message
+			if q.ShowStartedTrack {
+				session.ChannelMessageSendEmbed(q.TextChannelID, nowPlayingEmbed)
+			}
 		}
 
 		// Clean up loading message
@@ -695,7 +718,7 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 	normalization := q.Normalization
 	for {
 		logger.Debugf("[Play] Calling playAudio for: %s (seekTime: %d, volume: %g, normalization: %v)", song.Title, seekTime, q.Volume, normalization)
-		err := playAudio(player, song, streamURL, seekTime, q.Volume, normalization)
+		err := playAudio(player, song, streamURL, seekTime, q.Volume, normalization, voiceChannelBitrate)
 		if err == nil {
 			break
 		}
@@ -868,7 +891,7 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 }
 
 // playAudio streams audio to Discord
-func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime int, volume float64, normalization bool) error {
+func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime int, volume float64, normalization bool, bitrate int) error {
 	logger.Debugf("[playAudio] Entered function for guild: %s", player.GuildID)
 
 	// Capture stop channel locally so goroutines reference this specific channel
@@ -923,6 +946,9 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 	} else {
 		logger.Debugf("[playAudio] Skipping onSongStart callback (retry %d) for guild: %s", retries, guildID)
 	}
+
+	// Pre-cache next song so skip doesn't trigger a full yt-dlp call
+	go PreCacheNext(guildID, bitrate)
 
 	// Build FFmpeg command
 	logger.Debugf("[playAudio] Building FFmpeg command for guild: %s", guildID)
