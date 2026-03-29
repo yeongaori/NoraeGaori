@@ -119,18 +119,16 @@ func CreateInfoEmbed(title, description string) *discordgo.MessageEmbed {
 	return CreateEmbed(ColorInfo, title, description)
 }
 
-// EscapeMarkdown escapes Discord markdown special characters
-// Only escapes characters that actually trigger markdown formatting:
-// _ (italic/underline), ` (code), \ (escape char)
-// Note: * is NOT escaped to allow bold formatting in song titles
-// Note: | is NOT escaped - single pipe doesn't trigger markdown, only || (spoiler) does
-// Note: ~ is NOT escaped - single tilde doesn't trigger markdown, only ~~ (strikethrough) does
+// EscapeMarkdown escapes characters that can break Discord embed rendering.
+// Escapes \ (escape char) and [ ] (which break markdown link syntax).
+// Does NOT escape _, `, * — these only trigger formatting in matched pairs
+// and escaping them causes visible backslashes in most real-world text.
 func EscapeMarkdown(text string) string {
 	// Escape backslash first to avoid double-escaping
 	text = strings.ReplaceAll(text, "\\", "\\\\")
-	// Then escape other characters
-	text = strings.ReplaceAll(text, "_", "\\_")
-	text = strings.ReplaceAll(text, "`", "\\`")
+	// Escape brackets to prevent breaking [text](url) link syntax
+	text = strings.ReplaceAll(text, "[", "\\[")
+	text = strings.ReplaceAll(text, "]", "\\]")
 	return text
 }
 
