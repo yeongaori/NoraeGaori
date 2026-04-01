@@ -227,13 +227,10 @@ func stripMarkdown(s string) string {
 
 // HandlePlayNext handles the playnext command (adds song at position 2)
 func HandlePlayNext(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	// Defer response for long-running operation
-	DeferResponse(s, i)
-
-	// Get query from options
+	// Get query from options (before defer — no need to defer for simple validation errors)
 	options := i.ApplicationCommandData().Options
 	if len(options) == 0 {
-		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T().Music.EnterQuery))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T().Music.EnterQuery))
 		return nil
 	}
 	query := options[0].StringValue()
@@ -241,12 +238,15 @@ func HandlePlayNext(s *discordgo.Session, i *discordgo.InteractionCreate) error 
 	// Strip markdown formatting from query
 	query = stripMarkdown(query)
 
-	// Check if user is in a voice channel
+	// Check if user is in a voice channel (before defer — fast fail)
 	voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
 	if err != nil || voiceState.ChannelID == "" {
-		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.ErrorNotInVoiceChannel))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.ErrorNotInVoiceChannel))
 		return nil
 	}
+
+	// Defer response for long-running operation
+	DeferResponse(s, i)
 
 	// Show searching message
 	searchEmbed := messages.CreateWarningEmbed(messages.TitleSearching, fmt.Sprintf(messages.DescSearching, query))
@@ -322,13 +322,10 @@ func HandlePlayNext(s *discordgo.Session, i *discordgo.InteractionCreate) error 
 
 // HandlePlay handles the play command
 func HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	// Defer response for long-running operation
-	DeferResponse(s, i)
-
-	// Get query from options
+	// Get query from options (before defer — no need to defer for simple validation errors)
 	options := i.ApplicationCommandData().Options
 	if len(options) == 0 {
-		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T().Music.EnterQuery))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T().Music.EnterQuery))
 		return nil
 	}
 	query := options[0].StringValue()
@@ -336,12 +333,15 @@ func HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	// Strip markdown formatting from query (e.g., **URL** -> URL)
 	query = stripMarkdown(query)
 
-	// Check if user is in a voice channel
+	// Check if user is in a voice channel (before defer — fast fail)
 	voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
 	if err != nil || voiceState.ChannelID == "" {
-		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.ErrorNotInVoiceChannel))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.ErrorNotInVoiceChannel))
 		return nil
 	}
+
+	// Defer response for long-running operation
+	DeferResponse(s, i)
 
 	// Show searching message
 	searchEmbed := messages.CreateWarningEmbed(messages.TitleSearching, fmt.Sprintf(messages.DescSearching, query))
