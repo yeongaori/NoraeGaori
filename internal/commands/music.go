@@ -204,27 +204,6 @@ func getPlaylistLock(guildID string) *sync.Mutex {
 	return playlistLocks[guildID]
 }
 
-// stripMarkdown removes common markdown formatting from a string
-// This handles cases where URLs are pasted with markdown formatting (e.g., **URL**)
-func stripMarkdown(s string) string {
-	s = strings.TrimSpace(s)
-	// Remove bold/italic (**text** or __text__)
-	if strings.HasPrefix(s, "**") && strings.HasSuffix(s, "**") && len(s) > 4 {
-		s = s[2 : len(s)-2]
-	} else if strings.HasPrefix(s, "__") && strings.HasSuffix(s, "__") && len(s) > 4 {
-		s = s[2 : len(s)-2]
-	} else if strings.HasPrefix(s, "*") && strings.HasSuffix(s, "*") && len(s) > 2 {
-		s = s[1 : len(s)-1]
-	} else if strings.HasPrefix(s, "_") && strings.HasSuffix(s, "_") && len(s) > 2 {
-		s = s[1 : len(s)-1]
-	}
-	// Remove angle brackets (common in Discord URL formatting)
-	if strings.HasPrefix(s, "<") && strings.HasSuffix(s, ">") && len(s) > 2 {
-		s = s[1 : len(s)-1]
-	}
-	return strings.TrimSpace(s)
-}
-
 // HandlePlayNext handles the playnext command (adds song at position 2)
 func HandlePlayNext(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	// Get query from options (before defer — no need to defer for simple validation errors)
@@ -236,7 +215,7 @@ func HandlePlayNext(s *discordgo.Session, i *discordgo.InteractionCreate) error 
 	query := options[0].StringValue()
 
 	// Strip markdown formatting from query
-	query = stripMarkdown(query)
+	query = messages.StripMarkdown(query)
 
 	// Check if user is in a voice channel (before defer — fast fail)
 	voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
@@ -331,7 +310,7 @@ func HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	query := options[0].StringValue()
 
 	// Strip markdown formatting from query (e.g., **URL** -> URL)
-	query = stripMarkdown(query)
+	query = messages.StripMarkdown(query)
 
 	// Check if user is in a voice channel (before defer — fast fail)
 	voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
@@ -421,7 +400,7 @@ func HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		embed = &discordgo.MessageEmbed{
 			Color:       messages.ColorWarning,
 			Title:       messages.TitleLoading,
-			Description: fmt.Sprintf("**[%s](%s)**\n\n%s", messages.EscapeMarkdown(song.Title), song.URL, messages.DescLoading),
+			Description: fmt.Sprintf("%s\n\n%s", messages.FormatBoldMaskedLink(song.Title, song.URL), messages.DescLoading),
 			Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: song.Thumbnail},
 			Fields: []*discordgo.MessageEmbedField{
 				{Name: messages.FieldUploader, Value: song.Uploader, Inline: true},
@@ -477,7 +456,7 @@ func handlePurePlaylist(s *discordgo.Session, i *discordgo.InteractionCreate, pl
 		Color: messages.ColorInfo,
 		Title: messages.TitlePlaylistFound,
 		Description: fmt.Sprintf(messages.T().Music.PlaylistConfirmDesc,
-			messages.EscapeMarkdown(playlistInfo.Title), playlistInfo.URL, playlistInfo.VideoCount),
+			messages.FormatBoldMaskedLink(playlistInfo.Title, playlistInfo.URL), playlistInfo.VideoCount),
 		Thumbnail: &discordgo.MessageEmbedThumbnail{URL: playlistInfo.ThumbnailURL},
 		Footer:    &discordgo.MessageEmbedFooter{Text: messages.T().Music.PlaylistConfirmFooter},
 	}
@@ -591,10 +570,10 @@ func handleVideoWithPlaylist(s *discordgo.Session, i *discordgo.InteractionCreat
 		var description string
 		if isDuplicate {
 			description = fmt.Sprintf(messages.T().Music.VideoWithPlaylistDuplicate,
-				messages.EscapeMarkdown(song.Title), song.URL)
+				messages.FormatBoldMaskedLink(song.Title, song.URL))
 		} else {
 			description = fmt.Sprintf(messages.T().Music.VideoWithPlaylistFound,
-				messages.EscapeMarkdown(song.Title), song.URL)
+				messages.FormatBoldMaskedLink(song.Title, song.URL))
 		}
 
 		embed = &discordgo.MessageEmbed{
@@ -728,7 +707,7 @@ func HandleResume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 			Color:       messages.ColorWarning,
 			Title:       messages.T().Music.LiveCheckingTitle,
 			Description: fmt.Sprintf(messages.T().Music.LiveCheckingDesc,
-				messages.EscapeMarkdown(currentSong.Title), currentSong.URL),
+				messages.FormatBoldMaskedLink(currentSong.Title, currentSong.URL)),
 			Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: currentSong.Thumbnail},
 		}
 		UpdateResponseEmbed(s, i, checkingEmbed)
@@ -761,7 +740,7 @@ func HandleResume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 				Color:       messages.ColorWarning,
 				Title:       messages.T().Music.LiveEndedTitle,
 				Description: fmt.Sprintf(messages.T().Music.LiveEndedSkip,
-					messages.EscapeMarkdown(currentSong.Title), currentSong.URL),
+					messages.FormatBoldMaskedLink(currentSong.Title, currentSong.URL)),
 			}
 			UpdateResponseEmbed(s, i, skipEmbed)
 
@@ -788,8 +767,8 @@ func HandleResume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		loadingEmbed := &discordgo.MessageEmbed{
 			Color:       messages.ColorWarning,
 			Title:       messages.TitleLoading,
-			Description: fmt.Sprintf("**[%s](%s)**\n\n%s",
-				messages.EscapeMarkdown(currentSong.Title), currentSong.URL, messages.DescLoading),
+			Description: fmt.Sprintf("%s\n\n%s",
+				messages.FormatBoldMaskedLink(currentSong.Title, currentSong.URL), messages.DescLoading),
 			Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: currentSong.Thumbnail},
 		}
 		UpdateResponseEmbed(s, i, loadingEmbed)
@@ -1211,7 +1190,7 @@ func HandleNowPlaying(s *discordgo.Session, i *discordgo.InteractionCreate) erro
 	embed := &discordgo.MessageEmbed{
 		Color:       color,
 		Title:       title,
-		Description: fmt.Sprintf("**[%s](%s)**", messages.EscapeMarkdown(song.Title), song.URL),
+		Description: messages.FormatBoldMaskedLink(song.Title, song.URL),
 		Fields: []*discordgo.MessageEmbedField{
 			{Name: messages.FieldUploader, Value: messages.EscapeMarkdown(song.Uploader), Inline: true},
 			{Name: messages.FieldDuration, Value: progressText, Inline: true},
@@ -1795,7 +1774,7 @@ func processRemainingPlaylistSongs(s *discordgo.Session, i *discordgo.Interactio
 	}
 
 	description := fmt.Sprintf(messages.T().Music.PlaylistCompleteDesc,
-		messages.EscapeMarkdown(playlistInfo.Title), playlistInfo.URL)
+		messages.FormatBoldMaskedLink(playlistInfo.Title, playlistInfo.URL))
 
 	if skippedCount > 0 {
 		description += fmt.Sprintf("\n\n"+messages.T().Music.PlaylistSkippedCount, skippedCount)
@@ -1931,7 +1910,7 @@ func processAllPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreat
 	}
 
 	// Send completion message
-	description := fmt.Sprintf("**[%s](%s)**", messages.EscapeMarkdown(playlistInfo.Title), playlistInfo.URL)
+	description := messages.FormatBoldMaskedLink(playlistInfo.Title, playlistInfo.URL)
 	if skippedCount > 0 {
 		description += fmt.Sprintf("\n\n"+messages.T().Music.PlaylistSkippedOrDup, skippedCount)
 	}

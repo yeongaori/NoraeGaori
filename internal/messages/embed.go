@@ -20,7 +20,7 @@ func CreateEmbed(color int, title, description string) *discordgo.MessageEmbed {
 func CreateSongEmbed(color int, title, description, songTitle, songURL, uploader, duration, requester, thumbnailURL string) *discordgo.MessageEmbed {
 	embed := &discordgo.MessageEmbed{
 		Title:       title,
-		Description: fmt.Sprintf("**[%s](%s)**", EscapeMarkdown(songTitle), songURL),
+		Description: FormatBoldMaskedLink(songTitle, songURL),
 		Color:       color,
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
 			URL: thumbnailURL,
@@ -57,18 +57,16 @@ func CreateQueueEmbed(songs []QueueSong, page, totalPages, totalSongs int) *disc
 
 	for i, song := range songs {
 		if i == 0 {
-			desc.WriteString(fmt.Sprintf("▶️ **[%s](%s)**\n   %s: %s | %s: %s | %s: %s\n\n",
-				EscapeMarkdown(song.Title),
-				song.URL,
+			desc.WriteString(fmt.Sprintf("▶️ %s\n   %s: %s | %s: %s | %s: %s\n\n",
+				FormatBoldMaskedLink(song.Title, song.URL),
 				FieldUploader, EscapeMarkdown(song.Uploader),
 				FieldDuration, song.Duration,
 				FieldRequester, EscapeMarkdown(song.Requester),
 			))
 		} else {
-			desc.WriteString(fmt.Sprintf("%d. **[%s](%s)**\n   %s: %s | %s: %s | %s: %s\n\n",
+			desc.WriteString(fmt.Sprintf("%d. %s\n   %s: %s | %s: %s | %s: %s\n\n",
 				song.Position,
-				EscapeMarkdown(song.Title),
-				song.URL,
+				FormatBoldMaskedLink(song.Title, song.URL),
 				FieldUploader, EscapeMarkdown(song.Uploader),
 				FieldDuration, song.Duration,
 				FieldRequester, EscapeMarkdown(song.Requester),
@@ -119,17 +117,76 @@ func CreateInfoEmbed(title, description string) *discordgo.MessageEmbed {
 	return CreateEmbed(ColorInfo, title, description)
 }
 
-// EscapeMarkdown escapes characters that can break Discord embed rendering.
-// Escapes \ (escape char) and [ ] (which break markdown link syntax).
-// Does NOT escape _, `, * — these only trigger formatting in matched pairs
-// and escaping them causes visible backslashes in most real-world text.
-func EscapeMarkdown(text string) string {
-	// Escape backslash first to avoid double-escaping
-	text = strings.ReplaceAll(text, "\\", "\\\\")
-	// Escape brackets to prevent breaking [text](url) link syntax
-	text = strings.ReplaceAll(text, "[", "\\[")
-	text = strings.ReplaceAll(text, "]", "\\]")
+func EscapeInline(text string) string {
+	text = strings.ReplaceAll(text, `\`, `\\`)
+	text = strings.ReplaceAll(text, `*`, `\*`)
+	text = strings.ReplaceAll(text, `_`, `\_`)
+	text = strings.ReplaceAll(text, `~`, `\~`)
+	text = strings.ReplaceAll(text, "`", "\\`")
+	text = strings.ReplaceAll(text, `|`, `\|`)
 	return text
+}
+
+func EscapeMarkdown(text string) string {
+	text = EscapeInline(text)
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		if strings.HasPrefix(line, ">") ||
+			strings.HasPrefix(line, "- ") || line == "-" {
+			lines[i] = `\` + line
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+func EscapeMessageContent(text string) string {
+	text = EscapeInline(text)
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		if strings.HasPrefix(line, ">") || strings.HasPrefix(line, "#") ||
+			strings.HasPrefix(line, "- ") || line == "-" {
+			lines[i] = `\` + line
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+func EscapeLinkText(text string) string {
+	text = strings.ReplaceAll(text, `\`, `\\`)
+	text = strings.ReplaceAll(text, `[`, `\[`)
+	text = strings.ReplaceAll(text, `]`, `\]`)
+	text = strings.ReplaceAll(text, `*`, `\*`)
+	text = strings.ReplaceAll(text, `~`, `\~`)
+	text = strings.ReplaceAll(text, `|`, `\|`)
+	text = strings.ReplaceAll(text, "`", "\\`")
+	return text
+}
+
+func EscapeURL(rawURL string) string {
+	return strings.ReplaceAll(rawURL, `)`, `%29`)
+}
+
+func FormatMaskedLink(title, url string) string {
+	return fmt.Sprintf("[%s](%s)", EscapeLinkText(title), EscapeURL(url))
+}
+
+func FormatBoldMaskedLink(title, url string) string {
+	return fmt.Sprintf("**%s**", FormatMaskedLink(title, url))
+}
+
+func StripMarkdown(s string) string {
+	s = strings.TrimSpace(s)
+	markers := []string{"***", "**", "__", "~~", "||", "*", "_", "`"}
+	for _, marker := range markers {
+		if len(s) > 2*len(marker) && strings.HasPrefix(s, marker) && strings.HasSuffix(s, marker) {
+			s = s[len(marker) : len(s)-len(marker)]
+			break
+		}
+	}
+	if strings.HasPrefix(s, "<") && strings.HasSuffix(s, ">") && len(s) > 2 {
+		s = s[1 : len(s)-1]
+	}
+	return strings.TrimSpace(s)
 }
 
 // CreateNavigationButtons creates Previous/Next buttons for pagination
