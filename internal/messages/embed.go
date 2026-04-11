@@ -129,6 +129,8 @@ func EscapeInline(text string) string {
 
 func EscapeMarkdown(text string) string {
 	text = EscapeInline(text)
+	text = strings.ReplaceAll(text, `[`, `\[`)
+	text = strings.ReplaceAll(text, `]`, `\]`)
 	lines := strings.Split(text, "\n")
 	for i, line := range lines {
 		if strings.HasPrefix(line, ">") ||
@@ -141,6 +143,8 @@ func EscapeMarkdown(text string) string {
 
 func EscapeMessageContent(text string) string {
 	text = EscapeInline(text)
+	text = strings.ReplaceAll(text, `[`, `\[`)
+	text = strings.ReplaceAll(text, `]`, `\]`)
 	lines := strings.Split(text, "\n")
 	for i, line := range lines {
 		if strings.HasPrefix(line, ">") || strings.HasPrefix(line, "#") ||
@@ -153,8 +157,6 @@ func EscapeMessageContent(text string) string {
 
 func EscapeLinkText(text string) string {
 	text = strings.ReplaceAll(text, `\`, `\\`)
-	text = strings.ReplaceAll(text, `[`, `\[`)
-	text = strings.ReplaceAll(text, `]`, `\]`)
 	text = strings.ReplaceAll(text, `*`, `\*`)
 	text = strings.ReplaceAll(text, `~`, `\~`)
 	text = strings.ReplaceAll(text, `|`, `\|`)
