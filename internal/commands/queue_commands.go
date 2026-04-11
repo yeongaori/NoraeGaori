@@ -92,19 +92,17 @@ func createQueueEmbed(songs []*queue.Song, page, totalPages, perPage int) *disco
 
 		if idx == 0 {
 			// Current playing song with ▶️
-			description.WriteString(fmt.Sprintf("▶️ **[%s](%s)**\n   %s: %s | %s: %s | %s: %s\n\n",
-				messages.EscapeMarkdown(song.Title),
-				song.URL,
+			description.WriteString(fmt.Sprintf("▶️ %s\n   %s: %s | %s: %s | %s: %s\n\n",
+				messages.FormatBoldMaskedLink(song.Title, song.URL),
 				messages.FieldUploader, messages.EscapeMarkdown(song.Uploader),
 				messages.FieldDuration, duration,
 				messages.FieldRequester, messages.EscapeMarkdown(song.RequestedByTag),
 			))
 		} else {
 			// Queue songs with number
-			description.WriteString(fmt.Sprintf("%d. **[%s](%s)**\n   %s: %s | %s: %s | %s: %s\n\n",
+			description.WriteString(fmt.Sprintf("%d. %s\n   %s: %s | %s: %s | %s: %s\n\n",
 				idx+1,
-				messages.EscapeMarkdown(song.Title),
-				song.URL,
+				messages.FormatBoldMaskedLink(song.Title, song.URL),
 				messages.FieldUploader, messages.EscapeMarkdown(song.Uploader),
 				messages.FieldDuration, duration,
 				messages.FieldRequester, messages.EscapeMarkdown(song.RequestedByTag),
@@ -848,7 +846,7 @@ func HandleSkipTo(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		Color: messages.ColorSuccess,
 		Title: messages.T().Queue.SkipToCompleteTitle,
 		Description: fmt.Sprintf(messages.T().Queue.SkipToCompleteDesc,
-			messages.EscapeMarkdown(targetSong.Title), targetSong.URL),
+			messages.FormatBoldMaskedLink(targetSong.Title, targetSong.URL)),
 		Fields: []*discordgo.MessageEmbedField{
 			{Name: messages.T().Queue.SkipToSkippedSongs, Value: fmt.Sprintf(messages.T().Queue.SkipToSongsCount, position-1), Inline: true},
 			{Name: messages.FieldRequester, Value: messages.EscapeMarkdown(targetSong.RequestedByTag), Inline: true},

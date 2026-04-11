@@ -179,6 +179,65 @@ func DeleteLoadingMessage(guildID string) {
 	logger.Debugf("[LoadingMessage] Deleted loading message for guild: %s", guildID)
 }
 
+// sendNowPlayingMessage updates the loading message to "Now Playing" or sends a new one.
+// Also handles reconnect message updates.
+func sendNowPlayingMessage(session *discordgo.Session, guildID string, song *queue.Song, q *queue.Queue) {
+	loadingMsg := GetLoadingMessage(guildID)
+	if loadingMsg != nil {
+		nowPlayingEmbed := messages.CreateSongEmbed(
+			messages.ColorSuccess,
+			messages.T().Player.PlaybackStarted,
+			"",
+			song.Title,
+			song.URL,
+			song.Uploader,
+			song.Duration,
+			song.RequestedByTag,
+			song.Thumbnail,
+		)
+
+		_, err := session.ChannelMessageEditEmbed(loadingMsg.ChannelID, loadingMsg.ID, nowPlayingEmbed)
+		if err != nil {
+			logger.Warnf("[Play] Failed to update loading message: %v", err)
+			if q.ShowStartedTrack {
+				session.ChannelMessageSendEmbed(q.TextChannelID, nowPlayingEmbed)
+			}
+		}
+
+		DeleteLoadingMessage(guildID)
+	} else if q.ShowStartedTrack {
+		embed := messages.CreateSongEmbed(
+			messages.ColorSuccess,
+			messages.T().Player.NowPlaying,
+			"",
+			song.Title,
+			song.URL,
+			song.Uploader,
+			song.Duration,
+			song.RequestedByTag,
+			song.Thumbnail,
+		)
+		session.ChannelMessageSendEmbed(q.TextChannelID, embed)
+	}
+
+	// Update reconnect message if resuming after a stream stall
+	if reconnectMsg := getReconnectMessage(guildID); reconnectMsg != nil {
+		reconnectedEmbed := messages.CreateSongEmbed(
+			messages.ColorSuccess,
+			messages.T().Player.StreamReconnectedTitle,
+			messages.T().Player.StreamReconnectedDesc,
+			song.Title,
+			song.URL,
+			song.Uploader,
+			song.Duration,
+			song.RequestedByTag,
+			song.Thumbnail,
+		)
+		session.ChannelMessageEditEmbed(reconnectMsg.ChannelID, reconnectMsg.ID, reconnectedEmbed)
+		deleteReconnectMessage(guildID)
+	}
+}
+
 // setReconnectMessage stores a reconnect message for a guild
 func setReconnectMessage(guildID string, msg *discordgo.Message) {
 	reconnectMessagesMu.Lock()
@@ -635,67 +694,30 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 		return playContinue // Play the new song
 	}
 
-	// Update loading message if it exists (stored globally by guild ID)
-	loadingMsg := GetLoadingMessage(guildID)
-	if loadingMsg != nil {
-		nowPlayingEmbed := messages.CreateSongEmbed(
-			messages.ColorSuccess,
-			messages.T().Player.PlaybackStarted,
-			"",
-			song.Title,
-			song.URL,
-			song.Uploader,
-			song.Duration,
-			song.RequestedByTag,
-			song.Thumbnail,
-		)
+	// Send "Now Playing" message only after the first audio frame is delivered to Discord
+	firstFrameCh := make(chan struct{}, 1)
+	var firstFrameOnce sync.Once
+	closeFirstFrame := func() { firstFrameOnce.Do(func() { close(firstFrameCh) }) }
 
-		_, err := session.ChannelMessageEditEmbed(loadingMsg.ChannelID, loadingMsg.ID, nowPlayingEmbed)
-		if err != nil {
-			logger.Debugf("[Play] Failed to update loading message: %v", err)
+	go func() {
+		select {
+		case <-firstFrameCh:
+			sendNowPlayingMessage(session, guildID, song, q)
+		case <-player.StopChan:
+			// Skipped/stopped before first frame — clean up loading message if any
+			if lm := GetLoadingMessage(guildID); lm != nil {
+				session.ChannelMessageDelete(lm.ChannelID, lm.ID)
+				DeleteLoadingMessage(guildID)
+			}
 		}
-
-		// Clean up loading message
-		DeleteLoadingMessage(guildID)
-	} else if q.ShowStartedTrack {
-		// Send "Now Playing" message if enabled and no loading message to update
-		embed := messages.CreateSongEmbed(
-			messages.ColorSuccess,
-			messages.T().Player.NowPlaying,
-			"",
-			song.Title,
-			song.URL,
-			song.Uploader,
-			song.Duration,
-			song.RequestedByTag,
-			song.Thumbnail,
-		)
-		session.ChannelMessageSendEmbed(q.TextChannelID, embed)
-	}
-
-	// Update reconnect message if resuming after a stream stall
-	if reconnectMsg := getReconnectMessage(guildID); reconnectMsg != nil {
-		reconnectedEmbed := messages.CreateSongEmbed(
-			messages.ColorSuccess,
-			messages.T().Player.StreamReconnectedTitle,
-			messages.T().Player.StreamReconnectedDesc,
-			song.Title,
-			song.URL,
-			song.Uploader,
-			song.Duration,
-			song.RequestedByTag,
-			song.Thumbnail,
-		)
-		session.ChannelMessageEditEmbed(reconnectMsg.ChannelID, reconnectMsg.ID, reconnectedEmbed)
-		deleteReconnectMessage(guildID)
-	}
+	}()
 
 	// Create audio stream (loop to support restart on normalization toggle)
 	seekTime := song.SeekTime
 	normalization := q.Normalization
 	for {
 		logger.Debugf("[Play] Calling playAudio for: %s (seekTime: %d, volume: %g, normalization: %v)", song.Title, seekTime, q.Volume, normalization)
-		err := playAudio(player, song, streamURL, seekTime, q.Volume, normalization)
+		err := playAudio(player, song, streamURL, seekTime, q.Volume, normalization, voiceChannelBitrate, firstFrameCh)
 		if err == nil {
 			break
 		}
@@ -785,14 +807,17 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 			} else {
 				time.Sleep(2 * time.Second)
 			}
+			closeFirstFrame()
 			return playContinue // Retry from saved position (will auto-reconnect voice)
 		}
 		// Remove failed song and try next
 		if err := queue.RemoveFirstSong(guildID); err != nil {
 			logger.Errorf("[Play] Failed to remove failed song: %v", err)
 		}
+		closeFirstFrame()
 		return playContinue // Try next song
 	} // end for (playAudio restart loop)
+	closeFirstFrame() // Unblock goroutine if first frame was never sent
 	logger.Debugf("[Play] playAudio completed successfully for: %s", song.Title)
 
 	// Song finished successfully
@@ -868,7 +893,7 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 }
 
 // playAudio streams audio to Discord
-func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime int, volume float64, normalization bool) error {
+func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime int, volume float64, normalization bool, bitrate int, firstFrameCh chan<- struct{}) error {
 	logger.Debugf("[playAudio] Entered function for guild: %s", player.GuildID)
 
 	// Capture stop channel locally so goroutines reference this specific channel
@@ -923,6 +948,9 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 	} else {
 		logger.Debugf("[playAudio] Skipping onSongStart callback (retry %d) for guild: %s", retries, guildID)
 	}
+
+	// Pre-cache next song so skip doesn't trigger a full yt-dlp call
+	go PreCacheNext(guildID, bitrate)
 
 	// Build FFmpeg command
 	logger.Debugf("[playAudio] Building FFmpeg command for guild: %s", guildID)
@@ -1155,6 +1183,10 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 			sentFrames++
 			if sentFrames == 1 {
 				logger.Debugf("[playAudio] First Opus frame sent successfully for guild: %s", guildID)
+				select {
+				case firstFrameCh <- struct{}{}:
+				default:
+				}
 			}
 
 		case <-player.VoiceConn.Dead:
