@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"runtime/debug"
@@ -74,6 +75,12 @@ func main() {
 		commands.ReloadAliases()
 	})
 
+	// Initialize version manager for yt-dlp
+	logger.Info("Initializing yt-dlp version manager...")
+	if err := ytdlpUpdater.InitVersionManager(); err != nil {
+		logger.Warnf("Failed to initialize version manager: %v", err)
+	}
+
 	// Initialize YouTube integration
 	logger.Info("Initializing YouTube integration...")
 	if err := youtube.Initialize(); err != nil {
@@ -84,6 +91,11 @@ func main() {
 	// Update yt-dlp (always check on startup)
 	ytdlpUpdater.AutoUpdate()
 	ytdlpUpdater.DetectJsRuntime()
+
+	// Start background yt-dlp updater
+	updaterCtx, updaterCancel := context.WithCancel(context.Background())
+	defer updaterCancel()
+	ytdlpUpdater.StartBackgroundUpdater(updaterCtx)
 
 	// Get bot token
 	token := os.Getenv("DISCORD_BOT_TOKEN")

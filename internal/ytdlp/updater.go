@@ -1,6 +1,7 @@
 package ytdlp
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,9 +18,9 @@ import (
 )
 
 const (
-	githubAPIURL      = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"
-	updateCheckFile   = "data/.ytdlp_last_check"
-	updateCheckPeriod = 7 * 24 * time.Hour // Check weekly
+	githubAPIURL        = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"
+	updateCheckInterval = 6 * time.Hour
+	minCheckInterval    = 1 * time.Hour
 )
 
 // GitHubRelease represents a GitHub release
@@ -33,13 +34,32 @@ type GitHubRelease struct {
 	} `json:"assets"`
 }
 
-// GetBinaryPath returns the platform-specific yt-dlp binary path
-func GetBinaryPath() string {
+// GetLegacyBinaryPath returns the old-style platform-specific yt-dlp binary path
+func GetLegacyBinaryPath() string {
 	binaryName := "yt-dlp"
 	if runtime.GOOS == "windows" {
 		binaryName = "yt-dlp.exe"
 	}
 	return filepath.Join("lib", binaryName)
+}
+
+// GetBinaryPath returns the path to the yt-dlp binary.
+// If the VersionManager is initialized, delegates to it.
+// Otherwise falls back to the legacy flat path.
+func GetBinaryPath() string {
+	if versionmanager := GetVersionManager(); versionmanager != nil {
+		return versionmanager.ActiveBinaryPath()
+	}
+	return GetLegacyBinaryPath()
+}
+
+// VersionedBinaryPath returns the path for a specific yt-dlp version
+func VersionedBinaryPath(version string) string {
+	binaryName := "yt-dlp"
+	if runtime.GOOS == "windows" {
+		binaryName = "yt-dlp.exe"
+	}
+	return filepath.Join("lib", fmt.Sprintf("yt-dlp-%s", version), binaryName)
 }
 
 // GetCurrentVersion returns the currently installed yt-dlp version
@@ -146,7 +166,11 @@ func DownloadFile(url, destination string) error {
 	downloaded := int64(0)
 	lastProgress := 0
 
-	buffer := make([]byte, 32*1024) // 32KB buffer
+	// Throttle to 256 KB/s to avoid interfering with audio streaming
+	const downloadRateLimit = 256 * 1024
+	buffer := make([]byte, 16*1024)
+	chunkDelay := time.Duration(float64(len(buffer)) / float64(downloadRateLimit) * float64(time.Second))
+
 	for {
 		n, err := resp.Body.Read(buffer)
 		if n > 0 {
@@ -162,6 +186,8 @@ func DownloadFile(url, destination string) error {
 					lastProgress = progress
 				}
 			}
+
+			time.Sleep(chunkDelay)
 		}
 		if err == io.EOF {
 			break
@@ -175,16 +201,27 @@ func DownloadFile(url, destination string) error {
 	return nil
 }
 
-// UpdateYtDlp automatically updates yt-dlp
+// UpdateYtDlp downloads a new yt-dlp version to a versioned directory.
+// If VersionManager is active, registers the version and runs canary.
+// Returns (updated bool, error).
 func UpdateYtDlp(force bool) (bool, error) {
 	logger.Debugf("[yt-dlp] Update Process Started")
 	logger.Info("[yt-dlp] Checking for updates...")
 
+	versionmanager := GetVersionManager()
+
 	// Check current version
-	currentVersion, err := GetCurrentVersion()
-	if err != nil {
-		logger.Debugf("[yt-dlp] No version currently installed: %v", err)
-		currentVersion = ""
+	var currentVersion string
+	if versionmanager != nil {
+		currentVersion = versionmanager.GetActiveVersion()
+	}
+	if currentVersion == "" {
+		ver, err := GetCurrentVersion()
+		if err != nil {
+			logger.Debugf("[yt-dlp] No version currently installed: %v", err)
+		} else {
+			currentVersion = ver
+		}
 	}
 
 	// Fetch latest release info
@@ -195,14 +232,46 @@ func UpdateYtDlp(force bool) (bool, error) {
 
 	latestVersion := release.TagName
 
-	// Compare versions (if not forcing)
+	// Compare versions
 	if !force && currentVersion == latestVersion {
 		logger.Infof("[yt-dlp] Already up to date (%s)", currentVersion)
 		return false, nil
 	}
 
+	// Check if this version is already registered (blacklisted or otherwise)
+	if versionmanager != nil {
+		if state, ok := versionmanager.GetVersionState(latestVersion); ok {
+			if state == StateBlacklisted {
+				logger.Infof("[yt-dlp] Version %s is blacklisted, skipping", latestVersion)
+				return false, nil
+			}
+			if state == StateVerified || state == StateActive {
+				logger.Debugf("[yt-dlp] Version %s already registered as %s", latestVersion, state)
+				return false, nil
+			}
+			// StatePending: binary already on disk, just re-run canary
+			binaryPath := VersionedBinaryPath(latestVersion)
+			if _, statErr := os.Stat(binaryPath); statErr == nil {
+				passed, networkErr := versionmanager.RunCanary(latestVersion)
+				if !passed {
+					if networkErr {
+						logger.Warnf("[yt-dlp] Canary failed due to network, version %s stays pending", latestVersion)
+					} else {
+						logger.Warnf("[yt-dlp] Canary FAILED for %s, blacklisting", latestVersion)
+						versionmanager.SetVersionState(latestVersion, StateBlacklisted)
+					}
+					return false, nil
+				}
+				versionmanager.SetVersionState(latestVersion, StateVerified)
+				logger.Infof("[yt-dlp] Version %s verified by canary, will activate on next song", latestVersion)
+				return true, nil
+			}
+			// Binary missing despite pending state, re-download below
+		}
+	}
+
 	if currentVersion != "" && !force {
-		logger.Infof("[yt-dlp] Update available: %s → %s", currentVersion, latestVersion)
+		logger.Infof("[yt-dlp] Update available: %s -> %s", currentVersion, latestVersion)
 	} else if force {
 		logger.Infof("[yt-dlp] Force updating to %s", latestVersion)
 	} else {
@@ -215,108 +284,170 @@ func UpdateYtDlp(force bool) (bool, error) {
 		return false, err
 	}
 
-	binaryPath := GetBinaryPath()
-	backupPath := binaryPath + ".backup"
+	// Use versioned path
+	binaryPath := VersionedBinaryPath(latestVersion)
+	versionDir := filepath.Dir(binaryPath)
 
-	// Create lib directory if it doesn't exist
-	libDir := filepath.Dir(binaryPath)
-	if err := os.MkdirAll(libDir, 0755); err != nil {
-		return false, fmt.Errorf("failed to create lib directory: %w", err)
-	}
-
-	// Backup existing file if present
-	if _, err := os.Stat(binaryPath); err == nil {
-		logger.Debugf("[yt-dlp] Creating backup of existing binary...")
-		if err := copyFile(binaryPath, backupPath); err != nil {
-			logger.Warnf("[yt-dlp] Failed to create backup: %v", err)
-		} else {
-			logger.Debugf("[yt-dlp] Backup created")
-		}
+	// Create version directory
+	if err := os.MkdirAll(versionDir, 0755); err != nil {
+		return false, fmt.Errorf("failed to create version directory: %w", err)
 	}
 
 	// Download new version
 	logger.Info("[yt-dlp] Downloading new version...")
 	if err := DownloadFile(downloadURL, binaryPath); err != nil {
-		// Restore from backup on failure
-		if _, statErr := os.Stat(backupPath); statErr == nil {
-			logger.Warn("[yt-dlp] Restoring from backup...")
-			copyFile(backupPath, binaryPath)
-			os.Remove(backupPath)
-		}
+		// Clean up failed download directory
+		os.RemoveAll(versionDir)
 		return false, err
 	}
 
-	// Set executable permissions (Unix-like systems)
+	// Set executable permissions
 	if runtime.GOOS != "windows" {
-		logger.Debugf("[yt-dlp] Setting executable permissions...")
 		if err := os.Chmod(binaryPath, 0755); err != nil {
 			logger.Warnf("[yt-dlp] Failed to set permissions: %v", err)
 		}
 	}
 
-	// Verify installation
-	logger.Debugf("[yt-dlp] Verifying installation...")
-	newVersion, err := GetCurrentVersion()
+	// Verify basic installation (--version check)
+	cmd := exec.Command(binaryPath, "--version")
+	output, err := cmd.Output()
 	if err != nil {
-		// Restore from backup on verification failure
-		if _, statErr := os.Stat(backupPath); statErr == nil {
-			logger.Warn("[yt-dlp] Verification failed, restoring from backup...")
-			copyFile(backupPath, binaryPath)
-			os.Remove(backupPath)
+		os.RemoveAll(versionDir)
+		return false, fmt.Errorf("failed to verify version after download: %w", err)
+	}
+	actualVersion := strings.TrimSpace(string(output))
+	logger.Infof("[yt-dlp] Downloaded version: %s", actualVersion)
+
+	// Register with VersionManager and run canary
+	if versionmanager != nil {
+		versionmanager.RegisterVersion(latestVersion, binaryPath)
+
+		passed, networkErr := versionmanager.RunCanary(latestVersion)
+		if !passed {
+			if networkErr {
+				logger.Warnf("[yt-dlp] Canary failed due to network, version %s stays pending", latestVersion)
+			} else {
+				logger.Warnf("[yt-dlp] Canary FAILED for %s, blacklisting", latestVersion)
+				versionmanager.SetVersionState(latestVersion, StateBlacklisted)
+			}
+			return false, nil
 		}
-		return false, fmt.Errorf("failed to verify version after update: %w", err)
+
+		versionmanager.SetVersionState(latestVersion, StateVerified)
+		logger.Infof("[yt-dlp] Version %s verified by canary, will activate on next song", latestVersion)
+	} else {
+		// No VersionManager (shouldn't happen in normal flow), legacy behavior
+		logger.Infof("[yt-dlp] Update complete! Version: %s", actualVersion)
 	}
 
-	logger.Infof("[yt-dlp] Update complete! Version: %s", newVersion)
-
-	// Remove backup file
-	if _, err := os.Stat(backupPath); err == nil {
-		os.Remove(backupPath)
-	}
-
-	logger.Debugf("[yt-dlp] ===== Update Process Completed Successfully =====")
 	return true, nil
 }
 
-// ShouldCheckForUpdate checks if enough time has passed since last check
-func ShouldCheckForUpdate() bool {
-	// Ensure data directory exists
-	if err := os.MkdirAll("data", 0755); err != nil {
-		return true // Check anyway if we can't track
-	}
+// StartBackgroundUpdater runs a background goroutine that checks for yt-dlp updates
+// at regular intervals. Stops when ctx is cancelled.
+func StartBackgroundUpdater(ctx context.Context) {
+	go func() {
+		logger.Info("[yt-dlp] Background updater started (interval: 6h)")
+		ticker := time.NewTicker(updateCheckInterval)
+		defer ticker.Stop()
 
-	info, err := os.Stat(updateCheckFile)
-	if os.IsNotExist(err) {
-		return true // No check file, should check
-	}
-	if err != nil {
-		return true // Check anyway on error
-	}
+		for {
+			select {
+			case <-ctx.Done():
+				logger.Info("[yt-dlp] Background updater stopped")
+				return
+			case <-ticker.C:
+				versionmanager := GetVersionManager()
+				if versionmanager == nil {
+					continue
+				}
 
-	timeSinceLastCheck := time.Since(info.ModTime())
-	return timeSinceLastCheck >= updateCheckPeriod
+				// Respect minimum interval (prevent rapid checks on restarts)
+				if time.Since(versionmanager.GetLastGitHubCheck()) < minCheckInterval {
+					logger.Debugf("[yt-dlp] Skipping check, last check was %s ago", time.Since(versionmanager.GetLastGitHubCheck()).Round(time.Minute))
+					continue
+				}
+
+				logger.Info("[yt-dlp] Background update check starting...")
+				updated, err := UpdateYtDlp(false)
+				if err != nil {
+					logger.Errorf("[yt-dlp] Background update check failed: %v", err)
+				} else if updated {
+					logger.Info("[yt-dlp] Background update check found new version")
+				}
+
+				versionmanager.SetLastGitHubCheck(time.Now())
+			}
+		}
+	}()
 }
 
-// UpdateLastCheckTime updates the timestamp of the last update check
-func UpdateLastCheckTime() error {
-	// Ensure data directory exists
-	if err := os.MkdirAll("data", 0755); err != nil {
-		return err
+// MigrateFromLegacyLayout detects the old flat lib/yt-dlp layout and migrates
+// to a versioned directory. Called once from main() on startup.
+func MigrateFromLegacyLayout() error {
+	versionmanager := GetVersionManager()
+	if versionmanager == nil {
+		return nil
 	}
 
-	// Touch the file to update its modification time
-	file, err := os.OpenFile(updateCheckFile, os.O_CREATE|os.O_WRONLY, 0644)
+	// If there's already an active version, no migration needed
+	if versionmanager.GetActiveVersion() != "" {
+		return nil
+	}
+
+	legacyPath := GetLegacyBinaryPath()
+	if _, err := os.Stat(legacyPath); os.IsNotExist(err) {
+		return nil // No legacy binary, nothing to migrate
+	}
+
+	// Get version of legacy binary
+	cmd := exec.Command(legacyPath, "--version")
+	output, err := cmd.Output()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get legacy binary version: %w", err)
 	}
-	defer file.Close()
+	version := strings.TrimSpace(string(output))
 
-	now := time.Now()
-	return os.Chtimes(updateCheckFile, now, now)
+	// Create versioned directory
+	newPath := VersionedBinaryPath(version)
+	newDir := filepath.Dir(newPath)
+	if err := os.MkdirAll(newDir, 0755); err != nil {
+		return fmt.Errorf("failed to create version directory: %w", err)
+	}
+
+	// Move binary
+	if err := os.Rename(legacyPath, newPath); err != nil {
+		// If rename fails (cross-device), fall back to copy+delete
+		if cpErr := copyFile(legacyPath, newPath); cpErr != nil {
+			return fmt.Errorf("failed to migrate binary: %w", cpErr)
+		}
+		os.Remove(legacyPath)
+	}
+
+	// Set executable permissions
+	if runtime.GOOS != "windows" {
+		os.Chmod(newPath, 0755)
+	}
+
+	// Register and activate
+	versionmanager.RegisterVersion(version, newPath)
+	versionmanager.SetActiveVersion(version)
+
+	// Seed with 1 success (it was working before migration)
+	versionmanager.SaveSuccess(version, "")
+
+	logger.Infof("[yt-dlp] Migrated legacy binary to versioned layout: %s -> %s", legacyPath, newPath)
+	return nil
 }
 
-// AutoUpdate performs an automatic update check on startup (always checks)
+// AutoUpdate performs an initial update check on startup.
+// After migration, checks for new versions and runs canary.
 func AutoUpdate() {
+	// Migrate from legacy layout if needed
+	if err := MigrateFromLegacyLayout(); err != nil {
+		logger.Warnf("[yt-dlp] Migration failed: %v", err)
+	}
+
 	updated, err := UpdateYtDlp(false)
 	if err != nil {
 		logger.Errorf("[yt-dlp] Auto-update check failed: %v", err)
@@ -326,8 +457,8 @@ func AutoUpdate() {
 	}
 
 	// Update check timestamp
-	if err := UpdateLastCheckTime(); err != nil {
-		logger.Debugf("[yt-dlp] Failed to update check timestamp: %v", err)
+	if versionmanager := GetVersionManager(); versionmanager != nil {
+		versionmanager.SetLastGitHubCheck(time.Now())
 	}
 }
 
