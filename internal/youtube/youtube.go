@@ -22,6 +22,23 @@ func applyJsRuntime(cmd *ytdlp.Command) *ytdlp.Command {
 	return cmd
 }
 
+// saveVersionResult saves extraction success or failure to the VersionManager
+func saveVersionResult(url string, err error) {
+	versionmanager := ytdlpUpdater.GetVersionManager()
+	if versionmanager == nil {
+		return
+	}
+	version := versionmanager.GetActiveVersion()
+	if version == "" {
+		return
+	}
+	if err == nil {
+		versionmanager.SaveSuccess(version, url)
+	} else {
+		versionmanager.SaveError(version, url, err.Error())
+	}
+}
+
 // Song represents a YouTube song
 type Song struct {
 	URL           string
@@ -367,6 +384,7 @@ func CheckVideoAvailability(url string) (*AvailabilityResult, error) {
 		if err != nil {
 			// Record failure in circuit breaker
 			ytCircuitBreaker.recordFailure(err)
+			saveVersionResult(url, err)
 			checkTime := time.Since(startTime)
 			logger.Debugf("[Availability] yt-dlp error after %v: %v", checkTime, err)
 
@@ -476,6 +494,7 @@ func CheckVideoAvailability(url string) (*AvailabilityResult, error) {
 
 	// Record success in circuit breaker
 	ytCircuitBreaker.recordSuccess()
+	saveVersionResult(url, nil)
 
 	return availResult, nil
 }
@@ -734,6 +753,7 @@ func GetStreamURL(url string, sponsorBlock bool, bitrate int) (string, error) {
 		if err != nil {
 			logger.Errorf("[GetStreamURL] yt-dlp failed: %v", err)
 			ytCircuitBreaker.recordFailure(err) // Record failure for circuit breaker
+			saveVersionResult(url, err)
 			return fmt.Errorf("failed to get stream URL: %w", err)
 		}
 		logger.Debugf("[GetStreamURL] yt-dlp completed successfully")
@@ -754,6 +774,7 @@ func GetStreamURL(url string, sponsorBlock bool, bitrate int) (string, error) {
 
 	// Record success in circuit breaker
 	ytCircuitBreaker.recordSuccess()
+	saveVersionResult(url, nil)
 
 	return streamURL, nil
 }
@@ -1177,6 +1198,7 @@ func CheckAvailability(url string) (available bool, isLive bool, err error) {
 		result, ytdlpErr := cmd.Run(ctx, url)
 		if ytdlpErr != nil {
 			ytCircuitBreaker.recordFailure(ytdlpErr)
+			saveVersionResult(url, ytdlpErr)
 			checkTime := time.Since(startTime)
 			logger.Debugf("[CheckAvailability] yt-dlp also failed after %v: %v", checkTime, ytdlpErr)
 			return false, false, ytdlpErr
@@ -1222,6 +1244,7 @@ func CheckAvailability(url string) (available bool, isLive bool, err error) {
 
 	// Record success in circuit breaker
 	ytCircuitBreaker.recordSuccess()
+	saveVersionResult(url, nil)
 
 	return available, isLive, nil
 }

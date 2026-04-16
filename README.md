@@ -4,7 +4,7 @@ A feature-rich & high-quality audio Discord music bot written in Go.
 
 ## Features
 
-- **High-Quality Audio Streaming** from YouTube via yt-dlp
+- **High-Quality Audio Streaming** from YouTube via [yt-dlp](https://github.com/yt-dlp/yt-dlp)
 - **Persistent Queue**
 - **SponsorBlock**
 - **Live Stream Support**
@@ -15,6 +15,7 @@ A feature-rich & high-quality audio Discord music bot written in Go.
 - **Multi-Language Support**
 - **Admin Commands**
 - **Hot-Reload Config**
+- **Smart yt-dlp updater**
 
 ## Prerequisites
 

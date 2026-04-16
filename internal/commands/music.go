@@ -15,38 +15,11 @@ import (
 	"noraegaori/internal/shutdown"
 	"noraegaori/internal/worker"
 	"noraegaori/internal/youtube"
+	ytdlpUpdater "noraegaori/internal/ytdlp"
 	"noraegaori/pkg/logger"
 )
 
-// isDefinitiveUnavailableError checks if an error indicates the video is truly unavailable
-// (geo-restricted, age-restricted, private, deleted) vs. a potential false negative
-func isDefinitiveUnavailableError(errorMsg string) bool {
-	errorLower := strings.ToLower(errorMsg)
-	// These patterns indicate the video is truly unavailable, not a false negative
-	definitivePatterns := []string{
-		"video unavailable",
-		"not available",
-		"private video",
-		"deleted video",
-		"age-restricted",
-		"age restricted",
-		"not available in your country",
-		"geo",
-		"members-only",
-		"members only",
-		"premium",
-		"copyright",
-		"blocked",
-		"removed by the uploader",
-		"account associated with this video has been terminated",
-	}
-	for _, pattern := range definitivePatterns {
-		if strings.Contains(errorLower, pattern) {
-			return true
-		}
-	}
-	return false
-}
+
 
 // cleanErrorMessage extracts the main error reason from verbose yt-dlp error messages
 func cleanErrorMessage(errorMsg string) string {
@@ -1719,7 +1692,7 @@ func processRemainingPlaylistSongs(s *discordgo.Session, i *discordgo.Interactio
 
 		// Only skip on definitive unavailable errors (geo, private, deleted, age-restricted)
 		// Generic "unavailable" errors might be false negatives, so we add them anyway
-		if !result.Available && isDefinitiveUnavailableError(result.Error) {
+		if !result.Available && ytdlpUpdater.IsDefinitiveUnavailableError(result.Error) {
 			logger.Debugf("[Playlist Background] Skipping definitively unavailable: %s - %s",
 				song.Title, result.Error)
 			skippedCount++
@@ -1857,7 +1830,7 @@ func processAllPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreat
 
 		// Only skip on definitive unavailable errors (geo, private, deleted, age-restricted)
 		// Generic "unavailable" errors might be false negatives, so we add them anyway
-		if !result.Available && isDefinitiveUnavailableError(result.Error) {
+		if !result.Available && ytdlpUpdater.IsDefinitiveUnavailableError(result.Error) {
 			logger.Debugf("[Playlist] Skipping definitively unavailable: %s - %s",
 				song.Title, result.Error)
 			skippedCount++

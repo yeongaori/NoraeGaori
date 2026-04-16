@@ -177,6 +177,7 @@ func GetStreamPipe(url string, sponsorBlock bool, bitrate int, seekTime int) (*S
 	if err := cmd.Start(); err != nil {
 		cancel()
 		ytCircuitBreaker.recordFailure(err)
+		saveVersionResult(url, err)
 		return nil, fmt.Errorf("failed to start yt-dlp: %w", err)
 	}
 
@@ -215,6 +216,7 @@ func GetStreamPipe(url string, sponsorBlock bool, bitrate int, seekTime int) (*S
 
 	// Record success in circuit breaker (process started successfully)
 	ytCircuitBreaker.recordSuccess()
+	saveVersionResult(url, nil)
 
 	return &StreamPipe{
 		cmd:        cmd,
