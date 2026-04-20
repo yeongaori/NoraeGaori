@@ -73,7 +73,7 @@
     "playlist_skipped": "%d songs could not be played and were skipped.",
     "vote_added": "Skip vote has been added.",
     "skipped": "**%s** has been skipped.",
-    "paused": "Playback paused and left the channel. Queue and playback position are preserved.",
+    "paused": "Playback paused and left the channel.\nQueue and playback position are preserved.",
     "resumed": "Playback has been resumed.",
     "repeat_all": "Queue repeat has been **enabled**.\nWhen the current song ends, it will be re-added to the queue.",
     "repeat_single": "Single repeat has been **enabled**.\nWhen the current song ends, it will play again.",
