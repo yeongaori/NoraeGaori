@@ -347,7 +347,7 @@ func UpdateYtDlp(force bool) (bool, error) {
 // at regular intervals. Stops when ctx is cancelled.
 func StartBackgroundUpdater(ctx context.Context) {
 	go func() {
-		logger.Info("[yt-dlp] Background updater started (interval: 6h)")
+		logger.Info("[yt-dlp] Background updater started")
 		ticker := time.NewTicker(updateCheckInterval)
 		defer ticker.Stop()
 

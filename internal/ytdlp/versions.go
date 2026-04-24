@@ -79,7 +79,7 @@ func InitVersionManager() error {
 	}
 
 	if err := versionmanager.load(); err != nil {
-		logger.Debugf("[VersionManager] No existing state, starting fresh: %v", err)
+		logger.Debugf("[yt-dlp] No existing state, starting fresh: %v", err)
 	}
 
 	versionMgr = versionmanager
@@ -112,30 +112,30 @@ func (versionmanager *VersionManager) load() error {
 	}
 
 	versionmanager.state = state
-	logger.Infof("[VersionManager] Loaded state: active=%s, %d versions tracked", state.ActiveVersion, len(state.Versions))
+	logger.Infof("[yt-dlp] Loaded state: active=%s, %d versions tracked", state.ActiveVersion, len(state.Versions))
 	return nil
 }
 
 // persist writes current state to disk. Must be called with lock held.
 func (versionmanager *VersionManager) persist() {
 	if err := os.MkdirAll(filepath.Dir(versionDataFile), 0755); err != nil {
-		logger.Errorf("[VersionManager] Failed to create data dir: %v", err)
+		logger.Errorf("[yt-dlp] Failed to create data dir: %v", err)
 		return
 	}
 
 	data, err := json.MarshalIndent(versionmanager.state, "", "  ")
 	if err != nil {
-		logger.Errorf("[VersionManager] Failed to marshal state: %v", err)
+		logger.Errorf("[yt-dlp] Failed to marshal state: %v", err)
 		return
 	}
 
 	tmpFile := versionDataFile + ".tmp"
 	if err := os.WriteFile(tmpFile, data, 0644); err != nil {
-		logger.Errorf("[VersionManager] Failed to write temp state: %v", err)
+		logger.Errorf("[yt-dlp] Failed to write temp state: %v", err)
 		return
 	}
 	if err := os.Rename(tmpFile, versionDataFile); err != nil {
-		logger.Errorf("[VersionManager] Failed to rename state file: %v", err)
+		logger.Errorf("[yt-dlp] Failed to rename state file: %v", err)
 	}
 }
 
@@ -145,7 +145,7 @@ func (versionmanager *VersionManager) RegisterVersion(version, path string) {
 	defer versionmanager.mu.Unlock()
 
 	if _, exists := versionmanager.state.Versions[version]; exists {
-		logger.Warnf("[VersionManager] Version %s already registered, skipping", version)
+		logger.Warnf("[yt-dlp] Version %s already registered, skipping", version)
 		return
 	}
 
@@ -155,7 +155,7 @@ func (versionmanager *VersionManager) RegisterVersion(version, path string) {
 		RegisteredAt: time.Now(),
 	}
 	versionmanager.persist()
-	logger.Infof("[VersionManager] Registered version %s at %s", version, path)
+	logger.Infof("[yt-dlp] Registered version %s at %s", version, path)
 }
 
 // SetVersionState updates the state of a version
@@ -173,7 +173,7 @@ func (versionmanager *VersionManager) SetVersionState(version string, state Vers
 		entry.BlacklistedAt = time.Now()
 	}
 	versionmanager.persist()
-	logger.Infof("[VersionManager] Version %s -> %s", version, state)
+	logger.Infof("[yt-dlp] Version %s -> %s", version, state)
 }
 
 // GetActiveVersion returns the currently active version string
@@ -287,7 +287,7 @@ func (versionmanager *VersionManager) SaveSuccess(version, videoID string) {
 
 	// Trigger cleanup when active version proves stable
 	if version == versionmanager.state.ActiveVersion && entry.Successes == stableSuccessCount {
-		logger.Infof("[VersionManager] Active version %s reached %d successes, running cleanup", version, stableSuccessCount)
+		logger.Infof("[yt-dlp] Active version %s reached %d successes, running cleanup", version, stableSuccessCount)
 		versionmanager.cleanupOldVersions()
 	}
 
@@ -337,7 +337,7 @@ func (versionmanager *VersionManager) SaveError(version, videoID string, errMsg 
 		Time:    now,
 	})
 
-	logger.Warnf("[VersionManager] Saved error for version %s (video: %s), %d errors in window", version, videoID, len(entry.Errors))
+	logger.Warnf("[yt-dlp] Saved error for version %s (video: %s), %d errors in window", version, videoID, len(entry.Errors))
 	versionmanager.persist()
 }
 
@@ -392,7 +392,7 @@ func (versionmanager *VersionManager) ActiveBinaryPath() string {
 	if versionmanager.shouldRollback() {
 		best := versionmanager.selectBestVersion()
 		if best != versionmanager.state.ActiveVersion {
-			logger.Warnf("[VersionManager] Rolling back from %s to %s", versionmanager.state.ActiveVersion, best)
+			logger.Warnf("[yt-dlp] Rolling back from %s to %s", versionmanager.state.ActiveVersion, best)
 
 			// Blacklist the current active version
 			if entry, ok := versionmanager.state.Versions[versionmanager.state.ActiveVersion]; ok {
@@ -434,7 +434,7 @@ func (versionmanager *VersionManager) tryPromoteVerified() {
 		return
 	}
 
-	logger.Infof("[VersionManager] Promoting verified version %s to active (was %s)", bestVerified, versionmanager.state.ActiveVersion)
+	logger.Infof("[yt-dlp] Promoting verified version %s to active (was %s)", bestVerified, versionmanager.state.ActiveVersion)
 
 	// Demote old active
 	if old, ok := versionmanager.state.Versions[versionmanager.state.ActiveVersion]; ok {
@@ -493,7 +493,7 @@ func (versionmanager *VersionManager) cleanupOldVersions() {
 
 		if shouldDelete {
 			toDelete = append(toDelete, ver)
-			logger.Infof("[VersionManager] Marking %s for cleanup: %s", ver, reason)
+			logger.Infof("[yt-dlp] Marking %s for cleanup: %s", ver, reason)
 		}
 	}
 
@@ -503,9 +503,9 @@ func (versionmanager *VersionManager) cleanupOldVersions() {
 		// Remove directory from disk
 		dir := filepath.Dir(entry.Path)
 		if err := os.RemoveAll(dir); err != nil {
-			logger.Warnf("[VersionManager] Failed to remove directory %s: %v", dir, err)
+			logger.Warnf("[yt-dlp] Failed to remove directory %s: %v", dir, err)
 		} else {
-			logger.Infof("[VersionManager] Removed version directory: %s", dir)
+			logger.Infof("[yt-dlp] Removed version directory: %s", dir)
 		}
 
 		// Remove from registry
@@ -514,7 +514,7 @@ func (versionmanager *VersionManager) cleanupOldVersions() {
 
 	if len(toDelete) > 0 {
 		versionmanager.persist()
-		logger.Infof("[VersionManager] Cleanup complete: removed %d version(s), %d remaining", len(toDelete), len(versionmanager.state.Versions))
+		logger.Infof("[yt-dlp] Cleanup complete: removed %d version(s), %d remaining", len(toDelete), len(versionmanager.state.Versions))
 	}
 }
 
@@ -541,22 +541,22 @@ func (versionmanager *VersionManager) RunCanary(version string) (passed bool, ne
 	versionmanager.mu.RUnlock()
 
 	ids := versionmanager.getCanaryIDs()
-	logger.Infof("[VersionManager] Running canary for %s with %d video(s)", version, len(ids))
+	logger.Infof("[yt-dlp] Running canary for %s with %d video(s)", version, len(ids))
 
 	for _, id := range ids {
 		result := versionmanager.testExtraction(binaryPath, id)
 		if !result.success {
 			if result.network {
-				logger.Warnf("[VersionManager] Canary network error for %s (video %s): %s", version, id, result.errMsg)
+				logger.Warnf("[yt-dlp] Canary network error for %s (video %s): %s", version, id, result.errMsg)
 				return false, true
 			}
-			logger.Warnf("[VersionManager] Canary FAILED for %s (video %s): %s", version, id, result.errMsg)
+			logger.Warnf("[yt-dlp] Canary FAILED for %s (video %s): %s", version, id, result.errMsg)
 			return false, false
 		}
-		logger.Debugf("[VersionManager] Canary passed for %s (video %s)", version, id)
+		logger.Debugf("[yt-dlp] Canary passed for %s (video %s)", version, id)
 	}
 
-	logger.Infof("[VersionManager] Canary PASSED for %s", version)
+	logger.Infof("[yt-dlp] Canary PASSED for %s", version)
 	return true, false
 }
 
