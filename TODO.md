@@ -1,0 +1,7 @@
+- [ ] Fix Docker
+- [ ] Fix escaping logic (Wrong escapes; too much)
+- [ ] Fix spamming on adding playlist (Unavailable videos)
+- [ ] Language per server
+- [ ] Overall codebase structure maintenance & refactoring if needed
+- [ ] When new song is added to queue, and queue is not empty and paused, it should automatically run resume
+- [ ] Add seek command
