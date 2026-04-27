@@ -5,3 +5,7 @@
 - [ ] Overall codebase structure maintenance & refactoring if needed
 - [x] When new song is added to queue, and queue is not empty and paused, it should automatically run resume
 - [x] Add seek command
+- [ ] yt-dlp updater fix
+    - If the yt-dlp file is missing, and the latest version is blacklisted, the previous version must be automatically fetched and run the canary test.
+- [ ] Integrate nonative version and normal version
+    - Use native opus by default and automatically fallback to nonative, and show a warning.
