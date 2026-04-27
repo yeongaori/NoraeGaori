@@ -542,6 +542,7 @@ func InitializeCommands() {
 			},
 			Handler:   HandleSetLanguage,
 			AdminOnly: true,
+			TextOnly:  true,
 			Usage:     cmd("setlanguage").Usage,
 			Example:   cmd("setlanguage").Example,
 		})
