@@ -14,6 +14,8 @@ func IsDefinitiveUnavailableError(errorMsg string) bool {
 		"deleted video",
 		"age-restricted",
 		"age restricted",
+		"sign in to confirm your age",
+		"login required",
 		"not available in your country",
 		"geo",
 		"members-only",

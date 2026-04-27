@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"sync"
 	"sync/atomic"
@@ -156,8 +157,15 @@ func GetStreamPipe(url string, sponsorBlock bool, bitrate int, seekTime int) (*S
 
 	args = append(args, url)
 
+	binaryPath := ytdlpUpdater.GetBinaryPath()
+	if _, err := os.Stat(binaryPath); err != nil {
+		cancel()
+		logger.Errorf("[StreamPipe] yt-dlp binary missing at %s: %v", binaryPath, err)
+		return nil, fmt.Errorf("yt-dlp binary unavailable; the updater will retry in the background")
+	}
+
 	// Create command
-	cmd := exec.CommandContext(ctx, ytdlpUpdater.GetBinaryPath(), args...)
+	cmd := exec.CommandContext(ctx, binaryPath, args...)
 
 	// Get stdout pipe
 	stdout, err := cmd.StdoutPipe()

@@ -18,9 +18,12 @@ import (
 )
 
 const (
-	githubAPIURL        = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"
-	updateCheckInterval = 6 * time.Hour
-	minCheckInterval    = 1 * time.Hour
+	githubAPIURL         = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"
+	githubReleasesURL    = "https://api.github.com/repos/yt-dlp/yt-dlp/releases"
+	updateCheckInterval  = 6 * time.Hour
+	minCheckInterval     = 1 * time.Hour
+	maxFallbackAttempts  = 5
+	fallbackReleaseFetch = 15
 )
 
 // GitHubRelease represents a GitHub release
@@ -104,6 +107,35 @@ func GetLatestRelease() (*GitHubRelease, error) {
 	}
 
 	return &release, nil
+}
+
+// GetReleases fetches up to perPage most recent releases from GitHub, newest first.
+func GetReleases(perPage int) ([]*GitHubRelease, error) {
+	client := &http.Client{Timeout: 30 * time.Second}
+	url := fmt.Sprintf("%s?per_page=%d", githubReleasesURL, perPage)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("User-Agent", "yt-dlp-updater")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("GitHub API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub API returned status: %d", resp.StatusCode)
+	}
+
+	var releases []*GitHubRelease
+	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
+		return nil, fmt.Errorf("failed to parse releases list: %w", err)
+	}
+
+	return releases, nil
 }
 
 // GetDownloadURL determines the appropriate download URL based on platform and architecture
@@ -205,8 +237,7 @@ func DownloadFile(url, destination string) error {
 // If VersionManager is active, registers the version and runs canary.
 // Returns (updated bool, error).
 func UpdateYtDlp(force bool) (bool, error) {
-	logger.Debugf("[yt-dlp] Update Process Started")
-	logger.Info("[yt-dlp] Checking for updates...")
+	logger.Debug("[yt-dlp] Checking for updates...")
 
 	versionmanager := GetVersionManager()
 
@@ -234,7 +265,7 @@ func UpdateYtDlp(force bool) (bool, error) {
 
 	// Compare versions
 	if !force && currentVersion == latestVersion {
-		logger.Infof("[yt-dlp] Already up to date (%s)", currentVersion)
+		logger.Debugf("[yt-dlp] Already up to date (%s)", currentVersion)
 		return false, nil
 	}
 
@@ -242,10 +273,14 @@ func UpdateYtDlp(force bool) (bool, error) {
 	if versionmanager != nil {
 		if state, ok := versionmanager.GetVersionState(latestVersion); ok {
 			if state == StateBlacklisted {
-				logger.Infof("[yt-dlp] Version %s is blacklisted, skipping", latestVersion)
-				return false, nil
+				logger.Infof("[yt-dlp] Version %s is blacklisted", latestVersion)
+				if versionmanager.HasUsableBinary() {
+					return false, nil
+				}
+				logger.Warnf("[yt-dlp] No usable binary on disk; trying previous releases")
+				return installFallbackVersion(versionmanager, latestVersion, release)
 			}
-			if state == StateVerified || state == StateActive {
+			if state == StateVerified || state == StateActive || state == StateProvisional {
 				logger.Debugf("[yt-dlp] Version %s already registered as %s", latestVersion, state)
 				return false, nil
 			}
@@ -256,14 +291,15 @@ func UpdateYtDlp(force bool) (bool, error) {
 				if !passed {
 					if networkErr {
 						logger.Warnf("[yt-dlp] Canary failed due to network, version %s stays pending", latestVersion)
-					} else {
-						logger.Warnf("[yt-dlp] Canary FAILED for %s, blacklisting", latestVersion)
-						versionmanager.SetVersionState(latestVersion, StateBlacklisted)
+						return false, nil
 					}
-					return false, nil
+					logger.Warnf("[yt-dlp] Canary FAILED for %s, blacklisting and trying previous releases", latestVersion)
+					versionmanager.SetVersionState(latestVersion, StateBlacklisted)
+					return installFallbackVersion(versionmanager, latestVersion, release)
 				}
 				versionmanager.SetVersionState(latestVersion, StateVerified)
-				logger.Infof("[yt-dlp] Version %s verified by canary, will activate on next song", latestVersion)
+				versionmanager.SetActiveVersion(latestVersion)
+				logger.Infof("[yt-dlp] Version %s verified by canary and activated", latestVersion)
 				return true, nil
 			}
 			// Binary missing despite pending state, re-download below
@@ -294,7 +330,7 @@ func UpdateYtDlp(force bool) (bool, error) {
 	}
 
 	// Download new version
-	logger.Info("[yt-dlp] Downloading new version...")
+	logger.Debug("[yt-dlp] Downloading new version...")
 	if err := DownloadFile(downloadURL, binaryPath); err != nil {
 		// Clean up failed download directory
 		os.RemoveAll(versionDir)
@@ -326,20 +362,148 @@ func UpdateYtDlp(force bool) (bool, error) {
 		if !passed {
 			if networkErr {
 				logger.Warnf("[yt-dlp] Canary failed due to network, version %s stays pending", latestVersion)
-			} else {
-				logger.Warnf("[yt-dlp] Canary FAILED for %s, blacklisting", latestVersion)
-				versionmanager.SetVersionState(latestVersion, StateBlacklisted)
+				return false, nil
 			}
-			return false, nil
+			logger.Warnf("[yt-dlp] Canary FAILED for %s, blacklisting and trying previous releases", latestVersion)
+			versionmanager.SetVersionState(latestVersion, StateBlacklisted)
+			return installFallbackVersion(versionmanager, latestVersion, release)
 		}
 
 		versionmanager.SetVersionState(latestVersion, StateVerified)
-		logger.Infof("[yt-dlp] Version %s verified by canary, will activate on next song", latestVersion)
+		versionmanager.SetActiveVersion(latestVersion)
+		logger.Infof("[yt-dlp] Version %s verified by canary and activated", latestVersion)
 	} else {
 		// No VersionManager (shouldn't happen in normal flow), legacy behavior
 		logger.Infof("[yt-dlp] Update complete! Version: %s", actualVersion)
 	}
 
+	return true, nil
+}
+
+// installFallbackVersion tries previous yt-dlp releases until one passes
+// canary or the retry budget is exhausted. If the budget is exhausted, falls
+// back to installing the latest (blacklisted) version as a last resort so the
+// bot has some binary to run on.
+func installFallbackVersion(versionmanager *VersionManager, latestVersion string, latestRelease *GitHubRelease) (bool, error) {
+	releases, err := GetReleases(fallbackReleaseFetch)
+	if err != nil {
+		return false, fmt.Errorf("failed to fetch release list: %w", err)
+	}
+
+	considered := 0
+	for _, rel := range releases {
+		ver := rel.TagName
+		if ver == latestVersion {
+			continue
+		}
+		if considered >= maxFallbackAttempts {
+			break
+		}
+		considered++
+
+		if state, ok := versionmanager.GetVersionState(ver); ok {
+			if state == StateBlacklisted {
+				logger.Debugf("[yt-dlp] Fallback candidate %d/%d: %s already blacklisted, skipping", considered, maxFallbackAttempts, ver)
+				continue
+			}
+			if state == StateVerified || state == StateActive {
+				binaryPath := VersionedBinaryPath(ver)
+				if _, statErr := os.Stat(binaryPath); statErr == nil {
+					logger.Debugf("[yt-dlp] Reusing existing %s version %s", state, ver)
+					return true, nil
+				}
+			}
+		}
+
+		logger.Infof("[yt-dlp] Fallback candidate %d/%d: trying version %s", considered, maxFallbackAttempts, ver)
+
+		downloadURL, urlErr := GetDownloadURL(rel)
+		if urlErr != nil {
+			logger.Warnf("[yt-dlp] No download URL for %s: %v", ver, urlErr)
+			continue
+		}
+
+		binaryPath := VersionedBinaryPath(ver)
+		versionDir := filepath.Dir(binaryPath)
+		if err := os.MkdirAll(versionDir, 0755); err != nil {
+			logger.Warnf("[yt-dlp] Failed to create version dir for %s: %v", ver, err)
+			continue
+		}
+
+		if err := DownloadFile(downloadURL, binaryPath); err != nil {
+			logger.Warnf("[yt-dlp] Download of %s failed: %v", ver, err)
+			os.RemoveAll(versionDir)
+			continue
+		}
+
+		if runtime.GOOS != "windows" {
+			if err := os.Chmod(binaryPath, 0755); err != nil {
+				logger.Warnf("[yt-dlp] Failed to set permissions on %s: %v", ver, err)
+			}
+		}
+
+		cmd := exec.Command(binaryPath, "--version")
+		if _, err := cmd.Output(); err != nil {
+			logger.Warnf("[yt-dlp] Version check failed for %s: %v", ver, err)
+			os.RemoveAll(versionDir)
+			continue
+		}
+
+		versionmanager.RegisterVersion(ver, binaryPath)
+
+		passed, networkErr := versionmanager.RunCanary(ver)
+		if !passed {
+			if networkErr {
+				logger.Warnf("[yt-dlp] Canary network error on fallback %s; aborting fallback chain", ver)
+				return false, nil
+			}
+			logger.Warnf("[yt-dlp] Fallback %s failed canary, blacklisting", ver)
+			versionmanager.SetVersionState(ver, StateBlacklisted)
+			continue
+		}
+
+		versionmanager.SetVersionState(ver, StateVerified)
+		versionmanager.SetActiveVersion(ver)
+		logger.Infof("[yt-dlp] Fallback version %s verified by canary and activated", ver)
+		return true, nil
+	}
+
+	// Last resort: provisionally activate the latest version so the bot has a
+	// binary. Canary couldn't validate any candidate, but a music bot is
+	// useless without yt-dlp. Real-traffic SaveError handles correctness from
+	// here; subsequent boots skip the blacklist gate (state=Provisional, not
+	// Blacklisted) so we don't re-run this whole sequence on every restart.
+	logger.Warnf("[yt-dlp] All fallback attempts failed canary; provisionally activating latest %s as last resort", latestVersion)
+
+	downloadURL, err := GetDownloadURL(latestRelease)
+	if err != nil {
+		return false, fmt.Errorf("last-resort: no download URL for %s: %w", latestVersion, err)
+	}
+
+	binaryPath := VersionedBinaryPath(latestVersion)
+	versionDir := filepath.Dir(binaryPath)
+	if err := os.MkdirAll(versionDir, 0755); err != nil {
+		return false, fmt.Errorf("last-resort: failed to create version dir: %w", err)
+	}
+
+	if _, statErr := os.Stat(binaryPath); statErr != nil {
+		if err := DownloadFile(downloadURL, binaryPath); err != nil {
+			os.RemoveAll(versionDir)
+			return false, fmt.Errorf("last-resort: download failed: %w", err)
+		}
+		if runtime.GOOS != "windows" {
+			if err := os.Chmod(binaryPath, 0755); err != nil {
+				logger.Warnf("[yt-dlp] Failed to set permissions: %v", err)
+			}
+		}
+	}
+
+	if _, err := exec.Command(binaryPath, "--version").Output(); err != nil {
+		os.RemoveAll(versionDir)
+		return false, fmt.Errorf("last-resort: --version check failed: %w", err)
+	}
+
+	versionmanager.ProvisionallyActivate(latestVersion, binaryPath)
 	return true, nil
 }
 
@@ -368,12 +532,12 @@ func StartBackgroundUpdater(ctx context.Context) {
 					continue
 				}
 
-				logger.Info("[yt-dlp] Background update check starting...")
+				logger.Debug("[yt-dlp] Background update check starting...")
 				updated, err := UpdateYtDlp(false)
 				if err != nil {
 					logger.Errorf("[yt-dlp] Background update check failed: %v", err)
 				} else if updated {
-					logger.Info("[yt-dlp] Background update check found new version")
+					logger.Info("[yt-dlp] Background update found new version")
 				}
 
 				versionmanager.SetLastGitHubCheck(time.Now())
