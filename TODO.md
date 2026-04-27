@@ -8,3 +8,4 @@
 - [x] yt-dlp updater fix
 - [ ] Integrate nonative version and normal version
     - Use native opus by default and automatically fallback to nonative, and show a warning.
+- [ ] Fixed an issue where all slash commands were re-registered every time the app started; it should check the current commands and updates only the necessary ones
