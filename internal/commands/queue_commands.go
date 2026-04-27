@@ -48,7 +48,7 @@ func HandleQueue(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	}
 
 	// Create embed for current page
-	embed := createQueueEmbed(q.Songs, currentPage, totalPages, songsPerPage)
+	embed := createQueueEmbed(i.GuildID, q.Songs, currentPage, totalPages, songsPerPage)
 
 	// If only one page, no need for buttons
 	if totalPages == 1 {
@@ -57,7 +57,7 @@ func HandleQueue(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	}
 
 	// Create navigation buttons
-	components := createQueueButtons(currentPage, totalPages)
+	components := createQueueButtons(i.GuildID, currentPage, totalPages)
 
 	// Send response with buttons using the new helper
 	msg, err := RespondEmbedWithComponents(s, i, embed, components)
@@ -73,7 +73,7 @@ func HandleQueue(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 }
 
 // createQueueEmbed creates the queue embed for a specific page
-func createQueueEmbed(songs []*queue.Song, page, totalPages, perPage int) *discordgo.MessageEmbed {
+func createQueueEmbed(guildID string, songs []*queue.Song, page, totalPages, perPage int) *discordgo.MessageEmbed {
 	start := (page - 1) * perPage
 	end := start + perPage
 	if end > len(songs) {
@@ -87,7 +87,7 @@ func createQueueEmbed(songs []*queue.Song, page, totalPages, perPage int) *disco
 
 		duration := song.Duration
 		if song.IsLive {
-			duration = messages.T().Queue.LiveBadge
+			duration = messages.T(guildID).Queue.LiveBadge
 		}
 
 		if idx == 0 {
@@ -121,7 +121,7 @@ func createQueueEmbed(songs []*queue.Song, page, totalPages, perPage int) *disco
 }
 
 // createQueueButtons creates Previous/Next buttons for queue pagination
-func createQueueButtons(page, totalPages int) []discordgo.MessageComponent {
+func createQueueButtons(guildID string, page, totalPages int) []discordgo.MessageComponent {
 	return []discordgo.MessageComponent{
 		discordgo.ActionsRow{
 			Components: []discordgo.MessageComponent{
@@ -132,7 +132,7 @@ func createQueueButtons(page, totalPages int) []discordgo.MessageComponent {
 					Disabled: page == 1,
 				},
 				discordgo.Button{
-					Label:    messages.T().Queue.QueueNextButton,
+					Label:    messages.T(guildID).Queue.QueueNextButton,
 					Style:    discordgo.PrimaryButton,
 					CustomID: "queue_next",
 					Disabled: page == totalPages,
@@ -203,8 +203,8 @@ func handleQueueButtons(s *discordgo.Session, i *discordgo.InteractionCreate, or
 		}
 
 		// Update embed
-		embed := createQueueEmbed(q.Songs, page, totalPages, perPage)
-		components := createQueueButtons(page, totalPages)
+		embed := createQueueEmbed(guildID, q.Songs, page, totalPages, perPage)
+		components := createQueueButtons(guildID, page, totalPages)
 
 		// Respond to button interaction
 		s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
@@ -234,7 +234,7 @@ func handleQueueButtons(s *discordgo.Session, i *discordgo.InteractionCreate, or
 	finalPage := currentPage
 	pageMu.Unlock()
 
-	embed := createQueueEmbed(q.Songs, finalPage, totalPages, perPage)
+	embed := createQueueEmbed(guildID, q.Songs, finalPage, totalPages, perPage)
 
 	s.ChannelMessageEditComplex(&discordgo.MessageEdit{
 		ID:         originalMsg.ID,
@@ -248,7 +248,7 @@ func handleQueueButtons(s *discordgo.Session, i *discordgo.InteractionCreate, or
 func HandleRemove(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	options := i.ApplicationCommandData().Options
 	if len(options) == 0 {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T().Queue.EnterPosition))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T(i.GuildID).Queue.EnterPosition))
 		return nil
 	}
 	positionStr := options[0].StringValue()
@@ -292,14 +292,14 @@ func handleRemoveAll(s *discordgo.Session, i *discordgo.InteractionCreate, q *qu
 	}
 
 	if len(userSongs) == 0 {
-		description := messages.T().Queue.NoUserSongs
+		description := messages.T(i.GuildID).Queue.NoUserSongs
 
 		// Check if user only has the currently playing song
 		if (q.Playing || q.Loading) && len(q.Songs) > 0 && q.Songs[0].RequestedByID == userID {
-			description = messages.T().Queue.OnlyCurrentSong
+			description = messages.T(i.GuildID).Queue.OnlyCurrentSong
 		}
 
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T().Queue.NoSongsToRemoveTitle, description))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Queue.NoSongsToRemoveTitle, description))
 		return nil
 	}
 
@@ -323,7 +323,7 @@ func handleRemoveAll(s *discordgo.Session, i *discordgo.InteractionCreate, q *qu
 
 	// Remove from queue
 	if err := queue.RemoveSongsByIDs(i.GuildID, songIDs); err != nil {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, fmt.Sprintf(messages.T().Queue.RemoveFailed, err)))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, fmt.Sprintf(messages.T(i.GuildID).Queue.RemoveFailed, err)))
 		return err
 	}
 
@@ -332,8 +332,8 @@ func handleRemoveAll(s *discordgo.Session, i *discordgo.InteractionCreate, q *qu
 		player.CleanupPreCacheWorker(i.GuildID)
 	}
 
-	embed := messages.CreateSuccessEmbed(messages.T().Queue.SongsRemovedTitle,
-		fmt.Sprintf(messages.T().Queue.SongsRemovedAll, i.Member.User.Username, len(userSongs)))
+	embed := messages.CreateSuccessEmbed(messages.T(i.GuildID).Queue.SongsRemovedTitle,
+		fmt.Sprintf(messages.T(i.GuildID).Queue.SongsRemovedAll, i.Member.User.Username, len(userSongs)))
 	RespondEmbed(s, i, embed)
 	return nil
 }
@@ -342,7 +342,7 @@ func handleRemoveAll(s *discordgo.Session, i *discordgo.InteractionCreate, q *qu
 func handleRemoveRange(s *discordgo.Session, i *discordgo.InteractionCreate, q *queue.Queue, rangeStr string) error {
 	parts := strings.Split(rangeStr, "-")
 	if len(parts) != 2 {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T().Queue.InvalidRange))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T(i.GuildID).Queue.InvalidRange))
 		return nil
 	}
 
@@ -350,14 +350,14 @@ func handleRemoveRange(s *discordgo.Session, i *discordgo.InteractionCreate, q *
 	end, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
 
 	if err1 != nil || err2 != nil || start < 1 || end < start || start > len(q.Songs) {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T().Queue.InvalidRange))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T(i.GuildID).Queue.InvalidRange))
 		return nil
 	}
 
 	// Prevent removing currently playing song (position 1) in range
 	if start == 1 && (q.Playing || q.Loading) {
 		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError,
-			messages.T().Queue.RangeIncludesCurrent))
+			messages.T(i.GuildID).Queue.RangeIncludesCurrent))
 		return nil
 	}
 
@@ -379,7 +379,7 @@ func handleRemoveRange(s *discordgo.Session, i *discordgo.InteractionCreate, q *
 	}
 
 	if len(userSongs) == 0 {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleNoPermission, messages.T().Queue.NoUserSongsInRange))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleNoPermission, messages.T(i.GuildID).Queue.NoUserSongsInRange))
 		return nil
 	}
 
@@ -403,7 +403,7 @@ func handleRemoveRange(s *discordgo.Session, i *discordgo.InteractionCreate, q *
 
 	// Remove from queue
 	if err := queue.RemoveSongsByIDs(i.GuildID, songIDs); err != nil {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, fmt.Sprintf(messages.T().Queue.RemoveFailed, err)))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, fmt.Sprintf(messages.T(i.GuildID).Queue.RemoveFailed, err)))
 		return err
 	}
 
@@ -412,8 +412,8 @@ func handleRemoveRange(s *discordgo.Session, i *discordgo.InteractionCreate, q *
 		player.CleanupPreCacheWorker(i.GuildID)
 	}
 
-	embed := messages.CreateSuccessEmbed(messages.T().Queue.SongsRemovedTitle,
-		fmt.Sprintf(messages.T().Queue.RangeRemoved, start, end, len(userSongs)))
+	embed := messages.CreateSuccessEmbed(messages.T(i.GuildID).Queue.SongsRemovedTitle,
+		fmt.Sprintf(messages.T(i.GuildID).Queue.RangeRemoved, start, end, len(userSongs)))
 	RespondEmbed(s, i, embed)
 	return nil
 }
@@ -423,14 +423,14 @@ func handleRemoveSingle(s *discordgo.Session, i *discordgo.InteractionCreate, q 
 	position, err := strconv.Atoi(strings.TrimSpace(positionStr))
 	if err != nil || position < 1 || position > len(q.Songs) {
 		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError,
-			fmt.Sprintf(messages.T().Queue.EnterValidRange, len(q.Songs))))
+			fmt.Sprintf(messages.T(i.GuildID).Queue.EnterValidRange, len(q.Songs))))
 		return nil
 	}
 
 	// Prevent removing currently playing song (position 1)
 	if position == 1 && (q.Playing || q.Loading) {
 		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError,
-			messages.T().Queue.CannotRemoveCurrent))
+			messages.T(i.GuildID).Queue.CannotRemoveCurrent))
 		return nil
 	}
 
@@ -438,7 +438,7 @@ func handleRemoveSingle(s *discordgo.Session, i *discordgo.InteractionCreate, q 
 
 	// Check ownership
 	if songToRemove.RequestedByID != i.Member.User.ID {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleNoPermission, messages.T().Queue.OnlyOwnSongs))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleNoPermission, messages.T(i.GuildID).Queue.OnlyOwnSongs))
 		return nil
 	}
 
@@ -447,7 +447,7 @@ func handleRemoveSingle(s *discordgo.Session, i *discordgo.InteractionCreate, q 
 
 	// Remove song (convert to 0-based index)
 	if err := queue.RemoveSong(i.GuildID, position-1); err != nil {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, fmt.Sprintf(messages.T().Queue.RemoveFailed, err)))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, fmt.Sprintf(messages.T(i.GuildID).Queue.RemoveFailed, err)))
 		return err
 	}
 
@@ -456,8 +456,8 @@ func handleRemoveSingle(s *discordgo.Session, i *discordgo.InteractionCreate, q 
 		player.CleanupPreCacheWorker(i.GuildID)
 	}
 
-	embed := messages.CreateSuccessEmbed(messages.T().Queue.SongsRemovedTitle,
-		fmt.Sprintf(messages.T().Queue.SongRemoved, messages.EscapeMarkdown(songToRemove.Title)))
+	embed := messages.CreateSuccessEmbed(messages.T(i.GuildID).Queue.SongsRemovedTitle,
+		fmt.Sprintf(messages.T(i.GuildID).Queue.SongRemoved, messages.EscapeMarkdown(songToRemove.Title)))
 	RespondEmbed(s, i, embed)
 	return nil
 }
@@ -472,7 +472,7 @@ func HandleClear(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 func HandleSearch(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	cmdOptions := i.ApplicationCommandData().Options
 	if len(cmdOptions) == 0 {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T().Queue.EnterSearchQuery))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T(i.GuildID).Queue.EnterSearchQuery))
 		return nil
 	}
 	query := cmdOptions[0].StringValue()
@@ -485,7 +485,7 @@ func HandleSearch(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	}
 
 	// Show loading message first
-	loadingEmbed := messages.CreateWarningEmbed(messages.T().Queue.SearchingTitle, fmt.Sprintf(messages.T().Queue.SearchingDesc, query))
+	loadingEmbed := messages.CreateWarningEmbed(messages.T(i.GuildID).Queue.SearchingTitle, fmt.Sprintf(messages.T(i.GuildID).Queue.SearchingDesc, query))
 	RespondEmbed(s, i, loadingEmbed)
 
 	// Search YouTube for 10 results
@@ -497,7 +497,7 @@ func HandleSearch(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		searchEndTime.Sub(searchStartTime).Milliseconds(), query, len(results))
 
 	if err != nil || len(results) == 0 {
-		embed := messages.CreateErrorEmbed(messages.T().Queue.NoResultsTitle, messages.T().Queue.NoResultsDesc)
+		embed := messages.CreateErrorEmbed(messages.T(i.GuildID).Queue.NoResultsTitle, messages.T(i.GuildID).Queue.NoResultsDesc)
 		UpdateResponseEmbed(s, i, embed)
 		return nil
 	}
@@ -528,8 +528,8 @@ func HandleSearch(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	// Create embed with search results
 	embed := &discordgo.MessageEmbed{
 		Color:       messages.ColorInfo,
-		Title:       messages.T().Queue.SearchResultsTitle,
-		Description: fmt.Sprintf(messages.T().Queue.SearchResultsDesc, query),
+		Title:       messages.T(i.GuildID).Queue.SearchResultsTitle,
+		Description: fmt.Sprintf(messages.T(i.GuildID).Queue.SearchResultsDesc, query),
 		Fields:      make([]*discordgo.MessageEmbedField, 0, len(results)),
 	}
 
@@ -548,7 +548,7 @@ func HandleSearch(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 			Components: []discordgo.MessageComponent{
 				discordgo.SelectMenu{
 					CustomID:    customID,
-					Placeholder: messages.T().Queue.SelectPlaceholder,
+					Placeholder: messages.T(i.GuildID).Queue.SelectPlaceholder,
 					Options:     selectOptions,
 				},
 			},
@@ -597,7 +597,7 @@ func handleSearchSelection(s *discordgo.Session, originalInteraction *discordgo.
 
 		// Only allow the original requester to select
 		if i.Member.User.ID != originalInteraction.Member.User.ID {
-			embed := messages.CreateWarningEmbed(messages.TitleNoPermission, messages.T().Queue.OnlyRequester)
+			embed := messages.CreateWarningEmbed(messages.TitleNoPermission, messages.T(i.GuildID).Queue.OnlyRequester)
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
@@ -643,7 +643,7 @@ func handleSearchSelection(s *discordgo.Session, originalInteraction *discordgo.
 			// Already selected - ignore duplicate
 			searchSelectionsMu.Unlock()
 			logger.Debugf("[Search] Duplicate selection attempt ignored for search message: '%s'", searchMessageID)
-			embed := messages.CreateWarningEmbed(messages.T().Queue.AlreadySelectedTitle, messages.T().Queue.AlreadySelectedDesc)
+			embed := messages.CreateWarningEmbed(messages.T(i.GuildID).Queue.AlreadySelectedTitle, messages.T(i.GuildID).Queue.AlreadySelectedDesc)
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
@@ -672,8 +672,8 @@ func handleSearchSelection(s *discordgo.Session, originalInteraction *discordgo.
 		})
 
 		// Show processing message
-		processingEmbed := messages.CreateWarningEmbed(messages.T().Queue.ProcessingTitle,
-			fmt.Sprintf(messages.T().Queue.ProcessingDesc, selectedResult.Title))
+		processingEmbed := messages.CreateWarningEmbed(messages.T(i.GuildID).Queue.ProcessingTitle,
+			fmt.Sprintf(messages.T(i.GuildID).Queue.ProcessingDesc, selectedResult.Title))
 
 		s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 			Embeds:     &[]*discordgo.MessageEmbed{processingEmbed},
@@ -688,7 +688,7 @@ func handleSearchSelection(s *discordgo.Session, originalInteraction *discordgo.
 		song, err := youtube.GetVideoInfo(videoURL, originalInteraction.Member.User.Username, originalInteraction.Member.User.ID)
 		if err != nil {
 			logger.Errorf("[Search] Error fetching detailed info: %v", err)
-			errorEmbed := messages.CreateErrorEmbed(messages.TitleError, messages.T().Queue.SearchAddError)
+			errorEmbed := messages.CreateErrorEmbed(messages.TitleError, messages.T(i.GuildID).Queue.SearchAddError)
 			s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 				Embeds:     &[]*discordgo.MessageEmbed{errorEmbed},
 				Components: &[]discordgo.MessageComponent{},
@@ -710,7 +710,7 @@ func handleSearchSelection(s *discordgo.Session, originalInteraction *discordgo.
 		if q == nil {
 			if err := queue.CreateQueue(originalInteraction.GuildID, originalInteraction.ChannelID, voiceChannelID); err != nil {
 				logger.Errorf("[Search] Error creating queue: %v", err)
-				errorEmbed := messages.CreateErrorEmbed(messages.TitleError, messages.T().Music.QueueCreateFailed)
+				errorEmbed := messages.CreateErrorEmbed(messages.TitleError, messages.T(i.GuildID).Music.QueueCreateFailed)
 				s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 					Embeds: &[]*discordgo.MessageEmbed{errorEmbed},
 					Components: &[]discordgo.MessageComponent{},
@@ -735,7 +735,7 @@ func handleSearchSelection(s *discordgo.Session, originalInteraction *discordgo.
 		if err := queue.AddSong(originalInteraction.GuildID, queueSong, -1); err != nil {
 			logger.Errorf("[Search] Error adding song to queue: %v", err)
 			errorEmbed := messages.CreateErrorEmbed(messages.TitleError,
-				fmt.Sprintf(messages.T().Music.SongAddFailed, err))
+				fmt.Sprintf(messages.T(i.GuildID).Music.SongAddFailed, err))
 			s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 				Embeds:     &[]*discordgo.MessageEmbed{errorEmbed},
 				Components: &[]discordgo.MessageComponent{},
@@ -775,7 +775,7 @@ func handleSearchSelection(s *discordgo.Session, originalInteraction *discordgo.
 	<-timeout
 
 	// Timeout - update message
-	timeoutEmbed := messages.CreateWarningEmbed(messages.T().Queue.SearchTimeoutTitle, messages.T().Queue.SearchTimeoutDesc)
+	timeoutEmbed := messages.CreateWarningEmbed(messages.T(originalInteraction.GuildID).Queue.SearchTimeoutTitle, messages.T(originalInteraction.GuildID).Queue.SearchTimeoutDesc)
 
 	// Edit the original response using webhook edit (works for both command types)
 	s.InteractionResponseEdit(originalInteraction.Interaction, &discordgo.WebhookEdit{
@@ -790,7 +790,7 @@ func HandleSkipTo(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 	options := i.ApplicationCommandData().Options
 	if len(options) == 0 {
-		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T().Queue.SkipToEnterPosition))
+		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T(i.GuildID).Queue.SkipToEnterPosition))
 		return nil
 	}
 	position := int(options[0].IntValue())
@@ -798,7 +798,7 @@ func HandleSkipTo(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	// Check user in voice channel
 	voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
 	if err != nil || voiceState.ChannelID == "" {
-		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T().Music.EnterVoiceChannel))
+		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T(i.GuildID).Music.EnterVoiceChannel))
 		return nil
 	}
 
@@ -812,12 +812,12 @@ func HandleSkipTo(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	// Validate position
 	if position < 1 || position > len(q.Songs) {
 		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError,
-			fmt.Sprintf(messages.T().Queue.EnterValidRange, len(q.Songs))))
+			fmt.Sprintf(messages.T(i.GuildID).Queue.EnterValidRange, len(q.Songs))))
 		return nil
 	}
 
 	if position == 1 {
-		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T().Queue.SkipToCurrent))
+		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T(i.GuildID).Queue.SkipToCurrent))
 		return nil
 	}
 
@@ -827,7 +827,7 @@ func HandleSkipTo(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	// Remove all songs before target position
 	if err := queue.SkipToPosition(i.GuildID, position-1); err != nil {
 		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError,
-			fmt.Sprintf(messages.T().Queue.SkipToFailed, err)))
+			fmt.Sprintf(messages.T(i.GuildID).Queue.SkipToFailed, err)))
 		return err
 	}
 
@@ -836,7 +836,7 @@ func HandleSkipTo(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	if p.Playing || p.Loading {
 		if err := player.SkipTo(s, i.GuildID); err != nil {
 			UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError,
-				fmt.Sprintf(messages.T().Queue.SkipToFailed, err)))
+				fmt.Sprintf(messages.T(i.GuildID).Queue.SkipToFailed, err)))
 			return err
 		}
 	}
@@ -844,11 +844,11 @@ func HandleSkipTo(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	// NOW send success message
 	embed := &discordgo.MessageEmbed{
 		Color: messages.ColorSuccess,
-		Title: messages.T().Queue.SkipToCompleteTitle,
-		Description: fmt.Sprintf(messages.T().Queue.SkipToCompleteDesc,
+		Title: messages.T(i.GuildID).Queue.SkipToCompleteTitle,
+		Description: fmt.Sprintf(messages.T(i.GuildID).Queue.SkipToCompleteDesc,
 			messages.FormatBoldMaskedLink(targetSong.Title, targetSong.URL)),
 		Fields: []*discordgo.MessageEmbedField{
-			{Name: messages.T().Queue.SkipToSkippedSongs, Value: fmt.Sprintf(messages.T().Queue.SkipToSongsCount, position-1), Inline: true},
+			{Name: messages.T(i.GuildID).Queue.SkipToSkippedSongs, Value: fmt.Sprintf(messages.T(i.GuildID).Queue.SkipToSongsCount, position-1), Inline: true},
 			{Name: messages.FieldRequester, Value: messages.EscapeMarkdown(targetSong.RequestedByTag), Inline: true},
 		},
 		Thumbnail: &discordgo.MessageEmbedThumbnail{URL: targetSong.Thumbnail},
@@ -862,7 +862,7 @@ func HandleSkipTo(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 func HandleSwap(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	options := i.ApplicationCommandData().Options
 	if len(options) < 2 {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T().Queue.SwapEnterPositions))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T(i.GuildID).Queue.SwapEnterPositions))
 		return nil
 	}
 	pos1 := int(options[0].IntValue()) - 1 // Convert to 0-based
@@ -878,21 +878,21 @@ func HandleSwap(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	// Validate positions
 	if pos1 < 0 || pos2 < 0 || pos1 >= len(q.Songs) || pos2 >= len(q.Songs) {
 		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError,
-			fmt.Sprintf(messages.T().Queue.EnterValidRange, len(q.Songs))))
+			fmt.Sprintf(messages.T(i.GuildID).Queue.EnterValidRange, len(q.Songs))))
 		return nil
 	}
 
 	// Prevent swapping currently playing song (position 0)
 	if (pos1 == 0 || pos2 == 0) && (q.Playing || q.Loading) {
 		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError,
-			messages.T().Queue.CannotSwapCurrent))
+			messages.T(i.GuildID).Queue.CannotSwapCurrent))
 		return nil
 	}
 
 	// Check ownership - user can only swap their own songs
 	if q.Songs[pos1].RequestedByID != i.Member.User.ID || q.Songs[pos2].RequestedByID != i.Member.User.ID {
 		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleNoPermission,
-			messages.T().Queue.OnlyOwnSwap))
+			messages.T(i.GuildID).Queue.OnlyOwnSwap))
 		return nil
 	}
 
@@ -903,14 +903,14 @@ func HandleSwap(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	// Swap
 	if err := queue.SwapSongs(i.GuildID, pos1, pos2); err != nil {
 		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError,
-			fmt.Sprintf(messages.T().Queue.SwapFailed, err)))
+			fmt.Sprintf(messages.T(i.GuildID).Queue.SwapFailed, err)))
 		return err
 	}
 
 	embed := &discordgo.MessageEmbed{
 		Color: messages.ColorSuccess,
-		Title: messages.T().Queue.SwapCompleteTitle,
-		Description: fmt.Sprintf(messages.T().Queue.SwapCompleteDesc,
+		Title: messages.T(i.GuildID).Queue.SwapCompleteTitle,
+		Description: fmt.Sprintf(messages.T(i.GuildID).Queue.SwapCompleteDesc,
 			pos1+1, messages.EscapeMarkdown(song1Title),
 			pos2+1, messages.EscapeMarkdown(song2Title)),
 	}

@@ -221,6 +221,24 @@ func InitializeCommands() {
 	})
 
 	RegisterCommand(&Command{
+		Name:        "seek",
+		Description: cmd("seek").Description,
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "position",
+				Description: cmd("seek").Options["position"],
+				Required:    true,
+			},
+		},
+		Handler:  HandleSeek,
+		TextOnly: false,
+		Usage:    cmd("seek").Usage,
+		Example:  cmd("seek").Example,
+	})
+	registerCommandAliases("seek", cmd("seek"))
+
+	RegisterCommand(&Command{
 		Name:        "stop",
 		Description: cmd("stop").Description,
 		Handler:     HandleStop,
@@ -503,6 +521,32 @@ func InitializeCommands() {
 		Example:   cmd("setprefix").Example,
 	})
 	registerCommandAliases("setprefix", cmd("setprefix"))
+
+	// Register the language command under several universal names so it stays
+	// reachable even when a guild has been locked into the wrong language.
+	// /lang and /language are intentionally short, hard-coded labels — a user
+	// who can't read the current locale must still be able to find them.
+	for _, langCmd := range []string{"setlanguage", "lang", "language"} {
+		name := langCmd
+		RegisterCommand(&Command{
+			Name:        name,
+			Description: cmd("setlanguage").Description,
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "language",
+					Description: cmd("setlanguage").Options["language"],
+					Required:    false,
+					Choices:     buildLanguageChoices(),
+				},
+			},
+			Handler:   HandleSetLanguage,
+			AdminOnly: true,
+			Usage:     cmd("setlanguage").Usage,
+			Example:   cmd("setlanguage").Example,
+		})
+	}
+	registerCommandAliases("setlanguage", cmd("setlanguage"))
 
 	// Admin commands (not registered as slash commands in Node.js)
 	RegisterCommand(&Command{
@@ -1023,4 +1067,19 @@ func checkUserInBotVoiceChannel(s *discordgo.Session, i *discordgo.InteractionCr
 	}
 
 	return voiceState.ChannelID, nil
+}
+
+// buildLanguageChoices returns slash-command choices for every locale file
+// found on disk. Discord caps choices at 25 — well above the number of
+// locales we ship.
+func buildLanguageChoices() []*discordgo.ApplicationCommandOptionChoice {
+	codes := messages.AvailableLocales()
+	choices := make([]*discordgo.ApplicationCommandOptionChoice, 0, len(codes))
+	for _, code := range codes {
+		choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+			Name:  code,
+			Value: code,
+		})
+	}
+	return choices
 }

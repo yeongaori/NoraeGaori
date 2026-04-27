@@ -1,10 +1,8 @@
-version: '3.8'
-
 services:
-  noraedev:
+  noraegaori:
     build: .
-    image: noraedev:latest
-    container_name: noraedev-bot
+    image: noraegaori:${IMAGE_TAG:-dev}
+    container_name: noraegaori-bot
     restart: unless-stopped
 
     # Environment variables (or use .env file)
@@ -36,7 +34,7 @@ services:
 
     # Health check
     healthcheck:
-      test: ["CMD", "pgrep", "noraedev"]
+      test: ["CMD", "pgrep", "noraegaori"]
       interval: 30s
       timeout: 10s
       retries: 3

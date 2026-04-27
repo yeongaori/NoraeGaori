@@ -14,36 +14,36 @@ func HandleJoin(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	// Check if user is in a voice channel
 	voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
 	if err != nil || voiceState.ChannelID == "" {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T().Voice.EnterVoiceChannel))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T(i.GuildID).Voice.EnterVoiceChannel))
 		return nil
 	}
 
 	// Join voice channel
 	_, err = player.JoinVoice(s, i.GuildID, voiceState.ChannelID)
 	if err != nil {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T().Voice.JoinFailedTitle, messages.T().Voice.JoinFailedDesc))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Voice.JoinFailedTitle, messages.T(i.GuildID).Voice.JoinFailedDesc))
 		return err
 	}
 
 	// Get channel name
 	channel, err := s.Channel(voiceState.ChannelID)
 	if err != nil {
-		RespondEmbed(s, i, messages.CreateSuccessEmbed(messages.T().Voice.JoinSuccessTitle, messages.T().Voice.JoinSuccessDesc))
+		RespondEmbed(s, i, messages.CreateSuccessEmbed(messages.T(i.GuildID).Voice.JoinSuccessTitle, messages.T(i.GuildID).Voice.JoinSuccessDesc))
 		return nil
 	}
 
-	RespondEmbed(s, i, messages.CreateSuccessEmbed(messages.T().Voice.JoinSuccessTitle, fmt.Sprintf(messages.T().Voice.JoinSuccessChannel, messages.EscapeMarkdown(channel.Name))))
+	RespondEmbed(s, i, messages.CreateSuccessEmbed(messages.T(i.GuildID).Voice.JoinSuccessTitle, fmt.Sprintf(messages.T(i.GuildID).Voice.JoinSuccessChannel, messages.EscapeMarkdown(channel.Name))))
 	return nil
 }
 
 // HandleLeave handles the leave command
 func HandleLeave(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	if err := player.LeaveVoice(i.GuildID); err != nil {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T().Voice.LeaveFailedTitle, messages.T().Voice.LeaveFailedDesc))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Voice.LeaveFailedTitle, messages.T(i.GuildID).Voice.LeaveFailedDesc))
 		return err
 	}
 
-	RespondEmbed(s, i, messages.CreateSuccessEmbed(messages.T().Voice.LeaveSuccessTitle, messages.T().Voice.LeaveSuccessDesc))
+	RespondEmbed(s, i, messages.CreateSuccessEmbed(messages.T(i.GuildID).Voice.LeaveSuccessTitle, messages.T(i.GuildID).Voice.LeaveSuccessDesc))
 	return nil
 }
 
@@ -59,7 +59,7 @@ func HandleSwitchVC(s *discordgo.Session, i *discordgo.InteractionCreate) error 
 		// If no channel specified, use user's current voice channel
 		voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
 		if err != nil || voiceState.ChannelID == "" {
-			RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T().Voice.EnterVoiceOrSpecify))
+			RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T(i.GuildID).Voice.EnterVoiceOrSpecify))
 			return nil
 		}
 		targetChannelID = voiceState.ChannelID
@@ -79,14 +79,14 @@ func HandleSwitchVC(s *discordgo.Session, i *discordgo.InteractionCreate) error 
 	// Join new channel
 	_, err := player.JoinVoice(s, i.GuildID, targetChannelID)
 	if err != nil {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T().Voice.SwitchFailedTitle, messages.T().Voice.SwitchFailedChannel))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Voice.SwitchFailedTitle, messages.T(i.GuildID).Voice.SwitchFailedChannel))
 		return err
 	}
 
 	// Update queue voice channel
 	if hasSongs {
 		if err := queue.UpdateVoiceChannel(i.GuildID, targetChannelID); err != nil {
-			RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T().Voice.SwitchFailedTitle, messages.T().Voice.SwitchFailedQueue))
+			RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Voice.SwitchFailedTitle, messages.T(i.GuildID).Voice.SwitchFailedQueue))
 			return err
 		}
 	}
@@ -99,10 +99,10 @@ func HandleSwitchVC(s *discordgo.Session, i *discordgo.InteractionCreate) error 
 	// Get channel name
 	channel, err := s.Channel(targetChannelID)
 	if err != nil {
-		RespondEmbed(s, i, messages.CreateSuccessEmbed(messages.T().Voice.SwitchSuccessTitle, messages.T().Voice.SwitchSuccessDesc))
+		RespondEmbed(s, i, messages.CreateSuccessEmbed(messages.T(i.GuildID).Voice.SwitchSuccessTitle, messages.T(i.GuildID).Voice.SwitchSuccessDesc))
 		return nil
 	}
 
-	RespondEmbed(s, i, messages.CreateSuccessEmbed(messages.T().Voice.SwitchSuccessTitle, fmt.Sprintf(messages.T().Voice.SwitchSuccessChannel, messages.EscapeMarkdown(channel.Name))))
+	RespondEmbed(s, i, messages.CreateSuccessEmbed(messages.T(i.GuildID).Voice.SwitchSuccessTitle, fmt.Sprintf(messages.T(i.GuildID).Voice.SwitchSuccessChannel, messages.EscapeMarkdown(channel.Name))))
 	return nil
 }

@@ -155,12 +155,17 @@ func EscapeMessageContent(text string) string {
 	return strings.Join(lines, "\n")
 }
 
+// EscapeLinkText prepares a string for use as masked-link text: [text](url).
+// Discord does NOT process markdown formatting inside link text, so escaping
+// *, _, ~, |, ` is harmful — the backslashes render literally. The only
+// characters that need handling are \ (escape character) and brackets, which
+// terminate the link text. Brackets are substituted with full-width forms
+// rather than escaped, because Discord renders \[ and \] literally inside
+// masked-link text instead of treating them as escapes.
 func EscapeLinkText(text string) string {
 	text = strings.ReplaceAll(text, `\`, `\\`)
-	text = strings.ReplaceAll(text, `*`, `\*`)
-	text = strings.ReplaceAll(text, `~`, `\~`)
-	text = strings.ReplaceAll(text, `|`, `\|`)
-	text = strings.ReplaceAll(text, "`", "\\`")
+	text = strings.ReplaceAll(text, `[`, `［`)
+	text = strings.ReplaceAll(text, `]`, `］`)
 	return text
 }
 

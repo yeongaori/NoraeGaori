@@ -48,7 +48,7 @@ func HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	}
 
 	if len(filteredCommands) == 0 {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T().Help.NoCommandsTitle, messages.T().Help.NoCommandsDesc))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Help.NoCommandsTitle, messages.T(i.GuildID).Help.NoCommandsDesc))
 		return nil
 	}
 
@@ -71,7 +71,7 @@ func HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	}
 	pageCommands := filteredCommands[start:end]
 
-	embed := buildHelpEmbed(pageCommands, page, totalPages, start, len(filteredCommands), prefix)
+	embed := buildHelpEmbed(i.GuildID, pageCommands, page, totalPages, start, len(filteredCommands), prefix)
 
 	// Create navigation buttons if there are multiple pages
 	if totalPages == 1 {
@@ -95,7 +95,8 @@ func HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 }
 
 // buildHelpEmbed constructs a help embed for the given page of commands.
-func buildHelpEmbed(commands []CommandInfo, page, totalPages, startIndex, totalCommands int, prefix string) *discordgo.MessageEmbed {
+func buildHelpEmbed(guildID string, commands []CommandInfo, page, totalPages, startIndex, totalCommands int, prefix string) *discordgo.MessageEmbed {
+	t := messages.T(guildID)
 	var description strings.Builder
 	for idx, cmd := range commands {
 		position := startIndex + idx + 1
@@ -109,11 +110,11 @@ func buildHelpEmbed(commands []CommandInfo, page, totalPages, startIndex, totalC
 
 		description.WriteString(fmt.Sprintf("**%d. %s%s**\n", position, adminBadge, cmd.Name))
 		description.WriteString(fmt.Sprintf("%s\n", cmd.Description))
-		description.WriteString(fmt.Sprintf(messages.T().Help.MessageLabel+"\n", prefix, cmd.Usage))
-		description.WriteString(fmt.Sprintf(messages.T().Help.AliasLabel+"\n", aliasesStr))
-		description.WriteString(fmt.Sprintf(messages.T().Help.SlashLabel+"\n", cmd.Name))
+		description.WriteString(fmt.Sprintf(t.Help.MessageLabel+"\n", prefix, cmd.Usage))
+		description.WriteString(fmt.Sprintf(t.Help.AliasLabel+"\n", aliasesStr))
+		description.WriteString(fmt.Sprintf(t.Help.SlashLabel+"\n", cmd.Name))
 		if cmd.Example != "" {
-			description.WriteString(fmt.Sprintf(messages.T().Help.ExampleLabel+"\n", prefix, cmd.Example))
+			description.WriteString(fmt.Sprintf(t.Help.ExampleLabel+"\n", prefix, cmd.Example))
 		}
 		description.WriteString("\n")
 	}
@@ -124,7 +125,7 @@ func buildHelpEmbed(commands []CommandInfo, page, totalPages, startIndex, totalC
 		Description: description.String(),
 		Fields: []*discordgo.MessageEmbedField{
 			{Name: messages.FieldCurrentPrefix, Value: fmt.Sprintf("`%s`", prefix), Inline: true},
-			{Name: messages.FieldTotalCommands, Value: fmt.Sprintf(messages.T().Help.TotalCommandsValue, totalCommands), Inline: true},
+			{Name: messages.FieldTotalCommands, Value: fmt.Sprintf(t.Help.TotalCommandsValue, totalCommands), Inline: true},
 		},
 		Footer: &discordgo.MessageEmbedFooter{
 			Text: fmt.Sprintf(messages.FooterHelpPagination, page, totalPages),
@@ -209,7 +210,7 @@ func handleHelpButtons(s *discordgo.Session, i *discordgo.InteractionCreate, ori
 		}
 		pageCommands := allCommands[start:end]
 
-		embed := buildHelpEmbed(pageCommands, currentPage, totalPages, start, len(allCommands), prefix)
+		embed := buildHelpEmbed(guildID, pageCommands, currentPage, totalPages, start, len(allCommands), prefix)
 
 		components := createHelpButtons(currentPage, totalPages)
 
@@ -238,7 +239,7 @@ func handleHelpButtons(s *discordgo.Session, i *discordgo.InteractionCreate, ori
 	}
 	pageCommands := allCommands[start:end]
 
-	embed := buildHelpEmbed(pageCommands, currentPage, totalPages, start, len(allCommands), prefix)
+	embed := buildHelpEmbed(guildID, pageCommands, currentPage, totalPages, start, len(allCommands), prefix)
 
 	// Get the message to edit
 	var msg *discordgo.Message

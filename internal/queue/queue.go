@@ -1230,6 +1230,56 @@ func SetNormalization(guildID string, enabled bool) error {
 	return nil
 }
 
+// GetGuildLanguage returns the per-guild language code, or "" if none is set.
+// An empty string indicates the guild should use the global default language.
+func GetGuildLanguage(guildID string) (string, error) {
+	var lang sql.NullString
+	err := database.DB.QueryRow(
+		`SELECT language FROM guild_settings WHERE guild_id = ?`,
+		guildID,
+	).Scan(&lang)
+
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to get guild language: %w", err)
+	}
+
+	if !lang.Valid {
+		return "", nil
+	}
+	return lang.String, nil
+}
+
+// SetGuildLanguage stores the per-guild language code. Pass an empty string
+// to clear the override and fall back to the global default.
+func SetGuildLanguage(guildID, lang string) error {
+	lock := acquireLock(guildID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	var langValue interface{}
+	if lang == "" {
+		langValue = nil
+	} else {
+		langValue = lang
+	}
+
+	_, err := database.DB.Exec(
+		`INSERT INTO guild_settings (guild_id, language) VALUES (?, ?)
+		 ON CONFLICT(guild_id) DO UPDATE SET language = ?`,
+		guildID, langValue, langValue,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to set guild language: %w", err)
+	}
+
+	InvalidateCache(guildID)
+	logger.Debugf("[SetGuildLanguage] Set language=%q for guild: %s", lang, guildID)
+	return nil
+}
+
 // SwapSongs swaps two songs by position
 func SwapSongs(guildID string, pos1, pos2 int) error {
 	lock := acquireLock(guildID)

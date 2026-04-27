@@ -13,6 +13,7 @@ import (
 	"noraegaori/internal/database"
 	"noraegaori/internal/messages"
 	"noraegaori/internal/player"
+	"noraegaori/internal/queue"
 	"noraegaori/internal/youtube"
 	ytdlpUpdater "noraegaori/internal/ytdlp"
 	"noraegaori/pkg/logger"
@@ -52,6 +53,11 @@ func main() {
 		os.Exit(1)
 	}
 	defer config.Close()
+
+	// Wire per-guild language lookup so messages.T(guildID) reads from the
+	// guild_settings table without forming a messages → queue → database
+	// import cycle.
+	messages.SetGuildLangResolver(queue.GetGuildLanguage)
 
 	// Load locale strings based on configured language
 	lang := config.GetConfig().Language

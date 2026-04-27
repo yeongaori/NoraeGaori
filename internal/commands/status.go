@@ -20,7 +20,7 @@ func HandleStatus(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	DeferResponse(s, i)
 
 	// Show loading message
-	loadingEmbed := messages.CreateWarningEmbed(messages.T().Status.LoadingTitle, messages.T().Status.LoadingDesc)
+	loadingEmbed := messages.CreateWarningEmbed(messages.T(i.GuildID).Status.LoadingTitle, messages.T(i.GuildID).Status.LoadingDesc)
 	UpdateResponseEmbed(s, i, loadingEmbed)
 
 	// Gather system information
@@ -73,42 +73,42 @@ func HandleStatus(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	// Create info embed
 	infoEmbed := &discordgo.MessageEmbed{
 		Color:       messages.ColorInfo,
-		Title:       messages.T().Status.Title,
-		Description: messages.T().Status.Description,
+		Title:       messages.T(i.GuildID).Status.Title,
+		Description: messages.T(i.GuildID).Status.Description,
 		Fields: []*discordgo.MessageEmbedField{
 			{
 				Name:   messages.FieldCPUInfo,
-				Value:  fmt.Sprintf(messages.T().Status.CPUInfoValue, cpuModel, cpuCores),
+				Value:  fmt.Sprintf(messages.T(i.GuildID).Status.CPUInfoValue, cpuModel, cpuCores),
 				Inline: false,
 			},
 			{
 				Name:   messages.FieldCPUUsage,
-				Value:  fmt.Sprintf(messages.T().Status.CPUUsageValue, cpuUsage),
+				Value:  fmt.Sprintf(messages.T(i.GuildID).Status.CPUUsageValue, cpuUsage),
 				Inline: true,
 			},
 			{
 				Name:   messages.FieldTotalMemory,
-				Value:  fmt.Sprintf(messages.T().Status.TotalMemoryValue, totalMemoryGB),
+				Value:  fmt.Sprintf(messages.T(i.GuildID).Status.TotalMemoryValue, totalMemoryGB),
 				Inline: true,
 			},
 			{
 				Name:   messages.FieldMemoryUsage,
-				Value:  fmt.Sprintf(messages.T().Status.MemoryUsageValue, usedMemoryMB, totalMemoryGB, memoryUsagePercent),
+				Value:  fmt.Sprintf(messages.T(i.GuildID).Status.MemoryUsageValue, usedMemoryMB, totalMemoryGB, memoryUsagePercent),
 				Inline: false,
 			},
 			{
 				Name:   messages.FieldBotMemory,
-				Value:  fmt.Sprintf(messages.T().Status.BotMemoryValue, botHeapUsed, botRSS),
+				Value:  fmt.Sprintf(messages.T(i.GuildID).Status.BotMemoryValue, botHeapUsed, botRSS),
 				Inline: true,
 			},
 			{
 				Name:   messages.FieldServerMemory,
-				Value:  fmt.Sprintf(messages.T().Status.ServerMemoryValue, guildMemoryUsage),
+				Value:  fmt.Sprintf(messages.T(i.GuildID).Status.ServerMemoryValue, guildMemoryUsage),
 				Inline: true,
 			},
 			{
 				Name:   messages.FieldPlayingServers,
-				Value:  fmt.Sprintf(messages.T().Status.PlayingServersValue, playingGuildsCount),
+				Value:  fmt.Sprintf(messages.T(i.GuildID).Status.PlayingServersValue, playingGuildsCount),
 				Inline: true,
 			},
 		},

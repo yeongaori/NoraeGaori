@@ -49,6 +49,7 @@ type GuildPlayer struct {
 	Paused           bool
 	Loading          bool
 	TogglingNorm     bool // Signal to restart FFmpeg for normalization change
+	Seeking          bool // Signal to restart FFmpeg at song.SeekTime (user seek)
 	Volume           float64
 	StopChan         chan struct{}
 	PlaybackDone     chan struct{}      // Signaled when playback terminates
@@ -722,13 +723,20 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 			break
 		}
 
-		// Check if it was a normalization toggle restart
+		// Check if it was a normalization toggle or user-seek restart
 		player.mu.Lock()
 		toggling := player.TogglingNorm
+		seeking := player.Seeking
 		if toggling {
 			player.TogglingNorm = false
 			// Calculate current position for seamless restart
 			seekTime = int(time.Since(player.PlaybackStart).Milliseconds())
+			player.StopChan = make(chan struct{})
+		}
+		if seeking {
+			player.Seeking = false
+			// User-requested seek time was already written to song.SeekTime
+			seekTime = song.SeekTime
 			player.StopChan = make(chan struct{})
 		}
 		player.mu.Unlock()
@@ -742,6 +750,11 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 				normalization = newNorm
 			}
 			logger.Infof("[Play] Restarting FFmpeg for normalization toggle at %dms: %s", seekTime, song.Title)
+			continue
+		}
+
+		if seeking {
+			logger.Infof("[Play] Restarting FFmpeg for seek to %dms: %s", seekTime, song.Title)
 			continue
 		}
 
@@ -1515,6 +1528,49 @@ func pauseInternal(guildID string) error {
 	}
 
 	logger.Infof("[pauseInternal] Paused at %dms for guild: %s", seekTime, guildID)
+	return nil
+}
+
+// Seek restarts the current song's playback at positionMs without disconnecting
+// from voice. Errors if not playing, no current song, or the song is a live
+// stream. Persists the new position so a later pause/resume continues from
+// here. Mirrors the RestartForNormalization pattern: signal via StopChan +
+// flag, let playSingleSong's loop pick up the new seekTime on its next iter.
+func Seek(guildID string, positionMs int) error {
+	if positionMs < 0 {
+		return fmt.Errorf("seek position cannot be negative")
+	}
+	player := GetPlayer(guildID)
+
+	q, err := queue.GetQueue(guildID, false)
+	if err != nil || q == nil || len(q.Songs) == 0 {
+		return fmt.Errorf("no current song")
+	}
+	song := q.Songs[0]
+	if song.IsLive {
+		return fmt.Errorf("cannot seek a live stream")
+	}
+
+	player.mu.Lock()
+	if !player.Playing {
+		player.mu.Unlock()
+		return fmt.Errorf("not playing")
+	}
+	song.SeekTime = positionMs
+	player.Seeking = true
+	select {
+	case <-player.StopChan:
+		// Already closed
+	default:
+		close(player.StopChan)
+	}
+	player.mu.Unlock()
+
+	if _, err := queue.SaveSeekTime(guildID, song.ID, positionMs); err != nil {
+		logger.Errorf("[Seek] Failed to persist seek time: %v", err)
+		return err
+	}
+	logger.Infof("[Seek] Set position to %dms for guild %s", positionMs, guildID)
 	return nil
 }
 

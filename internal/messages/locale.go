@@ -7,8 +7,26 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strings"
+	"sync"
 
 	"noraegaori/locales"
+)
+
+// guildLangResolver returns the language code stored for a guild, or "" if none.
+// Wired from outside the messages package (in main.go) to avoid an import cycle
+// between messages → queue → database.
+var guildLangResolver func(guildID string) (string, error)
+
+// SetGuildLangResolver registers the function used to look up a guild's language.
+// Called once at startup.
+func SetGuildLangResolver(fn func(guildID string) (string, error)) {
+	guildLangResolver = fn
+}
+
+var (
+	localeCacheMu sync.RWMutex
+	localeCache   = make(map[string]*Locale) // language code → loaded locale
 )
 
 // Locale represents a complete set of translated strings
@@ -238,6 +256,14 @@ type SettingsMessages struct {
 	PrefixExampleTitle    string `json:"prefix_example_title"`
 	PrefixExampleValue    string `json:"prefix_example_value"`
 	PrefixSlashNote       string `json:"prefix_slash_note"`
+	LanguageUnknown       string `json:"language_unknown"`
+	LanguageChangedTitle  string `json:"language_changed_title"`
+	LanguageChangedDesc   string `json:"language_changed_desc"`
+	LanguageResetTitle    string `json:"language_reset_title"`
+	LanguageResetDesc     string `json:"language_reset_desc"`
+	LanguageCurrentTitle  string `json:"language_current_title"`
+	LanguageCurrentDesc   string `json:"language_current_desc"`
+	LanguageSaveFailed    string `json:"language_save_failed"`
 }
 
 type StatusMessages struct {
@@ -287,6 +313,12 @@ type MusicMessages struct {
 	ServerInfoFailed      string `json:"server_info_failed"`
 	SkipFailedTitle       string `json:"skip_failed_title"`
 	SkipFailedDesc        string `json:"skip_failed_desc"`
+	SeekedTitle           string `json:"seeked_title"`
+	SeekedDesc            string `json:"seeked_desc"`
+	SeekInvalidFormat     string `json:"seek_invalid_format"`
+	SeekOutOfBounds       string `json:"seek_out_of_bounds"`
+	SeekLiveStream        string `json:"seek_live_stream"`
+	SeekFailed            string `json:"seek_failed"`
 	PlaybackEndedTitle    string `json:"playback_ended_title"`
 	PlaybackEndedSkip     string `json:"playback_ended_skip"`
 	ForceSkipped          string `json:"force_skipped"`
@@ -316,6 +348,7 @@ type MusicMessages struct {
 	PlaylistCompleteDesc  string `json:"playlist_complete_desc"`
 	PlaylistSkippedCount  string `json:"playlist_skipped_count"`
 	PlaylistSkippedOrDup  string `json:"playlist_skipped_or_dup"`
+	PlaylistSkippedMore   string `json:"playlist_skipped_more"`
 	PlaylistAddedCount    string `json:"playlist_added_count"`
 	PlaylistAddedSongs    string `json:"playlist_added_songs"`
 	PlaylistSongsUnit     string `json:"playlist_songs_unit"`
@@ -444,58 +477,157 @@ var currentLocale = &Locale{}
 // currentLang holds the language code of the loaded locale (e.g. "en", "ko")
 var currentLang = "en"
 
-// T returns the current locale. Returns nil if no locale has been loaded.
-func T() *Locale {
+// T returns the locale for the given guild, falling back to the bot-wide
+// default when no guildID is provided or the guild has no override set.
+//
+// Callers in command handlers should pass i.GuildID so each guild sees its
+// own language. Callers without a guild context (startup, RPC, etc.) call T()
+// with no arguments to get the global default.
+func T(guildID ...string) *Locale {
+	if len(guildID) == 0 || guildID[0] == "" || guildLangResolver == nil {
+		return currentLocale
+	}
+	lang, err := guildLangResolver(guildID[0])
+	if err != nil || lang == "" || lang == currentLang {
+		return currentLocale
+	}
+	if loc := getCachedLocale(lang); loc != nil {
+		return loc
+	}
 	return currentLocale
 }
 
-// Lang returns the current language code (e.g. "en", "ko").
-func Lang() string {
-	return currentLang
+// Lang returns the language code in effect for the given guild (or the global
+// default when no guildID is provided).
+func Lang(guildID ...string) string {
+	if len(guildID) == 0 || guildID[0] == "" || guildLangResolver == nil {
+		return currentLang
+	}
+	lang, err := guildLangResolver(guildID[0])
+	if err != nil || lang == "" {
+		return currentLang
+	}
+	return lang
+}
+
+// AvailableLocales scans the locales directory and returns the list of
+// language codes that have a corresponding <code>.json file. The English
+// fallback ("en") is always included even when the file is missing on disk
+// (it is embedded into the binary).
+func AvailableLocales() []string {
+	dir := localesDir()
+	entries, err := os.ReadDir(dir)
+	seen := map[string]struct{}{"en": {}}
+	out := []string{"en"}
+	if err == nil {
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			name := e.Name()
+			if !strings.HasSuffix(name, ".json") {
+				continue
+			}
+			code := strings.TrimSuffix(name, ".json")
+			if _, ok := seen[code]; ok {
+				continue
+			}
+			seen[code] = struct{}{}
+			out = append(out, code)
+		}
+	}
+	return out
+}
+
+// localeDir returns the directory locale files live in. Mirrors readLocaleFile's
+// fallback to a path relative to the source file when the working directory is
+// not the project root (e.g. in some test harnesses).
+func localesDir() string {
+	const dir = "locales"
+	if _, err := os.Stat(dir); err == nil {
+		return dir
+	}
+	_, filename, _, _ := runtime.Caller(0)
+	return filepath.Join(filepath.Dir(filename), "..", "..", dir)
+}
+
+func getCachedLocale(lang string) *Locale {
+	localeCacheMu.RLock()
+	loc, ok := localeCache[lang]
+	localeCacheMu.RUnlock()
+	if ok {
+		return loc
+	}
+	loc, err := buildLocale(lang)
+	if err != nil {
+		return nil
+	}
+	localeCacheMu.Lock()
+	localeCache[lang] = loc
+	localeCacheMu.Unlock()
+	return loc
+}
+
+// buildLocale loads the English base then overlays the requested language.
+// Returns an error when the requested file is missing or malformed.
+func buildLocale(lang string) (*Locale, error) {
+	enData, err := readLocaleFile(filepath.Join(localesDir(), "en.json"))
+	if err != nil {
+		enData = locales.EnglishLocale
+	}
+	var base Locale
+	if err := json.Unmarshal(enData, &base); err != nil {
+		return nil, fmt.Errorf("failed to parse English fallback locale: %w", err)
+	}
+	if lang == "en" {
+		return &base, nil
+	}
+	langData, err := readLocaleFile(filepath.Join(localesDir(), lang+".json"))
+	if err != nil {
+		return nil, err
+	}
+	var overlay Locale
+	if err := json.Unmarshal(langData, &overlay); err != nil {
+		return nil, fmt.Errorf("locale %q has invalid JSON: %w", lang, err)
+	}
+	mergeLocale(&base, &overlay)
+	return &base, nil
+}
+
+// InvalidateLocaleCache drops cached locales so the next T(guildID) call
+// reloads from disk. Useful after editing a locale file at runtime.
+func InvalidateLocaleCache() {
+	localeCacheMu.Lock()
+	localeCache = make(map[string]*Locale)
+	localeCacheMu.Unlock()
 }
 
 func LoadLocale(lang string) error {
 	currentLang = lang
-	localesDir := "locales"
 
-	enData, err := readLocaleFile(filepath.Join(localesDir, "en.json"))
+	loc, err := buildLocale(lang)
 	if err != nil {
-		enData = locales.EnglishLocale
-	}
-
-	var base Locale
-	if err := json.Unmarshal(enData, &base); err != nil {
-		return fmt.Errorf("failed to parse English fallback locale: %w", err)
-	}
-
-	if lang == "en" {
+		// Build with the embedded English fallback so the bot still starts.
+		var base Locale
+		if jerr := json.Unmarshal(locales.EnglishLocale, &base); jerr != nil {
+			return fmt.Errorf("failed to parse embedded English fallback: %w", jerr)
+		}
 		currentLocale = &base
 		applyLocale(&base)
-		return nil
+		// Warm the cache for "en" so future fallbacks are O(1).
+		localeCacheMu.Lock()
+		localeCache["en"] = &base
+		localeCacheMu.Unlock()
+		return fmt.Errorf("failed to load locale %q, falling back to English: %w", lang, err)
 	}
 
-	// Try to load the requested language and overlay on top of English
-	langData, err := readLocaleFile(filepath.Join(localesDir, lang+".json"))
-	if err != nil {
-		// Locale file not found — fall back to English
-		currentLocale = &base
-		applyLocale(&base)
-		return fmt.Errorf("locale %q not found, falling back to English: %w", lang, err)
-	}
+	currentLocale = loc
+	applyLocale(loc)
 
-	var overlay Locale
-	if err := json.Unmarshal(langData, &overlay); err != nil {
-		// Invalid JSON — fall back to English
-		currentLocale = &base
-		applyLocale(&base)
-		return fmt.Errorf("locale %q has invalid JSON, falling back to English: %w", lang, err)
-	}
-
-	// Merge: overlay non-zero values onto the English base
-	mergeLocale(&base, &overlay)
-
-	currentLocale = &base
-	applyLocale(&base)
+	// Warm the cache for the active language.
+	localeCacheMu.Lock()
+	localeCache[lang] = loc
+	localeCacheMu.Unlock()
 	return nil
 }
 

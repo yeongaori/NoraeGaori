@@ -8,6 +8,15 @@ BINARY_PATH=./$(BINARY_NAME)
 BUILD_FLAGS=-ldflags="-s -w"
 CGO_FLAG=CGO_ENABLED=1
 
+# Docker image tag: master → release, anything else → dev
+GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
+ifeq ($(GIT_BRANCH),master)
+    DOCKER_TAG := release
+else
+    DOCKER_TAG := dev
+endif
+DOCKER_IMAGE := $(BINARY_NAME):$(DOCKER_TAG)
+
 all: deps build
 
 ## build: Build the application binary
@@ -86,20 +95,20 @@ local:
 	@mv go.sum.bak go.sum
 	@echo "Build complete (local fork): $(BINARY_PATH)"
 
-## docker-build: Build Docker image
+## docker-build: Build Docker image (tag derives from current branch)
 docker-build:
-	@echo "Building Docker image..."
-	@docker build -t noraedev:latest .
-	@echo "Docker image built"
+	@echo "Building Docker image: $(DOCKER_IMAGE)"
+	@docker build -t $(DOCKER_IMAGE) .
+	@echo "Docker image built: $(DOCKER_IMAGE)"
 
 ## docker-run: Run in Docker container
 docker-run:
-	@echo "Running in Docker..."
+	@echo "Running in Docker: $(DOCKER_IMAGE)"
 	@docker run --rm -it \
 		-v $(PWD)/config:/app/config \
 		-v $(PWD)/data:/app/data \
 		-v $(PWD)/.env:/app/.env \
-		noraedev:latest
+		$(DOCKER_IMAGE)
 
 ## lint: Run linter
 lint:

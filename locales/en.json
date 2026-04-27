@@ -163,6 +163,15 @@
       "example": "skip",
       "aliases": ["skip"]
     },
+    "seek": {
+      "description": "Jumps to a specific position in the current song",
+      "options": {
+        "position": "Position (e.g. 1:23 or 83)"
+      },
+      "usage": "seek <position>",
+      "example": "seek 1:23",
+      "aliases": ["seek", "jump"]
+    },
     "stop": {
       "description": "Stops playback and clears the queue.",
       "options": {},
@@ -267,6 +276,13 @@
       "usage": "setprefix [new prefix]",
       "example": "setprefix ?, setprefix !",
       "aliases": ["setprefix", "prefix"]
+    },
+    "setlanguage": {
+      "description": "Sets this server's language (admin only)",
+      "options": { "language": "Language code (e.g. en, ko) — leave empty to reset to default" },
+      "usage": "setlanguage [code]",
+      "example": "setlanguage ko, setlanguage en, setlanguage",
+      "aliases": ["setlanguage", "setlang", "language", "lang"]
     },
     "forceskip": {
       "description": "Force skips the current song (admin only)",
@@ -385,7 +401,15 @@
     "prefix_changed_desc": "The prefix has been changed to **%s**.",
     "prefix_example_title": "Usage Example",
     "prefix_example_value": "`%splay song title`\n`%squeue`\n`%shelp`",
-    "prefix_slash_note": "Slash commands (`/play`) are not affected by prefix changes."
+    "prefix_slash_note": "Slash commands (`/play`) are not affected by prefix changes.",
+    "language_unknown": "Unknown language code: **%s**. Available: %s",
+    "language_changed_title": "Language Changed",
+    "language_changed_desc": "This server's language is now **%s**.",
+    "language_reset_title": "Language Reset",
+    "language_reset_desc": "This server now uses the bot-wide default language (**%s**).",
+    "language_current_title": "Server Language",
+    "language_current_desc": "Current language: **%s**\nDefault: **%s**\nAvailable: %s\n\nUsage: `/setlanguage <code>` (or pass nothing to reset).",
+    "language_save_failed": "Failed to save language: %v"
   },
 
   "status": {
@@ -435,6 +459,12 @@
     "server_info_failed": "Could not retrieve server information.",
     "skip_failed_title": "Skip Failed",
     "skip_failed_desc": "An error occurred while skipping: %v",
+    "seeked_title": "Seeked",
+    "seeked_desc": "%s\nJumped to %s / %s.",
+    "seek_invalid_format": "Invalid position. Use seconds (`83`), `mm:ss` (`1:23`), or `hh:mm:ss`.",
+    "seek_out_of_bounds": "Position is past the end of the song.",
+    "seek_live_stream": "Cannot seek a live stream.",
+    "seek_failed": "Failed to seek: %v",
     "playback_ended_title": "Playback Ended",
     "playback_ended_skip": "**%s** has been skipped.\nAll songs have finished playing. Leaving the voice channel.",
     "force_skipped": "**%s** has been force skipped by an admin.",
@@ -464,6 +494,7 @@
     "playlist_complete_desc": "%s\n\nThe first song will start playing.\nThe remaining songs have been added to the queue.",
     "playlist_skipped_count": "%d songs could not be played and were skipped.",
     "playlist_skipped_or_dup": "%d songs were skipped due to being unavailable or duplicates.",
+    "playlist_skipped_more": "… and %d more",
     "playlist_added_count": "Added",
     "playlist_added_songs": "Songs Added",
     "playlist_songs_unit": "%d songs",
