@@ -1,7 +1,8 @@
 # Build stage
 FROM golang:1.25-alpine AS builder
 
-# Install build dependencies
+# CGO is required for go-sqlite3; libopus is dlopen'd at runtime via purego,
+# so no opus headers are needed at build time.
 RUN apk add --no-cache gcc musl-dev sqlite-dev
 
 WORKDIR /build
@@ -26,6 +27,7 @@ RUN apk add --no-cache \
     py3-pip \
     ca-certificates \
     sqlite \
+    opus \
     && pip3 install --no-cache-dir --break-system-packages yt-dlp
 
 WORKDIR /app

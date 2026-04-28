@@ -21,7 +21,8 @@ A feature-rich & high-quality audio Discord music bot written in Go.
 
 - **Go** 1.25+
 - **FFmpeg** (`sudo apt install ffmpeg`)
-- **libopus-dev** (optional, for native opus — `sudo apt install libopus-dev`)
+- **libopus** (optional, for native encoding — `sudo apt install libopus0`)
+  - The bot loads libopus at runtime via dlopen. If the library is found, the native encoder is used; if not, a pure-Go WASM encoder is used as a fallback (a warning is logged at startup). Released binaries do not need libopus installed to run.
 
 yt-dlp is automatically downloaded and updated by the bot on startup.
 
@@ -105,6 +106,7 @@ To add a new language, create `locales/<code>.json` using `locales/en.json` as a
 | `/pause` | | Pause and leave channel (state preserved) |
 | `/resume` | | Resume playback |
 | `/skip` | | Vote to skip current song |
+| `/seek <position>` | `jump` | Jump to a position in the current song (e.g. `1:23` or `83`) |
 | `/stop` | `st` | Stop playback and clear queue |
 | `/nowplaying` | `np` | Show the current song |
 | `/volume [level]` | `vol`, `v` | Get or set volume (0-1000) |
@@ -140,11 +142,18 @@ To add a new language, create `locales/<code>.json` using `locales/en.json` as a
 | Command | Aliases | Description |
 |---|---|---|
 | `/setprefix <prefix>` | `prefix` | Change the command prefix |
+| `/setlanguage [code]` | `setlang`, `language`, `lang` | Set server language (`en`, `ko`); no argument shows the current language |
 | `/forceskip` | `fs` | Skip without voting |
 | `/forceremove <target>` | `fr` | Remove a user's songs |
 | `/forcestop` | `fstop` | Force stop and clear queue |
 | `/movetrack <from> <to>` | `mt` | Move a song to a new position |
 | `/status` | | Show system info |
+
+### Help
+
+| Command | Aliases | Description |
+|---|---|---|
+| `/help [page]` | `h` | Show help for all commands |
 
 ## Project Structure
 
@@ -187,8 +196,7 @@ docker-compose up -d
 | Command | Description |
 |---|---|
 | `make setup` | First-time setup (install deps + build) |
-| `make build` | Build with native libopus (requires libopus-dev) |
-| `make build-nonative` | Build with WASM opus (no system deps) |
+| `make build` | Build the bot (uses libopus at runtime if present, WASM otherwise) |
 | `make run` | Build and run |
 | `make dev` | Run in dev mode with debug logging |
 | `make clean` | Remove build artifacts |

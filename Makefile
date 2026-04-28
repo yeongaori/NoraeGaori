@@ -1,4 +1,4 @@
-.PHONY: all build-nonative build run clean test deps install help local
+.PHONY: all build run clean test deps install help local
 
 # Binary name
 BINARY_NAME=noraegaori
@@ -6,7 +6,6 @@ BINARY_PATH=./$(BINARY_NAME)
 
 # Build flags
 BUILD_FLAGS=-ldflags="-s -w"
-CGO_FLAG=CGO_ENABLED=1
 
 # Docker image tag: master → release, anything else → dev
 GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
@@ -19,17 +18,10 @@ DOCKER_IMAGE := $(BINARY_NAME):$(DOCKER_TAG)
 
 all: deps build
 
-## build: Build the application binary
-build-nonative:
-	@echo "Building $(BINARY_NAME) with WASM opus..."
-	@$(CGO_FLAG) go build $(BUILD_FLAGS) -o $(BINARY_NAME) ./cmd/bot
-	@echo "Build complete (WASM Opus): $(BINARY_PATH)"
-
-## build-native: Build with native libopus (requires libopus-dev installed)
+## build: Build the bot (uses libopus at runtime if present, WASM otherwise)
 build:
 	@echo "Building $(BINARY_NAME)..."
-	@pkg-config --exists opus || (echo "libopus not found. Install with: sudo apt install libopus-dev" && exit 1)
-	@$(CGO_FLAG) go build $(BUILD_FLAGS) -tags "opus_native nolibopusfile" -o $(BINARY_NAME) ./cmd/bot
+	@CGO_ENABLED=1 go build $(BUILD_FLAGS) -o $(BINARY_NAME) ./cmd/bot
 	@echo "Build complete: $(BINARY_PATH)"
 
 ## run: Build and run the application
@@ -86,13 +78,10 @@ setup: install deps build
 ## local: Build using local discordgo-fork
 local:
 	@echo "Building $(BINARY_NAME) with local discordgo-fork..."
-	@cp go.mod go.mod.bak
-	@cp go.sum go.sum.bak
-	@go mod edit -replace github.com/bwmarrin/discordgo=/home/yeongaori/discordgo-fork
-	@pkg-config --exists opus || (mv go.mod.bak go.mod && mv go.sum.bak go.sum && echo "libopus not found. Install with: sudo apt install libopus-dev" && exit 1)
-	@$(CGO_FLAG) go build $(BUILD_FLAGS) -tags "opus_native nolibopusfile" -o $(BINARY_NAME) ./cmd/bot || (mv go.mod.bak go.mod && mv go.sum.bak go.sum && exit 1)
-	@mv go.mod.bak go.mod
-	@mv go.sum.bak go.sum
+	@cp go.mod go.mod.bak; cp go.sum go.sum.bak; \
+		go mod edit -replace github.com/bwmarrin/discordgo=/home/yeongaori/discordgo-fork; \
+		CGO_ENABLED=1 go build $(BUILD_FLAGS) -o $(BINARY_NAME) ./cmd/bot; \
+		RC=$$?; mv go.mod.bak go.mod; mv go.sum.bak go.sum; exit $$RC
 	@echo "Build complete (local fork): $(BINARY_PATH)"
 
 ## docker-build: Build Docker image (tag derives from current branch)
