@@ -727,7 +727,7 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	cmd, exists := commands[cmdName]
 	if !exists {
 		logger.Warnf("[Commands] Unknown command: %s", cmdName)
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T().Errors.UnknownCommand))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T(i.GuildID).Errors.UnknownCommand))
 		return
 	}
 
@@ -745,7 +745,7 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	// Execute command
 	if err := cmd.Handler(s, i); err != nil {
 		logger.Errorf("[Commands] Command %s failed: %v", cmdName, err)
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, fmt.Sprintf(messages.T().Errors.CommandExecutionError, err)))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, fmt.Sprintf(messages.T(i.GuildID).Errors.CommandExecutionError, err)))
 	}
 }
 
@@ -840,7 +840,7 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		logger.Errorf("[Commands] Text command %s failed: %v", cmdName, err)
 		// Only send error message if no message was already sent by the command handler
 		if messageResponder.Message == nil {
-			embed := messages.CreateErrorEmbed(messages.TitleError, fmt.Sprintf(messages.T().Errors.CommandExecutionError, err))
+			embed := messages.CreateErrorEmbed(messages.TitleError, fmt.Sprintf(messages.T(m.GuildID).Errors.CommandExecutionError, err))
 			// Send error as reply to original message
 			s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
 				Embeds: []*discordgo.MessageEmbed{embed},
@@ -1064,7 +1064,7 @@ func checkUserInBotVoiceChannel(s *discordgo.Session, i *discordgo.InteractionCr
 
 	// Check if user is in the same voice channel as the bot
 	if voiceState.ChannelID != q.VoiceChannelID {
-		return "", messages.CreateErrorEmbed(messages.TitleError, messages.T().Errors.MustBeInBotChannel)
+		return "", messages.CreateErrorEmbed(messages.TitleError, messages.T(i.GuildID).Errors.MustBeInBotChannel)
 	}
 
 	return voiceState.ChannelID, nil

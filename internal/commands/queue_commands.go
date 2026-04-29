@@ -685,7 +685,7 @@ func handleSearchSelection(s *discordgo.Session, originalInteraction *discordgo.
 		logger.Debugf("[Search] Fetching detailed info for selected song: %s", selectedResult.Title)
 		fetchStartTime := time.Now()
 
-		song, err := youtube.GetVideoInfo(videoURL, originalInteraction.Member.User.Username, originalInteraction.Member.User.ID)
+		song, err := youtube.GetVideoInfo(originalInteraction.GuildID, videoURL, originalInteraction.Member.User.Username, originalInteraction.Member.User.ID)
 		if err != nil {
 			logger.Errorf("[Search] Error fetching detailed info: %v", err)
 			errorEmbed := messages.CreateErrorEmbed(messages.TitleError, messages.T(i.GuildID).Queue.SearchAddError)

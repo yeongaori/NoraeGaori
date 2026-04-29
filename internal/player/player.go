@@ -187,7 +187,7 @@ func sendNowPlayingMessage(session *discordgo.Session, guildID string, song *que
 	if loadingMsg != nil {
 		nowPlayingEmbed := messages.CreateSongEmbed(
 			messages.ColorSuccess,
-			messages.T().Player.PlaybackStarted,
+			messages.T(guildID).Player.PlaybackStarted,
 			"",
 			song.Title,
 			song.URL,
@@ -209,7 +209,7 @@ func sendNowPlayingMessage(session *discordgo.Session, guildID string, song *que
 	} else if q.ShowStartedTrack {
 		embed := messages.CreateSongEmbed(
 			messages.ColorSuccess,
-			messages.T().Player.NowPlaying,
+			messages.T(guildID).Player.NowPlaying,
 			"",
 			song.Title,
 			song.URL,
@@ -225,8 +225,8 @@ func sendNowPlayingMessage(session *discordgo.Session, guildID string, song *que
 	if reconnectMsg := getReconnectMessage(guildID); reconnectMsg != nil {
 		reconnectedEmbed := messages.CreateSongEmbed(
 			messages.ColorSuccess,
-			messages.T().Player.StreamReconnectedTitle,
-			messages.T().Player.StreamReconnectedDesc,
+			messages.T(guildID).Player.StreamReconnectedTitle,
+			messages.T(guildID).Player.StreamReconnectedDesc,
 			song.Title,
 			song.URL,
 			song.Uploader,
@@ -1243,9 +1243,9 @@ func isDefinitivePlaybackError(errMsg string) bool {
 }
 
 // cleanPlaybackErrorMessage maps error strings to user-friendly messages
-func cleanPlaybackErrorMessage(errMsg string) string {
+func cleanPlaybackErrorMessage(guildID, errMsg string) string {
 	errorLower := strings.ToLower(errMsg)
-	t := messages.T()
+	t := messages.T(guildID)
 	errorMappings := map[string]string{
 		"private video":                 t.Player.ErrorPrivateVideo,
 		"deleted video":                 t.Player.ErrorDeletedVideo,
@@ -1282,8 +1282,8 @@ func sendReconnectMessage(session *discordgo.Session, guildID string, song *queu
 
 	embed := messages.CreateSongEmbed(
 		messages.ColorWarning,
-		messages.T().Player.StreamReconnectingTitle,
-		messages.T().Player.StreamReconnectingDesc,
+		messages.T(guildID).Player.StreamReconnectingTitle,
+		messages.T(guildID).Player.StreamReconnectingDesc,
 		song.Title,
 		song.URL,
 		song.Uploader,
@@ -1307,7 +1307,7 @@ func sendSongErrorMessage(session *discordgo.Session, guildID string, song *queu
 
 	embed := messages.CreateSongEmbed(
 		messages.ColorError,
-		messages.T().Player.PlaybackFailedTitle,
+		messages.T(guildID).Player.PlaybackFailedTitle,
 		reason,
 		song.Title,
 		song.URL,
@@ -1350,7 +1350,7 @@ func handlePlaybackError(session *discordgo.Session, guildID string, song *queue
 
 	// Check for definitive errors first — no point retrying these
 	if isDefinitivePlaybackError(errMsg) {
-		reason := cleanPlaybackErrorMessage(errMsg)
+		reason := cleanPlaybackErrorMessage(guildID, errMsg)
 		logger.Warnf("[Play] Definitive error for song %s in guild %s: %s", song.Title, guildID, reason)
 		song.SetState(queue.SongStateFailed)
 		sendSongErrorMessage(session, guildID, song, reason)
@@ -1379,8 +1379,8 @@ func handlePlaybackError(session *discordgo.Session, guildID string, song *queue
 	if reconnectMsg := getReconnectMessage(guildID); reconnectMsg != nil {
 		failedEmbed := messages.CreateSongEmbed(
 			messages.ColorError,
-			messages.T().Player.StreamReconnectFailedTitle,
-			messages.T().Player.StreamReconnectFailedDesc,
+			messages.T(guildID).Player.StreamReconnectFailedTitle,
+			messages.T(guildID).Player.StreamReconnectFailedDesc,
 			song.Title,
 			song.URL,
 			song.Uploader,
@@ -1391,7 +1391,7 @@ func handlePlaybackError(session *discordgo.Session, guildID string, song *queue
 		session.ChannelMessageEditEmbed(reconnectMsg.ChannelID, reconnectMsg.ID, failedEmbed)
 		deleteReconnectMessage(guildID)
 	} else {
-		sendSongErrorMessage(session, guildID, song, messages.T().Player.MaxRetriesSkipping)
+		sendSongErrorMessage(session, guildID, song, messages.T(guildID).Player.MaxRetriesSkipping)
 	}
 
 	clearRetryCount(guildID, song.URL)
@@ -2198,25 +2198,25 @@ func sendLeavingMessage(session *discordgo.Session, guildID, reason string) {
 	switch reason {
 	case "empty":
 		embed = &discordgo.MessageEmbed{
-			Description: messages.T().Player.LeavingEmptyDesc,
+			Description: messages.T(guildID).Player.LeavingEmptyDesc,
 			Color:       messages.ColorInfo,
 			Footer: &discordgo.MessageEmbedFooter{
-				Text: messages.T().Player.LeavingEmptyFooter,
+				Text: messages.T(guildID).Player.LeavingEmptyFooter,
 			},
 			Timestamp: time.Now().Format(time.RFC3339),
 		}
 	case "error":
 		embed = &discordgo.MessageEmbed{
-			Description: messages.T().Player.LeavingErrorDesc,
+			Description: messages.T(guildID).Player.LeavingErrorDesc,
 			Color:       messages.ColorError,
 			Footer: &discordgo.MessageEmbedFooter{
-				Text: messages.T().Player.LeavingErrorFooter,
+				Text: messages.T(guildID).Player.LeavingErrorFooter,
 			},
 			Timestamp: time.Now().Format(time.RFC3339),
 		}
 	default:
 		embed = &discordgo.MessageEmbed{
-			Description: messages.T().Player.LeavingDefaultDesc,
+			Description: messages.T(guildID).Player.LeavingDefaultDesc,
 			Color:       messages.ColorInfo,
 			Footer: &discordgo.MessageEmbedFooter{
 				Text: reason,

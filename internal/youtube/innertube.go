@@ -243,8 +243,9 @@ func (c *InnertubeClient) CheckAvailability(url string) (bool, bool, error) {
 	}
 
 	// Video is unavailable - classify the restriction type
+	// guildID intentionally empty: this error is logged, never shown to users.
 	reason := resp.PlayabilityStatus.Reason
-	errorMsg := classifyRestriction(status, reason, resp.PlayabilityStatus.Messages)
+	errorMsg := classifyRestriction("", status, reason, resp.PlayabilityStatus.Messages)
 
 	logger.Debugf("[Innertube] Video unavailable: %s (status: %s, reason: %s)", videoID, status, reason)
 	return false, false, errors.New(errorMsg)
@@ -253,7 +254,7 @@ func (c *InnertubeClient) CheckAvailability(url string) (bool, bool, error) {
 // GetVideoInfo fetches video information using Innertube API
 // This eliminates the double-fetch (CheckAvailability + GetVideoInfo) by getting everything in one call
 // Returns: *Song or error
-func (c *InnertubeClient) GetVideoInfo(url, requesterName, requesterID string) (*Song, error) {
+func (c *InnertubeClient) GetVideoInfo(guildID, url, requesterName, requesterID string) (*Song, error) {
 	videoID := extractVideoID(url)
 	if videoID == "" {
 		return nil, fmt.Errorf("invalid YouTube URL")
@@ -274,7 +275,7 @@ func (c *InnertubeClient) GetVideoInfo(url, requesterName, requesterID string) (
 	status := resp.PlayabilityStatus.Status
 	if status != "OK" {
 		reason := resp.PlayabilityStatus.Reason
-		errorMsg := classifyRestriction(status, reason, resp.PlayabilityStatus.Messages)
+		errorMsg := classifyRestriction(guildID, status, reason, resp.PlayabilityStatus.Messages)
 		logger.Infof("[Innertube] Video unavailable: %s (%v)", errorMsg, duration)
 		return nil, &VideoError{
 			Message: errorMsg,
@@ -324,7 +325,7 @@ func (c *InnertubeClient) GetVideoInfo(url, requesterName, requesterID string) (
 // CheckVideoAvailability checks if a video is available and not restricted
 // Returns detailed AvailabilityResult for comprehensive restriction checking
 // This is 7-27x faster than yt-dlp (100-300ms vs 2300ms)
-func (c *InnertubeClient) CheckVideoAvailability(url string) (*AvailabilityResult, error) {
+func (c *InnertubeClient) CheckVideoAvailability(guildID, url string) (*AvailabilityResult, error) {
 	videoID := extractVideoID(url)
 	if videoID == "" {
 		return nil, fmt.Errorf("invalid YouTube URL")
@@ -355,7 +356,7 @@ func (c *InnertubeClient) CheckVideoAvailability(url string) (*AvailabilityResul
 
 	// Video is unavailable - classify the restriction type
 	reason := resp.PlayabilityStatus.Reason
-	errorMsg := classifyRestriction(status, reason, resp.PlayabilityStatus.Messages)
+	errorMsg := classifyRestriction(guildID, status, reason, resp.PlayabilityStatus.Messages)
 
 	logger.Infof("[Innertube] Video unavailable: %s (%v)", errorMsg, duration)
 	return &AvailabilityResult{
@@ -366,10 +367,10 @@ func (c *InnertubeClient) CheckVideoAvailability(url string) (*AvailabilityResul
 }
 
 // classifyRestriction classifies the restriction type and returns appropriate localized error message
-func classifyRestriction(status, reason string, msgs []string) string {
+func classifyRestriction(guildID, status, reason string, msgs []string) string {
 	reasonLower := strings.ToLower(reason)
 	messagesStr := strings.ToLower(strings.Join(msgs, " "))
-	yt := messages.T().YouTube
+	yt := messages.T(guildID).YouTube
 
 	switch status {
 	case "LOGIN_REQUIRED":

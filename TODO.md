@@ -8,4 +8,5 @@
 - [x] yt-dlp updater fix
 - [x] Integrate nonative version and normal version
     - One self-contained binary per platform. The bot dlopens libopus at startup via purego: if it loads, the native encoder is used; if not, the pure-Go WASM encoder takes over and a warning is logged.
-- [ ] Fixed an issue where all slash commands were re-registered every time the app started; it should check the current commands and updates only the necessary ones
+- [ ] Fix an issue where all slash commands were re-registered every time the app started; it should check the current commands and updates only the necessary ones
+- [ ] Too many logs; change useless ones to debug

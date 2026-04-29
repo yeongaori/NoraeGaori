@@ -255,7 +255,7 @@ func HandlePlayNext(s *discordgo.Session, i *discordgo.InteractionCreate) error 
 
 	// Search for the song
 	logger.Infof("[PlayNext] Searching for: %s", query)
-	song, err := youtube.Search(query, i.Member.User.Username, i.Member.User.ID)
+	song, err := youtube.Search(i.GuildID, query, i.Member.User.Username, i.Member.User.ID)
 	if err != nil {
 		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.ErrorSongNotFound))
 		return err
@@ -366,7 +366,7 @@ func HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 	// Regular search or single video handling
 	logger.Infof("[Play] Searching for: %s", query)
-	song, err := youtube.Search(query, i.Member.User.Username, i.Member.User.ID)
+	song, err := youtube.Search(i.GuildID, query, i.Member.User.Username, i.Member.User.ID)
 	if err != nil {
 		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.ErrorSongNotFound))
 		return err
@@ -517,7 +517,7 @@ func handleVideoWithPlaylist(s *discordgo.Session, i *discordgo.InteractionCreat
 	// First, try to add the specific video
 	// Use a clean video URL without playlist parameter to avoid yt-dlp issues
 	cleanVideoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", analysis.VideoID)
-	song, videoErr := youtube.GetVideoInfo(cleanVideoURL, i.Member.User.Username, i.Member.User.ID)
+	song, videoErr := youtube.GetVideoInfo(i.GuildID, cleanVideoURL, i.Member.User.Username, i.Member.User.ID)
 	videoUnavailable := videoErr != nil
 
 	// If direct video fetch failed, try to get video info from the playlist
