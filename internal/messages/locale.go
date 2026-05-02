@@ -613,7 +613,6 @@ func LoadLocale(lang string) error {
 			return fmt.Errorf("failed to parse embedded English fallback: %w", jerr)
 		}
 		currentLocale = &base
-		applyLocale(&base)
 		// Warm the cache for "en" so future fallbacks are O(1).
 		localeCacheMu.Lock()
 		localeCache["en"] = &base
@@ -622,7 +621,6 @@ func LoadLocale(lang string) error {
 	}
 
 	currentLocale = loc
-	applyLocale(loc)
 
 	// Warm the cache for the active language.
 	localeCacheMu.Lock()
@@ -708,107 +706,3 @@ func mergeMap(base, overlay reflect.Value) {
 	}
 }
 
-// applyLocale copies loaded locale values into package-level variables
-// so existing call sites (messages.TitleAdded, messages.FieldUploader, etc.)
-// continue to work without modification.
-func applyLocale(l *Locale) {
-	// Errors
-	ErrorNotInVoiceChannel = l.Errors.NotInVoiceChannel
-	ErrorEmptyQueue = l.Errors.EmptyQueue
-	ErrorSongNotFound = l.Errors.SongNotFound
-	ErrorPermissionDenied = l.Errors.PermissionDenied
-	ErrorAdminOnly = l.Errors.AdminOnly
-	ErrorAlreadyVoted = l.Errors.AlreadyVoted
-	ErrorDuplicateSong = l.Errors.DuplicateSong
-
-	// Titles
-	TitleAdded = l.Titles.Added
-	TitleSuccess = l.Titles.Success
-	TitleRemoved = l.Titles.Removed
-	TitleSkipped = l.Titles.Skipped
-	TitleResumed = l.Titles.Resumed
-	TitlePaused = l.Titles.Paused
-	TitleRepeatAll = l.Titles.RepeatAll
-	TitleRepeatSingle = l.Titles.RepeatSingle
-	TitleRepeatOff = l.Titles.RepeatOff
-	TitleSearching = l.Titles.Searching
-	TitleLoading = l.Titles.Loading
-	TitleNowPlaying = l.Titles.NowPlaying
-	TitleQueue = l.Titles.Queue
-	TitleHelp = l.Titles.Help
-	TitleSearchResults = l.Titles.SearchResults
-	TitlePlaylistFound = l.Titles.PlaylistFound
-	TitlePlaylistAdded = l.Titles.PlaylistAdded
-	TitlePlaylistStart = l.Titles.PlaylistStart
-	TitleSkipVote = l.Titles.SkipVote
-	TitleStopVote = l.Titles.StopVote
-	TitleSystemInfo = l.Titles.SystemInfo
-	TitleWarning = l.Titles.Warning
-	TitleDuplicate = l.Titles.Duplicate
-	TitleUnavailable = l.Titles.Unavailable
-	TitleError = l.Titles.Error
-	TitleEmptyQueue = l.Titles.EmptyQueue
-	TitleNoSong = l.Titles.NoSong
-	TitleNoPermission = l.Titles.NoPermission
-	TitleAlreadyVoted = l.Titles.AlreadyVoted
-
-	// Fields
-	FieldUploader = l.Fields.Uploader
-	FieldDuration = l.Fields.Duration
-	FieldRequester = l.Fields.Requester
-	FieldNextSong = l.Fields.NextSong
-	FieldTotalSongs = l.Fields.TotalSongs
-	FieldCurrentVote = l.Fields.CurrentVote
-	FieldRequiredVote = l.Fields.RequiredVote
-	FieldVoteResult = l.Fields.VoteResult
-	FieldRemovedSongs = l.Fields.RemovedSongs
-	FieldCurrentPrefix = l.Fields.CurrentPrefix
-	FieldTotalCommands = l.Fields.TotalCommands
-	FieldCPUInfo = l.Fields.CPUInfo
-	FieldCPUUsage = l.Fields.CPUUsage
-	FieldTotalMemory = l.Fields.TotalMemory
-	FieldMemoryUsage = l.Fields.MemoryUsage
-	FieldBotMemory = l.Fields.BotMemory
-	FieldServerMemory = l.Fields.ServerMemory
-	FieldPlayingServers = l.Fields.PlayingServers
-
-	// Descriptions
-	DescSearching = l.Descriptions.Searching
-	DescLoading = l.Descriptions.Loading
-	DescPlaylistConfirm = l.Descriptions.PlaylistConfirm
-	DescPlaylistAdding = l.Descriptions.PlaylistAdding
-	DescPlaylistSkipped = l.Descriptions.PlaylistSkipped
-	DescVoteAdded = l.Descriptions.VoteAdded
-	DescSkipped = l.Descriptions.Skipped
-	DescPaused = l.Descriptions.Paused
-	DescResumed = l.Descriptions.Resumed
-	DescRepeatAll = l.Descriptions.RepeatAll
-	DescRepeatSingle = l.Descriptions.RepeatSingle
-	DescRepeatOff = l.Descriptions.RepeatOff
-	DescRepeatOffRemoved = l.Descriptions.RepeatOffRemoved
-	DescSongsRemoved = l.Descriptions.SongsRemoved
-	DescEmptyQueue = l.Descriptions.EmptyQueue
-	DescSearchPrompt = l.Descriptions.SearchPrompt
-	DescSystemStatus = l.Descriptions.SystemStatus
-
-	// Footers
-	FooterPagination = l.Footers.Pagination
-	FooterHelpPagination = l.Footers.HelpPagination
-	FooterPlaylistConfirm = l.Footers.PlaylistConfirm
-	FooterRequestedBy = l.Footers.RequestedBy
-	FooterVoteReaction = l.Footers.VoteReaction
-
-	// Buttons
-	ButtonPrevious = l.Buttons.Previous
-	ButtonNext = l.Buttons.Next
-
-	// Select menus
-	SelectPlaceholder = l.SelectMenus.Placeholder
-
-	// Votes
-	VoteMore = l.Votes.More
-
-	// Help
-	HelpCommandFormat = l.Help.CommandFormat
-	HelpAdminMarker = l.Help.AdminMarker
-}

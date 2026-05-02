@@ -32,7 +32,7 @@ func HandleSponsorBlock(s *discordgo.Session, i *discordgo.InteractionCreate) er
 	}
 
 	if err := queue.SetSponsorBlock(i.GuildID, enabled); err != nil {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError,
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
 			fmt.Sprintf(messages.T(i.GuildID).Settings.SponsorBlockError, err)))
 		return err
 	}
@@ -87,7 +87,7 @@ func HandleShowStartedTrack(s *discordgo.Session, i *discordgo.InteractionCreate
 	}
 
 	if err := queue.SetShowStartedTrack(i.GuildID, enabled); err != nil {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError,
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
 			fmt.Sprintf(messages.T(i.GuildID).Settings.ShowTrackError, err)))
 		return err
 	}
@@ -142,7 +142,7 @@ func HandleNormalization(s *discordgo.Session, i *discordgo.InteractionCreate) e
 	}
 
 	if err := queue.SetNormalization(i.GuildID, enabled); err != nil {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError,
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
 			fmt.Sprintf(messages.T(i.GuildID).Settings.NormalizationError, err)))
 		return err
 	}
@@ -211,7 +211,7 @@ func HandleSetLanguage(s *discordgo.Session, i *discordgo.InteractionCreate) err
 	// Empty value → clear override.
 	if requested == "" {
 		if err := queue.SetGuildLanguage(i.GuildID, ""); err != nil {
-			RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError,
+			RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
 				fmt.Sprintf(t.Settings.LanguageSaveFailed, err)))
 			return err
 		}
@@ -236,13 +236,13 @@ func HandleSetLanguage(s *discordgo.Session, i *discordgo.InteractionCreate) err
 		}
 	}
 	if !known {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError,
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
 			fmt.Sprintf(t.Settings.LanguageUnknown, requested, availableStr)))
 		return nil
 	}
 
 	if err := queue.SetGuildLanguage(i.GuildID, requested); err != nil {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError,
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
 			fmt.Sprintf(t.Settings.LanguageSaveFailed, err)))
 		return err
 	}
@@ -277,20 +277,20 @@ func HandleSetPrefix(s *discordgo.Session, i *discordgo.InteractionCreate) error
 
 	// Validate prefix
 	if len(newPrefix) == 0 {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError,
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
 			messages.T(i.GuildID).Settings.PrefixEmpty))
 		return nil
 	}
 
 	if len(newPrefix) > 5 {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError,
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
 			messages.T(i.GuildID).Settings.PrefixTooLong))
 		return nil
 	}
 
 	// Update prefix
 	if err := config.SetPrefix(newPrefix); err != nil {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError,
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
 			fmt.Sprintf(messages.T(i.GuildID).Settings.PrefixError, err)))
 		return err
 	}

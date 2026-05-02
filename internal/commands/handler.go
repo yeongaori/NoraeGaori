@@ -727,14 +727,14 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	cmd, exists := commands[cmdName]
 	if !exists {
 		logger.Warnf("[Commands] Unknown command: %s", cmdName)
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T(i.GuildID).Errors.UnknownCommand))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.UnknownCommand))
 		return
 	}
 
 	// Check admin permission (bot admin or server admin)
 	if cmd.AdminOnly {
 		if !config.IsAdmin(i.Member.User.ID) && !isGuildAdmin(s, i.GuildID, i.Member) {
-			RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleNoPermission, messages.ErrorAdminOnly))
+			RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.NoPermission, messages.T(i.GuildID).Errors.AdminOnly))
 			return
 		}
 	}
@@ -745,7 +745,7 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	// Execute command
 	if err := cmd.Handler(s, i); err != nil {
 		logger.Errorf("[Commands] Command %s failed: %v", cmdName, err)
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, fmt.Sprintf(messages.T(i.GuildID).Errors.CommandExecutionError, err)))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, fmt.Sprintf(messages.T(i.GuildID).Errors.CommandExecutionError, err)))
 	}
 }
 
@@ -801,7 +801,7 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		isServerAdmin := (err == nil) && isGuildAdmin(s, m.GuildID, member)
 
 		if !isBotAdmin && !isServerAdmin {
-			embed := messages.CreateErrorEmbed(messages.TitleNoPermission, messages.ErrorAdminOnly)
+			embed := messages.CreateErrorEmbed(messages.T(m.GuildID).Titles.NoPermission, messages.T(m.GuildID).Errors.AdminOnly)
 			// Send error as reply to original message
 			s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
 				Embeds: []*discordgo.MessageEmbed{embed},
@@ -840,7 +840,7 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		logger.Errorf("[Commands] Text command %s failed: %v", cmdName, err)
 		// Only send error message if no message was already sent by the command handler
 		if messageResponder.Message == nil {
-			embed := messages.CreateErrorEmbed(messages.TitleError, fmt.Sprintf(messages.T(m.GuildID).Errors.CommandExecutionError, err))
+			embed := messages.CreateErrorEmbed(messages.T(m.GuildID).Titles.Error, fmt.Sprintf(messages.T(m.GuildID).Errors.CommandExecutionError, err))
 			// Send error as reply to original message
 			s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
 				Embeds: []*discordgo.MessageEmbed{embed},
@@ -938,8 +938,8 @@ func DeferResponse(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		if mr, ok := messageResponders.Load(i.Token); ok {
 			loadingEmbed := &discordgo.MessageEmbed{
 				Color:       0xFFA500, // Orange color
-				Title:       messages.TitleLoading,
-				Description: messages.DescLoading,
+				Title:       messages.T(i.GuildID).Titles.Loading,
+				Description: messages.T(i.GuildID).Descriptions.Loading,
 			}
 			mr.(*MessageResponse).SendEmbed(loadingEmbed)
 		}
@@ -1052,7 +1052,7 @@ func checkUserInBotVoiceChannel(s *discordgo.Session, i *discordgo.InteractionCr
 	// Check if user is in a voice channel
 	voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
 	if err != nil || voiceState.ChannelID == "" {
-		return "", messages.CreateErrorEmbed(messages.TitleError, messages.ErrorNotInVoiceChannel)
+		return "", messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.NotInVoiceChannel)
 	}
 
 	// Get the queue to find bot's current voice channel
@@ -1064,7 +1064,7 @@ func checkUserInBotVoiceChannel(s *discordgo.Session, i *discordgo.InteractionCr
 
 	// Check if user is in the same voice channel as the bot
 	if voiceState.ChannelID != q.VoiceChannelID {
-		return "", messages.CreateErrorEmbed(messages.TitleError, messages.T(i.GuildID).Errors.MustBeInBotChannel)
+		return "", messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.MustBeInBotChannel)
 	}
 
 	return voiceState.ChannelID, nil

@@ -14,7 +14,7 @@ import (
 func HandleForceRemove(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	options := i.ApplicationCommandData().Options
 	if len(options) == 0 {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T(i.GuildID).Admin.MentionTarget))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Admin.MentionTarget))
 		return nil
 	}
 	target := options[0].StringValue()
@@ -22,7 +22,7 @@ func HandleForceRemove(s *discordgo.Session, i *discordgo.InteractionCreate) err
 	// Get queue
 	q, err := queue.GetQueue(i.GuildID, false)
 	if err != nil || q == nil || len(q.Songs) < 2 {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T(i.GuildID).Admin.NoSongsToDelete))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Admin.NoSongsToDelete))
 		return nil
 	}
 
@@ -31,7 +31,7 @@ func HandleForceRemove(s *discordgo.Session, i *discordgo.InteractionCreate) err
 	matches := userMentionRegex.FindStringSubmatch(target)
 
 	if len(matches) < 2 {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError,
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
 			messages.T(i.GuildID).Admin.InvalidMention))
 		return nil
 	}
@@ -41,7 +41,7 @@ func HandleForceRemove(s *discordgo.Session, i *discordgo.InteractionCreate) err
 	// Get target user info
 	targetUser, err := s.User(targetUserID)
 	if err != nil {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T(i.GuildID).Admin.UserNotFound))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Admin.UserNotFound))
 		return nil
 	}
 
@@ -63,7 +63,7 @@ func HandleForceRemove(s *discordgo.Session, i *discordgo.InteractionCreate) err
 		if startIdx == 1 {
 			description += messages.T(i.GuildID).Admin.ExcludingCurrent
 		}
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, description))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, description))
 		return nil
 	}
 
@@ -87,7 +87,7 @@ func HandleForceRemove(s *discordgo.Session, i *discordgo.InteractionCreate) err
 
 	// Remove songs
 	if err := queue.RemoveSongsByIDs(i.GuildID, songIDs); err != nil {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError,
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
 			fmt.Sprintf(messages.T(i.GuildID).Admin.RemoveFailed, err)))
 		return err
 	}
@@ -107,7 +107,7 @@ func HandleForceRemove(s *discordgo.Session, i *discordgo.InteractionCreate) err
 func HandleMoveTrack(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	options := i.ApplicationCommandData().Options
 	if len(options) < 2 {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T(i.GuildID).Admin.EnterPositions))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Admin.EnterPositions))
 		return nil
 	}
 	fromPos := int(options[0].IntValue()) - 1 // Convert to 0-based
@@ -116,25 +116,25 @@ func HandleMoveTrack(s *discordgo.Session, i *discordgo.InteractionCreate) error
 	// Get queue
 	q, err := queue.GetQueue(i.GuildID, false)
 	if err != nil || q == nil || len(q.Songs) == 0 {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleEmptyQueue, messages.DescEmptyQueue))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.EmptyQueue, messages.T(i.GuildID).Descriptions.EmptyQueue))
 		return nil
 	}
 
 	// Validate positions
 	if fromPos < 0 || toPos < 0 || fromPos >= len(q.Songs) || toPos >= len(q.Songs) {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError,
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
 			fmt.Sprintf(messages.T(i.GuildID).Admin.EnterValidRange, len(q.Songs))))
 		return nil
 	}
 
 	if fromPos == toPos {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T(i.GuildID).Admin.SamePosition))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Admin.SamePosition))
 		return nil
 	}
 
 	// Prevent moving currently playing song
 	if (fromPos == 0 || toPos == 0) && (q.Playing || q.Loading) {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError,
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
 			messages.T(i.GuildID).Admin.CannotMovePlaying))
 		return nil
 	}
@@ -144,7 +144,7 @@ func HandleMoveTrack(s *discordgo.Session, i *discordgo.InteractionCreate) error
 
 	// Move song
 	if err := queue.MoveSong(i.GuildID, fromPos, toPos); err != nil {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError,
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
 			fmt.Sprintf(messages.T(i.GuildID).Admin.MoveFailed, err)))
 		return err
 	}
@@ -170,7 +170,7 @@ func HandleForceStop(s *discordgo.Session, i *discordgo.InteractionCreate) error
 
 	// Force stop without voting
 	if err := player.Stop(i.GuildID); err != nil {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, fmt.Sprintf(messages.T(i.GuildID).Admin.StopFailed, err)))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, fmt.Sprintf(messages.T(i.GuildID).Admin.StopFailed, err)))
 		return err
 	}
 

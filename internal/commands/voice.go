@@ -14,7 +14,7 @@ func HandleJoin(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	// Check if user is in a voice channel
 	voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
 	if err != nil || voiceState.ChannelID == "" {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T(i.GuildID).Voice.EnterVoiceChannel))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Voice.EnterVoiceChannel))
 		return nil
 	}
 
@@ -59,7 +59,7 @@ func HandleSwitchVC(s *discordgo.Session, i *discordgo.InteractionCreate) error 
 		// If no channel specified, use user's current voice channel
 		voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
 		if err != nil || voiceState.ChannelID == "" {
-			RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T(i.GuildID).Voice.EnterVoiceOrSpecify))
+			RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Voice.EnterVoiceOrSpecify))
 			return nil
 		}
 		targetChannelID = voiceState.ChannelID

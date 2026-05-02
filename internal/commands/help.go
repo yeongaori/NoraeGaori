@@ -79,7 +79,7 @@ func HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return nil
 	}
 
-	components := createHelpButtons(page, totalPages)
+	components := createHelpButtons(i.GuildID, page, totalPages)
 
 	// Send response with buttons using the new helper
 	msg, err := RespondEmbedWithComponents(s, i, embed, components)
@@ -121,31 +121,32 @@ func buildHelpEmbed(guildID string, commands []CommandInfo, page, totalPages, st
 
 	return &discordgo.MessageEmbed{
 		Color:       messages.ColorInfo,
-		Title:       messages.TitleHelp,
+		Title:       t.Titles.Help,
 		Description: description.String(),
 		Fields: []*discordgo.MessageEmbedField{
-			{Name: messages.FieldCurrentPrefix, Value: fmt.Sprintf("`%s`", prefix), Inline: true},
-			{Name: messages.FieldTotalCommands, Value: fmt.Sprintf(t.Help.TotalCommandsValue, totalCommands), Inline: true},
+			{Name: t.Fields.CurrentPrefix, Value: fmt.Sprintf("`%s`", prefix), Inline: true},
+			{Name: t.Fields.TotalCommands, Value: fmt.Sprintf(t.Help.TotalCommandsValue, totalCommands), Inline: true},
 		},
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf(messages.FooterHelpPagination, page, totalPages),
+			Text: fmt.Sprintf(t.Footers.HelpPagination, page, totalPages),
 		},
 	}
 }
 
 // createHelpButtons creates Previous/Next buttons for help pagination
-func createHelpButtons(page, totalPages int) []discordgo.MessageComponent {
+func createHelpButtons(guildID string, page, totalPages int) []discordgo.MessageComponent {
+	t := messages.T(guildID)
 	return []discordgo.MessageComponent{
 		discordgo.ActionsRow{
 			Components: []discordgo.MessageComponent{
 				discordgo.Button{
-					Label:    messages.ButtonPrevious,
+					Label:    t.Buttons.Previous,
 					Style:    discordgo.PrimaryButton,
 					CustomID: "help_prev",
 					Disabled: page == 1,
 				},
 				discordgo.Button{
-					Label:    messages.ButtonNext,
+					Label:    t.Buttons.Next,
 					Style:    discordgo.PrimaryButton,
 					CustomID: "help_next",
 					Disabled: page == totalPages,
@@ -212,7 +213,7 @@ func handleHelpButtons(s *discordgo.Session, i *discordgo.InteractionCreate, ori
 
 		embed := buildHelpEmbed(guildID, pageCommands, currentPage, totalPages, start, len(allCommands), prefix)
 
-		components := createHelpButtons(currentPage, totalPages)
+		components := createHelpButtons(guildID, currentPage, totalPages)
 
 		// Respond to button interaction
 		s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{

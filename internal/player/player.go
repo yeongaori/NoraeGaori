@@ -186,6 +186,7 @@ func sendNowPlayingMessage(session *discordgo.Session, guildID string, song *que
 	loadingMsg := GetLoadingMessage(guildID)
 	if loadingMsg != nil {
 		nowPlayingEmbed := messages.CreateSongEmbed(
+			guildID,
 			messages.ColorSuccess,
 			messages.T(guildID).Player.PlaybackStarted,
 			"",
@@ -208,6 +209,7 @@ func sendNowPlayingMessage(session *discordgo.Session, guildID string, song *que
 		DeleteLoadingMessage(guildID)
 	} else if q.ShowStartedTrack {
 		embed := messages.CreateSongEmbed(
+			guildID,
 			messages.ColorSuccess,
 			messages.T(guildID).Player.NowPlaying,
 			"",
@@ -224,6 +226,7 @@ func sendNowPlayingMessage(session *discordgo.Session, guildID string, song *que
 	// Update reconnect message if resuming after a stream stall
 	if reconnectMsg := getReconnectMessage(guildID); reconnectMsg != nil {
 		reconnectedEmbed := messages.CreateSongEmbed(
+			guildID,
 			messages.ColorSuccess,
 			messages.T(guildID).Player.StreamReconnectedTitle,
 			messages.T(guildID).Player.StreamReconnectedDesc,
@@ -1281,6 +1284,7 @@ func sendReconnectMessage(session *discordgo.Session, guildID string, song *queu
 	}
 
 	embed := messages.CreateSongEmbed(
+		guildID,
 		messages.ColorWarning,
 		messages.T(guildID).Player.StreamReconnectingTitle,
 		messages.T(guildID).Player.StreamReconnectingDesc,
@@ -1306,6 +1310,7 @@ func sendSongErrorMessage(session *discordgo.Session, guildID string, song *queu
 	}
 
 	embed := messages.CreateSongEmbed(
+		guildID,
 		messages.ColorError,
 		messages.T(guildID).Player.PlaybackFailedTitle,
 		reason,
@@ -1378,6 +1383,7 @@ func handlePlaybackError(session *discordgo.Session, guildID string, song *queue
 	// If there's a reconnect message, edit it to show failure instead of sending a separate error
 	if reconnectMsg := getReconnectMessage(guildID); reconnectMsg != nil {
 		failedEmbed := messages.CreateSongEmbed(
+			guildID,
 			messages.ColorError,
 			messages.T(guildID).Player.StreamReconnectFailedTitle,
 			messages.T(guildID).Player.StreamReconnectFailedDesc,

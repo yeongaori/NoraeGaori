@@ -17,7 +17,8 @@ func CreateEmbed(color int, title, description string) *discordgo.MessageEmbed {
 }
 
 // CreateSongEmbed creates an embed for a song with thumbnail and fields
-func CreateSongEmbed(color int, title, description, songTitle, songURL, uploader, duration, requester, thumbnailURL string) *discordgo.MessageEmbed {
+func CreateSongEmbed(guildID string, color int, title, description, songTitle, songURL, uploader, duration, requester, thumbnailURL string) *discordgo.MessageEmbed {
+	t := T(guildID)
 	embed := &discordgo.MessageEmbed{
 		Title:       title,
 		Description: FormatBoldMaskedLink(songTitle, songURL),
@@ -27,17 +28,17 @@ func CreateSongEmbed(color int, title, description, songTitle, songURL, uploader
 		},
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:   FieldUploader,
+				Name:   t.Fields.Uploader,
 				Value:  EscapeMarkdown(uploader),
 				Inline: true,
 			},
 			{
-				Name:   FieldDuration,
+				Name:   t.Fields.Duration,
 				Value:  duration,
 				Inline: true,
 			},
 			{
-				Name:   FieldRequester,
+				Name:   t.Fields.Requester,
 				Value:  EscapeMarkdown(requester),
 				Inline: true,
 			},
@@ -51,54 +52,8 @@ func CreateSongEmbed(color int, title, description, songTitle, songURL, uploader
 	return embed
 }
 
-// CreateQueueEmbed creates an embed for queue display
-func CreateQueueEmbed(songs []QueueSong, page, totalPages, totalSongs int) *discordgo.MessageEmbed {
-	var desc strings.Builder
-
-	for i, song := range songs {
-		if i == 0 {
-			desc.WriteString(fmt.Sprintf("▶️ %s\n   %s: %s | %s: %s | %s: %s\n\n",
-				FormatBoldMaskedLink(song.Title, song.URL),
-				FieldUploader, EscapeMarkdown(song.Uploader),
-				FieldDuration, song.Duration,
-				FieldRequester, EscapeMarkdown(song.Requester),
-			))
-		} else {
-			desc.WriteString(fmt.Sprintf("%d. %s\n   %s: %s | %s: %s | %s: %s\n\n",
-				song.Position,
-				FormatBoldMaskedLink(song.Title, song.URL),
-				FieldUploader, EscapeMarkdown(song.Uploader),
-				FieldDuration, song.Duration,
-				FieldRequester, EscapeMarkdown(song.Requester),
-			))
-		}
-	}
-
-	return &discordgo.MessageEmbed{
-		Title:       TitleQueue,
-		Description: desc.String(),
-		Color:       ColorInfo,
-		Footer: &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf(FooterPagination, page, totalPages, totalSongs),
-		},
-	}
-}
-
-// QueueSong represents a song in the queue display
-type QueueSong struct {
-	Position  int
-	Title     string
-	URL       string
-	Uploader  string
-	Duration  string
-	Requester string
-}
-
 // CreateErrorEmbed creates a simple error embed
 func CreateErrorEmbed(title, description string) *discordgo.MessageEmbed {
-	if title == "" {
-		title = TitleError
-	}
 	return CreateEmbed(ColorError, title, description)
 }
 
@@ -194,28 +149,6 @@ func StripMarkdown(s string) string {
 		s = s[1 : len(s)-1]
 	}
 	return strings.TrimSpace(s)
-}
-
-// CreateNavigationButtons creates Previous/Next buttons for pagination
-func CreateNavigationButtons(currentPage, totalPages int, commandPrefix string) []discordgo.MessageComponent {
-	return []discordgo.MessageComponent{
-		discordgo.ActionsRow{
-			Components: []discordgo.MessageComponent{
-				discordgo.Button{
-					Label:    ButtonPrevious,
-					Style:    discordgo.PrimaryButton,
-					CustomID: fmt.Sprintf("%s_prev_%d", commandPrefix, currentPage-1),
-					Disabled: currentPage <= 1,
-				},
-				discordgo.Button{
-					Label:    ButtonNext,
-					Style:    discordgo.PrimaryButton,
-					CustomID: fmt.Sprintf("%s_next_%d", commandPrefix, currentPage+1),
-					Disabled: currentPage >= totalPages,
-				},
-			},
-		},
-	}
 }
 
 // AddField adds a field to an embed

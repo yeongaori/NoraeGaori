@@ -71,49 +71,50 @@ func HandleStatus(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	logger.Debugf("[Status] Playing guilds: %d", playingGuildsCount)
 
 	// Create info embed
+	t := messages.T(i.GuildID)
 	infoEmbed := &discordgo.MessageEmbed{
 		Color:       messages.ColorInfo,
-		Title:       messages.T(i.GuildID).Status.Title,
-		Description: messages.T(i.GuildID).Status.Description,
+		Title:       t.Status.Title,
+		Description: t.Status.Description,
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:   messages.FieldCPUInfo,
-				Value:  fmt.Sprintf(messages.T(i.GuildID).Status.CPUInfoValue, cpuModel, cpuCores),
+				Name:   t.Fields.CPUInfo,
+				Value:  fmt.Sprintf(t.Status.CPUInfoValue, cpuModel, cpuCores),
 				Inline: false,
 			},
 			{
-				Name:   messages.FieldCPUUsage,
-				Value:  fmt.Sprintf(messages.T(i.GuildID).Status.CPUUsageValue, cpuUsage),
+				Name:   t.Fields.CPUUsage,
+				Value:  fmt.Sprintf(t.Status.CPUUsageValue, cpuUsage),
 				Inline: true,
 			},
 			{
-				Name:   messages.FieldTotalMemory,
-				Value:  fmt.Sprintf(messages.T(i.GuildID).Status.TotalMemoryValue, totalMemoryGB),
+				Name:   t.Fields.TotalMemory,
+				Value:  fmt.Sprintf(t.Status.TotalMemoryValue, totalMemoryGB),
 				Inline: true,
 			},
 			{
-				Name:   messages.FieldMemoryUsage,
-				Value:  fmt.Sprintf(messages.T(i.GuildID).Status.MemoryUsageValue, usedMemoryMB, totalMemoryGB, memoryUsagePercent),
+				Name:   t.Fields.MemoryUsage,
+				Value:  fmt.Sprintf(t.Status.MemoryUsageValue, usedMemoryMB, totalMemoryGB, memoryUsagePercent),
 				Inline: false,
 			},
 			{
-				Name:   messages.FieldBotMemory,
-				Value:  fmt.Sprintf(messages.T(i.GuildID).Status.BotMemoryValue, botHeapUsed, botRSS),
+				Name:   t.Fields.BotMemory,
+				Value:  fmt.Sprintf(t.Status.BotMemoryValue, botHeapUsed, botRSS),
 				Inline: true,
 			},
 			{
-				Name:   messages.FieldServerMemory,
-				Value:  fmt.Sprintf(messages.T(i.GuildID).Status.ServerMemoryValue, guildMemoryUsage),
+				Name:   t.Fields.ServerMemory,
+				Value:  fmt.Sprintf(t.Status.ServerMemoryValue, guildMemoryUsage),
 				Inline: true,
 			},
 			{
-				Name:   messages.FieldPlayingServers,
-				Value:  fmt.Sprintf(messages.T(i.GuildID).Status.PlayingServersValue, playingGuildsCount),
+				Name:   t.Fields.PlayingServers,
+				Value:  fmt.Sprintf(t.Status.PlayingServersValue, playingGuildsCount),
 				Inline: true,
 			},
 		},
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf(messages.FooterRequestedBy, i.Member.User.Username),
+			Text: fmt.Sprintf(t.Footers.RequestedBy, i.Member.User.Username),
 		},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
