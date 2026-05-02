@@ -36,7 +36,7 @@ func HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	prefix := cfg.Prefix
 
 	// Get all commands
-	commandList := getAllCommands()
+	commandList := getAllCommands(i.GuildID)
 
 	// Filter admin commands for non-admins
 	isAdmin := config.IsAdmin(i.Member.User.ID)
@@ -269,36 +269,49 @@ func handleHelpButtons(s *discordgo.Session, i *discordgo.InteractionCreate, ori
 	})
 }
 
-// getAllCommands returns all registered commands with their information
-func getAllCommands() []CommandInfo {
+// getAllCommands returns all registered commands with their information,
+// resolving per-guild localized strings (description, usage, example, aliases)
+// from the guild's locale rather than the bot's global default.
+func getAllCommands(guildID string) []CommandInfo {
 	commandList := make([]CommandInfo, 0)
 
-	// Build alias map (reverse lookup)
-	aliasMap := make(map[string][]string) // command name -> aliases
-	for alias, cmdName := range aliases {
-		aliasMap[cmdName] = append(aliasMap[cmdName], alias)
-	}
+	t := messages.T(guildID)
 
 	for name, cmd := range commands {
-		// Get all aliases for this command (include command name)
-		cmdAliases := []string{name}
-		cmdAliases = append(cmdAliases, aliasMap[name]...)
+		var cs messages.CommandStrings
+		if t != nil {
+			cs = t.Commands[name]
+		}
 
-		// Use predefined usage and example if available, otherwise fall back to defaults
-		usage := cmd.Usage
+		description := cs.Description
+		if description == "" {
+			description = cmd.Description
+		}
+
+		usage := cs.Usage
+		if usage == "" {
+			usage = cmd.Usage
+		}
 		if usage == "" {
 			usage = name
 		}
 
-		example := cmd.Example
+		example := cs.Example
+		if example == "" {
+			example = cmd.Example
+		}
 		if example == "" {
 			example = name
 		}
 
+		// Aliases from the guild's locale (canonical name first).
+		cmdAliases := []string{name}
+		cmdAliases = append(cmdAliases, cs.Aliases...)
+
 		commandList = append(commandList, CommandInfo{
 			Name:        name,
 			Aliases:     cmdAliases,
-			Description: cmd.Description,
+			Description: description,
 			Usage:       usage,
 			Example:     example,
 			AdminOnly:   cmd.AdminOnly,
