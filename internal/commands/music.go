@@ -198,7 +198,7 @@ func startVoteWithReaction(s *discordgo.Session, guildID, title, emoji string, v
 		logger.Debugf("[VoteReaction] %s vote passed via reaction for guild %s", title, guildID)
 		s.MessageReactionsRemoveAll(vs.channelID, vs.messageID)
 	case <-time.After(voteExpirationTime):
-		logger.Infof("[VoteReaction] %s vote expired for guild %s", title, guildID)
+		logger.Debugf("[VoteReaction] %s vote expired for guild %s", title, guildID)
 		votesMutex.Lock()
 		delete(votesMap, guildID)
 		votesMutex.Unlock()
@@ -254,7 +254,7 @@ func HandlePlayNext(s *discordgo.Session, i *discordgo.InteractionCreate) error 
 	UpdateResponseEmbed(s, i, searchEmbed)
 
 	// Search for the song
-	logger.Infof("[PlayNext] Searching for: %s", query)
+	logger.Debugf("[PlayNext] Searching for: %s", query)
 	song, err := youtube.Search(i.GuildID, query, i.Member.User.Username, i.Member.User.ID)
 	if err != nil {
 		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.SongNotFound))
@@ -366,7 +366,7 @@ func HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	}
 
 	// Regular search or single video handling
-	logger.Infof("[Play] Searching for: %s", query)
+	logger.Debugf("[Play] Searching for: %s", query)
 	song, err := youtube.Search(i.GuildID, query, i.Member.User.Username, i.Member.User.ID)
 	if err != nil {
 		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.SongNotFound))
@@ -532,7 +532,7 @@ func handleVideoWithPlaylist(s *discordgo.Session, i *discordgo.InteractionCreat
 			// First, try to find the video by ID in the playlist
 			for _, video := range playlistInfo.Videos {
 				if strings.Contains(video.URL, analysis.VideoID) {
-					logger.Infof("[Play] Found video in playlist by ID, using playlist info: %s", video.Title)
+					logger.Debugf("[Play] Found video in playlist by ID, using playlist info: %s", video.Title)
 					song = video
 					videoUnavailable = false
 					break
@@ -542,7 +542,7 @@ func handleVideoWithPlaylist(s *discordgo.Session, i *discordgo.InteractionCreat
 			// This handles cases where the video was re-uploaded with a different ID
 			if videoUnavailable && len(playlistInfo.Videos) > 0 {
 				song = playlistInfo.Videos[0]
-				logger.Infof("[Play] Video ID not in playlist, using first video: %s", song.Title)
+				logger.Debugf("[Play] Video ID not in playlist, using first video: %s", song.Title)
 				videoUnavailable = false
 			}
 		}
@@ -872,7 +872,7 @@ func HandleResume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 			return nil
 		}
 
-		logger.Infof("[Resume] Live stream is still live, proceeding with resume")
+		logger.Debugf("[Resume] Live stream is still live, proceeding with resume")
 
 		// Update message and start playback
 		successEmbed := messages.CreateSuccessEmbed(messages.T(i.GuildID).Music.LiveStartTitle, messages.T(i.GuildID).Music.LiveStartDesc)
@@ -1540,7 +1540,7 @@ func handlePlaylistConfirmationReaction(s *discordgo.Session, originalInteractio
 			return
 		}
 
-		logger.Infof("[PlaylistReaction] Confirmed by user %s", r.UserID)
+		logger.Debugf("[PlaylistReaction] Confirmed by user %s", r.UserID)
 
 		// Signal confirmation (non-blocking)
 		select {
@@ -1624,7 +1624,7 @@ func handlePlaylistRestConfirmationReaction(s *discordgo.Session, originalIntera
 			return
 		}
 
-		logger.Infof("[PlaylistRestReaction] Confirmed by user %s", r.UserID)
+		logger.Debugf("[PlaylistRestReaction] Confirmed by user %s", r.UserID)
 
 		// Signal confirmation (non-blocking)
 		select {
@@ -1709,7 +1709,7 @@ func addPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreate, play
 	defer lock.Unlock()
 
 	startTime := time.Now()
-	logger.Infof("[Playlist] Starting playlist processing for %d songs", len(playlistInfo.Videos))
+	logger.Debugf("[Playlist] Starting playlist processing for %d songs", len(playlistInfo.Videos))
 
 	// Check if queue is empty before adding
 	q, _ := queue.GetQueue(i.GuildID, false)
@@ -1728,12 +1728,12 @@ func addPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreate, play
 
 	// Fast-track first playlist: process first song immediately, others synchronously (lock is held)
 	if isQueueEmpty && len(playlistInfo.Videos) > 0 {
-		logger.Info("[Playlist] Fast-tracking first song for immediate playback")
+		logger.Debug("[Playlist] Fast-tracking first song for immediate playback")
 
 		addedCount, skippedCount := fastTrackFirstSong(i.GuildID, playlistInfo.Videos, s, i)
 
 		initialTime := time.Since(startTime)
-		logger.Infof("[Playlist] First song processed in %dms: %d added, %d skipped",
+		logger.Debugf("[Playlist] First song processed in %dms: %d added, %d skipped",
 			initialTime.Milliseconds(), addedCount, skippedCount)
 
 		// Start playing first song immediately (async is OK here)
@@ -1744,7 +1744,7 @@ func addPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreate, play
 		// Process remaining songs synchronously to maintain order (lock is still held)
 		if len(playlistInfo.Videos) > 1 && addedCount > 0 {
 			remainingSongs := playlistInfo.Videos[1:]
-			logger.Infof("[Playlist] Processing remaining %d songs (synchronously to maintain order)", len(remainingSongs))
+			logger.Debugf("[Playlist] Processing remaining %d songs (synchronously to maintain order)", len(remainingSongs))
 
 			processRemainingPlaylistSongs(s, i, remainingSongs, playlistInfo, startTime, messageID)
 		}
@@ -1804,7 +1804,7 @@ func fastTrackFirstSong(guildID string, songs []*youtube.Song, s *discordgo.Sess
 		}
 
 		addedCount = 1
-		logger.Infof("[Playlist] First song added: %s", song.Title)
+		logger.Debugf("[Playlist] First song added: %s", song.Title)
 		break
 	}
 
@@ -1813,7 +1813,7 @@ func fastTrackFirstSong(guildID string, songs []*youtube.Song, s *discordgo.Sess
 
 // processRemainingPlaylistSongs processes remaining songs in background with worker pool
 func processRemainingPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreate, songs []*youtube.Song, playlistInfo *youtube.PlaylistInfo, startTime time.Time, messageID string) {
-	logger.Infof("[Playlist Background] Processing %d remaining songs with worker pool", len(songs))
+	logger.Debugf("[Playlist Background] Processing %d remaining songs with worker pool", len(songs))
 
 	workerPool := worker.GetWorkerPool()
 
@@ -1882,7 +1882,7 @@ func processRemainingPlaylistSongs(s *discordgo.Session, i *discordgo.Interactio
 	}
 
 	totalTime := time.Since(startTime)
-	logger.Infof("[Playlist Background] Completed: %d added, %d skipped in %dms total",
+	logger.Debugf("[Playlist Background] Completed: %d added, %d skipped in %dms total",
 		addedCount, skippedCount, totalTime.Milliseconds())
 
 	// Send completion message (skip if shutting down)
@@ -1928,7 +1928,7 @@ func processRemainingPlaylistSongs(s *discordgo.Session, i *discordgo.Interactio
 
 // processAllPlaylistSongs processes all songs (for non-first playlists)
 func processAllPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreate, songs []*youtube.Song, playlistInfo *youtube.PlaylistInfo, startTime time.Time, messageID string) {
-	logger.Infof("[Playlist] Standard processing for %d songs", len(songs))
+	logger.Debugf("[Playlist] Standard processing for %d songs", len(songs))
 
 	workerPool := worker.GetWorkerPool()
 
@@ -1944,7 +1944,7 @@ func processAllPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreat
 	// Check all in parallel
 	results := workerPool.CheckBatch(jobs)
 	checkTime := time.Since(startTime)
-	logger.Infof("[Playlist] Availability check completed in %dms", checkTime.Milliseconds())
+	logger.Debugf("[Playlist] Availability check completed in %dms", checkTime.Milliseconds())
 
 	addedCount := 0
 	skippedCount := 0
@@ -1998,7 +1998,7 @@ func processAllPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreat
 	}
 
 	totalTime := time.Since(startTime)
-	logger.Infof("[Playlist] Completed: %d added, %d skipped in %dms", addedCount, skippedCount, totalTime.Milliseconds())
+	logger.Debugf("[Playlist] Completed: %d added, %d skipped in %dms", addedCount, skippedCount, totalTime.Milliseconds())
 
 	// Skip sending messages and starting playback if shutting down
 	if shutdown.IsShuttingDown() {
@@ -2046,10 +2046,10 @@ func processAllPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreat
 	}
 	switch {
 	case p.Paused:
-		logger.Infof("[Playlist] Resuming playback after playlist addition")
+		logger.Debugf("[Playlist] Resuming playback after playlist addition")
 		go player.Resume(s, i.GuildID)
 	case !p.Playing && !p.Loading:
-		logger.Infof("[Playlist] Starting playback after playlist addition")
+		logger.Debugf("[Playlist] Starting playback after playlist addition")
 		go player.Play(s, i.GuildID)
 	}
 }

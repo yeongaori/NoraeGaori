@@ -649,7 +649,7 @@ func InitializeCommands() {
 	})
 	registerCommandAliases("help", cmd("help"))
 
-	logger.Info("[Commands] All commands registered")
+	logger.Debug("[Commands] All commands registered")
 }
 
 // RegisterSlashCommands syncs slash commands with Discord. It deep-compares
@@ -771,7 +771,7 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		}
 	}
 
-	logger.Infof("[Commands] Executing command: %s (user: %s, guild: %s)",
+	logger.Debugf("[Commands] Executing command: %s (user: %s, guild: %s)",
 		cmdName, i.Member.User.Username, i.GuildID)
 
 	// Execute command
@@ -846,7 +846,7 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 	}
 
-	logger.Infof("[Commands] Executing text command: %s (user: %s, guild: %s)",
+	logger.Debugf("[Commands] Executing text command: %s (user: %s, guild: %s)",
 		cmdName, m.Author.Username, m.GuildID)
 
 	// Parse args (everything after command name)

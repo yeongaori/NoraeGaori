@@ -44,7 +44,7 @@ func PreCacheNext(guildID string, bitrate int) {
 
 	// Skip live streams and songs with seek time
 	if nextSong.IsLive {
-		logger.Infof("[PreCache] Skipping pre-cache for live stream: %s", nextSong.Title)
+		logger.Debugf("[PreCache] Skipping pre-cache for live stream: %s", nextSong.Title)
 		return
 	}
 
@@ -64,7 +64,7 @@ func PreCacheNext(guildID string, bitrate int) {
 		return
 	}
 
-	logger.Infof("[PreCache] Starting pre-cache for: %s", nextSong.Title)
+	logger.Debugf("[PreCache] Starting pre-cache for: %s", nextSong.Title)
 
 	// Run pre-cache in goroutine
 	go func() {
@@ -112,7 +112,7 @@ func preCacheSong(ctx context.Context, guildID string, song *queue.Song, sponsor
 		cache := preCacheStore[cacheKey]
 		preCacheStoreMu.Unlock()
 
-		logger.Infof("[PreCache] Cached stream URL for: %s", song.Title)
+		logger.Debugf("[PreCache] Cached stream URL for: %s", song.Title)
 
 		// Set expiration
 		go func() {
@@ -200,7 +200,7 @@ func preCacheSong(ctx context.Context, guildID string, song *queue.Song, sponsor
 	cache := preCacheStore[cacheKey]
 	preCacheStoreMu.Unlock()
 
-	logger.Infof("[PreCache] Cached %d KB + stream URL for: %s", len(buffer)/1024, song.Title)
+	logger.Debugf("[PreCache] Cached %d KB + stream URL for: %s", len(buffer)/1024, song.Title)
 
 	// Set expiration
 	go func() {

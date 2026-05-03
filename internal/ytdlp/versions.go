@@ -638,16 +638,16 @@ func (versionmanager *VersionManager) RunCanary(version string) (passed bool, ne
 		result := versionmanager.testExtraction(binaryPath, id)
 		switch {
 		case result.success:
-			logger.Infof("[yt-dlp] Canary PASSED for %s (video %s)", version, id)
+			logger.Infof("[yt-dlp] Canary PASSED for %s", version)
 			return true, false
 		case result.network:
-			logger.Debugf("[yt-dlp] Canary network error for %s (video %s): %s", version, id, result.errMsg)
+			logger.Debugf("[yt-dlp] Canary network error for %s: %s", version, result.errMsg)
 			networkCount++
 		case result.inconclusive:
-			logger.Debugf("[yt-dlp] Canary inconclusive for %s (video %s, not a binary problem): %s", version, id, result.errMsg)
+			logger.Debugf("[yt-dlp] Canary inconclusive for %s (not a binary problem): %s", version, result.errMsg)
 			inconclusiveCount++
 		default:
-			logger.Warnf("[yt-dlp] Canary FAILED for %s (video %s): %s", version, id, result.errMsg)
+			logger.Warnf("[yt-dlp] Canary FAILED for %s: %s", version, result.errMsg)
 			return false, false
 		}
 	}

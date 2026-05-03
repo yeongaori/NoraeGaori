@@ -147,7 +147,7 @@ func (p *AvailabilityWorkerPool) worker(id int) {
 					delay = p.maxRetryDelay
 				}
 
-				logger.Infof("[Worker %d] Scheduling retry for %s in %v (attempt %d/%d)",
+				logger.Debugf("[Worker %d] Scheduling retry for %s in %v (attempt %d/%d)",
 					id, job.URL, delay, job.RetryCount+1, p.maxRetries)
 
 				// Schedule retry with exponential backoff

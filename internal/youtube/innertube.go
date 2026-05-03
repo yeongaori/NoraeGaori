@@ -276,7 +276,7 @@ func (c *InnertubeClient) GetVideoInfo(guildID, url, requesterName, requesterID 
 	if status != "OK" {
 		reason := resp.PlayabilityStatus.Reason
 		errorMsg := classifyRestriction(guildID, status, reason, resp.PlayabilityStatus.Messages)
-		logger.Infof("[Innertube] Video unavailable: %s (%v)", errorMsg, duration)
+		logger.Debugf("[Innertube] Video unavailable: %s (%v)", errorMsg, duration)
 		return nil, &VideoError{
 			Message: errorMsg,
 			Reason:  reason,
@@ -318,7 +318,7 @@ func (c *InnertubeClient) GetVideoInfo(guildID, url, requesterName, requesterID 
 		RequestedByID: requesterID,
 	}
 
-	logger.Infof("[Innertube] Retrieved video: %s (%s) in %v", song.Title, song.Duration, duration)
+	logger.Debugf("[Innertube] Retrieved video: %s (%s) in %v", song.Title, song.Duration, duration)
 	return song, nil
 }
 
@@ -347,7 +347,7 @@ func (c *InnertubeClient) CheckVideoAvailability(guildID, url string) (*Availabi
 	if status == "OK" {
 		// Video is available
 		isLive := resp.VideoDetails.IsLiveContent || resp.VideoDetails.IsLive
-		logger.Infof("[Innertube] \"%s\" is available (%v)", resp.VideoDetails.Title, duration)
+		logger.Debugf("[Innertube] \"%s\" is available (%v)", resp.VideoDetails.Title, duration)
 		return &AvailabilityResult{
 			Available: true,
 			IsLive:    isLive,
@@ -358,7 +358,7 @@ func (c *InnertubeClient) CheckVideoAvailability(guildID, url string) (*Availabi
 	reason := resp.PlayabilityStatus.Reason
 	errorMsg := classifyRestriction(guildID, status, reason, resp.PlayabilityStatus.Messages)
 
-	logger.Infof("[Innertube] Video unavailable: %s (%v)", errorMsg, duration)
+	logger.Debugf("[Innertube] Video unavailable: %s (%v)", errorMsg, duration)
 	return &AvailabilityResult{
 		Available: false,
 		Error:     errorMsg,

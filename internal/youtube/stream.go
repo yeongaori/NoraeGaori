@@ -152,7 +152,7 @@ func GetStreamPipe(url string, sponsorBlock bool, bitrate int, seekTime int) (*S
 		seekSeconds := float64(seekTime) / 1000.0
 		downloadSection := fmt.Sprintf("*%.1f-inf", seekSeconds)
 		args = append(args, "--download-sections", downloadSection)
-		logger.Infof("[StreamPipe] Seeking to %.1fs using --download-sections %s", seekSeconds, downloadSection)
+		logger.Debugf("[StreamPipe] Seeking to %.1fs using --download-sections %s", seekSeconds, downloadSection)
 	}
 
 	args = append(args, url)
@@ -220,7 +220,7 @@ func GetStreamPipe(url string, sponsorBlock bool, bitrate int, seekTime int) (*S
 		}
 	}()
 
-	logger.Infof("[StreamPipe] Started yt-dlp streaming process for: %s", url)
+	logger.Debugf("[StreamPipe] Started yt-dlp streaming process for: %s", url)
 
 	// Record success in circuit breaker (process started successfully)
 	ytCircuitBreaker.recordSuccess()

@@ -354,7 +354,7 @@ func JoinVoice(session *discordgo.Session, guildID, channelID string) (*discordg
 		select {
 		case <-ticker.C:
 			if vc.Status == discordgo.VoiceConnectionStatusReady {
-				logger.Infof("[Voice] Voice connection ready for guild: %s", guildID)
+				logger.Debugf("[Voice] Voice connection ready for guild: %s", guildID)
 				player.VoiceConn = vc
 				player.VoiceChannelID = channelID
 				return vc, nil
@@ -384,7 +384,7 @@ func LeaveVoice(guildID string) error {
 		}
 		player.VoiceConn = nil
 		player.VoiceChannelID = ""
-		logger.Infof("[Voice] Left voice channel in guild: %s", guildID)
+		logger.Debugf("[Voice] Left voice channel in guild: %s", guildID)
 	}
 
 	return nil
@@ -612,7 +612,7 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 			return playStop
 		}
 		player.VoiceConn = vc
-		logger.Infof("[Play] Voice connection established for guild: %s", guildID)
+		logger.Debugf("[Play] Voice connection established for guild: %s", guildID)
 	}
 
 	player.mu.Lock()
@@ -652,7 +652,7 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 	var streamErr error
 	if cached := GetCachedStreamURL(guildID, song.ID); cached != "" {
 		streamURL = cached
-		logger.Infof("[Play] Using pre-cached stream URL for: %s", song.Title)
+		logger.Debugf("[Play] Using pre-cached stream URL for: %s", song.Title)
 	} else {
 		streamURL, streamErr = youtube.GetStreamURL(song.URL, q.SponsorBlock, voiceChannelBitrate)
 	}
@@ -752,12 +752,12 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 			} else {
 				normalization = newNorm
 			}
-			logger.Infof("[Play] Restarting FFmpeg for normalization toggle at %dms: %s", seekTime, song.Title)
+			logger.Debugf("[Play] Restarting FFmpeg for normalization toggle at %dms: %s", seekTime, song.Title)
 			continue
 		}
 
 		if seeking {
-			logger.Infof("[Play] Restarting FFmpeg for seek to %dms: %s", seekTime, song.Title)
+			logger.Debugf("[Play] Restarting FFmpeg for seek to %dms: %s", seekTime, song.Title)
 			continue
 		}
 
@@ -888,13 +888,13 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 	if shouldRepeat {
 		if repeatMode == queue.RepeatSingle {
 			// Single: re-add to beginning so it plays immediately next
-			logger.Infof("[Play] Single repeat, re-adding song to front: %s", repeatSong.Title)
+			logger.Debugf("[Play] Single repeat, re-adding song to front: %s", repeatSong.Title)
 			if err := queue.AddSong(guildID, repeatSong, 0); err != nil {
 				logger.Errorf("[Play] Failed to re-add song for single repeat: %v", err)
 			}
 		} else {
 			// All: re-add to end of queue
-			logger.Infof("[Play] Queue repeat, re-adding song to end: %s", repeatSong.Title)
+			logger.Debugf("[Play] Queue repeat, re-adding song to end: %s", repeatSong.Title)
 			if err := queue.AddSong(guildID, repeatSong, -1); err != nil {
 				logger.Errorf("[Play] Failed to re-add song for queue repeat: %v", err)
 			}
@@ -1476,7 +1476,7 @@ func Pause(guildID string) error {
 	}
 	player.mu.Unlock()
 
-	logger.Infof("[Pause] Paused at %dms for guild: %s", seekTime, guildID)
+	logger.Debugf("[Pause] Paused at %dms for guild: %s", seekTime, guildID)
 	return nil
 }
 
@@ -1533,7 +1533,7 @@ func pauseInternal(guildID string) error {
 		logger.Errorf("[pauseInternal] Failed to clear playing state in database: %v", err)
 	}
 
-	logger.Infof("[pauseInternal] Paused at %dms for guild: %s", seekTime, guildID)
+	logger.Debugf("[pauseInternal] Paused at %dms for guild: %s", seekTime, guildID)
 	return nil
 }
 
@@ -1576,7 +1576,7 @@ func Seek(guildID string, positionMs int) error {
 		logger.Errorf("[Seek] Failed to persist seek time: %v", err)
 		return err
 	}
-	logger.Infof("[Seek] Set position to %dms for guild %s", positionMs, guildID)
+	logger.Debugf("[Seek] Set position to %dms for guild %s", positionMs, guildID)
 	return nil
 }
 
@@ -1598,7 +1598,7 @@ func RestartForNormalization(guildID string) {
 	default:
 		close(player.StopChan)
 	}
-	logger.Infof("[RestartForNormalization] Signaled FFmpeg restart for guild: %s", guildID)
+	logger.Debugf("[RestartForNormalization] Signaled FFmpeg restart for guild: %s", guildID)
 }
 
 // Resume queues a resume command (uses channels)
@@ -1635,7 +1635,7 @@ func Resume(session *discordgo.Session, guildID string) error {
 
 			// If playing and not paused, the resume succeeded
 			if playing && !paused {
-				logger.Infof("[Resume] Command completed successfully after timeout for guild %s", guildID)
+				logger.Debugf("[Resume] Command completed successfully after timeout for guild %s", guildID)
 				return nil
 			}
 
@@ -1686,7 +1686,7 @@ func resumeInternal(session *discordgo.Session, guildID string) error {
 	// Cancel auto-disconnect timer since we're resuming
 	ClearAutoPauseTimer(guildID)
 
-	logger.Infof("[Resume] Resuming playback for guild: %s", guildID)
+	logger.Debugf("[Resume] Resuming playback for guild: %s", guildID)
 	return playInternal(session, guildID)
 }
 
@@ -1747,7 +1747,7 @@ func Skip(session *discordgo.Session, guildID string) error {
 		return fmt.Errorf("failed to remove song: %w", err)
 	}
 
-	logger.Infof("[Skip] Skipped song for guild: %s", guildID)
+	logger.Debugf("[Skip] Skipped song for guild: %s", guildID)
 
 	// Check if queue is now empty - if so, return ErrQueueEmpty so caller can send message
 	q, err = queue.GetQueue(guildID, true)
@@ -1825,7 +1825,7 @@ func SkipTo(session *discordgo.Session, guildID string) error {
 		player.mu.Unlock()
 	}
 
-	logger.Infof("[SkipTo] Starting playback of target song for guild: %s", guildID)
+	logger.Debugf("[SkipTo] Starting playback of target song for guild: %s", guildID)
 
 	// Start playing the target song (now at position 0)
 	go func() {
@@ -1906,12 +1906,12 @@ func skipInternal(session *discordgo.Session, guildID string) error {
 		return fmt.Errorf("failed to remove song: %w", err)
 	}
 
-	logger.Infof("[skipInternal] Skipped song for guild: %s", guildID)
+	logger.Debugf("[skipInternal] Skipped song for guild: %s", guildID)
 
 	// Check if queue is now empty - if so, return ErrQueueEmpty so caller can send message
 	q, err = queue.GetQueue(guildID, true)
 	if err != nil || q == nil || len(q.Songs) == 0 {
-		logger.Infof("[skipInternal] Queue is empty after skip for guild: %s", guildID)
+		logger.Debugf("[skipInternal] Queue is empty after skip for guild: %s", guildID)
 		return ErrQueueEmpty
 	}
 
@@ -1998,7 +1998,7 @@ func Stop(guildID string) error {
 	// Delete player
 	DeletePlayer(guildID)
 
-	logger.Infof("[Stop] Stopped playback for guild: %s", guildID)
+	logger.Debugf("[Stop] Stopped playback for guild: %s", guildID)
 	return nil
 }
 
@@ -2037,7 +2037,7 @@ func stopInternal(guildID string) error {
 	ClearPreCache(guildID)
 
 	DeletePlayer(guildID)
-	logger.Infof("[Stop] Stopped playback for guild: %s", guildID)
+	logger.Debugf("[Stop] Stopped playback for guild: %s", guildID)
 	return nil
 }
 
@@ -2061,7 +2061,7 @@ func SetVolume(guildID string, volume float64) error {
 	player.Volume = volume / 100.0
 	player.mu.Unlock()
 
-	logger.Infof("[Volume] Set volume to %g%% for guild: %s", volume, guildID)
+	logger.Debugf("[Volume] Set volume to %g%% for guild: %s", volume, guildID)
 	return nil
 }
 

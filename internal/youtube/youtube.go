@@ -398,7 +398,7 @@ func CheckVideoAvailability(guildID, url string) (*AvailabilityResult, error) {
 				strings.Contains(errorMsg, "age-restricted") ||
 				strings.Contains(errorMsg, "not available in your country") ||
 				strings.Contains(errorMsg, "geo") {
-				logger.Infof("[Availability] Video blocked by error: %v (%v)", err, checkTime)
+				logger.Debugf("[Availability] Video blocked by error: %v (%v)", err, checkTime)
 				unavailResult := &AvailabilityResult{
 					Available: false,
 					Error:     err.Error(),
@@ -445,7 +445,7 @@ func CheckVideoAvailability(guildID, url string) (*AvailabilityResult, error) {
 			(info.LiveStatus != nil && (*info.LiveStatus == ytdlp.ExtractedLiveStatusIsLive ||
 				*info.LiveStatus == ytdlp.ExtractedLiveStatusIsUpcoming))
 		if isLive {
-			logger.Infof("[Availability] \"%s\" is a LIVE stream", getStringValue(info.Title))
+			logger.Debugf("[Availability] \"%s\" is a LIVE stream", getStringValue(info.Title))
 		}
 
 		// Check availability status
@@ -472,14 +472,14 @@ func CheckVideoAvailability(guildID, url string) (*AvailabilityResult, error) {
 
 		if len(unavailableReasons) > 0 {
 			errorMsg := strings.Join(unavailableReasons, ", ")
-			logger.Infof("[Availability] \"%s\" unavailable: %s (%v)", getStringValue(info.Title), errorMsg, checkTime)
+			logger.Debugf("[Availability] \"%s\" unavailable: %s (%v)", getStringValue(info.Title), errorMsg, checkTime)
 			availResult = &AvailabilityResult{
 				Available: false,
 				Error:     errorMsg,
 				IsLive:    isLive,
 			}
 		} else {
-			logger.Infof("[Availability] \"%s\" is available (%v)", getStringValue(info.Title), checkTime)
+			logger.Debugf("[Availability] \"%s\" is available (%v)", getStringValue(info.Title), checkTime)
 			availResult = &AvailabilityResult{
 				Available: true,
 				IsLive:    isLive,

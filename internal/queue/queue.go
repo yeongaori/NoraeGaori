@@ -185,7 +185,7 @@ func (s *Song) StartPlayback() {
 	s.State = SongStatePlaying
 	s.PlaybackStarted = time.Now().Add(-time.Duration(s.SeekTime) * time.Millisecond)
 	s.StateChangedAt = time.Now()
-	logger.Infof("[Song] Started playback: %s", s.Title)
+	logger.Debugf("[Song] Started playback: %s", s.Title)
 }
 
 // PausePlayback updates seek time and marks as paused
@@ -198,7 +198,7 @@ func (s *Song) PausePlayback() {
 	}
 	s.State = SongStatePaused
 	s.StateChangedAt = time.Now()
-	logger.Infof("[Song] Paused at %dms: %s", s.SeekTime, s.Title)
+	logger.Debugf("[Song] Paused at %dms: %s", s.SeekTime, s.Title)
 }
 
 // getStateName returns human-readable state name
@@ -602,7 +602,7 @@ func AddSongsBatch(guildID string, songs []*Song, position int) error {
 
 	// Invalidate cache
 	InvalidateCache(guildID)
-	logger.Infof("[AddSongsBatch] Added %d songs starting at position %d for guild: %s", len(songs), position, guildID)
+	logger.Debugf("[AddSongsBatch] Added %d songs starting at position %d for guild: %s", len(songs), position, guildID)
 	return nil
 }
 
@@ -1044,9 +1044,8 @@ func SetVolume(guildID string, volume float64) error {
 		return fmt.Errorf("failed to set volume: %w", err)
 	}
 
-	// Log the result for debugging
 	rowsAffected, _ := result.RowsAffected()
-	logger.Infof("[SetVolume] Set volume=%g for guild %s (rows affected: %d)", volume, guildID, rowsAffected)
+	logger.Debugf("[SetVolume] Set volume=%g for guild %s (rows affected: %d)", volume, guildID, rowsAffected)
 
 	// Invalidate cache
 	InvalidateCache(guildID)
