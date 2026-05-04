@@ -1,1 +1,2 @@
 - [ ] Overall codebase structure maintenance & refactoring if needed
+- [ ] Apply per-guild prefix to help command
