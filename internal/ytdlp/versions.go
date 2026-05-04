@@ -22,6 +22,7 @@ const (
 	StatePending     VersionState = "pending"
 	StateVerified    VersionState = "verified"
 	StateActive      VersionState = "active"
+	StateProvisional VersionState = "provisional"
 	StateBlacklisted VersionState = "blacklisted"
 
 	rollbackThreshold   = 3
@@ -30,9 +31,17 @@ const (
 	stalePendingTimeout = 48 * time.Hour
 	canaryRingSize      = 10
 	canaryTestCount     = 3
-	fixedCanaryID       = "dQw4w9WgXcQ"
 	versionDataFile     = "data/ytdlp_versions.json"
 )
+
+// fixedCanaryIDs are stable, non-age-restricted YouTube videos used as the
+// baseline canary set. The first ID is "Me at the zoo" — the first ever
+// YouTube video, public and not age-gated. The second is yt-dlp's own
+// canonical test video used in their own CI suite.
+var fixedCanaryIDs = []string{
+	"jNQXAC9IVRw",
+	"BaW_jenozKc",
+}
 
 // ErrorRecord tracks a non-definitive extraction error for a specific video
 type ErrorRecord struct {
@@ -79,7 +88,7 @@ func InitVersionManager() error {
 	}
 
 	if err := versionmanager.load(); err != nil {
-		logger.Debugf("[VersionManager] No existing state, starting fresh: %v", err)
+		logger.Debugf("[yt-dlp] No existing state, starting fresh: %v", err)
 	}
 
 	versionMgr = versionmanager
@@ -112,30 +121,30 @@ func (versionmanager *VersionManager) load() error {
 	}
 
 	versionmanager.state = state
-	logger.Infof("[VersionManager] Loaded state: active=%s, %d versions tracked", state.ActiveVersion, len(state.Versions))
+	logger.Infof("[yt-dlp] Loaded state: active=%s, %d versions tracked", state.ActiveVersion, len(state.Versions))
 	return nil
 }
 
 // persist writes current state to disk. Must be called with lock held.
 func (versionmanager *VersionManager) persist() {
 	if err := os.MkdirAll(filepath.Dir(versionDataFile), 0755); err != nil {
-		logger.Errorf("[VersionManager] Failed to create data dir: %v", err)
+		logger.Errorf("[yt-dlp] Failed to create data dir: %v", err)
 		return
 	}
 
 	data, err := json.MarshalIndent(versionmanager.state, "", "  ")
 	if err != nil {
-		logger.Errorf("[VersionManager] Failed to marshal state: %v", err)
+		logger.Errorf("[yt-dlp] Failed to marshal state: %v", err)
 		return
 	}
 
 	tmpFile := versionDataFile + ".tmp"
 	if err := os.WriteFile(tmpFile, data, 0644); err != nil {
-		logger.Errorf("[VersionManager] Failed to write temp state: %v", err)
+		logger.Errorf("[yt-dlp] Failed to write temp state: %v", err)
 		return
 	}
 	if err := os.Rename(tmpFile, versionDataFile); err != nil {
-		logger.Errorf("[VersionManager] Failed to rename state file: %v", err)
+		logger.Errorf("[yt-dlp] Failed to rename state file: %v", err)
 	}
 }
 
@@ -145,7 +154,7 @@ func (versionmanager *VersionManager) RegisterVersion(version, path string) {
 	defer versionmanager.mu.Unlock()
 
 	if _, exists := versionmanager.state.Versions[version]; exists {
-		logger.Warnf("[VersionManager] Version %s already registered, skipping", version)
+		logger.Warnf("[yt-dlp] Version %s already registered, skipping", version)
 		return
 	}
 
@@ -155,7 +164,7 @@ func (versionmanager *VersionManager) RegisterVersion(version, path string) {
 		RegisteredAt: time.Now(),
 	}
 	versionmanager.persist()
-	logger.Infof("[VersionManager] Registered version %s at %s", version, path)
+	logger.Debugf("[yt-dlp] Registered version %s at %s", version, path)
 }
 
 // SetVersionState updates the state of a version
@@ -173,7 +182,7 @@ func (versionmanager *VersionManager) SetVersionState(version string, state Vers
 		entry.BlacklistedAt = time.Now()
 	}
 	versionmanager.persist()
-	logger.Infof("[VersionManager] Version %s -> %s", version, state)
+	logger.Debugf("[yt-dlp] Version %s -> %s", version, state)
 }
 
 // GetActiveVersion returns the currently active version string
@@ -213,6 +222,64 @@ func (versionmanager *VersionManager) GetVersionState(version string) (VersionSt
 	return entry.State, true
 }
 
+// HasUsableBinary returns true if any registered version with a settled
+// non-broken state has its binary file present on disk and runs --version
+// successfully. Pending versions are excluded because their viability is
+// unknown; Blacklisted versions are excluded because they are known bad.
+func (versionmanager *VersionManager) HasUsableBinary() bool {
+	versionmanager.mu.RLock()
+	candidates := make([]string, 0, len(versionmanager.state.Versions))
+	for _, entry := range versionmanager.state.Versions {
+		switch entry.State {
+		case StateVerified, StateActive, StateProvisional:
+			if _, err := os.Stat(entry.Path); err == nil {
+				candidates = append(candidates, entry.Path)
+			}
+		}
+	}
+	versionmanager.mu.RUnlock()
+
+	for _, path := range candidates {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		err := exec.CommandContext(ctx, path, "--version").Run()
+		cancel()
+		if err == nil {
+			return true
+		}
+		logger.Warnf("[yt-dlp] Binary at %s failed --version check: %v", path, err)
+	}
+	return false
+}
+
+// ProvisionallyActivate points ActiveVersion at the given version with state
+// StateProvisional. Used by the last-resort path when no version has passed
+// canary but the bot still needs a binary. Real-traffic SaveSuccess and
+// rollback handle correctness from here. Crucially, StateProvisional is NOT
+// StateBlacklisted — subsequent boots will not re-trigger the fallback chain
+// for this version, avoiding the per-boot retry storm.
+func (versionmanager *VersionManager) ProvisionallyActivate(version, path string) {
+	versionmanager.mu.Lock()
+	defer versionmanager.mu.Unlock()
+
+	entry, ok := versionmanager.state.Versions[version]
+	if !ok {
+		entry = &VersionEntry{
+			Path:         path,
+			RegisteredAt: time.Now(),
+		}
+		versionmanager.state.Versions[version] = entry
+	} else if entry.Path == "" {
+		entry.Path = path
+	}
+
+	entry.State = StateProvisional
+	entry.BlacklistedAt = time.Time{}
+
+	versionmanager.state.ActiveVersion = version
+	versionmanager.persist()
+	logger.Warnf("[yt-dlp] Provisionally activated %s — canary did not pass; trusting based on real traffic", version)
+}
+
 // GetLastGitHubCheck returns when GitHub was last checked
 func (versionmanager *VersionManager) GetLastGitHubCheck() time.Time {
 	versionmanager.mu.RLock()
@@ -242,12 +309,13 @@ func (versionmanager *VersionManager) addToCanaryRing(videoID string) {
 	}
 }
 
-// getCanaryIDs returns the fixed canary + up to canaryTestCount random IDs from the ring
+// getCanaryIDs returns the fixed canary set + up to canaryTestCount random IDs from the ring
 func (versionmanager *VersionManager) getCanaryIDs() []string {
 	versionmanager.mu.RLock()
 	defer versionmanager.mu.RUnlock()
 
-	ids := []string{fixedCanaryID}
+	ids := make([]string, 0, len(fixedCanaryIDs)+canaryTestCount)
+	ids = append(ids, fixedCanaryIDs...)
 
 	if len(versionmanager.state.CanaryRing) == 0 {
 		return ids
@@ -285,9 +353,16 @@ func (versionmanager *VersionManager) SaveSuccess(version, videoID string) {
 		versionmanager.addToCanaryRing(videoID)
 	}
 
+	// Promote a Provisional active version to Active once real traffic has
+	// proved the canary's negative verdict wrong.
+	if entry.State == StateProvisional && version == versionmanager.state.ActiveVersion && entry.Successes >= stableSuccessCount {
+		entry.State = StateActive
+		logger.Infof("[yt-dlp] Provisional version %s promoted to Active after %d real successes", version, entry.Successes)
+	}
+
 	// Trigger cleanup when active version proves stable
 	if version == versionmanager.state.ActiveVersion && entry.Successes == stableSuccessCount {
-		logger.Infof("[VersionManager] Active version %s reached %d successes, running cleanup", version, stableSuccessCount)
+		logger.Infof("[yt-dlp] Active version %s reached %d successes, running cleanup", version, stableSuccessCount)
 		versionmanager.cleanupOldVersions()
 	}
 
@@ -337,7 +412,7 @@ func (versionmanager *VersionManager) SaveError(version, videoID string, errMsg 
 		Time:    now,
 	})
 
-	logger.Warnf("[VersionManager] Saved error for version %s (video: %s), %d errors in window", version, videoID, len(entry.Errors))
+	logger.Warnf("[yt-dlp] Saved error for version %s (video: %s), %d errors in window", version, videoID, len(entry.Errors))
 	versionmanager.persist()
 }
 
@@ -392,7 +467,7 @@ func (versionmanager *VersionManager) ActiveBinaryPath() string {
 	if versionmanager.shouldRollback() {
 		best := versionmanager.selectBestVersion()
 		if best != versionmanager.state.ActiveVersion {
-			logger.Warnf("[VersionManager] Rolling back from %s to %s", versionmanager.state.ActiveVersion, best)
+			logger.Warnf("[yt-dlp] Rolling back from %s to %s", versionmanager.state.ActiveVersion, best)
 
 			// Blacklist the current active version
 			if entry, ok := versionmanager.state.Versions[versionmanager.state.ActiveVersion]; ok {
@@ -409,9 +484,15 @@ func (versionmanager *VersionManager) ActiveBinaryPath() string {
 		}
 	}
 
-	// Return path for active version
+	// Return path for active version, but only if the binary actually exists
+	// on disk. A missing binary here means something deleted it out of band
+	// (manual cleanup, container volume reset). Fall back to the legacy path
+	// rather than handing out a phantom path that fails opaquely at exec time.
 	if entry, ok := versionmanager.state.Versions[versionmanager.state.ActiveVersion]; ok {
-		return entry.Path
+		if _, err := os.Stat(entry.Path); err == nil {
+			return entry.Path
+		}
+		logger.Errorf("[yt-dlp] Active binary %s missing on disk; falling back to legacy path", entry.Path)
 	}
 
 	// Fallback: no version manager state, use legacy path
@@ -434,7 +515,7 @@ func (versionmanager *VersionManager) tryPromoteVerified() {
 		return
 	}
 
-	logger.Infof("[VersionManager] Promoting verified version %s to active (was %s)", bestVerified, versionmanager.state.ActiveVersion)
+	logger.Infof("[yt-dlp] Promoting verified version %s to active (was %s)", bestVerified, versionmanager.state.ActiveVersion)
 
 	// Demote old active
 	if old, ok := versionmanager.state.Versions[versionmanager.state.ActiveVersion]; ok {
@@ -493,7 +574,7 @@ func (versionmanager *VersionManager) cleanupOldVersions() {
 
 		if shouldDelete {
 			toDelete = append(toDelete, ver)
-			logger.Infof("[VersionManager] Marking %s for cleanup: %s", ver, reason)
+			logger.Debugf("[yt-dlp] Marking %s for cleanup: %s", ver, reason)
 		}
 	}
 
@@ -503,9 +584,9 @@ func (versionmanager *VersionManager) cleanupOldVersions() {
 		// Remove directory from disk
 		dir := filepath.Dir(entry.Path)
 		if err := os.RemoveAll(dir); err != nil {
-			logger.Warnf("[VersionManager] Failed to remove directory %s: %v", dir, err)
+			logger.Warnf("[yt-dlp] Failed to remove directory %s: %v", dir, err)
 		} else {
-			logger.Infof("[VersionManager] Removed version directory: %s", dir)
+			logger.Debugf("[yt-dlp] Removed version directory: %s", dir)
 		}
 
 		// Remove from registry
@@ -514,22 +595,27 @@ func (versionmanager *VersionManager) cleanupOldVersions() {
 
 	if len(toDelete) > 0 {
 		versionmanager.persist()
-		logger.Infof("[VersionManager] Cleanup complete: removed %d version(s), %d remaining", len(toDelete), len(versionmanager.state.Versions))
+		logger.Infof("[yt-dlp] Cleanup complete: removed %d version(s), %d remaining", len(toDelete), len(versionmanager.state.Versions))
 	}
 }
 
 // canaryResult represents the outcome of a single canary test
 type canaryResult struct {
-	videoID string
-	success bool
-	network bool // true if failure was a network error
-	errMsg  string
+	videoID      string
+	success      bool
+	network      bool // failure was a transient network error
+	inconclusive bool // failure was a definitive video-unavailability (not a binary problem)
+	errMsg       string
 }
 
 // RunCanary smoke-tests a version against known-good video IDs.
-// Returns: true if canary passed, false if failed.
-// On network errors, returns false but the version should stay pending (not blacklisted).
-// The caller must check the second return value (networkError) to distinguish.
+// Returns (passed, networkError):
+//   - passed=true  → canary OK (or all tests inconclusive — no evidence of binary breakage)
+//   - passed=false, networkError=true  → all tests hit network errors; version stays pending
+//   - passed=false, networkError=false → at least one concrete binary failure; caller should blacklist
+//
+// A single concrete success short-circuits to passed=true regardless of other results.
+// A single concrete failure (non-network, non-inconclusive) short-circuits to passed=false.
 func (versionmanager *VersionManager) RunCanary(version string) (passed bool, networkError bool) {
 	versionmanager.mu.RLock()
 	entry, ok := versionmanager.state.Versions[version]
@@ -541,26 +627,53 @@ func (versionmanager *VersionManager) RunCanary(version string) (passed bool, ne
 	versionmanager.mu.RUnlock()
 
 	ids := versionmanager.getCanaryIDs()
-	logger.Infof("[VersionManager] Running canary for %s with %d video(s)", version, len(ids))
+	logger.Debugf("[yt-dlp] Running canary for %s with %d video(s)", version, len(ids))
+
+	var (
+		networkCount      int
+		inconclusiveCount int
+	)
 
 	for _, id := range ids {
 		result := versionmanager.testExtraction(binaryPath, id)
-		if !result.success {
-			if result.network {
-				logger.Warnf("[VersionManager] Canary network error for %s (video %s): %s", version, id, result.errMsg)
-				return false, true
-			}
-			logger.Warnf("[VersionManager] Canary FAILED for %s (video %s): %s", version, id, result.errMsg)
+		switch {
+		case result.success:
+			logger.Infof("[yt-dlp] Canary PASSED for %s", version)
+			return true, false
+		case result.network:
+			logger.Debugf("[yt-dlp] Canary network error for %s: %s", version, result.errMsg)
+			networkCount++
+		case result.inconclusive:
+			logger.Debugf("[yt-dlp] Canary inconclusive for %s (not a binary problem): %s", version, result.errMsg)
+			inconclusiveCount++
+		default:
+			logger.Warnf("[yt-dlp] Canary FAILED for %s: %s", version, result.errMsg)
 			return false, false
 		}
-		logger.Debugf("[VersionManager] Canary passed for %s (video %s)", version, id)
 	}
 
-	logger.Infof("[VersionManager] Canary PASSED for %s", version)
+	// No concrete success and no concrete failure. All results were either
+	// transient network errors or per-video unavailability — no evidence of
+	// a broken binary either way.
+	if networkCount > 0 && inconclusiveCount == 0 {
+		// All-network: stay pending, retry later.
+		logger.Warnf("[yt-dlp] All canary tests for %s hit network errors; version stays pending", version)
+		return false, true
+	}
+
+	// All tests inconclusive (or a mix with no network-only set). The binary
+	// hasn't been proven good, but we have no evidence of breakage. Pass with
+	// a warning; real-traffic SaveError will catch real regressions.
+	logger.Warnf("[yt-dlp] Canary inconclusive for %s — no testable videos but no evidence of binary breakage", version)
 	return true, false
 }
 
-// testExtraction runs yt-dlp --dump-json on a video ID and checks for valid output
+// testExtraction runs yt-dlp --dump-json on a video ID and checks for valid output.
+// Distinguishes three failure modes:
+//   - network: transient connection problems (caller should retry later)
+//   - inconclusive: the video itself isn't extractable (age-gated, geo-blocked,
+//     deleted, login-required); not a binary problem, try a different video
+//   - concrete failure: anything else (genuine binary breakage)
 func (versionmanager *VersionManager) testExtraction(binaryPath, videoID string) canaryResult {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -577,27 +690,35 @@ func (versionmanager *VersionManager) testExtraction(binaryPath, videoID string)
 
 	if err != nil {
 		errMsg := err.Error()
-		// Try to get stderr for better error info
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			errMsg = string(exitErr.Stderr)
 		}
 
 		if IsNetworkError(errMsg) || ctx.Err() != nil {
-			return canaryResult{videoID: videoID, success: false, network: true, errMsg: errMsg}
+			return canaryResult{videoID: videoID, network: true, errMsg: errMsg}
 		}
-		return canaryResult{videoID: videoID, success: false, network: false, errMsg: errMsg}
+		if IsDefinitiveUnavailableError(errMsg) {
+			return canaryResult{videoID: videoID, inconclusive: true, errMsg: errMsg}
+		}
+		return canaryResult{videoID: videoID, errMsg: errMsg}
 	}
 
-	// Verify the output is valid JSON with a URL field
+	// Validate JSON and accept any of the three indicators that the YouTube
+	// extractor responded sensibly: matching id, non-empty formats, or non-empty
+	// top-level url. The top-level url field is downstream of format selection
+	// and isn't always populated even on healthy extractions.
 	var info struct {
-		URL string `json:"url"`
+		ID      string `json:"id"`
+		URL     string `json:"url"`
+		Formats []struct {
+			URL string `json:"url"`
+		} `json:"formats"`
 	}
 	if err := json.Unmarshal(output, &info); err != nil {
-		return canaryResult{videoID: videoID, success: false, network: false, errMsg: "invalid JSON output"}
+		return canaryResult{videoID: videoID, errMsg: "invalid JSON output"}
 	}
-	if info.URL == "" {
-		return canaryResult{videoID: videoID, success: false, network: false, errMsg: "empty stream URL in output"}
+	if info.ID == videoID || len(info.Formats) > 0 || info.URL != "" {
+		return canaryResult{videoID: videoID, success: true}
 	}
-
-	return canaryResult{videoID: videoID, success: true}
+	return canaryResult{videoID: videoID, errMsg: "extractor returned no id, formats, or url"}
 }

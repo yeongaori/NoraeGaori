@@ -104,7 +104,7 @@ func (e *VideoError) Error() string {
 }
 
 // parseYtDlpError parses yt-dlp error messages and returns user-friendly error messages
-func parseYtDlpError(err error) error {
+func parseYtDlpError(guildID string, err error) error {
 	if err == nil {
 		return nil
 	}
@@ -112,7 +112,7 @@ func parseYtDlpError(err error) error {
 	errorLower := strings.ToLower(err.Error())
 
 	// Map of patterns to user-friendly localized messages
-	yt := messages.T().YouTube
+	yt := messages.T(guildID).YouTube
 	errorMappings := []struct {
 		patterns []string
 		message  string
@@ -285,10 +285,10 @@ func IsYouTubeURL(query string) bool {
 }
 
 // Search searches YouTube for a query
-func Search(query string, requesterName, requesterID string) (*Song, error) {
+func Search(guildID, query string, requesterName, requesterID string) (*Song, error) {
 	if IsYouTubeURL(query) {
 		// Get video info from URL
-		return GetVideoInfo(query, requesterName, requesterID)
+		return GetVideoInfo(guildID, query, requesterName, requesterID)
 	}
 
 	// Search YouTube
@@ -310,7 +310,7 @@ func Search(query string, requesterName, requesterID string) (*Song, error) {
 	videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", video.VideoID)
 
 	// Get detailed info for the video
-	return GetVideoInfo(videoURL, requesterName, requesterID)
+	return GetVideoInfo(guildID, videoURL, requesterName, requesterID)
 }
 
 // SearchMultiple searches YouTube and returns multiple results
@@ -340,16 +340,18 @@ func SearchMultiple(query string, limit int) ([]SearchResult, error) {
 // CheckVideoAvailability checks if a video is available and not restricted
 // This matches the NodeJS implementation's comprehensive checking
 // Uses fast Innertube API (100-300ms) with fallback to yt-dlp (2300ms) on failure
-func CheckVideoAvailability(url string) (*AvailabilityResult, error) {
+// Cache is keyed by (url, guildID) so per-guild localized error strings don't leak across guilds.
+func CheckVideoAvailability(guildID, url string) (*AvailabilityResult, error) {
+	cacheKey := guildID + "|" + url
 	// Check cache first
-	if cached, ok := availabilityCache.Load(url); ok {
+	if cached, ok := availabilityCache.Load(cacheKey); ok {
 		cachedEntry := cached.(*cachedAvailability)
 		if time.Since(cachedEntry.timestamp) < cacheTTL {
 			logger.Debugf("[Availability] Cache hit for: %s (age: %v)", url, time.Since(cachedEntry.timestamp))
 			return cachedEntry.result, nil
 		}
 		// Cache expired, remove it
-		availabilityCache.Delete(url)
+		availabilityCache.Delete(cacheKey)
 		logger.Debugf("[Availability] Cache expired for: %s", url)
 	}
 
@@ -363,7 +365,7 @@ func CheckVideoAvailability(url string) (*AvailabilityResult, error) {
 	logger.Debugf("[Availability] Starting check for: %s", url)
 
 	client := getInnertubeClient()
-	availResult, innertubeErr := client.CheckVideoAvailability(url)
+	availResult, innertubeErr := client.CheckVideoAvailability(guildID, url)
 
 	if innertubeErr != nil {
 		// Innertube failed, fallback to yt-dlp
@@ -396,13 +398,13 @@ func CheckVideoAvailability(url string) (*AvailabilityResult, error) {
 				strings.Contains(errorMsg, "age-restricted") ||
 				strings.Contains(errorMsg, "not available in your country") ||
 				strings.Contains(errorMsg, "geo") {
-				logger.Infof("[Availability] Video blocked by error: %v (%v)", err, checkTime)
+				logger.Debugf("[Availability] Video blocked by error: %v (%v)", err, checkTime)
 				unavailResult := &AvailabilityResult{
 					Available: false,
 					Error:     err.Error(),
 				}
 				// Cache unavailable results
-				availabilityCache.Store(url, &cachedAvailability{
+				availabilityCache.Store(cacheKey, &cachedAvailability{
 					result:    unavailResult,
 					timestamp: time.Now(),
 				})
@@ -434,7 +436,7 @@ func CheckVideoAvailability(url string) (*AvailabilityResult, error) {
 
 		// Check age restriction
 		if info.AgeLimit != nil && *info.AgeLimit > 0 {
-			unavailableReasons = append(unavailableReasons, messages.T().YouTube.ErrorAgeVerification)
+			unavailableReasons = append(unavailableReasons, messages.T(guildID).YouTube.ErrorAgeVerification)
 			logger.Debugf("[Availability] age_limit: %g", *info.AgeLimit)
 		}
 
@@ -443,7 +445,7 @@ func CheckVideoAvailability(url string) (*AvailabilityResult, error) {
 			(info.LiveStatus != nil && (*info.LiveStatus == ytdlp.ExtractedLiveStatusIsLive ||
 				*info.LiveStatus == ytdlp.ExtractedLiveStatusIsUpcoming))
 		if isLive {
-			logger.Infof("[Availability] \"%s\" is a LIVE stream", getStringValue(info.Title))
+			logger.Debugf("[Availability] \"%s\" is a LIVE stream", getStringValue(info.Title))
 		}
 
 		// Check availability status
@@ -452,7 +454,7 @@ func CheckVideoAvailability(url string) (*AvailabilityResult, error) {
 			logger.Debugf("[Availability] availability: %s", availability)
 			// Allow "public" and "unlisted" videos, block "private" and restricted content
 			if availability != "public" && availability != "unlisted" {
-				unavailableReasons = append(unavailableReasons, messages.T().YouTube.ErrorRegionRestricted)
+				unavailableReasons = append(unavailableReasons, messages.T(guildID).YouTube.ErrorRegionRestricted)
 			}
 		}
 
@@ -463,21 +465,21 @@ func CheckVideoAvailability(url string) (*AvailabilityResult, error) {
 				strings.Contains(title, "[deleted video]") ||
 				strings.Contains(title, "private video") ||
 				strings.Contains(title, "deleted video") {
-				unavailableReasons = append(unavailableReasons, messages.T().YouTube.ErrorPrivateOrDeleted)
+				unavailableReasons = append(unavailableReasons, messages.T(guildID).YouTube.ErrorPrivateOrDeleted)
 				logger.Debugf("[Availability] title_indicates_unavailable: true")
 			}
 		}
 
 		if len(unavailableReasons) > 0 {
 			errorMsg := strings.Join(unavailableReasons, ", ")
-			logger.Infof("[Availability] \"%s\" unavailable: %s (%v)", getStringValue(info.Title), errorMsg, checkTime)
+			logger.Debugf("[Availability] \"%s\" unavailable: %s (%v)", getStringValue(info.Title), errorMsg, checkTime)
 			availResult = &AvailabilityResult{
 				Available: false,
 				Error:     errorMsg,
 				IsLive:    isLive,
 			}
 		} else {
-			logger.Infof("[Availability] \"%s\" is available (%v)", getStringValue(info.Title), checkTime)
+			logger.Debugf("[Availability] \"%s\" is available (%v)", getStringValue(info.Title), checkTime)
 			availResult = &AvailabilityResult{
 				Available: true,
 				IsLive:    isLive,
@@ -486,7 +488,7 @@ func CheckVideoAvailability(url string) (*AvailabilityResult, error) {
 	}
 
 	// Store in cache
-	availabilityCache.Store(url, &cachedAvailability{
+	availabilityCache.Store(cacheKey, &cachedAvailability{
 		result:    availResult,
 		timestamp: time.Now(),
 	})
@@ -553,11 +555,11 @@ func retryWithBackoff(operation func() error, operationName string) error {
 // Uses fast Innertube API (300-500ms) to get both availability and video info in a single call
 // This eliminates the previous double-fetch pattern (CheckVideoAvailability + GetVideoInfo)
 // Falls back to yt-dlp (4-6s) if Innertube fails
-func GetVideoInfo(url, requesterName, requesterID string) (*Song, error) {
+func GetVideoInfo(guildID, url, requesterName, requesterID string) (*Song, error) {
 	logger.Debugf("Fetching video info for: %s", url)
 
 	client := getInnertubeClient()
-	song, innertubeErr := client.GetVideoInfo(url, requesterName, requesterID)
+	song, innertubeErr := client.GetVideoInfo(guildID, url, requesterName, requesterID)
 
 	if innertubeErr == nil {
 		// Success with Innertube
@@ -568,13 +570,13 @@ func GetVideoInfo(url, requesterName, requesterID string) (*Song, error) {
 	logger.Warnf("[GetVideoInfo] Innertube failed, falling back to yt-dlp: %v", innertubeErr)
 
 	// First, check video availability using the comprehensive check
-	availability, err := CheckVideoAvailability(url)
+	availability, err := CheckVideoAvailability(guildID, url)
 	if err != nil {
 		logger.Warnf("Failed to check video availability (continuing anyway): %v", err)
 	} else if !availability.Available {
 		// Return parsed error message for unavailable videos
 		errMsg := fmt.Errorf("video is not available: %s", availability.Error)
-		return nil, parseYtDlpError(errMsg)
+		return nil, parseYtDlpError(guildID, errMsg)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -603,7 +605,7 @@ func GetVideoInfo(url, requesterName, requesterID string) (*Song, error) {
 
 	if retryErr != nil {
 		// Parse yt-dlp error to provide specific user-friendly message
-		return nil, parseYtDlpError(retryErr)
+		return nil, parseYtDlpError(guildID, retryErr)
 	}
 
 	// Parse extracted info

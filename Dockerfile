@@ -1,7 +1,8 @@
 # Build stage
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
-# Install build dependencies
+# CGO is required for go-sqlite3; libopus is dlopen'd at runtime via purego,
+# so no opus headers are needed at build time.
 RUN apk add --no-cache gcc musl-dev sqlite-dev
 
 WORKDIR /build
@@ -14,7 +15,7 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=1 go build -ldflags="-s -w" -o noraedev ./cmd/bot
+RUN CGO_ENABLED=1 go build -ldflags="-s -w" -o noraegaori ./cmd/bot
 
 # Runtime stage
 FROM alpine:latest
@@ -26,12 +27,14 @@ RUN apk add --no-cache \
     py3-pip \
     ca-certificates \
     sqlite \
-    && pip3 install --no-cache-dir yt-dlp
+    opus \
+    && pip3 install --no-cache-dir --break-system-packages yt-dlp
 
 WORKDIR /app
 
-# Copy binary from builder
-COPY --from=builder /build/noraedev .
+# Copy binary and locale files from builder
+COPY --from=builder /build/noraegaori .
+COPY --from=builder /build/locales ./locales
 
 # Create directories
 RUN mkdir -p /app/config /app/data
@@ -46,7 +49,7 @@ USER botuser
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD pgrep noraedev || exit 1
+    CMD pgrep noraegaori || exit 1
 
 # Run the bot
-CMD ["./noraedev"]
+CMD ["./noraegaori"]

@@ -163,7 +163,7 @@ func startAutoPauseTimer(session *discordgo.Session, guildID, channelID string) 
 		}
 		player.mu.Unlock()
 
-		logger.Infof("[VoiceHandler] Auto-paused at %dms for guild: %s", seekTime, guildID)
+		logger.Debugf("[VoiceHandler] Auto-paused at %dms for guild: %s", seekTime, guildID)
 
 		// Send notification to text channel
 		go sendAutoPauseNotification(session, guildID, channelID)
@@ -208,8 +208,8 @@ func sendAutoPauseNotification(session *discordgo.Session, guildID, voiceChannel
 	// Create embed
 	embed := &discordgo.MessageEmbed{
 		Color:       messages.ColorWarning,
-		Title:       messages.T().VoiceHandler.AutoPauseTitle,
-		Description: fmt.Sprintf(messages.T().VoiceHandler.AutoPauseDesc, channel.Name),
+		Title:       messages.T(guildID).VoiceHandler.AutoPauseTitle,
+		Description: fmt.Sprintf(messages.T(guildID).VoiceHandler.AutoPauseDesc, channel.Name),
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 

@@ -49,6 +49,7 @@ type GuildPlayer struct {
 	Paused           bool
 	Loading          bool
 	TogglingNorm     bool // Signal to restart FFmpeg for normalization change
+	Seeking          bool // Signal to restart FFmpeg at song.SeekTime (user seek)
 	Volume           float64
 	StopChan         chan struct{}
 	PlaybackDone     chan struct{}      // Signaled when playback terminates
@@ -185,8 +186,9 @@ func sendNowPlayingMessage(session *discordgo.Session, guildID string, song *que
 	loadingMsg := GetLoadingMessage(guildID)
 	if loadingMsg != nil {
 		nowPlayingEmbed := messages.CreateSongEmbed(
+			guildID,
 			messages.ColorSuccess,
-			messages.T().Player.PlaybackStarted,
+			messages.T(guildID).Player.PlaybackStarted,
 			"",
 			song.Title,
 			song.URL,
@@ -207,8 +209,9 @@ func sendNowPlayingMessage(session *discordgo.Session, guildID string, song *que
 		DeleteLoadingMessage(guildID)
 	} else if q.ShowStartedTrack {
 		embed := messages.CreateSongEmbed(
+			guildID,
 			messages.ColorSuccess,
-			messages.T().Player.NowPlaying,
+			messages.T(guildID).Player.NowPlaying,
 			"",
 			song.Title,
 			song.URL,
@@ -223,9 +226,10 @@ func sendNowPlayingMessage(session *discordgo.Session, guildID string, song *que
 	// Update reconnect message if resuming after a stream stall
 	if reconnectMsg := getReconnectMessage(guildID); reconnectMsg != nil {
 		reconnectedEmbed := messages.CreateSongEmbed(
+			guildID,
 			messages.ColorSuccess,
-			messages.T().Player.StreamReconnectedTitle,
-			messages.T().Player.StreamReconnectedDesc,
+			messages.T(guildID).Player.StreamReconnectedTitle,
+			messages.T(guildID).Player.StreamReconnectedDesc,
 			song.Title,
 			song.URL,
 			song.Uploader,
@@ -350,7 +354,7 @@ func JoinVoice(session *discordgo.Session, guildID, channelID string) (*discordg
 		select {
 		case <-ticker.C:
 			if vc.Status == discordgo.VoiceConnectionStatusReady {
-				logger.Infof("[Voice] Voice connection ready for guild: %s", guildID)
+				logger.Debugf("[Voice] Voice connection ready for guild: %s", guildID)
 				player.VoiceConn = vc
 				player.VoiceChannelID = channelID
 				return vc, nil
@@ -380,7 +384,7 @@ func LeaveVoice(guildID string) error {
 		}
 		player.VoiceConn = nil
 		player.VoiceChannelID = ""
-		logger.Infof("[Voice] Left voice channel in guild: %s", guildID)
+		logger.Debugf("[Voice] Left voice channel in guild: %s", guildID)
 	}
 
 	return nil
@@ -608,7 +612,7 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 			return playStop
 		}
 		player.VoiceConn = vc
-		logger.Infof("[Play] Voice connection established for guild: %s", guildID)
+		logger.Debugf("[Play] Voice connection established for guild: %s", guildID)
 	}
 
 	player.mu.Lock()
@@ -648,7 +652,7 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 	var streamErr error
 	if cached := GetCachedStreamURL(guildID, song.ID); cached != "" {
 		streamURL = cached
-		logger.Infof("[Play] Using pre-cached stream URL for: %s", song.Title)
+		logger.Debugf("[Play] Using pre-cached stream URL for: %s", song.Title)
 	} else {
 		streamURL, streamErr = youtube.GetStreamURL(song.URL, q.SponsorBlock, voiceChannelBitrate)
 	}
@@ -722,13 +726,20 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 			break
 		}
 
-		// Check if it was a normalization toggle restart
+		// Check if it was a normalization toggle or user-seek restart
 		player.mu.Lock()
 		toggling := player.TogglingNorm
+		seeking := player.Seeking
 		if toggling {
 			player.TogglingNorm = false
 			// Calculate current position for seamless restart
 			seekTime = int(time.Since(player.PlaybackStart).Milliseconds())
+			player.StopChan = make(chan struct{})
+		}
+		if seeking {
+			player.Seeking = false
+			// User-requested seek time was already written to song.SeekTime
+			seekTime = song.SeekTime
 			player.StopChan = make(chan struct{})
 		}
 		player.mu.Unlock()
@@ -741,7 +752,12 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 			} else {
 				normalization = newNorm
 			}
-			logger.Infof("[Play] Restarting FFmpeg for normalization toggle at %dms: %s", seekTime, song.Title)
+			logger.Debugf("[Play] Restarting FFmpeg for normalization toggle at %dms: %s", seekTime, song.Title)
+			continue
+		}
+
+		if seeking {
+			logger.Debugf("[Play] Restarting FFmpeg for seek to %dms: %s", seekTime, song.Title)
 			continue
 		}
 
@@ -872,13 +888,13 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 	if shouldRepeat {
 		if repeatMode == queue.RepeatSingle {
 			// Single: re-add to beginning so it plays immediately next
-			logger.Infof("[Play] Single repeat, re-adding song to front: %s", repeatSong.Title)
+			logger.Debugf("[Play] Single repeat, re-adding song to front: %s", repeatSong.Title)
 			if err := queue.AddSong(guildID, repeatSong, 0); err != nil {
 				logger.Errorf("[Play] Failed to re-add song for single repeat: %v", err)
 			}
 		} else {
 			// All: re-add to end of queue
-			logger.Infof("[Play] Queue repeat, re-adding song to end: %s", repeatSong.Title)
+			logger.Debugf("[Play] Queue repeat, re-adding song to end: %s", repeatSong.Title)
 			if err := queue.AddSong(guildID, repeatSong, -1); err != nil {
 				logger.Errorf("[Play] Failed to re-add song for queue repeat: %v", err)
 			}
@@ -1230,9 +1246,9 @@ func isDefinitivePlaybackError(errMsg string) bool {
 }
 
 // cleanPlaybackErrorMessage maps error strings to user-friendly messages
-func cleanPlaybackErrorMessage(errMsg string) string {
+func cleanPlaybackErrorMessage(guildID, errMsg string) string {
 	errorLower := strings.ToLower(errMsg)
-	t := messages.T()
+	t := messages.T(guildID)
 	errorMappings := map[string]string{
 		"private video":                 t.Player.ErrorPrivateVideo,
 		"deleted video":                 t.Player.ErrorDeletedVideo,
@@ -1268,9 +1284,10 @@ func sendReconnectMessage(session *discordgo.Session, guildID string, song *queu
 	}
 
 	embed := messages.CreateSongEmbed(
+		guildID,
 		messages.ColorWarning,
-		messages.T().Player.StreamReconnectingTitle,
-		messages.T().Player.StreamReconnectingDesc,
+		messages.T(guildID).Player.StreamReconnectingTitle,
+		messages.T(guildID).Player.StreamReconnectingDesc,
 		song.Title,
 		song.URL,
 		song.Uploader,
@@ -1293,8 +1310,9 @@ func sendSongErrorMessage(session *discordgo.Session, guildID string, song *queu
 	}
 
 	embed := messages.CreateSongEmbed(
+		guildID,
 		messages.ColorError,
-		messages.T().Player.PlaybackFailedTitle,
+		messages.T(guildID).Player.PlaybackFailedTitle,
 		reason,
 		song.Title,
 		song.URL,
@@ -1337,7 +1355,7 @@ func handlePlaybackError(session *discordgo.Session, guildID string, song *queue
 
 	// Check for definitive errors first — no point retrying these
 	if isDefinitivePlaybackError(errMsg) {
-		reason := cleanPlaybackErrorMessage(errMsg)
+		reason := cleanPlaybackErrorMessage(guildID, errMsg)
 		logger.Warnf("[Play] Definitive error for song %s in guild %s: %s", song.Title, guildID, reason)
 		song.SetState(queue.SongStateFailed)
 		sendSongErrorMessage(session, guildID, song, reason)
@@ -1365,9 +1383,10 @@ func handlePlaybackError(session *discordgo.Session, guildID string, song *queue
 	// If there's a reconnect message, edit it to show failure instead of sending a separate error
 	if reconnectMsg := getReconnectMessage(guildID); reconnectMsg != nil {
 		failedEmbed := messages.CreateSongEmbed(
+			guildID,
 			messages.ColorError,
-			messages.T().Player.StreamReconnectFailedTitle,
-			messages.T().Player.StreamReconnectFailedDesc,
+			messages.T(guildID).Player.StreamReconnectFailedTitle,
+			messages.T(guildID).Player.StreamReconnectFailedDesc,
 			song.Title,
 			song.URL,
 			song.Uploader,
@@ -1378,7 +1397,7 @@ func handlePlaybackError(session *discordgo.Session, guildID string, song *queue
 		session.ChannelMessageEditEmbed(reconnectMsg.ChannelID, reconnectMsg.ID, failedEmbed)
 		deleteReconnectMessage(guildID)
 	} else {
-		sendSongErrorMessage(session, guildID, song, messages.T().Player.MaxRetriesSkipping)
+		sendSongErrorMessage(session, guildID, song, messages.T(guildID).Player.MaxRetriesSkipping)
 	}
 
 	clearRetryCount(guildID, song.URL)
@@ -1457,7 +1476,7 @@ func Pause(guildID string) error {
 	}
 	player.mu.Unlock()
 
-	logger.Infof("[Pause] Paused at %dms for guild: %s", seekTime, guildID)
+	logger.Debugf("[Pause] Paused at %dms for guild: %s", seekTime, guildID)
 	return nil
 }
 
@@ -1514,7 +1533,50 @@ func pauseInternal(guildID string) error {
 		logger.Errorf("[pauseInternal] Failed to clear playing state in database: %v", err)
 	}
 
-	logger.Infof("[pauseInternal] Paused at %dms for guild: %s", seekTime, guildID)
+	logger.Debugf("[pauseInternal] Paused at %dms for guild: %s", seekTime, guildID)
+	return nil
+}
+
+// Seek restarts the current song's playback at positionMs without disconnecting
+// from voice. Errors if not playing, no current song, or the song is a live
+// stream. Persists the new position so a later pause/resume continues from
+// here. Mirrors the RestartForNormalization pattern: signal via StopChan +
+// flag, let playSingleSong's loop pick up the new seekTime on its next iter.
+func Seek(guildID string, positionMs int) error {
+	if positionMs < 0 {
+		return fmt.Errorf("seek position cannot be negative")
+	}
+	player := GetPlayer(guildID)
+
+	q, err := queue.GetQueue(guildID, false)
+	if err != nil || q == nil || len(q.Songs) == 0 {
+		return fmt.Errorf("no current song")
+	}
+	song := q.Songs[0]
+	if song.IsLive {
+		return fmt.Errorf("cannot seek a live stream")
+	}
+
+	player.mu.Lock()
+	if !player.Playing {
+		player.mu.Unlock()
+		return fmt.Errorf("not playing")
+	}
+	song.SeekTime = positionMs
+	player.Seeking = true
+	select {
+	case <-player.StopChan:
+		// Already closed
+	default:
+		close(player.StopChan)
+	}
+	player.mu.Unlock()
+
+	if _, err := queue.SaveSeekTime(guildID, song.ID, positionMs); err != nil {
+		logger.Errorf("[Seek] Failed to persist seek time: %v", err)
+		return err
+	}
+	logger.Debugf("[Seek] Set position to %dms for guild %s", positionMs, guildID)
 	return nil
 }
 
@@ -1536,7 +1598,7 @@ func RestartForNormalization(guildID string) {
 	default:
 		close(player.StopChan)
 	}
-	logger.Infof("[RestartForNormalization] Signaled FFmpeg restart for guild: %s", guildID)
+	logger.Debugf("[RestartForNormalization] Signaled FFmpeg restart for guild: %s", guildID)
 }
 
 // Resume queues a resume command (uses channels)
@@ -1573,7 +1635,7 @@ func Resume(session *discordgo.Session, guildID string) error {
 
 			// If playing and not paused, the resume succeeded
 			if playing && !paused {
-				logger.Infof("[Resume] Command completed successfully after timeout for guild %s", guildID)
+				logger.Debugf("[Resume] Command completed successfully after timeout for guild %s", guildID)
 				return nil
 			}
 
@@ -1624,7 +1686,7 @@ func resumeInternal(session *discordgo.Session, guildID string) error {
 	// Cancel auto-disconnect timer since we're resuming
 	ClearAutoPauseTimer(guildID)
 
-	logger.Infof("[Resume] Resuming playback for guild: %s", guildID)
+	logger.Debugf("[Resume] Resuming playback for guild: %s", guildID)
 	return playInternal(session, guildID)
 }
 
@@ -1685,7 +1747,7 @@ func Skip(session *discordgo.Session, guildID string) error {
 		return fmt.Errorf("failed to remove song: %w", err)
 	}
 
-	logger.Infof("[Skip] Skipped song for guild: %s", guildID)
+	logger.Debugf("[Skip] Skipped song for guild: %s", guildID)
 
 	// Check if queue is now empty - if so, return ErrQueueEmpty so caller can send message
 	q, err = queue.GetQueue(guildID, true)
@@ -1763,7 +1825,7 @@ func SkipTo(session *discordgo.Session, guildID string) error {
 		player.mu.Unlock()
 	}
 
-	logger.Infof("[SkipTo] Starting playback of target song for guild: %s", guildID)
+	logger.Debugf("[SkipTo] Starting playback of target song for guild: %s", guildID)
 
 	// Start playing the target song (now at position 0)
 	go func() {
@@ -1844,12 +1906,12 @@ func skipInternal(session *discordgo.Session, guildID string) error {
 		return fmt.Errorf("failed to remove song: %w", err)
 	}
 
-	logger.Infof("[skipInternal] Skipped song for guild: %s", guildID)
+	logger.Debugf("[skipInternal] Skipped song for guild: %s", guildID)
 
 	// Check if queue is now empty - if so, return ErrQueueEmpty so caller can send message
 	q, err = queue.GetQueue(guildID, true)
 	if err != nil || q == nil || len(q.Songs) == 0 {
-		logger.Infof("[skipInternal] Queue is empty after skip for guild: %s", guildID)
+		logger.Debugf("[skipInternal] Queue is empty after skip for guild: %s", guildID)
 		return ErrQueueEmpty
 	}
 
@@ -1936,7 +1998,7 @@ func Stop(guildID string) error {
 	// Delete player
 	DeletePlayer(guildID)
 
-	logger.Infof("[Stop] Stopped playback for guild: %s", guildID)
+	logger.Debugf("[Stop] Stopped playback for guild: %s", guildID)
 	return nil
 }
 
@@ -1975,7 +2037,7 @@ func stopInternal(guildID string) error {
 	ClearPreCache(guildID)
 
 	DeletePlayer(guildID)
-	logger.Infof("[Stop] Stopped playback for guild: %s", guildID)
+	logger.Debugf("[Stop] Stopped playback for guild: %s", guildID)
 	return nil
 }
 
@@ -1999,7 +2061,7 @@ func SetVolume(guildID string, volume float64) error {
 	player.Volume = volume / 100.0
 	player.mu.Unlock()
 
-	logger.Infof("[Volume] Set volume to %g%% for guild: %s", volume, guildID)
+	logger.Debugf("[Volume] Set volume to %g%% for guild: %s", volume, guildID)
 	return nil
 }
 
@@ -2142,25 +2204,25 @@ func sendLeavingMessage(session *discordgo.Session, guildID, reason string) {
 	switch reason {
 	case "empty":
 		embed = &discordgo.MessageEmbed{
-			Description: messages.T().Player.LeavingEmptyDesc,
+			Description: messages.T(guildID).Player.LeavingEmptyDesc,
 			Color:       messages.ColorInfo,
 			Footer: &discordgo.MessageEmbedFooter{
-				Text: messages.T().Player.LeavingEmptyFooter,
+				Text: messages.T(guildID).Player.LeavingEmptyFooter,
 			},
 			Timestamp: time.Now().Format(time.RFC3339),
 		}
 	case "error":
 		embed = &discordgo.MessageEmbed{
-			Description: messages.T().Player.LeavingErrorDesc,
+			Description: messages.T(guildID).Player.LeavingErrorDesc,
 			Color:       messages.ColorError,
 			Footer: &discordgo.MessageEmbedFooter{
-				Text: messages.T().Player.LeavingErrorFooter,
+				Text: messages.T(guildID).Player.LeavingErrorFooter,
 			},
 			Timestamp: time.Now().Format(time.RFC3339),
 		}
 	default:
 		embed = &discordgo.MessageEmbed{
-			Description: messages.T().Player.LeavingDefaultDesc,
+			Description: messages.T(guildID).Player.LeavingDefaultDesc,
 			Color:       messages.ColorInfo,
 			Footer: &discordgo.MessageEmbedFooter{
 				Text: reason,

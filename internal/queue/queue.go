@@ -185,7 +185,7 @@ func (s *Song) StartPlayback() {
 	s.State = SongStatePlaying
 	s.PlaybackStarted = time.Now().Add(-time.Duration(s.SeekTime) * time.Millisecond)
 	s.StateChangedAt = time.Now()
-	logger.Infof("[Song] Started playback: %s", s.Title)
+	logger.Debugf("[Song] Started playback: %s", s.Title)
 }
 
 // PausePlayback updates seek time and marks as paused
@@ -198,7 +198,7 @@ func (s *Song) PausePlayback() {
 	}
 	s.State = SongStatePaused
 	s.StateChangedAt = time.Now()
-	logger.Infof("[Song] Paused at %dms: %s", s.SeekTime, s.Title)
+	logger.Debugf("[Song] Paused at %dms: %s", s.SeekTime, s.Title)
 }
 
 // getStateName returns human-readable state name
@@ -602,7 +602,7 @@ func AddSongsBatch(guildID string, songs []*Song, position int) error {
 
 	// Invalidate cache
 	InvalidateCache(guildID)
-	logger.Infof("[AddSongsBatch] Added %d songs starting at position %d for guild: %s", len(songs), position, guildID)
+	logger.Debugf("[AddSongsBatch] Added %d songs starting at position %d for guild: %s", len(songs), position, guildID)
 	return nil
 }
 
@@ -1044,9 +1044,8 @@ func SetVolume(guildID string, volume float64) error {
 		return fmt.Errorf("failed to set volume: %w", err)
 	}
 
-	// Log the result for debugging
 	rowsAffected, _ := result.RowsAffected()
-	logger.Infof("[SetVolume] Set volume=%g for guild %s (rows affected: %d)", volume, guildID, rowsAffected)
+	logger.Debugf("[SetVolume] Set volume=%g for guild %s (rows affected: %d)", volume, guildID, rowsAffected)
 
 	// Invalidate cache
 	InvalidateCache(guildID)
@@ -1227,6 +1226,56 @@ func SetNormalization(guildID string, enabled bool) error {
 	// Invalidate cache
 	InvalidateCache(guildID)
 	logger.Debugf("[SetNormalization] Set normalization=%v for guild: %s", enabled, guildID)
+	return nil
+}
+
+// GetGuildLanguage returns the per-guild language code, or "" if none is set.
+// An empty string indicates the guild should use the global default language.
+func GetGuildLanguage(guildID string) (string, error) {
+	var lang sql.NullString
+	err := database.DB.QueryRow(
+		`SELECT language FROM guild_settings WHERE guild_id = ?`,
+		guildID,
+	).Scan(&lang)
+
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to get guild language: %w", err)
+	}
+
+	if !lang.Valid {
+		return "", nil
+	}
+	return lang.String, nil
+}
+
+// SetGuildLanguage stores the per-guild language code. Pass an empty string
+// to clear the override and fall back to the global default.
+func SetGuildLanguage(guildID, lang string) error {
+	lock := acquireLock(guildID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	var langValue interface{}
+	if lang == "" {
+		langValue = nil
+	} else {
+		langValue = lang
+	}
+
+	_, err := database.DB.Exec(
+		`INSERT INTO guild_settings (guild_id, language) VALUES (?, ?)
+		 ON CONFLICT(guild_id) DO UPDATE SET language = ?`,
+		guildID, langValue, langValue,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to set guild language: %w", err)
+	}
+
+	InvalidateCache(guildID)
+	logger.Debugf("[SetGuildLanguage] Set language=%q for guild: %s", lang, guildID)
 	return nil
 }
 

@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -219,6 +220,24 @@ func InitializeCommands() {
 		Usage:       cmd("skip").Usage,
 		Example:     cmd("skip").Example,
 	})
+
+	RegisterCommand(&Command{
+		Name:        "seek",
+		Description: cmd("seek").Description,
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "position",
+				Description: cmd("seek").Options["position"],
+				Required:    true,
+			},
+		},
+		Handler:  HandleSeek,
+		TextOnly: false,
+		Usage:    cmd("seek").Usage,
+		Example:  cmd("seek").Example,
+	})
+	registerCommandAliases("seek", cmd("seek"))
 
 	RegisterCommand(&Command{
 		Name:        "stop",
@@ -504,6 +523,33 @@ func InitializeCommands() {
 	})
 	registerCommandAliases("setprefix", cmd("setprefix"))
 
+	// Register the language command under several universal names so it stays
+	// reachable even when a guild has been locked into the wrong language.
+	// /lang and /language are intentionally short, hard-coded labels — a user
+	// who can't read the current locale must still be able to find them.
+	for _, langCmd := range []string{"setlanguage", "lang", "language"} {
+		name := langCmd
+		RegisterCommand(&Command{
+			Name:        name,
+			Description: cmd("setlanguage").Description,
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "language",
+					Description: cmd("setlanguage").Options["language"],
+					Required:    false,
+					Choices:     buildLanguageChoices(),
+				},
+			},
+			Handler:   HandleSetLanguage,
+			AdminOnly: true,
+			TextOnly:  true,
+			Usage:     cmd("setlanguage").Usage,
+			Example:   cmd("setlanguage").Example,
+		})
+	}
+	registerCommandAliases("setlanguage", cmd("setlanguage"))
+
 	// Admin commands (not registered as slash commands in Node.js)
 	RegisterCommand(&Command{
 		Name:        "forceskip",
@@ -603,73 +649,104 @@ func InitializeCommands() {
 	})
 	registerCommandAliases("help", cmd("help"))
 
-	logger.Info("[Commands] All commands registered")
+	logger.Debug("[Commands] All commands registered")
 }
 
-// RegisterSlashCommands registers slash commands with Discord
+// RegisterSlashCommands syncs slash commands with Discord. It deep-compares
+// the desired set against what Discord currently has and only issues a write
+// when something actually changed; in that case it pushes the full set in a
+// single atomic ApplicationCommandBulkOverwrite call.
 func RegisterSlashCommands(session *discordgo.Session) error {
-	logger.Info("[Commands] Registering slash commands with Discord...")
+	logger.Info("[Commands] Syncing slash commands with Discord...")
 
-	// Get existing commands
-	existing, err := session.ApplicationCommands(session.State.User.ID, "")
+	appID := session.State.User.ID
+
+	desired := make([]*discordgo.ApplicationCommand, 0, len(commands))
+	for _, cmd := range commands {
+		if cmd.TextOnly {
+			logger.Debugf("[Commands] Skipping text-only command from slash registration: %s", cmd.Name)
+			continue
+		}
+		desired = append(desired, &discordgo.ApplicationCommand{
+			Name:        cmd.Name,
+			Description: cmd.Description,
+			Options:     cmd.Options,
+		})
+	}
+
+	existing, err := session.ApplicationCommands(appID, "")
 	if err != nil {
 		return fmt.Errorf("failed to get existing commands: %w", err)
 	}
 
-	// Create a map of existing commands
-	existingMap := make(map[string]*discordgo.ApplicationCommand)
-	for _, cmd := range existing {
-		existingMap[cmd.Name] = cmd
+	desiredJSON, err := canonicalCommandMap(desired)
+	if err != nil {
+		return fmt.Errorf("failed to canonicalize desired commands: %w", err)
+	}
+	existingJSON, err := canonicalCommandMap(existing)
+	if err != nil {
+		return fmt.Errorf("failed to canonicalize existing commands: %w", err)
 	}
 
-	// Register new commands
-	for name, cmd := range commands {
-		// Skip text-only commands from slash registration
-		if cmd.TextOnly {
-			logger.Debugf("[Commands] Skipping text-only command from slash registration: %s", name)
-			continue
-		}
-
-		appCmd := &discordgo.ApplicationCommand{
-			Name:        cmd.Name,
-			Description: cmd.Description,
-			Options:     cmd.Options,
-		}
-
-		// Check if command already exists
-		if existing, ok := existingMap[name]; ok {
-			// Update if changed
-			if existing.Description != cmd.Description {
-				_, err := session.ApplicationCommandEdit(session.State.User.ID, "", existing.ID, appCmd)
-				if err != nil {
-					logger.Errorf("[Commands] Failed to update command %s: %v", name, err)
-				} else {
-					logger.Infof("[Commands] Updated command: %s", name)
-				}
-			}
-			delete(existingMap, name)
-		} else {
-			// Create new command
-			_, err := session.ApplicationCommandCreate(session.State.User.ID, "", appCmd)
-			if err != nil {
-				logger.Errorf("[Commands] Failed to create command %s: %v", name, err)
-			} else {
-				logger.Infof("[Commands] Created command: %s", name)
-			}
-		}
+	added, updated, removed := diffCommandSets(desiredJSON, existingJSON)
+	if len(added) == 0 && len(updated) == 0 && len(removed) == 0 {
+		logger.Info("[Commands] Slash commands already in sync, skipping registration")
+		return nil
 	}
 
-	// Remove old commands that no longer exist
-	for name, cmd := range existingMap {
-		if err := session.ApplicationCommandDelete(session.State.User.ID, "", cmd.ID); err != nil {
-			logger.Errorf("[Commands] Failed to delete old command %s: %v", name, err)
-		} else {
-			logger.Infof("[Commands] Deleted old command: %s", name)
-		}
+	logger.Infof("[Commands] Slash command changes detected — added: %v, updated: %v, removed: %v", added, updated, removed)
+
+	if _, err := session.ApplicationCommandBulkOverwrite(appID, "", desired); err != nil {
+		return fmt.Errorf("failed to bulk overwrite slash commands: %w", err)
 	}
 
 	logger.Info("[Commands] Slash commands registered successfully")
 	return nil
+}
+
+// canonicalCommandMap builds a name→canonical-JSON map of a command set,
+// keeping only the fields that define a command's shape so server-assigned
+// fields (ID, ApplicationID, Version, GuildID, …) don't cause false diffs.
+func canonicalCommandMap(cmds []*discordgo.ApplicationCommand) (map[string]string, error) {
+	out := make(map[string]string, len(cmds))
+	for _, cmd := range cmds {
+		opts := cmd.Options
+		if opts == nil {
+			opts = []*discordgo.ApplicationCommandOption{}
+		}
+		shape := struct {
+			Name        string                                `json:"name"`
+			Description string                                `json:"description"`
+			Options     []*discordgo.ApplicationCommandOption `json:"options"`
+		}{cmd.Name, cmd.Description, opts}
+		buf, err := json.Marshal(shape)
+		if err != nil {
+			return nil, fmt.Errorf("marshal command %q: %w", cmd.Name, err)
+		}
+		out[cmd.Name] = string(buf)
+	}
+	return out, nil
+}
+
+// diffCommandSets returns the names added (in desired, not existing),
+// updated (in both but with different shape), and removed (in existing,
+// not desired). Used only for log clarity — control flow keys off whether
+// any of the three slices is non-empty.
+func diffCommandSets(desired, existing map[string]string) (added, updated, removed []string) {
+	for name, want := range desired {
+		got, ok := existing[name]
+		if !ok {
+			added = append(added, name)
+		} else if got != want {
+			updated = append(updated, name)
+		}
+	}
+	for name := range existing {
+		if _, ok := desired[name]; !ok {
+			removed = append(removed, name)
+		}
+	}
+	return added, updated, removed
 }
 
 // HandleInteraction handles slash command interactions
@@ -682,25 +759,25 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	cmd, exists := commands[cmdName]
 	if !exists {
 		logger.Warnf("[Commands] Unknown command: %s", cmdName)
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, messages.T().Errors.UnknownCommand))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.UnknownCommand))
 		return
 	}
 
 	// Check admin permission (bot admin or server admin)
 	if cmd.AdminOnly {
 		if !config.IsAdmin(i.Member.User.ID) && !isGuildAdmin(s, i.GuildID, i.Member) {
-			RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleNoPermission, messages.ErrorAdminOnly))
+			RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.NoPermission, messages.T(i.GuildID).Errors.AdminOnly))
 			return
 		}
 	}
 
-	logger.Infof("[Commands] Executing command: %s (user: %s, guild: %s)",
+	logger.Debugf("[Commands] Executing command: %s (user: %s, guild: %s)",
 		cmdName, i.Member.User.Username, i.GuildID)
 
 	// Execute command
 	if err := cmd.Handler(s, i); err != nil {
 		logger.Errorf("[Commands] Command %s failed: %v", cmdName, err)
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.TitleError, fmt.Sprintf(messages.T().Errors.CommandExecutionError, err)))
+		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, fmt.Sprintf(messages.T(i.GuildID).Errors.CommandExecutionError, err)))
 	}
 }
 
@@ -756,7 +833,7 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		isServerAdmin := (err == nil) && isGuildAdmin(s, m.GuildID, member)
 
 		if !isBotAdmin && !isServerAdmin {
-			embed := messages.CreateErrorEmbed(messages.TitleNoPermission, messages.ErrorAdminOnly)
+			embed := messages.CreateErrorEmbed(messages.T(m.GuildID).Titles.NoPermission, messages.T(m.GuildID).Errors.AdminOnly)
 			// Send error as reply to original message
 			s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
 				Embeds: []*discordgo.MessageEmbed{embed},
@@ -769,7 +846,7 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 	}
 
-	logger.Infof("[Commands] Executing text command: %s (user: %s, guild: %s)",
+	logger.Debugf("[Commands] Executing text command: %s (user: %s, guild: %s)",
 		cmdName, m.Author.Username, m.GuildID)
 
 	// Parse args (everything after command name)
@@ -795,7 +872,7 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		logger.Errorf("[Commands] Text command %s failed: %v", cmdName, err)
 		// Only send error message if no message was already sent by the command handler
 		if messageResponder.Message == nil {
-			embed := messages.CreateErrorEmbed(messages.TitleError, fmt.Sprintf(messages.T().Errors.CommandExecutionError, err))
+			embed := messages.CreateErrorEmbed(messages.T(m.GuildID).Titles.Error, fmt.Sprintf(messages.T(m.GuildID).Errors.CommandExecutionError, err))
 			// Send error as reply to original message
 			s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
 				Embeds: []*discordgo.MessageEmbed{embed},
@@ -893,8 +970,8 @@ func DeferResponse(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		if mr, ok := messageResponders.Load(i.Token); ok {
 			loadingEmbed := &discordgo.MessageEmbed{
 				Color:       0xFFA500, // Orange color
-				Title:       messages.TitleLoading,
-				Description: messages.DescLoading,
+				Title:       messages.T(i.GuildID).Titles.Loading,
+				Description: messages.T(i.GuildID).Descriptions.Loading,
 			}
 			mr.(*MessageResponse).SendEmbed(loadingEmbed)
 		}
@@ -1007,7 +1084,7 @@ func checkUserInBotVoiceChannel(s *discordgo.Session, i *discordgo.InteractionCr
 	// Check if user is in a voice channel
 	voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
 	if err != nil || voiceState.ChannelID == "" {
-		return "", messages.CreateErrorEmbed(messages.TitleError, messages.ErrorNotInVoiceChannel)
+		return "", messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.NotInVoiceChannel)
 	}
 
 	// Get the queue to find bot's current voice channel
@@ -1019,8 +1096,23 @@ func checkUserInBotVoiceChannel(s *discordgo.Session, i *discordgo.InteractionCr
 
 	// Check if user is in the same voice channel as the bot
 	if voiceState.ChannelID != q.VoiceChannelID {
-		return "", messages.CreateErrorEmbed(messages.TitleError, messages.T().Errors.MustBeInBotChannel)
+		return "", messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.MustBeInBotChannel)
 	}
 
 	return voiceState.ChannelID, nil
+}
+
+// buildLanguageChoices returns slash-command choices for every locale file
+// found on disk. Discord caps choices at 25 — well above the number of
+// locales we ship.
+func buildLanguageChoices() []*discordgo.ApplicationCommandOptionChoice {
+	codes := messages.AvailableLocales()
+	choices := make([]*discordgo.ApplicationCommandOptionChoice, 0, len(codes))
+	for _, code := range codes {
+		choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+			Name:  code,
+			Value: code,
+		})
+	}
+	return choices
 }

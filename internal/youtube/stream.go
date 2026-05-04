@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"sync"
 	"sync/atomic"
@@ -151,13 +152,20 @@ func GetStreamPipe(url string, sponsorBlock bool, bitrate int, seekTime int) (*S
 		seekSeconds := float64(seekTime) / 1000.0
 		downloadSection := fmt.Sprintf("*%.1f-inf", seekSeconds)
 		args = append(args, "--download-sections", downloadSection)
-		logger.Infof("[StreamPipe] Seeking to %.1fs using --download-sections %s", seekSeconds, downloadSection)
+		logger.Debugf("[StreamPipe] Seeking to %.1fs using --download-sections %s", seekSeconds, downloadSection)
 	}
 
 	args = append(args, url)
 
+	binaryPath := ytdlpUpdater.GetBinaryPath()
+	if _, err := os.Stat(binaryPath); err != nil {
+		cancel()
+		logger.Errorf("[StreamPipe] yt-dlp binary missing at %s: %v", binaryPath, err)
+		return nil, fmt.Errorf("yt-dlp binary unavailable; the updater will retry in the background")
+	}
+
 	// Create command
-	cmd := exec.CommandContext(ctx, ytdlpUpdater.GetBinaryPath(), args...)
+	cmd := exec.CommandContext(ctx, binaryPath, args...)
 
 	// Get stdout pipe
 	stdout, err := cmd.StdoutPipe()
@@ -212,7 +220,7 @@ func GetStreamPipe(url string, sponsorBlock bool, bitrate int, seekTime int) (*S
 		}
 	}()
 
-	logger.Infof("[StreamPipe] Started yt-dlp streaming process for: %s", url)
+	logger.Debugf("[StreamPipe] Started yt-dlp streaming process for: %s", url)
 
 	// Record success in circuit breaker (process started successfully)
 	ytCircuitBreaker.recordSuccess()
