@@ -9,10 +9,10 @@ A feature-rich & high-quality audio Discord music bot written in Go.
 - **SponsorBlock**
 - **Live Stream Support**
 - **Queue Management** — move, swap, skip-to, remove by range
-- **Per-Guild Settings** — volume, repeat, prefix, normalization
-- **Auto-Pause** when voice channel empties
+- **Per-Guild Settings** — volume, repeat, normalization, language, SponsorBlock
+- **Auto-Pause** when voice channel empties, **auto-resume** when a song is added back to a paused queue
 - **Slash Commands & Prefix Commands**
-- **Multi-Language Support**
+- **Multi-Language Support** (per-server, with `/setlanguage`)
 - **Admin Commands**
 - **Hot-Reload Config**
 - **Smart yt-dlp updater**
@@ -68,8 +68,8 @@ make build
 
 | Field | Default | Description |
 |---|---|---|
-| `prefix` | `!` | Command prefix for text commands |
-| `language` | `en` | Bot language (`en`, `ko`) |
+| `prefix` | `!` | Command prefix for text commands (global; can be changed at runtime via `setprefix`) |
+| `language` | `en` | Default bot language (`en`, `ko`); each server can override with `setlanguage` |
 | `show_started_track` | `true` | Show "Now Playing" messages |
 | `default_volume` | `100` | Default volume (0-1000) |
 | `precache_strategy` | `1` | 0=None, 1=Full memory |
@@ -86,9 +86,11 @@ make build
 
 ### Language
 
-Set `"language"` in `config/config.json` to change the bot's display language:
+`"language"` in `config/config.json` sets the bot-wide default:
 - `"en"` — English (default)
 - `"ko"` — Korean
+
+Each server can override this with the `setlanguage <code>` text command (admin only). Run `setlanguage` with no argument to see the current language; pass an empty value to clear the override and fall back to the default.
 
 Locale files are in `locales/`. Missing translations automatically fall back to English.
 
@@ -139,15 +141,17 @@ To add a new language, create `locales/<code>.json` using `locales/en.json` as a
 
 ### Admin Only
 
+Admin commands are **text-only** (prefix commands, not slash commands). Invoke them with the configured prefix, e.g. `!setprefix #`.
+
 | Command | Aliases | Description |
 |---|---|---|
-| `/setprefix <prefix>` | `prefix` | Change the command prefix |
-| `/setlanguage [code]` | `setlang`, `language`, `lang` | Set server language (`en`, `ko`); no argument shows the current language |
-| `/forceskip` | `fs` | Skip without voting |
-| `/forceremove <target>` | `fr` | Remove a user's songs |
-| `/forcestop` | `fstop` | Force stop and clear queue |
-| `/movetrack <from> <to>` | `mt` | Move a song to a new position |
-| `/status` | | Show system info |
+| `setprefix <prefix>` | `prefix` | Change the command prefix |
+| `setlanguage [code]` | `setlang`, `language`, `lang` | Set server language (`en`, `ko`); no argument shows the current language |
+| `forceskip` | `fs` | Skip without voting |
+| `forceremove <target>` | `fr` | Remove a user's songs |
+| `forcestop` | `fstop` | Force stop and clear queue |
+| `movetrack <from> <to>` | `mt` | Move a song to a new position |
+| `status` | | Show system info |
 
 ### Help
 
@@ -166,10 +170,13 @@ NoraeGaori/
 │   ├── config/         Config loading with hot-reload
 │   ├── database/       SQLite
 │   ├── messages/       Locale system and embed helpers
-│   ├── player/         Audio streaming and voice
+│   ├── player/         Audio streaming and voice (libopus via dlopen, WASM fallback)
 │   ├── queue/          Queue management with caching
 │   ├── rpc/            Discord Rich Presence
-│   └── youtube/        yt-dlp and InnerTube integration
+│   ├── shutdown/       Graceful shutdown coordination
+│   ├── worker/         Background worker pools
+│   ├── youtube/        InnerTube integration
+│   └── ytdlp/          yt-dlp version management and updater
 ├── locales/            Language files (ko.json, en.json)
 ├── config/             Runtime config (gitignored, see *.example.json)
 ├── pkg/logger/         Logging
