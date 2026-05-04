@@ -246,8 +246,6 @@ type SettingsMessages struct {
 	NormalizationDesc     string `json:"normalization_desc"`
 	NormalizationWhatTitle string `json:"normalization_what_title"`
 	NormalizationWhatDesc  string `json:"normalization_what_desc"`
-	CurrentPrefixTitle    string `json:"current_prefix_title"`
-	CurrentPrefixDesc     string `json:"current_prefix_desc"`
 	PrefixEmpty           string `json:"prefix_empty"`
 	PrefixTooLong         string `json:"prefix_too_long"`
 	PrefixError           string `json:"prefix_error"`

@@ -258,31 +258,18 @@ func HandleSetLanguage(s *discordgo.Session, i *discordgo.InteractionCreate) err
 	return nil
 }
 
-// HandleSetPrefix handles the setprefix command
+// HandleSetPrefix handles the setprefix command. No argument (or an empty
+// argument) clears the per-guild override and reverts to the default prefix.
 func HandleSetPrefix(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	options := i.ApplicationCommandData().Options
 
 	defaultPrefix := config.GetConfig().Prefix
 	t := messages.T(i.GuildID)
 
-	if len(options) == 0 {
-		current, err := queue.GetGuildPrefix(i.GuildID)
-		if err != nil {
-			logger.Errorf("[SetPrefix] Failed to get current prefix: %v", err)
-		}
-		display := current
-		if display == "" {
-			display = defaultPrefix + " (default)"
-		}
-		embed := messages.CreateInfoEmbed(
-			t.Settings.CurrentPrefixTitle,
-			fmt.Sprintf(t.Settings.CurrentPrefixDesc, display, defaultPrefix, defaultPrefix),
-		)
-		RespondEmbed(s, i, embed)
-		return nil
+	requested := ""
+	if len(options) > 0 {
+		requested = strings.TrimSpace(options[0].StringValue())
 	}
-
-	requested := strings.TrimSpace(options[0].StringValue())
 
 	if requested == "" {
 		if err := queue.SetGuildPrefix(i.GuildID, ""); err != nil {

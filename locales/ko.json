@@ -392,8 +392,6 @@
     "normalization_desc": "음량 정규화가 **%s**으로 설정되었습니다.",
     "normalization_what_title": "설명",
     "normalization_what_desc": "모든 노래의 음량을 일정하게 유지하여 노래마다 볼륨을 조절할 필요가 없습니다.",
-    "current_prefix_title": "서버 접두사",
-    "current_prefix_desc": "현재 접두사: **%s**\n기본값: **%s**\n\n사용법: `/setprefix <새접두사>` 또는 `%ssetprefix <새접두사>` (인자 없이 호출하면 초기화됩니다)",
     "prefix_empty": "접두사는 비워둘 수 없습니다.",
     "prefix_too_long": "접두사는 5자 이하여야 합니다.",
     "prefix_error": "접두사 설정 중 오류가 발생했습니다: %v",

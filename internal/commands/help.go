@@ -9,6 +9,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/config"
 	"noraegaori/internal/messages"
+	"noraegaori/internal/queue"
 	"noraegaori/pkg/logger"
 )
 
@@ -31,9 +32,15 @@ func HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		page = int(options[0].IntValue())
 	}
 
-	// Get current prefix
-	cfg := config.GetConfig()
-	prefix := cfg.Prefix
+	// Get current prefix (per-guild override falls back to global default).
+	prefix := config.GetConfig().Prefix
+	if i.GuildID != "" {
+		if guildPrefix, err := queue.GetGuildPrefix(i.GuildID); err != nil {
+			logger.Debugf("[Help] failed to get guild prefix for %s: %v", i.GuildID, err)
+		} else if guildPrefix != "" {
+			prefix = guildPrefix
+		}
+	}
 
 	// Get all commands
 	commandList := getAllCommands(i.GuildID)

@@ -1,3 +1,1 @@
 - [ ] Overall codebase structure maintenance & refactoring if needed
-- [ ] Apply per-guild prefix to help command
-- [ ] Calling setprefix without parameter does not reset to default prefix
