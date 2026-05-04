@@ -393,7 +393,7 @@
     "normalization_what_title": "Description",
     "normalization_what_desc": "Keeps the volume consistent across all songs so you don't need to adjust it for each song.",
     "current_prefix_title": "Server Prefix",
-    "current_prefix_desc": "Current prefix: **%s**\nDefault: **%s**\n\nUsage: `/setprefix <new prefix>` or `%ssetprefix <new prefix>` (pass nothing to reset).",
+    "current_prefix_desc": "Current prefix: **%s**\nDefault: **%s**\n\nUsage: `/setprefix <new prefix>` or `%ssetprefix <new prefix>` (pass nothing to reset)",
     "prefix_empty": "The prefix cannot be empty.",
     "prefix_too_long": "The prefix must be 5 characters or less.",
     "prefix_error": "An error occurred while setting the prefix: %v",
@@ -409,7 +409,7 @@
     "language_reset_title": "Language Reset",
     "language_reset_desc": "This server now uses the bot-wide default language (**%s**).",
     "language_current_title": "Server Language",
-    "language_current_desc": "Current language: **%s**\nDefault: **%s**\nAvailable: %s\n\nUsage: `/setlanguage <code>` (or pass nothing to reset).",
+    "language_current_desc": "Current language: **%s**\nDefault: **%s**\nAvailable: %s\n\nUsage: `/setlanguage <code>` (or pass nothing to reset)",
     "language_save_failed": "Failed to save language: %v"
   },
 
