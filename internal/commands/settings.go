@@ -321,11 +321,6 @@ func HandleSetPrefix(s *discordgo.Session, i *discordgo.InteractionCreate) error
 				Value:  fmt.Sprintf(t.Settings.PrefixExampleValue, requested, requested, requested),
 				Inline: false,
 			},
-			{
-				Name:   t.Settings.NoteTitle,
-				Value:  t.Settings.PrefixSlashNote,
-				Inline: false,
-			},
 		},
 	}
 

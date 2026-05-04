@@ -401,7 +401,6 @@
     "prefix_changed_desc": "This server's prefix has been changed to **%s**.",
     "prefix_example_title": "Usage Example",
     "prefix_example_value": "`%splay song title`\n`%squeue`\n`%shelp`",
-    "prefix_slash_note": "Slash commands (`/play`) are not affected by prefix changes.",
     "prefix_reset_title": "Prefix Reset",
     "prefix_reset_desc": "This server now uses the bot-wide default prefix (**%s**).",
     "language_unknown": "Unknown language code: **%s**. Available: %s",
