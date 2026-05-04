@@ -282,6 +282,10 @@ var (
 	// Per-guild locks for operations
 	locks    = make(map[string]*sync.Mutex)
 	locksMux sync.Mutex
+
+	prefixCache       = make(map[string]string)
+	prefixCacheLoaded = make(map[string]bool)
+	prefixCacheMux    sync.RWMutex
 )
 
 // acquireLock gets or creates a mutex for a guild
@@ -511,6 +515,7 @@ func DeleteGuildData(guildID string) error {
 
 	// Invalidate cache
 	InvalidateCache(guildID)
+	invalidatePrefixCache(guildID)
 	logger.Infof("[DeleteGuildData] All data deleted for guild: %s", guildID)
 	return nil
 }
@@ -1276,6 +1281,78 @@ func SetGuildLanguage(guildID, lang string) error {
 
 	InvalidateCache(guildID)
 	logger.Debugf("[SetGuildLanguage] Set language=%q for guild: %s", lang, guildID)
+	return nil
+}
+
+func invalidatePrefixCache(guildID string) {
+	prefixCacheMux.Lock()
+	defer prefixCacheMux.Unlock()
+	delete(prefixCache, guildID)
+	delete(prefixCacheLoaded, guildID)
+}
+
+func GetGuildPrefix(guildID string) (string, error) {
+	if guildID == "" {
+		return "", nil
+	}
+
+	prefixCacheMux.RLock()
+	if prefixCacheLoaded[guildID] {
+		val := prefixCache[guildID]
+		prefixCacheMux.RUnlock()
+		return val, nil
+	}
+	prefixCacheMux.RUnlock()
+
+	var prefix sql.NullString
+	err := database.DB.QueryRow(
+		`SELECT prefix FROM guild_settings WHERE guild_id = ?`,
+		guildID,
+	).Scan(&prefix)
+
+	value := ""
+	if err == nil && prefix.Valid {
+		value = prefix.String
+	} else if err != nil && err != sql.ErrNoRows {
+		return "", fmt.Errorf("failed to get guild prefix: %w", err)
+	}
+
+	prefixCacheMux.Lock()
+	prefixCache[guildID] = value
+	prefixCacheLoaded[guildID] = true
+	prefixCacheMux.Unlock()
+
+	return value, nil
+}
+
+func SetGuildPrefix(guildID, prefix string) error {
+	lock := acquireLock(guildID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	var prefixValue interface{}
+	if prefix == "" {
+		prefixValue = nil
+	} else {
+		prefixValue = prefix
+	}
+
+	_, err := database.DB.Exec(
+		`INSERT INTO guild_settings (guild_id, prefix) VALUES (?, ?)
+		 ON CONFLICT(guild_id) DO UPDATE SET prefix = ?`,
+		guildID, prefixValue, prefixValue,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to set guild prefix: %w", err)
+	}
+
+	prefixCacheMux.Lock()
+	prefixCache[guildID] = prefix
+	prefixCacheLoaded[guildID] = true
+	prefixCacheMux.Unlock()
+
+	InvalidateCache(guildID)
+	logger.Debugf("[SetGuildPrefix] Set prefix=%q for guild: %s", prefix, guildID)
 	return nil
 }
 

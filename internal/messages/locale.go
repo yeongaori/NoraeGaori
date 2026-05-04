@@ -256,6 +256,8 @@ type SettingsMessages struct {
 	PrefixExampleTitle    string `json:"prefix_example_title"`
 	PrefixExampleValue    string `json:"prefix_example_value"`
 	PrefixSlashNote       string `json:"prefix_slash_note"`
+	PrefixResetTitle      string `json:"prefix_reset_title"`
+	PrefixResetDesc       string `json:"prefix_reset_desc"`
 	LanguageUnknown       string `json:"language_unknown"`
 	LanguageChangedTitle  string `json:"language_changed_title"`
 	LanguageChangedDesc   string `json:"language_changed_desc"`

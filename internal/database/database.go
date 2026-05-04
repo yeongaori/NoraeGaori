@@ -128,6 +128,7 @@ func runMigrations() error {
 		{"queues", "playing", "INTEGER DEFAULT 0"},
 		{"queues", "loading", "INTEGER DEFAULT 0"},
 		{"guild_settings", "language", "TEXT"},
+		{"guild_settings", "prefix", "TEXT"},
 	}
 
 	for _, m := range migrations {

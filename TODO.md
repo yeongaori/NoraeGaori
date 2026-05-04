@@ -1,2 +1,1 @@
 - [ ] Overall codebase structure maintenance & refactoring if needed
-- [ ] Per-guild command prefix

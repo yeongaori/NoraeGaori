@@ -68,7 +68,7 @@ make build
 
 | Field | Default | Description |
 |---|---|---|
-| `prefix` | `!` | Command prefix for text commands (global; can be changed at runtime via `setprefix`) |
+| `prefix` | `!` | Default command prefix for text commands; each server can override with `setprefix` |
 | `language` | `en` | Default bot language (`en`, `ko`); each server can override with `setlanguage` |
 | `show_started_track` | `true` | Show "Now Playing" messages |
 | `default_volume` | `100` | Default volume (0-1000) |
@@ -141,11 +141,11 @@ To add a new language, create `locales/<code>.json` using `locales/en.json` as a
 
 ### Admin Only
 
-Admin commands are **text-only** (prefix commands, not slash commands). Invoke them with the configured prefix, e.g. `!setprefix #`.
+Admin commands are **text-only** (prefix commands, not slash commands). Invoke them with the configured prefix — the server's override if set, otherwise the global default — e.g. `!setprefix #`.
 
 | Command | Aliases | Description |
 |---|---|---|
-| `setprefix <prefix>` | `prefix` | Change the command prefix |
+| `setprefix [prefix]` | `prefix` | Change this server's command prefix (no argument shows current; empty argument resets to default) |
 | `setlanguage [code]` | `setlang`, `language`, `lang` | Set server language (`en`, `ko`); no argument shows the current language |
 | `forceskip` | `fs` | Skip without voting |
 | `forceremove <target>` | `fr` | Remove a user's songs |

@@ -262,52 +262,68 @@ func HandleSetLanguage(s *discordgo.Session, i *discordgo.InteractionCreate) err
 func HandleSetPrefix(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	options := i.ApplicationCommandData().Options
 
+	defaultPrefix := config.GetConfig().Prefix
+	t := messages.T(i.GuildID)
+
 	if len(options) == 0 {
-		// Show current prefix
-		cfg := config.GetConfig()
+		current, err := queue.GetGuildPrefix(i.GuildID)
+		if err != nil {
+			logger.Errorf("[SetPrefix] Failed to get current prefix: %v", err)
+		}
+		display := current
+		if display == "" {
+			display = defaultPrefix + " (default)"
+		}
 		embed := messages.CreateInfoEmbed(
-			messages.T(i.GuildID).Settings.CurrentPrefixTitle,
-			fmt.Sprintf(messages.T(i.GuildID).Settings.CurrentPrefixDesc, cfg.Prefix, cfg.Prefix),
+			t.Settings.CurrentPrefixTitle,
+			fmt.Sprintf(t.Settings.CurrentPrefixDesc, display, defaultPrefix, defaultPrefix),
 		)
 		RespondEmbed(s, i, embed)
 		return nil
 	}
 
-	newPrefix := options[0].StringValue()
+	requested := strings.TrimSpace(options[0].StringValue())
 
-	// Validate prefix
-	if len(newPrefix) == 0 {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
-			messages.T(i.GuildID).Settings.PrefixEmpty))
+	if requested == "" {
+		if err := queue.SetGuildPrefix(i.GuildID, ""); err != nil {
+			RespondEmbed(s, i, messages.CreateErrorEmbed(t.Titles.Error,
+				fmt.Sprintf(t.Settings.PrefixError, err)))
+			return err
+		}
+		embed := &discordgo.MessageEmbed{
+			Color:       messages.ColorSuccess,
+			Title:       t.Settings.PrefixResetTitle,
+			Description: fmt.Sprintf(t.Settings.PrefixResetDesc, defaultPrefix),
+		}
+		RespondEmbed(s, i, embed)
 		return nil
 	}
 
-	if len(newPrefix) > 5 {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
-			messages.T(i.GuildID).Settings.PrefixTooLong))
+	if len(requested) > 5 {
+		RespondEmbed(s, i, messages.CreateErrorEmbed(t.Titles.Error,
+			t.Settings.PrefixTooLong))
 		return nil
 	}
 
-	// Update prefix
-	if err := config.SetPrefix(newPrefix); err != nil {
-		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
-			fmt.Sprintf(messages.T(i.GuildID).Settings.PrefixError, err)))
+	if err := queue.SetGuildPrefix(i.GuildID, requested); err != nil {
+		RespondEmbed(s, i, messages.CreateErrorEmbed(t.Titles.Error,
+			fmt.Sprintf(t.Settings.PrefixError, err)))
 		return err
 	}
 
 	embed := &discordgo.MessageEmbed{
 		Color:       messages.ColorSuccess,
-		Title:       messages.T(i.GuildID).Settings.PrefixChangedTitle,
-		Description: fmt.Sprintf(messages.T(i.GuildID).Settings.PrefixChangedDesc, newPrefix),
+		Title:       t.Settings.PrefixChangedTitle,
+		Description: fmt.Sprintf(t.Settings.PrefixChangedDesc, requested),
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:   messages.T(i.GuildID).Settings.PrefixExampleTitle,
-				Value:  fmt.Sprintf(messages.T(i.GuildID).Settings.PrefixExampleValue, newPrefix, newPrefix, newPrefix),
+				Name:   t.Settings.PrefixExampleTitle,
+				Value:  fmt.Sprintf(t.Settings.PrefixExampleValue, requested, requested, requested),
 				Inline: false,
 			},
 			{
-				Name:   messages.T(i.GuildID).Settings.NoteTitle,
-				Value:  messages.T(i.GuildID).Settings.PrefixSlashNote,
+				Name:   t.Settings.NoteTitle,
+				Value:  t.Settings.PrefixSlashNote,
 				Inline: false,
 			},
 		},
