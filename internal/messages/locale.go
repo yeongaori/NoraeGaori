@@ -246,8 +246,6 @@ type SettingsMessages struct {
 	NormalizationDesc     string `json:"normalization_desc"`
 	NormalizationWhatTitle string `json:"normalization_what_title"`
 	NormalizationWhatDesc  string `json:"normalization_what_desc"`
-	CurrentPrefixTitle    string `json:"current_prefix_title"`
-	CurrentPrefixDesc     string `json:"current_prefix_desc"`
 	PrefixEmpty           string `json:"prefix_empty"`
 	PrefixTooLong         string `json:"prefix_too_long"`
 	PrefixError           string `json:"prefix_error"`
@@ -255,7 +253,8 @@ type SettingsMessages struct {
 	PrefixChangedDesc     string `json:"prefix_changed_desc"`
 	PrefixExampleTitle    string `json:"prefix_example_title"`
 	PrefixExampleValue    string `json:"prefix_example_value"`
-	PrefixSlashNote       string `json:"prefix_slash_note"`
+	PrefixResetTitle      string `json:"prefix_reset_title"`
+	PrefixResetDesc       string `json:"prefix_reset_desc"`
 	LanguageUnknown       string `json:"language_unknown"`
 	LanguageChangedTitle  string `json:"language_changed_title"`
 	LanguageChangedDesc   string `json:"language_changed_desc"`

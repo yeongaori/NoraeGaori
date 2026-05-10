@@ -790,6 +790,13 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	cfg := config.GetConfig()
 	prefix := cfg.Prefix
+	if m.GuildID != "" {
+		if guildPrefix, err := queue.GetGuildPrefix(m.GuildID); err != nil {
+			logger.Debugf("[HandleMessage] failed to get guild prefix for %s: %v", m.GuildID, err)
+		} else if guildPrefix != "" {
+			prefix = guildPrefix
+		}
+	}
 
 	// Check if message starts with prefix
 	if !strings.HasPrefix(m.Content, prefix) {
