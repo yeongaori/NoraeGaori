@@ -78,7 +78,6 @@ func createQueueButtons(guildID string, page, totalPages int) []discordgo.Messag
 	}
 }
 
-// handleQueueButtons listens for prev/next button presses for 5 minutes, then strips buttons.
 func handleQueueButtons(s *discordgo.Session, i *discordgo.InteractionCreate, originalMsg *discordgo.Message, guildID string, totalPages, perPage int) {
 	timeout := time.After(5 * time.Minute)
 	currentPage := 1
@@ -99,7 +98,7 @@ func handleQueueButtons(s *discordgo.Session, i *discordgo.InteractionCreate, or
 			return
 		}
 
-		// Filter to events on the embed we sent.
+		
 		if originalMsgID != "" && (ic.Message == nil || ic.Message.ID != originalMsgID) {
 			return
 		}

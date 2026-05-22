@@ -12,7 +12,6 @@ import (
 	"noraegaori/pkg/logger"
 )
 
-// HandleSetLanguage sets, clears, or shows the per-guild language override.
 func HandleSetLanguage(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	options := i.ApplicationCommandData().Options
 
@@ -48,7 +47,7 @@ func HandleSetLanguage(s *discordgo.Session, i *discordgo.InteractionCreate) err
 				fmt.Sprintf(t.Settings.LanguageSaveFailed, err)))
 			return err
 		}
-		// Re-resolve T so the response renders in the newly active language.
+		
 		t = messages.T(i.GuildID)
 		embed := &discordgo.MessageEmbed{
 			Color:       messages.ColorSuccess,
@@ -79,7 +78,7 @@ func HandleSetLanguage(s *discordgo.Session, i *discordgo.InteractionCreate) err
 		return err
 	}
 
-	// Re-resolve T so the response renders in the newly active language.
+	
 	t = messages.T(i.GuildID)
 	embed := &discordgo.MessageEmbed{
 		Color:       messages.ColorSuccess,

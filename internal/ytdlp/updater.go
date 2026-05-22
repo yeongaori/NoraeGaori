@@ -26,7 +26,6 @@ const (
 	fallbackReleaseFetch = 15
 )
 
-// GitHubRelease represents a GitHub release
 type GitHubRelease struct {
 	TagName     string `json:"tag_name"`
 	PublishedAt string `json:"published_at"`
@@ -37,7 +36,6 @@ type GitHubRelease struct {
 	} `json:"assets"`
 }
 
-// GetLegacyBinaryPath returns the old-style platform-specific yt-dlp binary path
 func GetLegacyBinaryPath() string {
 	binaryName := "yt-dlp"
 	if runtime.GOOS == "windows" {
@@ -46,9 +44,6 @@ func GetLegacyBinaryPath() string {
 	return filepath.Join("lib", binaryName)
 }
 
-// GetBinaryPath returns the path to the yt-dlp binary.
-// If the VersionManager is initialized, delegates to it.
-// Otherwise falls back to the legacy flat path.
 func GetBinaryPath() string {
 	if versionmanager := GetVersionManager(); versionmanager != nil {
 		return versionmanager.ActiveBinaryPath()
@@ -56,7 +51,6 @@ func GetBinaryPath() string {
 	return GetLegacyBinaryPath()
 }
 
-// VersionedBinaryPath returns the path for a specific yt-dlp version
 func VersionedBinaryPath(version string) string {
 	binaryName := "yt-dlp"
 	if runtime.GOOS == "windows" {
@@ -65,7 +59,6 @@ func VersionedBinaryPath(version string) string {
 	return filepath.Join("lib", fmt.Sprintf("yt-dlp-%s", version), binaryName)
 }
 
-// GetCurrentVersion returns the currently installed yt-dlp version
 func GetCurrentVersion() (string, error) {
 	binaryPath := GetBinaryPath()
 	if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
@@ -81,7 +74,6 @@ func GetCurrentVersion() (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
-// GetLatestRelease fetches the latest release information from GitHub
 func GetLatestRelease() (*GitHubRelease, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
 	req, err := http.NewRequest("GET", githubAPIURL, nil)
@@ -109,7 +101,6 @@ func GetLatestRelease() (*GitHubRelease, error) {
 	return &release, nil
 }
 
-// GetReleases fetches up to perPage most recent releases from GitHub, newest first.
 func GetReleases(perPage int) ([]*GitHubRelease, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
 	url := fmt.Sprintf("%s?per_page=%d", githubReleasesURL, perPage)
@@ -138,7 +129,6 @@ func GetReleases(perPage int) ([]*GitHubRelease, error) {
 	return releases, nil
 }
 
-// GetDownloadURL determines the appropriate download URL based on platform and architecture
 func GetDownloadURL(release *GitHubRelease) (string, error) {
 	var assetName string
 
@@ -171,7 +161,6 @@ func GetDownloadURL(release *GitHubRelease) (string, error) {
 	return "", fmt.Errorf("asset not found: %s", assetName)
 }
 
-// DownloadFile downloads a file from the specified URL to the destination
 func DownloadFile(url, destination string) error {
 	logger.Debugf("[yt-dlp] Starting download from: %s", url)
 
@@ -186,19 +175,19 @@ func DownloadFile(url, destination string) error {
 		return fmt.Errorf("download returned status: %d", resp.StatusCode)
 	}
 
-	// Create destination file
+	
 	out, err := os.Create(destination)
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
 	defer out.Close()
 
-	// Download with progress logging
+	
 	totalSize := resp.ContentLength
 	downloaded := int64(0)
 	lastProgress := 0
 
-	// Throttle to 256 KB/s to avoid interfering with audio streaming
+	
 	const downloadRateLimit = 256 * 1024
 	buffer := make([]byte, 16*1024)
 	chunkDelay := time.Duration(float64(len(buffer)) / float64(downloadRateLimit) * float64(time.Second))
@@ -233,15 +222,12 @@ func DownloadFile(url, destination string) error {
 	return nil
 }
 
-// UpdateYtDlp downloads a new yt-dlp version to a versioned directory.
-// If VersionManager is active, registers the version and runs canary.
-// Returns (updated bool, error).
 func UpdateYtDlp(force bool) (bool, error) {
 	logger.Debug("[yt-dlp] Checking for updates...")
 
 	versionmanager := GetVersionManager()
 
-	// Check current version
+	
 	var currentVersion string
 	if versionmanager != nil {
 		currentVersion = versionmanager.GetActiveVersion()
@@ -255,7 +241,7 @@ func UpdateYtDlp(force bool) (bool, error) {
 		}
 	}
 
-	// Fetch latest release info
+	
 	release, err := GetLatestRelease()
 	if err != nil {
 		return false, fmt.Errorf("failed to fetch release info: %w", err)
@@ -263,13 +249,13 @@ func UpdateYtDlp(force bool) (bool, error) {
 
 	latestVersion := release.TagName
 
-	// Compare versions
+	
 	if !force && currentVersion == latestVersion {
 		logger.Debugf("[yt-dlp] Already up to date (%s)", currentVersion)
 		return false, nil
 	}
 
-	// Check if this version is already registered (blacklisted or otherwise)
+	
 	if versionmanager != nil {
 		if state, ok := versionmanager.GetVersionState(latestVersion); ok {
 			if state == StateBlacklisted {
@@ -284,7 +270,7 @@ func UpdateYtDlp(force bool) (bool, error) {
 				logger.Debugf("[yt-dlp] Version %s already registered as %s", latestVersion, state)
 				return false, nil
 			}
-			// StatePending: binary already on disk, just re-run canary
+			
 			binaryPath := VersionedBinaryPath(latestVersion)
 			if _, statErr := os.Stat(binaryPath); statErr == nil {
 				passed, networkErr := versionmanager.RunCanary(latestVersion)
@@ -302,7 +288,7 @@ func UpdateYtDlp(force bool) (bool, error) {
 				logger.Infof("[yt-dlp] Version %s verified by canary and activated", latestVersion)
 				return true, nil
 			}
-			// Binary missing despite pending state, re-download below
+			
 		}
 	}
 
@@ -314,37 +300,37 @@ func UpdateYtDlp(force bool) (bool, error) {
 		logger.Infof("[yt-dlp] Installing version %s", latestVersion)
 	}
 
-	// Determine download URL
+	
 	downloadURL, err := GetDownloadURL(release)
 	if err != nil {
 		return false, err
 	}
 
-	// Use versioned path
+	
 	binaryPath := VersionedBinaryPath(latestVersion)
 	versionDir := filepath.Dir(binaryPath)
 
-	// Create version directory
+	
 	if err := os.MkdirAll(versionDir, 0755); err != nil {
 		return false, fmt.Errorf("failed to create version directory: %w", err)
 	}
 
-	// Download new version
+	
 	logger.Debug("[yt-dlp] Downloading new version...")
 	if err := DownloadFile(downloadURL, binaryPath); err != nil {
-		// Clean up failed download directory
+		
 		os.RemoveAll(versionDir)
 		return false, err
 	}
 
-	// Set executable permissions
+	
 	if runtime.GOOS != "windows" {
 		if err := os.Chmod(binaryPath, 0755); err != nil {
 			logger.Warnf("[yt-dlp] Failed to set permissions: %v", err)
 		}
 	}
 
-	// Verify basic installation (--version check)
+	
 	cmd := exec.Command(binaryPath, "--version")
 	output, err := cmd.Output()
 	if err != nil {
@@ -354,7 +340,7 @@ func UpdateYtDlp(force bool) (bool, error) {
 	actualVersion := strings.TrimSpace(string(output))
 	logger.Infof("[yt-dlp] Downloaded version: %s", actualVersion)
 
-	// Register with VersionManager and run canary
+	
 	if versionmanager != nil {
 		versionmanager.RegisterVersion(latestVersion, binaryPath)
 
@@ -373,17 +359,13 @@ func UpdateYtDlp(force bool) (bool, error) {
 		versionmanager.SetActiveVersion(latestVersion)
 		logger.Infof("[yt-dlp] Version %s verified by canary and activated", latestVersion)
 	} else {
-		// No VersionManager (shouldn't happen in normal flow), legacy behavior
+		
 		logger.Infof("[yt-dlp] Update complete! Version: %s", actualVersion)
 	}
 
 	return true, nil
 }
 
-// installFallbackVersion tries previous yt-dlp releases until one passes
-// canary or the retry budget is exhausted. If the budget is exhausted, falls
-// back to installing the latest (blacklisted) version as a last resort so the
-// bot has some binary to run on.
 func installFallbackVersion(versionmanager *VersionManager, latestVersion string, latestRelease *GitHubRelease) (bool, error) {
 	releases, err := GetReleases(fallbackReleaseFetch)
 	if err != nil {
@@ -468,11 +450,11 @@ func installFallbackVersion(versionmanager *VersionManager, latestVersion string
 		return true, nil
 	}
 
-	// Last resort: provisionally activate the latest version so the bot has a
-	// binary. Canary couldn't validate any candidate, but a music bot is
-	// useless without yt-dlp. Real-traffic SaveError handles correctness from
-	// here; subsequent boots skip the blacklist gate (state=Provisional, not
-	// Blacklisted) so we don't re-run this whole sequence on every restart.
+	
+	
+	
+	
+	
 	logger.Warnf("[yt-dlp] All fallback attempts failed canary; provisionally activating latest %s as last resort", latestVersion)
 
 	downloadURL, err := GetDownloadURL(latestRelease)
@@ -507,8 +489,6 @@ func installFallbackVersion(versionmanager *VersionManager, latestVersion string
 	return true, nil
 }
 
-// StartBackgroundUpdater runs a background goroutine that checks for yt-dlp updates
-// at regular intervals. Stops when ctx is cancelled.
 func StartBackgroundUpdater(ctx context.Context) {
 	go func() {
 		logger.Info("[yt-dlp] Background updater started")
@@ -526,7 +506,7 @@ func StartBackgroundUpdater(ctx context.Context) {
 					continue
 				}
 
-				// Respect minimum interval (prevent rapid checks on restarts)
+				
 				if time.Since(versionmanager.GetLastGitHubCheck()) < minCheckInterval {
 					logger.Debugf("[yt-dlp] Skipping check, last check was %s ago", time.Since(versionmanager.GetLastGitHubCheck()).Round(time.Minute))
 					continue
@@ -546,25 +526,23 @@ func StartBackgroundUpdater(ctx context.Context) {
 	}()
 }
 
-// MigrateFromLegacyLayout detects the old flat lib/yt-dlp layout and migrates
-// to a versioned directory. Called once from main() on startup.
 func MigrateFromLegacyLayout() error {
 	versionmanager := GetVersionManager()
 	if versionmanager == nil {
 		return nil
 	}
 
-	// If there's already an active version, no migration needed
+	
 	if versionmanager.GetActiveVersion() != "" {
 		return nil
 	}
 
 	legacyPath := GetLegacyBinaryPath()
 	if _, err := os.Stat(legacyPath); os.IsNotExist(err) {
-		return nil // No legacy binary, nothing to migrate
+		return nil 
 	}
 
-	// Get version of legacy binary
+	
 	cmd := exec.Command(legacyPath, "--version")
 	output, err := cmd.Output()
 	if err != nil {
@@ -572,42 +550,40 @@ func MigrateFromLegacyLayout() error {
 	}
 	version := strings.TrimSpace(string(output))
 
-	// Create versioned directory
+	
 	newPath := VersionedBinaryPath(version)
 	newDir := filepath.Dir(newPath)
 	if err := os.MkdirAll(newDir, 0755); err != nil {
 		return fmt.Errorf("failed to create version directory: %w", err)
 	}
 
-	// Move binary
+	
 	if err := os.Rename(legacyPath, newPath); err != nil {
-		// If rename fails (cross-device), fall back to copy+delete
+		
 		if cpErr := copyFile(legacyPath, newPath); cpErr != nil {
 			return fmt.Errorf("failed to migrate binary: %w", cpErr)
 		}
 		os.Remove(legacyPath)
 	}
 
-	// Set executable permissions
+	
 	if runtime.GOOS != "windows" {
 		os.Chmod(newPath, 0755)
 	}
 
-	// Register and activate
+	
 	versionmanager.RegisterVersion(version, newPath)
 	versionmanager.SetActiveVersion(version)
 
-	// Seed with 1 success (it was working before migration)
+	
 	versionmanager.SaveSuccess(version, "")
 
 	logger.Infof("[yt-dlp] Migrated legacy binary to versioned layout: %s -> %s", legacyPath, newPath)
 	return nil
 }
 
-// AutoUpdate performs an initial update check on startup.
-// After migration, checks for new versions and runs canary.
 func AutoUpdate() {
-	// Migrate from legacy layout if needed
+	
 	if err := MigrateFromLegacyLayout(); err != nil {
 		logger.Warnf("[yt-dlp] Migration failed: %v", err)
 	}
@@ -620,7 +596,7 @@ func AutoUpdate() {
 		logger.Info("[yt-dlp] Auto-update completed successfully")
 	}
 
-	// Update check timestamp
+	
 	if versionmanager := GetVersionManager(); versionmanager != nil {
 		versionmanager.SetLastGitHubCheck(time.Now())
 	}
@@ -628,7 +604,6 @@ func AutoUpdate() {
 
 var jsRuntime string
 
-// DetectJsRuntime checks for node (incl. nvm) → deno → bun, logs warnings
 func DetectJsRuntime() {
 	if _, err := exec.LookPath("node"); err == nil {
 		jsRuntime = "node"
@@ -651,7 +626,6 @@ func DetectJsRuntime() {
 	logger.Warn("[yt-dlp] Node.js not found, using no JS runtime")
 }
 
-// tryNvm finds node under ~/.nvm and prepends its bin dir to PATH
 func tryNvm() bool {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -667,12 +641,10 @@ func tryNvm() bool {
 	return true
 }
 
-// GetJsRuntime returns the detected runtime ("node", "deno", "bun", or "")
 func GetJsRuntime() string {
 	return jsRuntime
 }
 
-// copyFile copies a file from src to dst
 func copyFile(src, dst string) error {
 	sourceFile, err := os.Open(src)
 	if err != nil {

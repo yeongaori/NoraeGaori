@@ -18,7 +18,7 @@ func HandleResume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return nil
 	}
 
-	// Force refresh — cached state may lag the database.
+	
 	q, err := queue.GetQueue(i.GuildID, true)
 	if err != nil || q == nil || len(q.Songs) == 0 {
 		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.NoSongsToResume))
@@ -48,7 +48,7 @@ func HandleResume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 	currentSong := q.Songs[0]
 
-	// Live streams can end while paused; verify before reconnecting.
+	
 	if currentSong.IsLive {
 		logger.Debugf("[Resume] Current song is a live stream, checking if it's still live")
 
@@ -66,7 +66,7 @@ func HandleResume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		isStillLive, err := youtube.CheckIfLive(currentSong.URL)
 		if err != nil {
 			logger.Warnf("[Resume] Error checking live stream status: %v", err)
-			// proceed anyway — better to try than to block resume
+			
 		} else if !isStillLive {
 			logger.Infof("[Resume] Live stream has ended, skipping to next song")
 
@@ -104,8 +104,8 @@ func HandleResume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return nil
 	}
 
-	// Seeking far into a song takes time; show a loading embed so the user isn't left waiting.
-	const seekLoadingThreshold = 120000 // 2 minutes in ms
+	
+	const seekLoadingThreshold = 120000 
 	if currentSong.SeekTime > seekLoadingThreshold {
 		DeferResponse(s, i)
 

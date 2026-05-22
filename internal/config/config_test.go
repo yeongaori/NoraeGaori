@@ -67,8 +67,8 @@ func TestSetPrefix(t *testing.T) {
 		{"Valid special char", "?", false},
 		{"Valid dot", ".", false},
 		{"Valid arrow", ">", false},
-		{"Empty prefix", "", false}, // Should be handled by command validation
-		{"Long prefix", "verylongprefix", false}, // Should be handled by command validation
+		{"Empty prefix", "", false}, 
+		{"Long prefix", "verylongprefix", false}, 
 	}
 
 	for _, tc := range testCases {
@@ -95,7 +95,7 @@ func TestIsAdmin(t *testing.T) {
 	setupTestConfig(t)
 	defer teardownTestConfig(t)
 
-	// Create admins config
+	
 	adminsConf = &AdminsConfig{
 		Admins: []string{"admin1", "admin2", "admin3"},
 	}
@@ -159,7 +159,7 @@ func TestConcurrentConfigAccess(t *testing.T) {
 
 	done := make(chan bool)
 
-	// Concurrent reads
+	
 	for i := 0; i < 10; i++ {
 		go func() {
 			cfg := GetConfig()
@@ -170,7 +170,7 @@ func TestConcurrentConfigAccess(t *testing.T) {
 		}()
 	}
 
-	// Concurrent writes
+	
 	for i := 0; i < 10; i++ {
 		go func(idx int) {
 			SetPrefix("!")
@@ -178,7 +178,7 @@ func TestConcurrentConfigAccess(t *testing.T) {
 		}(i)
 	}
 
-	// Wait for all goroutines
+	
 	for i := 0; i < 20; i++ {
 		<-done
 	}
@@ -188,27 +188,27 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	setupTestConfig(t)
 	defer teardownTestConfig(t)
 
-	// Create initial config
+	
 	config = &Config{
 		Prefix:           "?",
 		ShowStartedTrack: false,
 		DefaultVolume:    75,
 	}
 
-	// Save config
+	
 	if err := saveConfig(config); err != nil {
 		t.Fatalf("Failed to save config: %v", err)
 	}
 
-	// Reset config
+	
 	config = nil
 
-	// Load config
+	
 	if err := loadConfig(); err != nil {
 		t.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Verify loaded values
+	
 	if config.Prefix != "?" {
 		t.Errorf("Expected prefix ?, got %s", config.Prefix)
 	}

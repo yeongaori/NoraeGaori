@@ -15,28 +15,25 @@ import (
 	"noraegaori/pkg/logger"
 )
 
-// SongState represents the current state of a song
 type SongState int
 
 const (
-	SongStateQueued SongState = iota // Song is waiting in queue
-	SongStateLoading                 // Song is being loaded
-	SongStatePlaying                 // Song is currently playing
-	SongStatePaused                  // Song is paused
-	SongStateFailed                  // Song failed to play
-	SongStateCompleted               // Song finished successfully
+	SongStateQueued SongState = iota 
+	SongStateLoading                 
+	SongStatePlaying                 
+	SongStatePaused                  
+	SongStateFailed                  
+	SongStateCompleted               
 )
 
-// Repeat modes
 const (
-	RepeatOff    = 0 // No repeat
-	RepeatAll    = 1 // Repeat entire queue
-	RepeatSingle = 2 // Repeat current song
+	RepeatOff    = 0 
+	RepeatAll    = 1 
+	RepeatSingle = 2 
 )
 
-// Song represents a song with all integrated state management
 type Song struct {
-	// Basic metadata (stored in database)
+	
 	ID             int
 	GuildID        string
 	URL            string
@@ -46,24 +43,23 @@ type Song struct {
 	RequestedByID  string
 	RequestedByTag string
 	QueuePosition  int
-	SeekTime       int    // Playback position in milliseconds
+	SeekTime       int    
 	Uploader       string
 	IsLive         bool
 
-	// Runtime state (not persisted to database)
-	State           SongState              // Current playback state
-	RetryCount      int                    // Number of retry attempts
-	LastError       error                  // Last error encountered
-	LoadingMessage  *discordgo.Message     // Loading message for this song
-	PreCacheData    []byte                 // Pre-cached audio data
-	PreCacheCancel  context.CancelFunc     // Cancel function for pre-cache
-	PlaybackStarted time.Time              // When playback started
-	AddedAt         time.Time              // When added to queue
-	StateChangedAt  time.Time              // Last state change timestamp
-	mu              sync.RWMutex           // Mutex for thread-safe state access
+	
+	State           SongState              
+	RetryCount      int                    
+	LastError       error                  
+	LoadingMessage  *discordgo.Message     
+	PreCacheData    []byte                 
+	PreCacheCancel  context.CancelFunc     
+	PlaybackStarted time.Time              
+	AddedAt         time.Time              
+	StateChangedAt  time.Time              
+	mu              sync.RWMutex           
 }
 
-// SetState safely updates the song state
 func (s *Song) SetState(state SongState) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -72,14 +68,12 @@ func (s *Song) SetState(state SongState) {
 	logger.Debugf("[Song] %s state changed to %s", s.Title, s.getStateName())
 }
 
-// GetState safely retrieves the song state
 func (s *Song) GetState() SongState {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.State
 }
 
-// IncrementRetry safely increments retry count and returns new count
 func (s *Song) IncrementRetry() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -87,21 +81,18 @@ func (s *Song) IncrementRetry() int {
 	return s.RetryCount
 }
 
-// GetRetryCount safely retrieves retry count
 func (s *Song) GetRetryCount() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.RetryCount
 }
 
-// ResetRetry safely resets retry count to 0
 func (s *Song) ResetRetry() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.RetryCount = 0
 }
 
-// SetError safely sets the last error
 func (s *Song) SetError(err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -111,35 +102,30 @@ func (s *Song) SetError(err error) {
 	}
 }
 
-// GetError safely retrieves the last error
 func (s *Song) GetError() error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.LastError
 }
 
-// SetLoadingMessage safely sets the loading message
 func (s *Song) SetLoadingMessage(msg *discordgo.Message) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.LoadingMessage = msg
 }
 
-// GetLoadingMessage safely retrieves the loading message
 func (s *Song) GetLoadingMessage() *discordgo.Message {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.LoadingMessage
 }
 
-// ClearLoadingMessage safely clears the loading message
 func (s *Song) ClearLoadingMessage() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.LoadingMessage = nil
 }
 
-// SetPreCache safely sets pre-cached data
 func (s *Song) SetPreCache(data []byte, cancel context.CancelFunc) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -148,14 +134,12 @@ func (s *Song) SetPreCache(data []byte, cancel context.CancelFunc) {
 	logger.Debugf("[Song] Pre-cache set for %s (%d bytes)", s.Title, len(data))
 }
 
-// GetPreCache safely retrieves pre-cached data
 func (s *Song) GetPreCache() ([]byte, context.CancelFunc) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.PreCacheData, s.PreCacheCancel
 }
 
-// ClearPreCache safely clears pre-cached data and cancels pre-caching
 func (s *Song) ClearPreCache() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -167,7 +151,6 @@ func (s *Song) ClearPreCache() {
 	logger.Debugf("[Song] Pre-cache cleared for %s", s.Title)
 }
 
-// UpdatePlaybackPosition updates seek time based on elapsed time
 func (s *Song) UpdatePlaybackPosition() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -178,7 +161,6 @@ func (s *Song) UpdatePlaybackPosition() int {
 	return s.SeekTime
 }
 
-// StartPlayback marks the song as playing and records start time
 func (s *Song) StartPlayback() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -188,7 +170,6 @@ func (s *Song) StartPlayback() {
 	logger.Debugf("[Song] Started playback: %s", s.Title)
 }
 
-// PausePlayback updates seek time and marks as paused
 func (s *Song) PausePlayback() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -201,7 +182,6 @@ func (s *Song) PausePlayback() {
 	logger.Debugf("[Song] Paused at %dms: %s", s.SeekTime, s.Title)
 }
 
-// getStateName returns human-readable state name
 func (s *Song) getStateName() string {
 	switch s.State {
 	case SongStateQueued:
@@ -221,7 +201,6 @@ func (s *Song) getStateName() string {
 	}
 }
 
-// Clone creates a deep copy of the song (for safe concurrent access)
 func (s *Song) Clone() *Song {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -245,13 +224,12 @@ func (s *Song) Clone() *Song {
 		StateChangedAt: s.StateChangedAt,
 	}
 
-	// Note: Don't clone runtime resources like messages, cache data, or cancel functions
-	// Those should be managed by the original song instance
+	
+	
 
 	return clone
 }
 
-// Queue represents a guild's music queue
 type Queue struct {
 	GuildID          string
 	TextChannelID    string
@@ -267,19 +245,18 @@ type Queue struct {
 	Loading          bool
 }
 
-// Cache for active queues
 type queueCache struct {
 	queue     *Queue
 	timestamp time.Time
 }
 
 var (
-	// In-memory cache with 30s TTL
+	
 	cache    = make(map[string]*queueCache)
 	cacheMux sync.RWMutex
 	cacheTTL = 30 * time.Second
 
-	// Per-guild locks for operations
+	
 	locks    = make(map[string]*sync.Mutex)
 	locksMux sync.Mutex
 
@@ -288,7 +265,6 @@ var (
 	prefixCacheMux    sync.RWMutex
 )
 
-// acquireLock gets or creates a mutex for a guild
 func acquireLock(guildID string) *sync.Mutex {
 	locksMux.Lock()
 	defer locksMux.Unlock()
@@ -299,13 +275,12 @@ func acquireLock(guildID string) *sync.Mutex {
 	return locks[guildID]
 }
 
-// GetQueue retrieves a queue from cache or database
 func GetQueue(guildID string, forceRefresh bool) (*Queue, error) {
 	lock := acquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
-	// Check cache
+	
 	if !forceRefresh {
 		cacheMux.RLock()
 		cached, exists := cache[guildID]
@@ -317,7 +292,7 @@ func GetQueue(guildID string, forceRefresh bool) (*Queue, error) {
 		}
 	}
 
-	// Fetch from database
+	
 	queue, err := loadQueueFromDB(guildID)
 	if err != nil {
 		return nil, err
@@ -327,7 +302,7 @@ func GetQueue(guildID string, forceRefresh bool) (*Queue, error) {
 		return nil, nil
 	}
 
-	// Update cache
+	
 	cacheMux.Lock()
 	cache[guildID] = &queueCache{
 		queue:     queue,
@@ -339,9 +314,8 @@ func GetQueue(guildID string, forceRefresh bool) (*Queue, error) {
 	return queue, nil
 }
 
-// loadQueueFromDB loads a queue from the database
 func loadQueueFromDB(guildID string) (*Queue, error) {
-	// Get queue metadata
+	
 	var textChannelID, voiceChannelID string
 	var paused, playing, loading int
 
@@ -359,7 +333,7 @@ func loadQueueFromDB(guildID string) (*Queue, error) {
 		return nil, fmt.Errorf("failed to query queue: %w", err)
 	}
 
-	// Get guild settings
+	
 	var volume float64
 	var repeat, sponsorblock, showStartedTrack, normalization int
 	err = database.DB.QueryRow(
@@ -369,12 +343,12 @@ func loadQueueFromDB(guildID string) (*Queue, error) {
 	).Scan(&volume, &repeat, &sponsorblock, &showStartedTrack, &normalization)
 
 	if err == sql.ErrNoRows {
-		// Use defaults
+		
 		cfg := config.GetConfig()
 		if cfg != nil {
 			volume = cfg.DefaultVolume
 		} else {
-			volume = 100 // fallback default
+			volume = 100 
 		}
 		repeat = 0
 		sponsorblock = 0
@@ -388,7 +362,7 @@ func loadQueueFromDB(guildID string) (*Queue, error) {
 			guildID, volume, repeat == 1, sponsorblock == 1, normalization == 1)
 	}
 
-	// Get songs
+	
 	rows, err := database.DB.Query(
 		`SELECT id, guild_id, url, title, duration, thumbnail, requested_by_id,
 		 requested_by_tag, queue_position, seek_time, uploader, is_live
@@ -434,13 +408,12 @@ func loadQueueFromDB(guildID string) (*Queue, error) {
 	return queue, nil
 }
 
-// CreateQueue creates a new queue in the database
 func CreateQueue(guildID, textChannelID, voiceChannelID string) error {
 	lock := acquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
-	// Delete old queue if exists
+	
 	_, err := database.DB.Exec(`DELETE FROM songs WHERE guild_id = ?`, guildID)
 	if err != nil {
 		return fmt.Errorf("failed to delete old songs: %w", err)
@@ -451,7 +424,7 @@ func CreateQueue(guildID, textChannelID, voiceChannelID string) error {
 		return fmt.Errorf("failed to delete old queue: %w", err)
 	}
 
-	// Create new queue
+	
 	_, err = database.DB.Exec(
 		`INSERT INTO queues (guild_id, text_channel_id, voice_channel_id) VALUES (?, ?, ?)`,
 		guildID, textChannelID, voiceChannelID,
@@ -460,13 +433,12 @@ func CreateQueue(guildID, textChannelID, voiceChannelID string) error {
 		return fmt.Errorf("failed to create queue: %w", err)
 	}
 
-	// Invalidate cache
+	
 	InvalidateCache(guildID)
 	logger.Debugf("[CreateQueue] Queue created for guild: %s", guildID)
 	return nil
 }
 
-// DeleteQueue deletes a queue and all its songs
 func DeleteQueue(guildID string) error {
 	lock := acquireLock(guildID)
 	lock.Lock()
@@ -482,46 +454,42 @@ func DeleteQueue(guildID string) error {
 		return fmt.Errorf("failed to delete queue: %w", err)
 	}
 
-	// Invalidate cache
+	
 	InvalidateCache(guildID)
 	logger.Debugf("[DeleteQueue] Queue deleted for guild: %s", guildID)
 	return nil
 }
 
-// DeleteGuildData deletes all data for a guild (queue, songs, and settings)
-// This should be called when the bot leaves or is removed from a guild
 func DeleteGuildData(guildID string) error {
 	lock := acquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
-	// Delete songs
+	
 	_, err := database.DB.Exec(`DELETE FROM songs WHERE guild_id = ?`, guildID)
 	if err != nil {
 		return fmt.Errorf("failed to delete songs: %w", err)
 	}
 
-	// Delete queue
+	
 	_, err = database.DB.Exec(`DELETE FROM queues WHERE guild_id = ?`, guildID)
 	if err != nil {
 		return fmt.Errorf("failed to delete queue: %w", err)
 	}
 
-	// Delete guild settings
+	
 	_, err = database.DB.Exec(`DELETE FROM guild_settings WHERE guild_id = ?`, guildID)
 	if err != nil {
 		return fmt.Errorf("failed to delete guild settings: %w", err)
 	}
 
-	// Invalidate cache
+	
 	InvalidateCache(guildID)
 	invalidatePrefixCache(guildID)
 	logger.Infof("[DeleteGuildData] All data deleted for guild: %s", guildID)
 	return nil
 }
 
-// AddSongsBatch adds multiple songs to the queue in a single batch operation
-// This is much more efficient than calling AddSong multiple times for playlists
 func AddSongsBatch(guildID string, songs []*Song, position int) error {
 	if len(songs) == 0 {
 		return nil
@@ -531,7 +499,7 @@ func AddSongsBatch(guildID string, songs []*Song, position int) error {
 	lock.Lock()
 	defer lock.Unlock()
 
-	// Check if queue exists
+	
 	var queueExists int
 	err := database.DB.QueryRow(`SELECT 1 FROM queues WHERE guild_id = ? LIMIT 1`, guildID).Scan(&queueExists)
 	if err == sql.ErrNoRows {
@@ -540,19 +508,19 @@ func AddSongsBatch(guildID string, songs []*Song, position int) error {
 		return fmt.Errorf("failed to check queue existence: %w", err)
 	}
 
-	// Get current queue length
+	
 	var count int
 	err = database.DB.QueryRow(`SELECT COUNT(*) FROM songs WHERE guild_id = ?`, guildID).Scan(&count)
 	if err != nil {
 		return fmt.Errorf("failed to count songs: %w", err)
 	}
 
-	// Determine position
+	
 	if position == -1 || position > count {
 		position = count
 	}
 
-	// Make space for new songs
+	
 	if position < count {
 		_, err = database.DB.Exec(
 			`UPDATE songs SET queue_position = queue_position + ?
@@ -564,9 +532,9 @@ func AddSongsBatch(guildID string, songs []*Song, position int) error {
 		}
 	}
 
-	// Build batch INSERT query
-	// SQLite supports up to 999 parameters per query, each song has 10 parameters
-	// So we can insert up to 99 songs per batch (990 parameters)
+	
+	
+	
 	const maxSongsPerBatch = 99
 
 	for batchStart := 0; batchStart < len(songs); batchStart += maxSongsPerBatch {
@@ -576,7 +544,7 @@ func AddSongsBatch(guildID string, songs []*Song, position int) error {
 		}
 		batch := songs[batchStart:batchEnd]
 
-		// Build query with placeholders
+		
 		query := `INSERT INTO songs (guild_id, url, title, duration, thumbnail, requested_by_id,
 			requested_by_tag, queue_position, uploader, is_live) VALUES `
 
@@ -598,26 +566,25 @@ func AddSongsBatch(guildID string, songs []*Song, position int) error {
 			)
 		}
 
-		// Execute batch insert
+		
 		_, err = database.DB.Exec(query, values...)
 		if err != nil {
 			return fmt.Errorf("failed to batch insert songs (batch %d): %w", batchStart/maxSongsPerBatch+1, err)
 		}
 	}
 
-	// Invalidate cache
+	
 	InvalidateCache(guildID)
 	logger.Debugf("[AddSongsBatch] Added %d songs starting at position %d for guild: %s", len(songs), position, guildID)
 	return nil
 }
 
-// AddSong adds a song to the queue
 func AddSong(guildID string, song *Song, position int) error {
 	lock := acquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
-	// Check if queue exists
+	
 	var queueExists int
 	err := database.DB.QueryRow(`SELECT 1 FROM queues WHERE guild_id = ? LIMIT 1`, guildID).Scan(&queueExists)
 	if err == sql.ErrNoRows {
@@ -626,29 +593,29 @@ func AddSong(guildID string, song *Song, position int) error {
 		return fmt.Errorf("failed to check queue existence: %w", err)
 	}
 
-	// Check for duplicate URL
+	
 	var existingID int
 	err = database.DB.QueryRow(`SELECT id FROM songs WHERE guild_id = ? AND url = ? LIMIT 1`, guildID, song.URL).Scan(&existingID)
 	if err == nil {
-		// Song already exists
+		
 		return fmt.Errorf("song already in queue: %s", song.Title)
 	} else if err != sql.ErrNoRows {
 		return fmt.Errorf("failed to check for duplicate: %w", err)
 	}
 
-	// Get current queue length
+	
 	var count int
 	err = database.DB.QueryRow(`SELECT COUNT(*) FROM songs WHERE guild_id = ?`, guildID).Scan(&count)
 	if err != nil {
 		return fmt.Errorf("failed to count songs: %w", err)
 	}
 
-	// Determine position
+	
 	if position == -1 || position > count {
 		position = count
 	}
 
-	// Make space for new song
+	
 	if position < count {
 		_, err = database.DB.Exec(
 			`UPDATE songs SET queue_position = queue_position + 1
@@ -660,7 +627,7 @@ func AddSong(guildID string, song *Song, position int) error {
 		}
 	}
 
-	// Insert song
+	
 	isLiveInt := 0
 	if song.IsLive {
 		isLiveInt = 1
@@ -677,13 +644,12 @@ func AddSong(guildID string, song *Song, position int) error {
 		return fmt.Errorf("failed to insert song: %w", err)
 	}
 
-	// Invalidate cache
+	
 	InvalidateCache(guildID)
 	logger.Debugf("[AddSong] Added song '%s' at position %d for guild: %s", song.Title, position, guildID)
 	return nil
 }
 
-// UpdateSongSeekTime updates the seek time for a song (used for crash recovery)
 func UpdateSongSeekTime(guildID string, songID int, seekTime int) error {
 	lock := acquireLock(guildID)
 	lock.Lock()
@@ -697,26 +663,25 @@ func UpdateSongSeekTime(guildID string, songID int, seekTime int) error {
 		return fmt.Errorf("failed to update seek time: %w", err)
 	}
 
-	// Invalidate cache
+	
 	InvalidateCache(guildID)
 	logger.Debugf("[UpdateSongSeekTime] Updated seek time to %dms for song %d in guild: %s", seekTime, songID, guildID)
 	return nil
 }
 
-// RemoveFirstSong removes the first song from the queue
 func RemoveFirstSong(guildID string) error {
 	lock := acquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
-	// Begin transaction for atomic delete + reorder
+	
 	tx, err := database.DB.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback() // Rollback if not committed
+	defer tx.Rollback() 
 
-	// Get first song ID
+	
 	var songID int
 	err = tx.QueryRow(
 		`SELECT id FROM songs WHERE guild_id = ? ORDER BY queue_position ASC LIMIT 1`,
@@ -724,19 +689,19 @@ func RemoveFirstSong(guildID string) error {
 	).Scan(&songID)
 
 	if err == sql.ErrNoRows {
-		return nil // No songs to remove
+		return nil 
 	}
 	if err != nil {
 		return fmt.Errorf("failed to get first song: %w", err)
 	}
 
-	// Delete first song
+	
 	_, err = tx.Exec(`DELETE FROM songs WHERE id = ?`, songID)
 	if err != nil {
 		return fmt.Errorf("failed to delete song: %w", err)
 	}
 
-	// Update positions
+	
 	_, err = tx.Exec(
 		`UPDATE songs SET queue_position = queue_position - 1 WHERE guild_id = ?`,
 		guildID,
@@ -745,31 +710,30 @@ func RemoveFirstSong(guildID string) error {
 		return fmt.Errorf("failed to update positions: %w", err)
 	}
 
-	// Commit transaction
+	
 	if err = tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	// Invalidate cache
+	
 	InvalidateCache(guildID)
 	logger.Debugf("[RemoveFirstSong] Removed first song for guild: %s", guildID)
 	return nil
 }
 
-// RemoveSong removes a song at a specific position
 func RemoveSong(guildID string, position int) error {
 	lock := acquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
-	// Begin transaction for atomic delete + reorder
+	
 	tx, err := database.DB.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 
-	// Get song ID at position
+	
 	var songID int
 	err = tx.QueryRow(
 		`SELECT id FROM songs WHERE guild_id = ? AND queue_position = ?`,
@@ -780,13 +744,13 @@ func RemoveSong(guildID string, position int) error {
 		return fmt.Errorf("failed to find song at position %d: %w", position, err)
 	}
 
-	// Delete song
+	
 	_, err = tx.Exec(`DELETE FROM songs WHERE id = ?`, songID)
 	if err != nil {
 		return fmt.Errorf("failed to delete song: %w", err)
 	}
 
-	// Update positions
+	
 	_, err = tx.Exec(
 		`UPDATE songs SET queue_position = queue_position - 1
 		 WHERE guild_id = ? AND queue_position > ?`,
@@ -796,31 +760,30 @@ func RemoveSong(guildID string, position int) error {
 		return fmt.Errorf("failed to update positions: %w", err)
 	}
 
-	// Commit transaction
+	
 	if err = tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	// Invalidate cache
+	
 	InvalidateCache(guildID)
 	logger.Debugf("[RemoveSong] Removed song at position %d for guild: %s", position, guildID)
 	return nil
 }
 
-// SkipToPosition removes all songs before targetIndex, making the song at targetIndex the new first song
 func SkipToPosition(guildID string, targetIndex int) error {
 	lock := acquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
-	// Begin transaction for atomic delete + reorder
+	
 	tx, err := database.DB.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 
-	// Get all songs before target position
+	
 	rows, err := tx.Query(
 		`SELECT id FROM songs WHERE guild_id = ? AND queue_position < ? ORDER BY queue_position ASC`,
 		guildID, targetIndex,
@@ -841,10 +804,10 @@ func SkipToPosition(guildID string, targetIndex int) error {
 	rows.Close()
 
 	if len(songIDs) == 0 {
-		return nil // Nothing to skip
+		return nil 
 	}
 
-	// Delete songs before target
+	
 	placeholders := make([]string, len(songIDs))
 	args := make([]interface{}, len(songIDs))
 	for i, id := range songIDs {
@@ -858,23 +821,22 @@ func SkipToPosition(guildID string, targetIndex int) error {
 		return fmt.Errorf("failed to delete songs: %w", err)
 	}
 
-	// Reorder remaining songs starting from 0
+	
 	if err := reorderSongsAfterRemovalTx(tx, guildID); err != nil {
 		return fmt.Errorf("failed to reorder songs: %w", err)
 	}
 
-	// Commit transaction
+	
 	if err = tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	// Invalidate cache
+	
 	InvalidateCache(guildID)
 	logger.Debugf("[SkipToPosition] Skipped to position %d for guild: %s", targetIndex, guildID)
 	return nil
 }
 
-// RemoveSongsByIDs removes multiple songs by their IDs
 func RemoveSongsByIDs(guildID string, songIDs []int) error {
 	if len(songIDs) == 0 {
 		return nil
@@ -884,14 +846,14 @@ func RemoveSongsByIDs(guildID string, songIDs []int) error {
 	lock.Lock()
 	defer lock.Unlock()
 
-	// Begin transaction for atomic delete + reorder
+	
 	tx, err := database.DB.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 
-	// Build placeholders for SQL IN clause
+	
 	placeholders := make([]string, len(songIDs))
 	args := make([]interface{}, len(songIDs)+1)
 	args[0] = guildID
@@ -911,25 +873,24 @@ func RemoveSongsByIDs(guildID string, songIDs []int) error {
 
 	rowsAffected, _ := result.RowsAffected()
 
-	// Reorder remaining songs
+	
 	if err := reorderSongsAfterRemovalTx(tx, guildID); err != nil {
 		return fmt.Errorf("failed to reorder songs: %w", err)
 	}
 
-	// Commit transaction
+	
 	if err = tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	// Invalidate cache
+	
 	InvalidateCache(guildID)
 	logger.Debugf("[RemoveSongsByIDs] Removed %d songs for guild: %s", rowsAffected, guildID)
 	return nil
 }
 
-// reorderSongsAfterRemoval fixes queue positions after bulk removal
 func reorderSongsAfterRemoval(guildID string) error {
-	// Get all remaining songs ordered by position
+	
 	rows, err := database.DB.Query(
 		`SELECT id FROM songs WHERE guild_id = ? ORDER BY queue_position ASC`,
 		guildID,
@@ -948,7 +909,7 @@ func reorderSongsAfterRemoval(guildID string) error {
 		songIDs = append(songIDs, id)
 	}
 
-	// Update positions sequentially
+	
 	for i, id := range songIDs {
 		_, err := database.DB.Exec(
 			`UPDATE songs SET queue_position = ? WHERE id = ?`,
@@ -962,9 +923,8 @@ func reorderSongsAfterRemoval(guildID string) error {
 	return nil
 }
 
-// reorderSongsAfterRemovalTx fixes queue positions after bulk removal within a transaction
 func reorderSongsAfterRemovalTx(tx *sql.Tx, guildID string) error {
-	// Get all remaining songs ordered by position
+	
 	rows, err := tx.Query(
 		`SELECT id FROM songs WHERE guild_id = ? ORDER BY queue_position ASC`,
 		guildID,
@@ -984,7 +944,7 @@ func reorderSongsAfterRemovalTx(tx *sql.Tx, guildID string) error {
 	}
 	rows.Close()
 
-	// Update positions sequentially
+	
 	for i, id := range songIDs {
 		_, err := tx.Exec(
 			`UPDATE songs SET queue_position = ? WHERE id = ?`,
@@ -998,7 +958,6 @@ func reorderSongsAfterRemovalTx(tx *sql.Tx, guildID string) error {
 	return nil
 }
 
-// SetRepeatMode sets the repeat mode for a guild (RepeatOff=0, RepeatAll=1, RepeatSingle=2)
 func SetRepeatMode(guildID string, mode int) error {
 	if mode < RepeatOff || mode > RepeatSingle {
 		return fmt.Errorf("invalid repeat mode: %d", mode)
@@ -1017,20 +976,19 @@ func SetRepeatMode(guildID string, mode int) error {
 		return fmt.Errorf("failed to set repeat mode: %w", err)
 	}
 
-	// Invalidate cache
+	
 	InvalidateCache(guildID)
 	logger.Debugf("[SetRepeatMode] Set repeat=%d for guild: %s", mode, guildID)
 	return nil
 }
 
-// SetVolume sets the volume for a guild
 func SetVolume(guildID string, volume float64) error {
-	// Check for invalid float values
+	
 	if math.IsNaN(volume) || math.IsInf(volume, 0) {
 		return fmt.Errorf("volume must be a valid number, got: %g", volume)
 	}
 
-	// Validate volume range (0-1000)
+	
 	if volume < 0 || volume > 1000 {
 		return fmt.Errorf("volume must be between 0 and 1000, got: %g", volume)
 	}
@@ -1052,13 +1010,12 @@ func SetVolume(guildID string, volume float64) error {
 	rowsAffected, _ := result.RowsAffected()
 	logger.Debugf("[SetVolume] Set volume=%g for guild %s (rows affected: %d)", volume, guildID, rowsAffected)
 
-	// Invalidate cache
+	
 	InvalidateCache(guildID)
 	logger.Debugf("[Cache] Invalidated cache for guild: %s", guildID)
 	return nil
 }
 
-// GetVolume gets the volume setting for a guild from database
 func GetVolume(guildID string) (float64, error) {
 	var volume float64
 	err := database.DB.QueryRow(
@@ -1067,7 +1024,7 @@ func GetVolume(guildID string) (float64, error) {
 	).Scan(&volume)
 
 	if err == sql.ErrNoRows {
-		// No settings found, return default
+		
 		cfg := config.GetConfig()
 		if cfg != nil {
 			return cfg.DefaultVolume, nil
@@ -1081,7 +1038,6 @@ func GetVolume(guildID string) (float64, error) {
 	return volume, nil
 }
 
-// GetRepeatMode gets the repeat mode for a guild from database (RepeatOff=0, RepeatAll=1, RepeatSingle=2)
 func GetRepeatMode(guildID string) (int, error) {
 	var repeat int
 	err := database.DB.QueryRow(
@@ -1099,7 +1055,6 @@ func GetRepeatMode(guildID string) (int, error) {
 	return repeat, nil
 }
 
-// GetSponsorBlock gets the SponsorBlock setting for a guild from database
 func GetSponsorBlock(guildID string) (bool, error) {
 	var sponsorblock int
 	err := database.DB.QueryRow(
@@ -1108,7 +1063,7 @@ func GetSponsorBlock(guildID string) (bool, error) {
 	).Scan(&sponsorblock)
 
 	if err == sql.ErrNoRows {
-		// No settings found, return default (false)
+		
 		return false, nil
 	}
 	if err != nil {
@@ -1118,7 +1073,6 @@ func GetSponsorBlock(guildID string) (bool, error) {
 	return sponsorblock == 1, nil
 }
 
-// GetShowStartedTrack gets the ShowStartedTrack setting for a guild from database
 func GetShowStartedTrack(guildID string) (bool, error) {
 	var showStartedTrack int
 	err := database.DB.QueryRow(
@@ -1127,7 +1081,7 @@ func GetShowStartedTrack(guildID string) (bool, error) {
 	).Scan(&showStartedTrack)
 
 	if err == sql.ErrNoRows {
-		// No settings found, return default (true - enabled by default)
+		
 		return true, nil
 	}
 	if err != nil {
@@ -1137,7 +1091,6 @@ func GetShowStartedTrack(guildID string) (bool, error) {
 	return showStartedTrack == 1, nil
 }
 
-// GetNormalization gets the Normalization setting for a guild from database
 func GetNormalization(guildID string) (bool, error) {
 	var normalization int
 	err := database.DB.QueryRow(
@@ -1146,7 +1099,7 @@ func GetNormalization(guildID string) (bool, error) {
 	).Scan(&normalization)
 
 	if err == sql.ErrNoRows {
-		// No settings found, return default (false)
+		
 		return false, nil
 	}
 	if err != nil {
@@ -1156,7 +1109,6 @@ func GetNormalization(guildID string) (bool, error) {
 	return normalization == 1, nil
 }
 
-// SetSponsorBlock sets the SponsorBlock mode for a guild
 func SetSponsorBlock(guildID string, enabled bool) error {
 	lock := acquireLock(guildID)
 	lock.Lock()
@@ -1176,13 +1128,12 @@ func SetSponsorBlock(guildID string, enabled bool) error {
 		return fmt.Errorf("failed to set sponsorblock: %w", err)
 	}
 
-	// Invalidate cache
+	
 	InvalidateCache(guildID)
 	logger.Debugf("[SetSponsorBlock] Set sponsorblock=%v for guild: %s", enabled, guildID)
 	return nil
 }
 
-// SetShowStartedTrack sets the ShowStartedTrack mode for a guild
 func SetShowStartedTrack(guildID string, enabled bool) error {
 	lock := acquireLock(guildID)
 	lock.Lock()
@@ -1202,13 +1153,12 @@ func SetShowStartedTrack(guildID string, enabled bool) error {
 		return fmt.Errorf("failed to set show_started_track: %w", err)
 	}
 
-	// Invalidate cache
+	
 	InvalidateCache(guildID)
 	logger.Debugf("[SetShowStartedTrack] Set show_started_track=%v for guild: %s", enabled, guildID)
 	return nil
 }
 
-// SetNormalization sets the Normalization mode for a guild
 func SetNormalization(guildID string, enabled bool) error {
 	lock := acquireLock(guildID)
 	lock.Lock()
@@ -1228,14 +1178,12 @@ func SetNormalization(guildID string, enabled bool) error {
 		return fmt.Errorf("failed to set normalization: %w", err)
 	}
 
-	// Invalidate cache
+	
 	InvalidateCache(guildID)
 	logger.Debugf("[SetNormalization] Set normalization=%v for guild: %s", enabled, guildID)
 	return nil
 }
 
-// GetGuildLanguage returns the per-guild language code, or "" if none is set.
-// An empty string indicates the guild should use the global default language.
 func GetGuildLanguage(guildID string) (string, error) {
 	var lang sql.NullString
 	err := database.DB.QueryRow(
@@ -1256,8 +1204,6 @@ func GetGuildLanguage(guildID string) (string, error) {
 	return lang.String, nil
 }
 
-// SetGuildLanguage stores the per-guild language code. Pass an empty string
-// to clear the override and fall back to the global default.
 func SetGuildLanguage(guildID, lang string) error {
 	lock := acquireLock(guildID)
 	lock.Lock()
@@ -1356,13 +1302,12 @@ func SetGuildPrefix(guildID, prefix string) error {
 	return nil
 }
 
-// SwapSongs swaps two songs by position
 func SwapSongs(guildID string, pos1, pos2 int) error {
 	lock := acquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
-	// Validate positions
+	
 	q, err := loadQueueFromDB(guildID)
 	if err != nil {
 		return fmt.Errorf("failed to load queue: %w", err)
@@ -1373,17 +1318,17 @@ func SwapSongs(guildID string, pos1, pos2 int) error {
 	}
 
 	if pos1 == pos2 {
-		return nil // Nothing to swap
+		return nil 
 	}
 
-	// Begin transaction for atomic swap
+	
 	tx, err := database.DB.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 
-	// Get song IDs at both positions
+	
 	var song1ID, song2ID int
 	err = tx.QueryRow(
 		`SELECT id FROM songs WHERE guild_id = ? AND queue_position = ?`,
@@ -1401,10 +1346,10 @@ func SwapSongs(guildID string, pos1, pos2 int) error {
 		return fmt.Errorf("failed to get song at position %d: %w", pos2, err)
 	}
 
-	// Swap positions in database using a temporary position to avoid conflicts
+	
 	tempPos := -1
 
-	// Move song1 to temp
+	
 	_, err = tx.Exec(
 		`UPDATE songs SET queue_position = ? WHERE id = ?`,
 		tempPos, song1ID)
@@ -1412,7 +1357,7 @@ func SwapSongs(guildID string, pos1, pos2 int) error {
 		return fmt.Errorf("failed to move song1 to temp: %w", err)
 	}
 
-	// Move song2 to pos1
+	
 	_, err = tx.Exec(
 		`UPDATE songs SET queue_position = ? WHERE id = ?`,
 		pos1, song2ID)
@@ -1420,7 +1365,7 @@ func SwapSongs(guildID string, pos1, pos2 int) error {
 		return fmt.Errorf("failed to move song2 to pos1: %w", err)
 	}
 
-	// Move song1 from temp to pos2
+	
 	_, err = tx.Exec(
 		`UPDATE songs SET queue_position = ? WHERE id = ?`,
 		pos2, song1ID)
@@ -1428,7 +1373,7 @@ func SwapSongs(guildID string, pos1, pos2 int) error {
 		return fmt.Errorf("failed to move song1 to pos2: %w", err)
 	}
 
-	// Commit transaction
+	
 	if err = tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
@@ -1438,13 +1383,12 @@ func SwapSongs(guildID string, pos1, pos2 int) error {
 	return nil
 }
 
-// MoveSong moves a song from one position to another
 func MoveSong(guildID string, fromPos, toPos int) error {
 	lock := acquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
-	// Validate positions
+	
 	q, err := loadQueueFromDB(guildID)
 	if err != nil {
 		return fmt.Errorf("failed to load queue: %w", err)
@@ -1455,17 +1399,17 @@ func MoveSong(guildID string, fromPos, toPos int) error {
 	}
 
 	if fromPos == toPos {
-		return nil // Nothing to move
+		return nil 
 	}
 
-	// Begin transaction for atomic move
+	
 	tx, err := database.DB.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 
-	// Get song ID at fromPos
+	
 	var songID int
 	err = tx.QueryRow(
 		`SELECT id FROM songs WHERE guild_id = ? AND queue_position = ?`,
@@ -1475,7 +1419,7 @@ func MoveSong(guildID string, fromPos, toPos int) error {
 		return fmt.Errorf("failed to get song at position %d: %w", fromPos, err)
 	}
 
-	// Move song to temporary position first
+	
 	tempPos := -1
 	_, err = tx.Exec(
 		`UPDATE songs SET queue_position = ? WHERE id = ?`,
@@ -1484,15 +1428,15 @@ func MoveSong(guildID string, fromPos, toPos int) error {
 		return fmt.Errorf("failed to move song to temp: %w", err)
 	}
 
-	// Shift other songs
+	
 	if fromPos < toPos {
-		// Moving down: shift songs between fromPos and toPos up by 1
+		
 		_, err = tx.Exec(
 			`UPDATE songs SET queue_position = queue_position - 1
 			 WHERE guild_id = ? AND queue_position > ? AND queue_position <= ?`,
 			guildID, fromPos, toPos)
 	} else {
-		// Moving up: shift songs between toPos and fromPos down by 1
+		
 		_, err = tx.Exec(
 			`UPDATE songs SET queue_position = queue_position + 1
 			 WHERE guild_id = ? AND queue_position >= ? AND queue_position < ?`,
@@ -1502,7 +1446,7 @@ func MoveSong(guildID string, fromPos, toPos int) error {
 		return fmt.Errorf("failed to shift songs: %w", err)
 	}
 
-	// Move song from temp to toPos
+	
 	_, err = tx.Exec(
 		`UPDATE songs SET queue_position = ? WHERE id = ?`,
 		toPos, songID)
@@ -1510,7 +1454,7 @@ func MoveSong(guildID string, fromPos, toPos int) error {
 		return fmt.Errorf("failed to move song to final position: %w", err)
 	}
 
-	// Commit transaction
+	
 	if err = tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
@@ -1520,7 +1464,6 @@ func MoveSong(guildID string, fromPos, toPos int) error {
 	return nil
 }
 
-// SaveSeekTime saves the current seek position for a song
 func SaveSeekTime(guildID string, songID int, seekTime int) (int, error) {
 	lock := acquireLock(guildID)
 	lock.Lock()
@@ -1534,13 +1477,12 @@ func SaveSeekTime(guildID string, songID int, seekTime int) (int, error) {
 		return 0, fmt.Errorf("failed to save seek time: %w", err)
 	}
 
-	// Invalidate cache
+	
 	InvalidateCache(guildID)
 	logger.Debugf("[SaveSeekTime] Saved seek time %dms for song %d in guild: %s", seekTime, songID, guildID)
 	return seekTime, nil
 }
 
-// UpdateVoiceChannel updates the voice channel ID for a queue
 func UpdateVoiceChannel(guildID, channelID string) error {
 	lock := acquireLock(guildID)
 	lock.Lock()
@@ -1558,7 +1500,6 @@ func UpdateVoiceChannel(guildID, channelID string) error {
 	return nil
 }
 
-// SetPaused sets the paused state for a queue
 func SetPaused(guildID string, paused bool) error {
 	lock := acquireLock(guildID)
 	lock.Lock()
@@ -1581,7 +1522,6 @@ func SetPaused(guildID string, paused bool) error {
 	return nil
 }
 
-// SetPlaying sets the playing state for a queue
 func SetPlaying(guildID string, playing bool) error {
 	lock := acquireLock(guildID)
 	lock.Lock()
@@ -1604,7 +1544,6 @@ func SetPlaying(guildID string, playing bool) error {
 	return nil
 }
 
-// SetLoading sets the loading state for a queue
 func SetLoading(guildID string, loading bool) error {
 	lock := acquireLock(guildID)
 	lock.Lock()
@@ -1627,7 +1566,6 @@ func SetLoading(guildID string, loading bool) error {
 	return nil
 }
 
-// InvalidateCache removes a guild's queue from cache
 func InvalidateCache(guildID string) {
 	cacheMux.Lock()
 	defer cacheMux.Unlock()

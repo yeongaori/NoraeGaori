@@ -13,7 +13,6 @@ import (
 	"noraegaori/pkg/logger"
 )
 
-// CommandInfo represents information about a command for help display
 type CommandInfo struct {
 	Name        string
 	Aliases     []string
@@ -23,16 +22,15 @@ type CommandInfo struct {
 	AdminOnly   bool
 }
 
-// HandleHelp handles the help command with pagination
 func HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	// Get page from options if provided
+	
 	page := 1
 	options := i.ApplicationCommandData().Options
 	if len(options) > 0 {
 		page = int(options[0].IntValue())
 	}
 
-	// Get current prefix (per-guild override falls back to global default).
+	
 	prefix := config.GetConfig().Prefix
 	if i.GuildID != "" {
 		if guildPrefix, err := queue.GetGuildPrefix(i.GuildID); err != nil {
@@ -42,10 +40,10 @@ func HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		}
 	}
 
-	// Get all commands
+	
 	commandList := getAllCommands(i.GuildID)
 
-	// Filter admin commands for non-admins
+	
 	isAdmin := config.IsAdmin(i.Member.User.ID)
 	filteredCommands := make([]CommandInfo, 0)
 	for _, cmd := range commandList {
@@ -59,7 +57,7 @@ func HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return nil
 	}
 
-	// Pagination settings
+	
 	const commandsPerPage = 5
 	totalPages := (len(filteredCommands) + commandsPerPage - 1) / commandsPerPage
 
@@ -70,7 +68,7 @@ func HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		page = totalPages
 	}
 
-	// Get commands for current page
+	
 	start := (page - 1) * commandsPerPage
 	end := start + commandsPerPage
 	if end > len(filteredCommands) {
@@ -80,7 +78,7 @@ func HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 	embed := buildHelpEmbed(i.GuildID, pageCommands, page, totalPages, start, len(filteredCommands), prefix)
 
-	// Create navigation buttons if there are multiple pages
+	
 	if totalPages == 1 {
 		RespondEmbed(s, i, embed)
 		return nil
@@ -88,20 +86,19 @@ func HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 	components := createHelpButtons(i.GuildID, page, totalPages)
 
-	// Send response with buttons using the new helper
+	
 	msg, err := RespondEmbedWithComponents(s, i, embed, components)
 	if err != nil {
 		logger.Errorf("[Help] Failed to send response: %v", err)
 		return err
 	}
 
-	// Start button collector (5 minute timeout)
+	
 	go handleHelpButtons(s, i, msg, i.GuildID, totalPages, commandsPerPage, filteredCommands, prefix)
 
 	return nil
 }
 
-// buildHelpEmbed constructs a help embed for the given page of commands.
 func buildHelpEmbed(guildID string, commands []CommandInfo, page, totalPages, startIndex, totalCommands int, prefix string) *discordgo.MessageEmbed {
 	t := messages.T(guildID)
 	var description strings.Builder
@@ -140,7 +137,6 @@ func buildHelpEmbed(guildID string, commands []CommandInfo, page, totalPages, st
 	}
 }
 
-// createHelpButtons creates Previous/Next buttons for help pagination
 func createHelpButtons(guildID string, page, totalPages int) []discordgo.MessageComponent {
 	t := messages.T(guildID)
 	return []discordgo.MessageComponent{
@@ -163,35 +159,34 @@ func createHelpButtons(guildID string, page, totalPages int) []discordgo.Message
 	}
 }
 
-// handleHelpButtons handles button interactions for help pagination
 func handleHelpButtons(s *discordgo.Session, i *discordgo.InteractionCreate, originalMsg *discordgo.Message, guildID string, totalPages, perPage int, allCommands []CommandInfo, prefix string) {
 	timeout := time.After(5 * time.Minute)
 	currentPage := 1
 
-	// Get initial page from options
+	
 	options := i.ApplicationCommandData().Options
 	if len(options) > 0 {
 		currentPage = int(options[0].IntValue())
 	}
 
-	// Get message ID for comparison
+	
 	originalMsgID := ""
 	if originalMsg != nil {
 		originalMsgID = originalMsg.ID
 	}
 
-	// Create a channel for button events
+	
 	buttonHandler := func(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 		if ic.Type != discordgo.InteractionMessageComponent {
 			return
 		}
 
-		// Check if this is our message (if we have a message ID to check against)
+		
 		if originalMsgID != "" && (ic.Message == nil || ic.Message.ID != originalMsgID) {
 			return
 		}
 
-		// Check if it's a help button by CustomID
+		
 		data := ic.MessageComponentData()
 		if data.CustomID != "help_prev" && data.CustomID != "help_next" {
 			return
@@ -210,7 +205,7 @@ func handleHelpButtons(s *discordgo.Session, i *discordgo.InteractionCreate, ori
 			return
 		}
 
-		// Build updated embed
+		
 		start := (currentPage - 1) * perPage
 		end := start + perPage
 		if end > len(allCommands) {
@@ -222,7 +217,7 @@ func handleHelpButtons(s *discordgo.Session, i *discordgo.InteractionCreate, ori
 
 		components := createHelpButtons(guildID, currentPage, totalPages)
 
-		// Respond to button interaction
+		
 		s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseUpdateMessage,
 			Data: &discordgo.InteractionResponseData{
@@ -232,14 +227,14 @@ func handleHelpButtons(s *discordgo.Session, i *discordgo.InteractionCreate, ori
 		})
 	}
 
-	// Register handler
+	
 	removeHandler := s.AddHandler(buttonHandler)
 	defer removeHandler()
 
-	// Wait for timeout
+	
 	<-timeout
 
-	// Remove buttons after timeout
+	
 	start := (currentPage - 1) * perPage
 	end := start + perPage
 	if end > len(allCommands) {
@@ -249,12 +244,12 @@ func handleHelpButtons(s *discordgo.Session, i *discordgo.InteractionCreate, ori
 
 	embed := buildHelpEmbed(guildID, pageCommands, currentPage, totalPages, start, len(allCommands), prefix)
 
-	// Get the message to edit
+	
 	var msg *discordgo.Message
 	if i.Interaction.Message != nil {
 		msg = i.Interaction.Message
 	} else {
-		// For deferred responses, get the original response
+		
 		msg, err := GetResponseMessage(s, i)
 		if err != nil {
 			return
@@ -263,7 +258,7 @@ func handleHelpButtons(s *discordgo.Session, i *discordgo.InteractionCreate, ori
 			ID:         msg.ID,
 			Channel:    msg.ChannelID,
 			Embeds:     &[]*discordgo.MessageEmbed{embed},
-			Components: &[]discordgo.MessageComponent{}, // Remove buttons
+			Components: &[]discordgo.MessageComponent{}, 
 		})
 		return
 	}
@@ -272,13 +267,10 @@ func handleHelpButtons(s *discordgo.Session, i *discordgo.InteractionCreate, ori
 		ID:         msg.ID,
 		Channel:    msg.ChannelID,
 		Embeds:     &[]*discordgo.MessageEmbed{embed},
-		Components: &[]discordgo.MessageComponent{}, // Remove buttons
+		Components: &[]discordgo.MessageComponent{}, 
 	})
 }
 
-// getAllCommands returns all registered commands with their information,
-// resolving per-guild localized strings (description, usage, example, aliases)
-// from the guild's locale rather than the bot's global default.
 func getAllCommands(guildID string) []CommandInfo {
 	commandList := make([]CommandInfo, 0)
 
@@ -311,7 +303,7 @@ func getAllCommands(guildID string) []CommandInfo {
 			example = name
 		}
 
-		// Aliases from the guild's locale (canonical name first).
+		
 		cmdAliases := []string{name}
 		cmdAliases = append(cmdAliases, cs.Aliases...)
 
@@ -325,7 +317,7 @@ func getAllCommands(guildID string) []CommandInfo {
 		})
 	}
 
-	// Sort commands alphabetically
+	
 	sort.Slice(commandList, func(i, j int) bool {
 		return commandList[i].Name < commandList[j].Name
 	})

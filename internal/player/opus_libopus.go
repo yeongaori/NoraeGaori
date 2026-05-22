@@ -10,16 +10,11 @@ import (
 	"github.com/ebitengine/purego"
 )
 
-// openSharedLib resolves a shared library by name via the OS dynamic loader.
-// Implemented per-platform in opus_libopus_unix.go / opus_libopus_windows.go.
-
-// libopus C constants used by the bot.
 const (
-	opusApplicationAudio = 2049 // OPUS_APPLICATION_AUDIO
-	opusSetBitrateReq    = 4002 // OPUS_SET_BITRATE_REQUEST
+	opusApplicationAudio = 2049 
+	opusSetBitrateReq    = 4002 
 )
 
-// libopus function pointers, populated once on first successful dlopen.
 var (
 	libopusOnce      sync.Once
 	libopusLibName   string
@@ -32,8 +27,6 @@ var (
 	cOpusStrerror       func(err int32) *byte
 )
 
-// libopusCandidates returns the per-platform shared-library names to try, in
-// order. The first one that the OS dynamic loader can resolve wins.
 func libopusCandidates() []string {
 	switch runtime.GOOS {
 	case "windows":
@@ -45,9 +38,6 @@ func libopusCandidates() []string {
 	}
 }
 
-// tryLoadLibopus dlopens libopus and registers the encoder symbols. Idempotent
-// — only the first call performs the load. Returns the resolved library name
-// on success, or an error describing why the probe failed.
 func tryLoadLibopus() (libName string, err error) {
 	libopusOnce.Do(func() {
 		var handle uintptr
@@ -70,7 +60,7 @@ func tryLoadLibopus() (libName string, err error) {
 			return
 		}
 
-		// RegisterLibFunc panics on missing symbols; treat that as a load failure.
+		
 		defer func() {
 			if r := recover(); r != nil {
 				libopusLoadErr = fmt.Errorf("libopus symbol registration failed: %v", r)
@@ -87,7 +77,6 @@ func tryLoadLibopus() (libName string, err error) {
 	return libopusLibName, libopusLoadErr
 }
 
-// libopusEncoder is the native opus encoder backed by libopus loaded via purego.
 type libopusEncoder struct {
 	st       uintptr
 	channels int
@@ -141,8 +130,6 @@ func (e *libopusEncoder) Encode(pcm []int16, output []byte) (int, error) {
 	return int(n), nil
 }
 
-// opusStrError converts a libopus error code to its human-readable string by
-// calling opus_strerror. Returns a numeric fallback if the symbol isn't loaded.
 func opusStrError(code int32) string {
 	if cOpusStrerror == nil {
 		return fmt.Sprintf("opus error %d", code)

@@ -11,7 +11,6 @@ import (
 	"noraegaori/pkg/logger"
 )
 
-// skippedSong holds metadata for a playlist video that couldn't be queued.
 type skippedSong struct {
 	Title     string
 	URL       string
@@ -19,10 +18,8 @@ type skippedSong struct {
 	Error     string
 }
 
-// maxSkippedShown caps the skipped-videos embed at 10 lines before collapsing to "… and N more".
 const maxSkippedShown = 10
 
-// sendBatchedSkipNotice posts one embed for all unqueuable playlist videos. No-op if empty.
 func sendBatchedSkipNotice(s *discordgo.Session, guildID, channelID string, skipped []skippedSong) {
 	if len(skipped) == 0 {
 		return
@@ -56,7 +53,6 @@ func sendBatchedSkipNotice(s *discordgo.Session, guildID, channelID string, skip
 	}
 }
 
-// cleanErrorMessage maps verbose yt-dlp error strings to short user-facing reasons.
 func cleanErrorMessage(guildID, errorMsg string) string {
 	errorLower := strings.ToLower(errorMsg)
 	t := messages.T(guildID)
@@ -82,7 +78,7 @@ func cleanErrorMessage(guildID, errorMsg string) string {
 }
 
 type voteSession struct {
-	votes          map[string]bool // userID → voted
+	votes          map[string]bool 
 	requiredVotes  int
 	startTime      time.Time
 	cancelTimer    chan bool
@@ -92,18 +88,17 @@ type voteSession struct {
 }
 
 var (
-	skipVotes      = make(map[string]*voteSession) // guildID → session
+	skipVotes      = make(map[string]*voteSession) 
 	skipVotesMutex sync.RWMutex
 )
 
 var (
-	stopVotes      = make(map[string]*voteSession) // guildID → session
+	stopVotes      = make(map[string]*voteSession) 
 	stopVotesMutex sync.RWMutex
 )
 
 const voteExpirationTime = 60 * time.Second
 
-// startVoteWithReaction adds a reaction and waits until the vote threshold, cancellation, or timeout.
 func startVoteWithReaction(s *discordgo.Session, guildID, title, emoji string, vs *voteSession, votesMap map[string]*voteSession, votesMutex *sync.RWMutex, onVotePassed func(currentVotes int)) {
 	if err := s.MessageReactionAdd(vs.channelID, vs.messageID, emoji); err != nil {
 		logger.Errorf("[VoteReaction] Failed to add reaction to message: %v", err)
@@ -191,7 +186,6 @@ func startVoteWithReaction(s *discordgo.Session, guildID, title, emoji string, v
 	}
 }
 
-// ClearSkipVotes is called by internal/bot when the current song changes.
 func ClearSkipVotes(guildID string) {
 	skipVotesMutex.Lock()
 	defer skipVotesMutex.Unlock()
@@ -206,7 +200,6 @@ func ClearSkipVotes(guildID string) {
 	delete(skipVotes, guildID)
 }
 
-// ClearStopVotes is called by internal/bot when the current song changes.
 func ClearStopVotes(guildID string) {
 	stopVotesMutex.Lock()
 	defer stopVotesMutex.Unlock()

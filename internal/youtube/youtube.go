@@ -22,7 +22,6 @@ func applyJsRuntime(cmd *ytdlp.Command) *ytdlp.Command {
 	return cmd
 }
 
-// saveVersionResult saves extraction success or failure to the VersionManager
 func saveVersionResult(url string, err error) {
 	versionmanager := ytdlpUpdater.GetVersionManager()
 	if versionmanager == nil {
@@ -39,7 +38,6 @@ func saveVersionResult(url string, err error) {
 	}
 }
 
-// Song represents a YouTube song
 type Song struct {
 	URL           string
 	Title         string
@@ -51,10 +49,8 @@ type Song struct {
 	RequestedByID string
 }
 
-// SearchResult is an alias for ytsearch.VideoInfo for easier use
 type SearchResult = ytsearch.VideoInfo
 
-// PlaylistInfo represents information about a YouTube playlist
 type PlaylistInfo struct {
 	ID            string
 	Title         string
@@ -64,7 +60,6 @@ type PlaylistInfo struct {
 	Videos        []*Song
 }
 
-// URLType represents the type of YouTube URL
 type URLType string
 
 const (
@@ -73,37 +68,32 @@ const (
 	URLTypeVideoOnly         URLType = "video_only"
 )
 
-// URLAnalysis contains the result of analyzing a YouTube URL
 type URLAnalysis struct {
 	Type       URLType
 	VideoID    string
 	PlaylistID string
 }
 
-// AvailabilityResult represents the result of checking video availability
 type AvailabilityResult struct {
 	Available bool
 	Error     string
 	IsLive    bool
 }
 
-// cachedAvailability represents a cached availability check result
 type cachedAvailability struct {
 	result    *AvailabilityResult
 	timestamp time.Time
 }
 
-// VideoError represents a specific error type for video fetching
 type VideoError struct {
-	Message string // User-friendly error message
-	Reason  string // Technical reason
+	Message string 
+	Reason  string 
 }
 
 func (e *VideoError) Error() string {
 	return e.Message
 }
 
-// parseYtDlpError parses yt-dlp error messages and returns user-friendly error messages
 func parseYtDlpError(guildID string, err error) error {
 	if err == nil {
 		return nil
@@ -111,7 +101,7 @@ func parseYtDlpError(guildID string, err error) error {
 
 	errorLower := strings.ToLower(err.Error())
 
-	// Map of patterns to user-friendly localized messages
+	
 	yt := messages.T(guildID).YouTube
 	errorMappings := []struct {
 		patterns []string
@@ -162,20 +152,18 @@ func parseYtDlpError(guildID string, err error) error {
 		}
 	}
 
-	// If no specific pattern matched, return the original error
+	
 	return err
 }
 
-// Circuit breaker state
 type circuitState int
 
 const (
-	circuitClosed   circuitState = iota // Normal operation
-	circuitOpen                         // Failing fast due to rate limits
-	circuitHalfOpen                     // Testing if service recovered
+	circuitClosed   circuitState = iota 
+	circuitOpen                         
+	circuitHalfOpen                     
 )
 
-// circuitBreaker tracks rate limit failures for fail-fast behavior
 type circuitBreaker struct {
 	state            circuitState
 	failureCount     int
@@ -185,23 +173,22 @@ type circuitBreaker struct {
 }
 
 var (
-	// YouTube URL regex patterns - matches youtube.com, youtu.be, and music.youtube.com
+	
 	youtubeRegex = regexp.MustCompile(`^(https?://)?(www\.)?(music\.youtube\.com|youtube\.com|youtu\.be)/.+$`)
 	searchClient *ytsearch.Client
 
-	// Availability check cache
+	
 	availabilityCache = &sync.Map{}
-	cacheTTL          = 10 * time.Minute // Cache results for 10 minutes
+	cacheTTL          = 10 * time.Minute 
 
-	// Circuit breaker for rate limiting
+	
 	ytCircuitBreaker = &circuitBreaker{
 		state: circuitClosed,
 	}
-	circuitOpenThreshold   = 5               // Open circuit after 5 consecutive rate limit errors
-	circuitCooldownPeriod  = 60 * time.Second // Wait 60s before trying again
+	circuitOpenThreshold   = 5               
+	circuitCooldownPeriod  = 60 * time.Second 
 )
 
-// isRateLimitError checks if an error is a rate limit error
 func isRateLimitError(err error) bool {
 	if err == nil {
 		return false
@@ -213,7 +200,6 @@ func isRateLimitError(err error) bool {
 		strings.Contains(errMsg, "quota exceeded")
 }
 
-// recordSuccess records a successful operation and may close the circuit
 func (cb *circuitBreaker) recordSuccess() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
@@ -225,10 +211,9 @@ func (cb *circuitBreaker) recordSuccess() {
 	cb.consecutiveFails = 0
 }
 
-// recordFailure records a failed operation and may open the circuit
 func (cb *circuitBreaker) recordFailure(err error) {
 	if !isRateLimitError(err) {
-		return // Only track rate limit errors
+		return 
 	}
 
 	cb.mu.Lock()
@@ -244,7 +229,6 @@ func (cb *circuitBreaker) recordFailure(err error) {
 	}
 }
 
-// canAttempt checks if a request should be allowed
 func (cb *circuitBreaker) canAttempt() error {
 	cb.mu.RLock()
 	state := cb.state
@@ -253,9 +237,9 @@ func (cb *circuitBreaker) canAttempt() error {
 
 	switch state {
 	case circuitClosed:
-		return nil // Normal operation
+		return nil 
 	case circuitOpen:
-		// Check if cooldown period has passed
+		
 		if time.Since(lastFailure) > circuitCooldownPeriod {
 			cb.mu.Lock()
 			cb.state = circuitHalfOpen
@@ -266,32 +250,29 @@ func (cb *circuitBreaker) canAttempt() error {
 		return fmt.Errorf("YouTube rate limit exceeded, please wait %v before trying again",
 			circuitCooldownPeriod-time.Since(lastFailure))
 	case circuitHalfOpen:
-		return nil // Allow test request
+		return nil 
 	}
 	return nil
 }
 
-// Initialize sets up the YouTube client
 func Initialize() error {
-	// Initialize search client with default http client
+	
 	searchClient = ytsearch.NewClient(nil)
 
 	return nil
 }
 
-// IsYouTubeURL checks if a string is a YouTube URL
 func IsYouTubeURL(query string) bool {
 	return youtubeRegex.MatchString(query)
 }
 
-// Search searches YouTube for a query
 func Search(guildID, query string, requesterName, requesterID string) (*Song, error) {
 	if IsYouTubeURL(query) {
-		// Get video info from URL
+		
 		return GetVideoInfo(guildID, query, requesterName, requesterID)
 	}
 
-	// Search YouTube
+	
 	logger.Debugf("Searching YouTube for: %s", query)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -309,11 +290,10 @@ func Search(guildID, query string, requesterName, requesterID string) (*Song, er
 	video := response.Results[0]
 	videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", video.VideoID)
 
-	// Get detailed info for the video
+	
 	return GetVideoInfo(guildID, videoURL, requesterName, requesterID)
 }
 
-// SearchMultiple searches YouTube and returns multiple results
 func SearchMultiple(query string, limit int) ([]SearchResult, error) {
 	logger.Debugf("Searching YouTube for multiple results: %s", query)
 
@@ -329,7 +309,7 @@ func SearchMultiple(query string, limit int) ([]SearchResult, error) {
 		return nil, fmt.Errorf("no results found")
 	}
 
-	// Return up to limit results
+	
 	if len(response.Results) > limit {
 		return response.Results[:limit], nil
 	}
@@ -337,25 +317,21 @@ func SearchMultiple(query string, limit int) ([]SearchResult, error) {
 	return response.Results, nil
 }
 
-// CheckVideoAvailability checks if a video is available and not restricted
-// This matches the NodeJS implementation's comprehensive checking
-// Uses fast Innertube API (100-300ms) with fallback to yt-dlp (2300ms) on failure
-// Cache is keyed by (url, guildID) so per-guild localized error strings don't leak across guilds.
 func CheckVideoAvailability(guildID, url string) (*AvailabilityResult, error) {
 	cacheKey := guildID + "|" + url
-	// Check cache first
+	
 	if cached, ok := availabilityCache.Load(cacheKey); ok {
 		cachedEntry := cached.(*cachedAvailability)
 		if time.Since(cachedEntry.timestamp) < cacheTTL {
 			logger.Debugf("[Availability] Cache hit for: %s (age: %v)", url, time.Since(cachedEntry.timestamp))
 			return cachedEntry.result, nil
 		}
-		// Cache expired, remove it
+		
 		availabilityCache.Delete(cacheKey)
 		logger.Debugf("[Availability] Cache expired for: %s", url)
 	}
 
-	// Check circuit breaker before making request
+	
 	if err := ytCircuitBreaker.canAttempt(); err != nil {
 		logger.Warnf("[Availability] Circuit breaker open: %v", err)
 		return nil, err
@@ -368,29 +344,29 @@ func CheckVideoAvailability(guildID, url string) (*AvailabilityResult, error) {
 	availResult, innertubeErr := client.CheckVideoAvailability(guildID, url)
 
 	if innertubeErr != nil {
-		// Innertube failed, fallback to yt-dlp
+		
 		logger.Warnf("[Availability] Innertube failed, falling back to yt-dlp: %v", innertubeErr)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		// Create ytdlp command with flags to skip download and get flat playlist info
+		
 		cmd := applyJsRuntime(ytdlp.New().
 			SetExecutable(ytdlpUpdater.GetBinaryPath()).
 			DumpJSON().
 			FlatPlaylist()).
 			SkipDownload()
 
-		// Run yt-dlp to get video information
+		
 		result, err := cmd.Run(ctx, url)
 		if err != nil {
-			// Record failure in circuit breaker
+			
 			ytCircuitBreaker.recordFailure(err)
 			saveVersionResult(url, err)
 			checkTime := time.Since(startTime)
 			logger.Debugf("[Availability] yt-dlp error after %v: %v", checkTime, err)
 
-			// Parse error message for specific restrictions
+			
 			errorMsg := strings.ToLower(err.Error())
 			if strings.Contains(errorMsg, "video unavailable") ||
 				strings.Contains(errorMsg, "private video") ||
@@ -403,7 +379,7 @@ func CheckVideoAvailability(guildID, url string) (*AvailabilityResult, error) {
 					Available: false,
 					Error:     err.Error(),
 				}
-				// Cache unavailable results
+				
 				availabilityCache.Store(cacheKey, &cachedAvailability{
 					result:    unavailResult,
 					timestamp: time.Now(),
@@ -411,11 +387,11 @@ func CheckVideoAvailability(guildID, url string) (*AvailabilityResult, error) {
 				return unavailResult, nil
 			}
 
-			// Other errors (network, etc.) should be returned as errors
+			
 			return nil, fmt.Errorf("failed to check availability: %w", err)
 		}
 
-		// Parse extracted info
+		
 		infos, err := result.GetExtractedInfo()
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse video info: %w", err)
@@ -434,13 +410,13 @@ func CheckVideoAvailability(guildID, url string) (*AvailabilityResult, error) {
 
 		unavailableReasons := []string{}
 
-		// Check age restriction
+		
 		if info.AgeLimit != nil && *info.AgeLimit > 0 {
 			unavailableReasons = append(unavailableReasons, messages.T(guildID).YouTube.ErrorAgeVerification)
 			logger.Debugf("[Availability] age_limit: %g", *info.AgeLimit)
 		}
 
-		// Check if it's a live stream
+		
 		isLive := info.IsLive != nil && *info.IsLive ||
 			(info.LiveStatus != nil && (*info.LiveStatus == ytdlp.ExtractedLiveStatusIsLive ||
 				*info.LiveStatus == ytdlp.ExtractedLiveStatusIsUpcoming))
@@ -448,17 +424,17 @@ func CheckVideoAvailability(guildID, url string) (*AvailabilityResult, error) {
 			logger.Debugf("[Availability] \"%s\" is a LIVE stream", getStringValue(info.Title))
 		}
 
-		// Check availability status
+		
 		if info.Availability != nil {
 			availability := strings.ToLower(string(*info.Availability))
 			logger.Debugf("[Availability] availability: %s", availability)
-			// Allow "public" and "unlisted" videos, block "private" and restricted content
+			
 			if availability != "public" && availability != "unlisted" {
 				unavailableReasons = append(unavailableReasons, messages.T(guildID).YouTube.ErrorRegionRestricted)
 			}
 		}
 
-		// Check if video is private or deleted from title
+		
 		if info.Title != nil {
 			title := strings.ToLower(*info.Title)
 			if strings.Contains(title, "[private video]") ||
@@ -487,22 +463,20 @@ func CheckVideoAvailability(guildID, url string) (*AvailabilityResult, error) {
 		}
 	}
 
-	// Store in cache
+	
 	availabilityCache.Store(cacheKey, &cachedAvailability{
 		result:    availResult,
 		timestamp: time.Now(),
 	})
 	logger.Debugf("[Availability] Cached result for: %s", url)
 
-	// Record success in circuit breaker
+	
 	ytCircuitBreaker.recordSuccess()
 	saveVersionResult(url, nil)
 
 	return availResult, nil
 }
 
-// retryWithBackoff executes a function with exponential backoff retry logic
-// Reduced retries for faster failure recovery: 2^retry * 1000ms, max 10 seconds, max 3 retries
 func retryWithBackoff(operation func() error, operationName string) error {
 	const maxRetries = 3
 	const baseDelay = 1000 * time.Millisecond
@@ -520,7 +494,7 @@ func retryWithBackoff(operation func() error, operationName string) error {
 
 		lastErr = err
 
-		// Check if error is retryable (network errors, rate limits)
+		
 		errorMsg := strings.ToLower(err.Error())
 		isRetryable := strings.Contains(errorMsg, "network") ||
 			strings.Contains(errorMsg, "timeout") ||
@@ -530,12 +504,12 @@ func retryWithBackoff(operation func() error, operationName string) error {
 			strings.Contains(errorMsg, "temporary failure")
 
 		if !isRetryable {
-			// Don't retry non-network errors
+			
 			return err
 		}
 
 		if attempt < maxRetries-1 {
-			// Calculate backoff delay: 2^attempt * 1000ms, max 30s
+			
 			delay := time.Duration(1<<uint(attempt)) * baseDelay
 			if delay > maxDelay {
 				delay = maxDelay
@@ -551,10 +525,6 @@ func retryWithBackoff(operation func() error, operationName string) error {
 	return fmt.Errorf("failed after %d retries: %w", maxRetries, lastErr)
 }
 
-// GetVideoInfo retrieves detailed information about a YouTube video
-// Uses fast Innertube API (300-500ms) to get both availability and video info in a single call
-// This eliminates the previous double-fetch pattern (CheckVideoAvailability + GetVideoInfo)
-// Falls back to yt-dlp (4-6s) if Innertube fails
 func GetVideoInfo(guildID, url, requesterName, requesterID string) (*Song, error) {
 	logger.Debugf("Fetching video info for: %s", url)
 
@@ -562,19 +532,19 @@ func GetVideoInfo(guildID, url, requesterName, requesterID string) (*Song, error
 	song, innertubeErr := client.GetVideoInfo(guildID, url, requesterName, requesterID)
 
 	if innertubeErr == nil {
-		// Success with Innertube
+		
 		return song, nil
 	}
 
-	// Innertube failed, fallback to yt-dlp method
+	
 	logger.Warnf("[GetVideoInfo] Innertube failed, falling back to yt-dlp: %v", innertubeErr)
 
-	// First, check video availability using the comprehensive check
+	
 	availability, err := CheckVideoAvailability(guildID, url)
 	if err != nil {
 		logger.Warnf("Failed to check video availability (continuing anyway): %v", err)
 	} else if !availability.Available {
-		// Return parsed error message for unavailable videos
+		
 		errMsg := fmt.Errorf("video is not available: %s", availability.Error)
 		return nil, parseYtDlpError(guildID, errMsg)
 	}
@@ -584,9 +554,9 @@ func GetVideoInfo(guildID, url, requesterName, requesterID string) (*Song, error
 
 	var result *ytdlp.Result
 
-	// Retry video info fetching with exponential backoff
+	
 	retryErr := retryWithBackoff(func() error {
-		// Create ytdlp command
+		
 		cmd := ytdlp.New().
 			SetExecutable(ytdlpUpdater.GetBinaryPath()).
 			DumpJSON().
@@ -594,7 +564,7 @@ func GetVideoInfo(guildID, url, requesterName, requesterID string) (*Song, error
 		cmd = applyJsRuntime(cmd).
 			Format("bestaudio/best")
 
-		// Run yt-dlp to get video information
+		
 		var err error
 		result, err = cmd.Run(ctx, url)
 		if err != nil {
@@ -604,11 +574,11 @@ func GetVideoInfo(guildID, url, requesterName, requesterID string) (*Song, error
 	}, "GetVideoInfo")
 
 	if retryErr != nil {
-		// Parse yt-dlp error to provide specific user-friendly message
+		
 		return nil, parseYtDlpError(guildID, retryErr)
 	}
 
-	// Parse extracted info
+	
 	infos, err := result.GetExtractedInfo()
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse video info: %w", err)
@@ -620,7 +590,7 @@ func GetVideoInfo(guildID, url, requesterName, requesterID string) (*Song, error
 
 	info := infos[0]
 
-	// Parse duration
+	
 	var duration string
 	var isLive bool
 
@@ -634,14 +604,14 @@ func GetVideoInfo(guildID, url, requesterName, requesterID string) (*Song, error
 		duration = "Unknown"
 	}
 
-	// Get thumbnail
+	
 	thumbnail := ""
 	if len(info.Thumbnails) > 0 {
-		// Get the best quality thumbnail
+		
 		thumbnail = info.Thumbnails[len(info.Thumbnails)-1].URL
 	}
 
-	// Get uploader
+	
 	uploader := "Unknown"
 	if info.Uploader != nil && *info.Uploader != "" {
 		uploader = *info.Uploader
@@ -649,7 +619,7 @@ func GetVideoInfo(guildID, url, requesterName, requesterID string) (*Song, error
 		uploader = *info.Channel
 	}
 
-	// Get title
+	
 	title := "Unknown"
 	if info.Title != nil {
 		title = *info.Title
@@ -670,56 +640,52 @@ func GetVideoInfo(guildID, url, requesterName, requesterID string) (*Song, error
 	return song, nil
 }
 
-// GetOptimalAudioFormat returns the optimal yt-dlp audio format string based on voice channel bitrate
-// Matches NodeJS modules/music/player.js:161-205 behavior
 func GetOptimalAudioFormat(bitrate int) string {
 	if bitrate <= 0 {
-		// Default to best audio if bitrate is unknown
+		
 		logger.Debugf("[AudioFormat] Voice channel bitrate unknown, using bestaudio")
 		return "bestaudio/best"
 	}
 
-	// Discord voice channel bitrates (in bps):
-	// - 8 kbps (8000): Low quality
-	// - 32 kbps (32000): Normal
-	// - 64 kbps (64000): Medium (default for most servers)
-	// - 96 kbps (96000): High (Nitro servers)
-	// - 128 kbps (128000): Very High (Nitro Level 2)
-	// - 384 kbps (384000): Max (Nitro Level 3, Stage channels)
+	
+	
+	
+	
+	
+	
+	
 
 	bitrateKbps := bitrate / 1000
 	logger.Debugf("[AudioFormat] Voice channel bitrate: %d kbps", bitrateKbps)
 
-	// Select appropriate audio quality to avoid wasting bandwidth and memory
-	// Format selection uses yt-dlp's fallback chain (left to right):
-	// Try specific bitrate → Try lower bitrates → Use best available
+	
+	
+	
 	if bitrate <= 32000 {
-		// Low quality channels: Try 32k, then any lower, then best
+		
 		logger.Debugf("[AudioFormat] Using low quality audio (≤32k)")
 		return "bestaudio[abr<=32]/bestaudio[abr<=48]/bestaudio[abr<=64]/bestaudio/best"
 	} else if bitrate <= 64000 {
-		// Normal/Medium channels: Try 64k, then lower options, then best
+		
 		logger.Debugf("[AudioFormat] Using medium quality audio (≤64k)")
 		return "bestaudio[abr<=64]/bestaudio[abr<=96]/bestaudio/best"
 	} else if bitrate <= 96000 {
-		// High quality channels: Try 96k, then 128k fallback, then best
+		
 		logger.Debugf("[AudioFormat] Using high quality audio (≤96k)")
 		return "bestaudio[abr<=96]/bestaudio[abr<=128]/bestaudio/best"
 	} else if bitrate <= 128000 {
-		// Very high quality: Try 128k, then 160k fallback, then best
+		
 		logger.Debugf("[AudioFormat] Using very high quality audio (≤128k)")
 		return "bestaudio[abr<=128]/bestaudio[abr<=160]/bestaudio/best"
 	} else {
-		// Max quality channels (384 kbps): Use best available without limit
+		
 		logger.Debugf("[AudioFormat] Using maximum quality audio")
 		return "bestaudio/best"
 	}
 }
 
-// GetStreamURL retrieves the direct stream URL for a video
-// bitrate is the voice channel bitrate in bps (pass 0 for default best quality)
 func GetStreamURL(url string, sponsorBlock bool, bitrate int) (string, error) {
-	// Check circuit breaker before making request
+	
 	if err := ytCircuitBreaker.canAttempt(); err != nil {
 		logger.Warnf("[GetStreamURL] Circuit breaker open: %v", err)
 		return "", err
@@ -733,9 +699,9 @@ func GetStreamURL(url string, sponsorBlock bool, bitrate int) (string, error) {
 
 	var streamURL string
 
-	// Retry stream URL fetching with exponential backoff
+	
 	retryErr := retryWithBackoff(func() error {
-		// Create ytdlp command with optimal audio format
+		
 		cmd := ytdlp.New().
 			SetExecutable(ytdlpUpdater.GetBinaryPath()).
 			GetURL().
@@ -743,18 +709,18 @@ func GetStreamURL(url string, sponsorBlock bool, bitrate int) (string, error) {
 		cmd = applyJsRuntime(cmd).
 			Format(audioFormat)
 
-		// Add SponsorBlock if enabled
+		
 		if sponsorBlock {
 			cmd = cmd.SponsorblockMark("all").
 				SponsorblockRemove("sponsor,selfpromo,interaction,intro,outro")
 		}
 
-		// Run yt-dlp
+		
 		logger.Debugf("[GetStreamURL] Running yt-dlp command for: %s", url)
 		result, err := cmd.Run(ctx, url)
 		if err != nil {
 			logger.Errorf("[GetStreamURL] yt-dlp failed: %v", err)
-			ytCircuitBreaker.recordFailure(err) // Record failure for circuit breaker
+			ytCircuitBreaker.recordFailure(err) 
 			saveVersionResult(url, err)
 			return fmt.Errorf("failed to get stream URL: %w", err)
 		}
@@ -774,14 +740,13 @@ func GetStreamURL(url string, sponsorBlock bool, bitrate int) (string, error) {
 		return "", retryErr
 	}
 
-	// Record success in circuit breaker
+	
 	ytCircuitBreaker.recordSuccess()
 	saveVersionResult(url, nil)
 
 	return streamURL, nil
 }
 
-// formatDuration converts seconds to HH:MM:SS or MM:SS format
 func formatDuration(seconds int) string {
 	hours := seconds / 3600
 	minutes := (seconds % 3600) / 60
@@ -793,7 +758,6 @@ func formatDuration(seconds int) string {
 	return fmt.Sprintf("%d:%02d", minutes, secs)
 }
 
-// ParseDurationToSeconds converts duration string (HH:MM:SS or MM:SS) to seconds
 func ParseDurationToSeconds(duration string) int {
 	if duration == "" || duration == "Unknown" || duration == "🔴 LIVE" {
 		return 0
@@ -810,8 +774,6 @@ func ParseDurationToSeconds(duration string) int {
 	return 0
 }
 
-// IsLiveStreamActive checks if a live stream is still active
-// Uses fast Innertube API (100-200ms) with fallback to yt-dlp (2-3s)
 func IsLiveStreamActive(url string) (bool, error) {
 	logger.Debugf("Checking if live stream is active: %s", url)
 
@@ -819,7 +781,7 @@ func IsLiveStreamActive(url string) (bool, error) {
 	available, isLive, err := client.CheckAvailability(url)
 
 	if err == nil {
-		// Success with Innertube
+		
 		if !available {
 			logger.Debugf("Live stream is not available: %s", url)
 			return false, nil
@@ -832,13 +794,13 @@ func IsLiveStreamActive(url string) (bool, error) {
 		return false, nil
 	}
 
-	// Innertube failed, fallback to yt-dlp
+	
 	logger.Warnf("[IsLiveStreamActive] Innertube failed, falling back to yt-dlp: %v", err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Create ytdlp command
+	
 	cmd := ytdlp.New().
 		SetExecutable(ytdlpUpdater.GetBinaryPath()).
 		DumpJSON().
@@ -846,13 +808,13 @@ func IsLiveStreamActive(url string) (bool, error) {
 	cmd = applyJsRuntime(cmd).
 		Format("bestaudio/best")
 
-	// Run yt-dlp to get video information
+	
 	result, ytdlpErr := cmd.Run(ctx, url)
 	if ytdlpErr != nil {
 		return false, fmt.Errorf("failed to get video info: %w", ytdlpErr)
 	}
 
-	// Parse extracted info
+	
 	infos, parseErr := result.GetExtractedInfo()
 	if parseErr != nil {
 		return false, fmt.Errorf("failed to parse video info: %w", parseErr)
@@ -864,7 +826,7 @@ func IsLiveStreamActive(url string) (bool, error) {
 
 	info := infos[0]
 
-	// Check if live stream is active
+	
 	if info.LiveStatus != nil && *info.LiveStatus == ytdlp.ExtractedLiveStatusIsLive {
 		logger.Debugf("Live stream is active: %s", url)
 		return true, nil
@@ -874,15 +836,10 @@ func IsLiveStreamActive(url string) (bool, error) {
 	return false, nil
 }
 
-// CheckIfLive checks if a YouTube URL is currently a live stream
-// Alias for IsLiveStreamActive for compatibility
 func CheckIfLive(url string) (bool, error) {
 	return IsLiveStreamActive(url)
 }
 
-// CheckIfLiveStreamEnded checks if a previously live stream has ended
-// This is used for resume command to skip ended live streams
-// Matches NodeJS resume.js:85-98 behavior
 func CheckIfLiveStreamEnded(url string) (bool, error) {
 	logger.Debugf("Checking if live stream has ended: %s", url)
 
@@ -892,9 +849,9 @@ func CheckIfLiveStreamEnded(url string) (bool, error) {
 	var info *ytdlp.ExtractedInfo
 	var infos []*ytdlp.ExtractedInfo
 
-	// Retry with exponential backoff
+	
 	retryErr := retryWithBackoff(func() error {
-		// Create ytdlp command with FlatPlaylist for fast checking
+		
 		cmd := ytdlp.New().
 			SetExecutable(ytdlpUpdater.GetBinaryPath()).
 			DumpJSON().
@@ -902,13 +859,13 @@ func CheckIfLiveStreamEnded(url string) (bool, error) {
 		cmd = applyJsRuntime(cmd).
 			NoPlaylist()
 
-		// Run yt-dlp to get video information
+		
 		result, err := cmd.Run(ctx, url)
 		if err != nil {
 			return fmt.Errorf("failed to get video info: %w", err)
 		}
 
-		// Parse extracted info
+		
 		infos, err = result.GetExtractedInfo()
 		if err != nil {
 			return fmt.Errorf("failed to parse video info: %w", err)
@@ -926,28 +883,27 @@ func CheckIfLiveStreamEnded(url string) (bool, error) {
 		return false, retryErr
 	}
 
-	// Check if the stream is still live
-	// Matches NodeJS: info.is_live === true || info.live_status === 'is_live'
+	
+	
 	isStillLive := info.IsLive != nil && *info.IsLive ||
 		(info.LiveStatus != nil && *info.LiveStatus == ytdlp.ExtractedLiveStatusIsLive)
 
 	if !isStillLive {
 		logger.Infof("Live stream has ended: %s", url)
-		return true, nil // Stream has ended
+		return true, nil 
 	}
 
 	logger.Debugf("Live stream is still active: %s", url)
-	return false, nil // Stream is still live
+	return false, nil 
 }
 
-// AnalyzeYouTubeURL analyzes a YouTube URL to determine its type
 func AnalyzeYouTubeURL(urlStr string) *URLAnalysis {
-	// Add https if missing
+	
 	if !regexp.MustCompile(`^https?://`).MatchString(urlStr) {
 		urlStr = "https://" + urlStr
 	}
 
-	// Check if it's a pure playlist URL
+	
 	playlistRegex := regexp.MustCompile(`youtube\.com/playlist\?list=([a-zA-Z0-9_-]+)`)
 	if matches := playlistRegex.FindStringSubmatch(urlStr); len(matches) > 1 {
 		return &URLAnalysis{
@@ -956,7 +912,7 @@ func AnalyzeYouTubeURL(urlStr string) *URLAnalysis {
 		}
 	}
 
-	// Check if it's a video URL with playlist
+	
 	videoWithListRegex := regexp.MustCompile(`[?&]v=([a-zA-Z0-9_-]+).*[?&]list=([a-zA-Z0-9_-]+)`)
 	if matches := videoWithListRegex.FindStringSubmatch(urlStr); len(matches) > 2 {
 		return &URLAnalysis{
@@ -966,7 +922,7 @@ func AnalyzeYouTubeURL(urlStr string) *URLAnalysis {
 		}
 	}
 
-	// Check for youtu.be format with playlist
+	
 	youtuBeRegex := regexp.MustCompile(`youtu\.be/([a-zA-Z0-9_-]+).*[?&]list=([a-zA-Z0-9_-]+)`)
 	if matches := youtuBeRegex.FindStringSubmatch(urlStr); len(matches) > 2 {
 		return &URLAnalysis{
@@ -976,7 +932,7 @@ func AnalyzeYouTubeURL(urlStr string) *URLAnalysis {
 		}
 	}
 
-	// Check for regular video URL (watch?v=)
+	
 	watchRegex := regexp.MustCompile(`[?&]v=([a-zA-Z0-9_-]+)`)
 	if matches := watchRegex.FindStringSubmatch(urlStr); len(matches) > 1 {
 		return &URLAnalysis{
@@ -985,7 +941,7 @@ func AnalyzeYouTubeURL(urlStr string) *URLAnalysis {
 		}
 	}
 
-	// Check for youtu.be short format
+	
 	youtuBeShortRegex := regexp.MustCompile(`youtu\.be/([a-zA-Z0-9_-]+)`)
 	if matches := youtuBeShortRegex.FindStringSubmatch(urlStr); len(matches) > 1 {
 		return &URLAnalysis{
@@ -999,18 +955,17 @@ func AnalyzeYouTubeURL(urlStr string) *URLAnalysis {
 	}
 }
 
-// GetPlaylistInfo retrieves information about a YouTube playlist
 func GetPlaylistInfo(url, requesterName, requesterID string) (*PlaylistInfo, error) {
 	logger.Debugf("Fetching playlist info for: %s", url)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	// Create ytdlp command for playlist
-	// Use FlatPlaylist() for fast fetching - with this flag, yt-dlp returns:
-	// - infos[0]: playlist metadata
-	// - infos[1:]: individual video entries with basic info (fast!)
-	// Use IgnoreErrors() to skip unavailable videos instead of failing the entire playlist
+	
+	
+	
+	
+	
 	cmd := ytdlp.New().
 		SetExecutable(ytdlpUpdater.GetBinaryPath()).
 		ExtractorArgs("youtube:lang=" + messages.Lang()).
@@ -1019,13 +974,13 @@ func GetPlaylistInfo(url, requesterName, requesterID string) (*PlaylistInfo, err
 	cmd = applyJsRuntime(cmd).
 		IgnoreErrors()
 
-	// Run yt-dlp to get playlist information
+	
 	result, err := cmd.Run(ctx, url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get playlist info: %w", err)
 	}
 
-	// Parse extracted info
+	
 	infos, err := result.GetExtractedInfo()
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse playlist info: %w", err)
@@ -1037,33 +992,33 @@ func GetPlaylistInfo(url, requesterName, requesterID string) (*PlaylistInfo, err
 
 	info := infos[0]
 
-	// Check if it's a playlist by checking playlist count or multiple infos
-	// With FlatPlaylist(), videos are in infos[1:], not info.Entries
+	
+	
 	if info.PlaylistCount == nil && len(infos) <= 1 {
 		return nil, fmt.Errorf("URL is not a playlist (no entries found)")
 	}
 
-	// With FlatPlaylist(), yt-dlp behavior varies:
-	// - Sometimes infos[0] is playlist metadata only, infos[1:] are videos
-	// - Sometimes infos[0] is the first video (with playlist metadata), infos[1:] are remaining videos
-	// We detect this by checking if infos[0] has a Duration field (indicates it's a video)
+	
+	
+	
+	
 	var videoInfos []*ytdlp.ExtractedInfo
 	var playlistTitle string
 
 	if info.Duration != nil {
-		// infos[0] is a video, include all infos
-		// Use PlaylistTitle field for the actual playlist name (not the video's title)
+		
+		
 		videoInfos = infos
 		if info.PlaylistTitle != nil {
 			playlistTitle = *info.PlaylistTitle
 		} else if info.Playlist != nil {
 			playlistTitle = *info.Playlist
 		} else {
-			// Fallback to video title if playlist title not available
+			
 			playlistTitle = getStringValue(info.Title)
 		}
 	} else {
-		// infos[0] is just metadata, skip it
+		
 		videoInfos = infos[1:]
 		playlistTitle = getStringValue(info.Title)
 	}
@@ -1075,32 +1030,32 @@ func GetPlaylistInfo(url, requesterName, requesterID string) (*PlaylistInfo, err
 		Videos: make([]*Song, 0),
 	}
 
-	// Get playlist count
+	
 	if info.PlaylistCount != nil {
 		playlistInfo.VideoCount = int(*info.PlaylistCount)
 	}
 
-	// Update VideoCount if not set
+	
 	if playlistInfo.VideoCount == 0 {
 		playlistInfo.VideoCount = len(videoInfos)
 	}
 
-	// Get thumbnail from first video if available
+	
 	if len(videoInfos) > 0 && len(videoInfos[0].Thumbnails) > 0 {
 		playlistInfo.ThumbnailURL = videoInfos[0].Thumbnails[0].URL
 	}
 
-	// Determine the domain to use for video URLs (preserve YouTube Music URLs)
+	
 	domain := "www.youtube.com"
 	if strings.Contains(url, "music.youtube.com") {
 		domain = "music.youtube.com"
 	}
 
-	// Parse video entries
+	
 	for _, entry := range videoInfos {
 		videoURL := fmt.Sprintf("https://%s/watch?v=%s", domain, entry.ID)
 
-		// Parse duration
+		
 		var duration string
 		var isLive bool
 
@@ -1114,7 +1069,7 @@ func GetPlaylistInfo(url, requesterName, requesterID string) (*PlaylistInfo, err
 			duration = "Unknown"
 		}
 
-		// Get thumbnail
+		
 		thumbnail := ""
 		if len(entry.Thumbnails) > 0 {
 			thumbnail = entry.Thumbnails[len(entry.Thumbnails)-1].URL
@@ -1138,7 +1093,6 @@ func GetPlaylistInfo(url, requesterName, requesterID string) (*PlaylistInfo, err
 	return playlistInfo, nil
 }
 
-// getStringValue safely extracts a string value from a pointer
 func getStringValue(ptr *string) string {
 	if ptr != nil {
 		return *ptr
@@ -1146,31 +1100,25 @@ func getStringValue(ptr *string) string {
 	return ""
 }
 
-// UpdateYtDlp updates the yt-dlp binary
-// This function is deprecated and kept for compatibility
-// Use internal/ytdlp package's AutoUpdate() instead
 func UpdateYtDlp() error {
-	// This is now handled by internal/ytdlp package
-	// which provides better update control and weekly checking
+	
+	
 	return nil
 }
 
-// CheckAvailability checks if a video is available and if it's live
-// This is a lightweight check that doesn't fetch full video info
-// Uses fast Innertube API (100-300ms) with fallback to yt-dlp (2300ms) on failure
 func CheckAvailability(url string) (available bool, isLive bool, err error) {
-	// Check cache first to avoid redundant calls
+	
 	if cached, ok := availabilityCache.Load(url); ok {
 		cachedEntry := cached.(*cachedAvailability)
 		if time.Since(cachedEntry.timestamp) < cacheTTL {
 			logger.Debugf("[CheckAvailability] Cache hit for: %s (age: %v)", url, time.Since(cachedEntry.timestamp))
 			return cachedEntry.result.Available, cachedEntry.result.IsLive, nil
 		}
-		// Cache expired, remove it
+		
 		availabilityCache.Delete(url)
 	}
 
-	// Check circuit breaker before making request
+	
 	if err := ytCircuitBreaker.canAttempt(); err != nil {
 		logger.Warnf("[CheckAvailability] Circuit breaker open: %v", err)
 		return false, false, err
@@ -1182,13 +1130,13 @@ func CheckAvailability(url string) (available bool, isLive bool, err error) {
 	available, isLive, err = client.CheckAvailability(url)
 
 	if err != nil {
-		// Innertube failed, fallback to yt-dlp
+		
 		logger.Warnf("[CheckAvailability] Innertube failed, falling back to yt-dlp: %v", err)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		// Create ytdlp command with minimal info extraction
+		
 		cmd := ytdlp.New().
 			SetExecutable(ytdlpUpdater.GetBinaryPath()).
 			DumpJSON().
@@ -1196,7 +1144,7 @@ func CheckAvailability(url string) (available bool, isLive bool, err error) {
 		cmd = applyJsRuntime(cmd).
 			SkipDownload()
 
-		// Run yt-dlp to check availability
+		
 		result, ytdlpErr := cmd.Run(ctx, url)
 		if ytdlpErr != nil {
 			ytCircuitBreaker.recordFailure(ytdlpErr)
@@ -1206,7 +1154,7 @@ func CheckAvailability(url string) (available bool, isLive bool, err error) {
 			return false, false, ytdlpErr
 		}
 
-		// Parse extracted info
+		
 		infos, parseErr := result.GetExtractedInfo()
 		if parseErr != nil {
 			return false, false, parseErr
@@ -1218,7 +1166,7 @@ func CheckAvailability(url string) (available bool, isLive bool, err error) {
 
 		info := infos[0]
 
-		// Check if live
+		
 		isLive = false
 		if info.LiveStatus != nil && (*info.LiveStatus == ytdlp.ExtractedLiveStatusIsLive ||
 			*info.LiveStatus == ytdlp.ExtractedLiveStatusIsUpcoming) {
@@ -1233,7 +1181,7 @@ func CheckAvailability(url string) (available bool, isLive bool, err error) {
 	checkTime := time.Since(startTime)
 	logger.Debugf("[CheckAvailability] Check completed in %v for: %s (available: %v, isLive: %v)", checkTime, url, available, isLive)
 
-	// Cache successful result (10-minute TTL to reduce duplicate checks)
+	
 	if available {
 		availabilityCache.Store(url, &cachedAvailability{
 			result: &AvailabilityResult{
@@ -1244,7 +1192,7 @@ func CheckAvailability(url string) (available bool, isLive bool, err error) {
 		})
 	}
 
-	// Record success in circuit breaker
+	
 	ytCircuitBreaker.recordSuccess()
 	saveVersionResult(url, nil)
 

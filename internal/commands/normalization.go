@@ -18,7 +18,7 @@ func HandleNormalization(s *discordgo.Session, i *discordgo.InteractionCreate) e
 		mode := options[0].StringValue()
 		enabled = mode == "on"
 	} else {
-		// No arg → toggle the current value.
+		
 		currentNormalization, err := queue.GetNormalization(i.GuildID)
 		if err != nil {
 			logger.Errorf("[Normalization] Failed to get current state: %v", err)
@@ -33,7 +33,7 @@ func HandleNormalization(s *discordgo.Session, i *discordgo.InteractionCreate) e
 		return err
 	}
 
-	// Restart FFmpeg so the new filter takes effect on the current track.
+	
 	player.RestartForNormalization(i.GuildID)
 
 	statusText := messages.T(i.GuildID).Settings.StatusOff

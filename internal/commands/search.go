@@ -14,13 +14,11 @@ import (
 	"noraegaori/pkg/logger"
 )
 
-// searchSelections prevents the same result from being queued twice on duplicate select-menu callbacks.
 var (
-	searchSelections   = make(map[string]bool) // searchMessageID → selected
+	searchSelections   = make(map[string]bool) 
 	searchSelectionsMu sync.Mutex
 )
 
-// HandleSearch shows 10 YouTube results in a select menu and queues the chosen song.
 func HandleSearch(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	cmdOptions := i.ApplicationCommandData().Options
 	if len(cmdOptions) == 0 {
@@ -51,11 +49,11 @@ func HandleSearch(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return nil
 	}
 
-	// Use guild+user+nano for uniqueness — i.ID is the interaction ID, not the message ID.
+	
 	searchMessageID := fmt.Sprintf("%s_%s_%d", i.GuildID, i.Member.User.ID, time.Now().UnixNano())
 	logger.Debugf("[Search] HandleSearch called, generated searchMessageID='%s'", searchMessageID)
 
-	// Each select-menu value encodes "{searchMessageID}:{index}" to validate the session on selection.
+	
 	selectOptions := make([]discordgo.SelectMenuOption, 0, len(results))
 	for idx, result := range results {
 		titleWithNumber := fmt.Sprintf("%d. %s", idx+1, result.Title)

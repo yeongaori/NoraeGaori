@@ -279,7 +279,7 @@ func TestCreatePseudoInteraction(t *testing.T) {
 }
 
 func TestMessageResponseFunctions(t *testing.T) {
-	// Test that MessageResponse methods don't panic
+	
 	mr := &MessageResponse{
 		Session:   &discordgo.Session{},
 		ChannelID: "channel123",
@@ -291,7 +291,7 @@ func TestMessageResponseFunctions(t *testing.T) {
 		Description: "Test Description",
 	}
 
-	// These will fail to send (no real connection), but shouldn't panic
+	
 	defer func() {
 		if r := recover(); r != nil {
 			t.Errorf("MessageResponse method panicked: %v", r)

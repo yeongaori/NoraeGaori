@@ -16,9 +16,6 @@ import (
 	"noraegaori/pkg/logger"
 )
 
-// InnertubeClient provides fast YouTube metadata and availability checking
-// using YouTube's internal Innertube API (iOS client)
-// This is 7-27x faster than yt-dlp while maintaining full restriction detection
 type InnertubeClient struct {
 	httpClient    *http.Client
 	apiKey        string
@@ -27,7 +24,6 @@ type InnertubeClient struct {
 	clientVersion string
 }
 
-// innertubeRequest represents the request body for Innertube API
 type innertubeRequest struct {
 	Context struct {
 		Client struct {
@@ -40,7 +36,6 @@ type innertubeRequest struct {
 	VideoID string `json:"videoId"`
 }
 
-// innertubeResponse represents the response from Innertube API
 type innertubeResponse struct {
 	PlayabilityStatus struct {
 		Status          string   `json:"status"`
@@ -74,10 +69,8 @@ type innertubeResponse struct {
 	} `json:"streamingData"`
 }
 
-// Global Innertube client instance
 var innertubeClient *InnertubeClient
 
-// fetchAPIKey scrapes a valid Innertube API key from YouTube's homepage.
 func fetchAPIKey() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -113,7 +106,6 @@ func fetchAPIKey() (string, error) {
 	return "", fmt.Errorf("API key not found in YouTube page")
 }
 
-// initInnertubeClient initializes the global Innertube client
 func initInnertubeClient() {
 	apiKey, err := fetchAPIKey()
 	if err != nil {
@@ -124,7 +116,7 @@ func initInnertubeClient() {
 
 	innertubeClient = &InnertubeClient{
 		httpClient: &http.Client{
-			Timeout: 5 * time.Second, // Fast timeout for quick responses
+			Timeout: 5 * time.Second, 
 		},
 		apiKey:        apiKey,
 		userAgent:     "com.google.ios.youtube/20.03.02 (iPhone16,2; U; CPU iOS 18_2_1 like Mac OS X;)",
@@ -134,7 +126,6 @@ func initInnertubeClient() {
 	logger.Debugf("[Innertube] Client initialized")
 }
 
-// getInnertubeClient returns the global Innertube client, initializing if needed
 func getInnertubeClient() *InnertubeClient {
 	if innertubeClient == nil {
 		initInnertubeClient()
@@ -142,7 +133,6 @@ func getInnertubeClient() *InnertubeClient {
 	return innertubeClient
 }
 
-// extractVideoID extracts the video ID from a YouTube URL
 func extractVideoID(url string) string {
 	patterns := []string{
 		`(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})`,
@@ -158,9 +148,8 @@ func extractVideoID(url string) string {
 	return ""
 }
 
-// callPlayerEndpoint calls the Innertube player endpoint for a video
 func (c *InnertubeClient) callPlayerEndpoint(ctx context.Context, videoID string) (*innertubeResponse, error) {
-	// Build request body
+	
 	reqBody := innertubeRequest{}
 	reqBody.Context.Client.ClientName = c.clientName
 	reqBody.Context.Client.ClientVersion = c.clientVersion
@@ -173,7 +162,7 @@ func (c *InnertubeClient) callPlayerEndpoint(ctx context.Context, videoID string
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Create HTTP request
+	
 	apiURL := "https://www.youtube.com/youtubei/v1/player"
 	if c.apiKey != "" {
 		apiURL += "?key=" + c.apiKey
@@ -186,26 +175,26 @@ func (c *InnertubeClient) callPlayerEndpoint(ctx context.Context, videoID string
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", c.userAgent)
 
-	// Execute request
+	
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Read response
+	
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	// Parse JSON response
+	
 	var innertubeResp innertubeResponse
 	if err := json.Unmarshal(body, &innertubeResp); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
-	// Verify video ID matches to detect AndroidGuard-style mismatches
+	
 	if innertubeResp.VideoDetails.VideoID != "" && innertubeResp.VideoDetails.VideoID != videoID {
 		return nil, fmt.Errorf("video ID mismatch: requested %s but got %s (possible API tampering)", videoID, innertubeResp.VideoDetails.VideoID)
 	}
@@ -213,9 +202,6 @@ func (c *InnertubeClient) callPlayerEndpoint(ctx context.Context, videoID string
 	return &innertubeResp, nil
 }
 
-// CheckAvailability checks if a video is available using Innertube API
-// Returns: available (bool), isLive (bool), error
-// This is 7-27x faster than yt-dlp (100-300ms vs 2300ms)
 func (c *InnertubeClient) CheckAvailability(url string) (bool, bool, error) {
 	videoID := extractVideoID(url)
 	if videoID == "" {
@@ -234,16 +220,16 @@ func (c *InnertubeClient) CheckAvailability(url string) (bool, bool, error) {
 	duration := time.Since(startTime)
 	logger.Debugf("[Innertube] CheckAvailability completed in %v for video: %s", duration, videoID)
 
-	// Check playability status
+	
 	status := resp.PlayabilityStatus.Status
 	if status == "OK" {
-		// Video is available
+		
 		isLive := resp.VideoDetails.IsLiveContent || resp.VideoDetails.IsLive
 		return true, isLive, nil
 	}
 
-	// Video is unavailable - classify the restriction type
-	// guildID intentionally empty: this error is logged, never shown to users.
+	
+	
 	reason := resp.PlayabilityStatus.Reason
 	errorMsg := classifyRestriction("", status, reason, resp.PlayabilityStatus.Messages)
 
@@ -251,9 +237,6 @@ func (c *InnertubeClient) CheckAvailability(url string) (bool, bool, error) {
 	return false, false, errors.New(errorMsg)
 }
 
-// GetVideoInfo fetches video information using Innertube API
-// This eliminates the double-fetch (CheckAvailability + GetVideoInfo) by getting everything in one call
-// Returns: *Song or error
 func (c *InnertubeClient) GetVideoInfo(guildID, url, requesterName, requesterID string) (*Song, error) {
 	videoID := extractVideoID(url)
 	if videoID == "" {
@@ -271,7 +254,7 @@ func (c *InnertubeClient) GetVideoInfo(guildID, url, requesterName, requesterID 
 
 	duration := time.Since(startTime)
 
-	// Check availability first
+	
 	status := resp.PlayabilityStatus.Status
 	if status != "OK" {
 		reason := resp.PlayabilityStatus.Reason
@@ -283,10 +266,10 @@ func (c *InnertubeClient) GetVideoInfo(guildID, url, requesterName, requesterID 
 		}
 	}
 
-	// Parse video details
+	
 	vd := resp.VideoDetails
 
-	// Duration
+	
 	var durationStr string
 	var isLive bool
 
@@ -301,7 +284,7 @@ func (c *InnertubeClient) GetVideoInfo(guildID, url, requesterName, requesterID 
 		durationStr = "Unknown"
 	}
 
-	// Thumbnail - get highest quality
+	
 	thumbnail := ""
 	if len(vd.Thumbnail.Thumbnails) > 0 {
 		thumbnail = vd.Thumbnail.Thumbnails[len(vd.Thumbnail.Thumbnails)-1].URL
@@ -322,9 +305,6 @@ func (c *InnertubeClient) GetVideoInfo(guildID, url, requesterName, requesterID 
 	return song, nil
 }
 
-// CheckVideoAvailability checks if a video is available and not restricted
-// Returns detailed AvailabilityResult for comprehensive restriction checking
-// This is 7-27x faster than yt-dlp (100-300ms vs 2300ms)
 func (c *InnertubeClient) CheckVideoAvailability(guildID, url string) (*AvailabilityResult, error) {
 	videoID := extractVideoID(url)
 	if videoID == "" {
@@ -342,10 +322,10 @@ func (c *InnertubeClient) CheckVideoAvailability(guildID, url string) (*Availabi
 
 	duration := time.Since(startTime)
 
-	// Check playability status
+	
 	status := resp.PlayabilityStatus.Status
 	if status == "OK" {
-		// Video is available
+		
 		isLive := resp.VideoDetails.IsLiveContent || resp.VideoDetails.IsLive
 		logger.Debugf("[Innertube] \"%s\" is available (%v)", resp.VideoDetails.Title, duration)
 		return &AvailabilityResult{
@@ -354,7 +334,7 @@ func (c *InnertubeClient) CheckVideoAvailability(guildID, url string) (*Availabi
 		}, nil
 	}
 
-	// Video is unavailable - classify the restriction type
+	
 	reason := resp.PlayabilityStatus.Reason
 	errorMsg := classifyRestriction(guildID, status, reason, resp.PlayabilityStatus.Messages)
 
@@ -366,7 +346,6 @@ func (c *InnertubeClient) CheckVideoAvailability(guildID, url string) (*Availabi
 	}, nil
 }
 
-// classifyRestriction classifies the restriction type and returns appropriate localized error message
 func classifyRestriction(guildID, status, reason string, msgs []string) string {
 	reasonLower := strings.ToLower(reason)
 	messagesStr := strings.ToLower(strings.Join(msgs, " "))
@@ -374,38 +353,38 @@ func classifyRestriction(guildID, status, reason string, msgs []string) string {
 
 	switch status {
 	case "LOGIN_REQUIRED":
-		// Check if it's private or age-restricted
+		
 		if strings.Contains(reasonLower, "private") || strings.Contains(messagesStr, "private") {
 			return yt.ErrorPrivateVideo
 		}
-		// Age-restricted content
+		
 		return yt.ErrorAgeRestricted
 
 	case "UNPLAYABLE":
-		// Region/geo-blocking
+		
 		if strings.Contains(reasonLower, "country") || strings.Contains(reasonLower, "region") {
 			return yt.ErrorGeoRestricted
 		}
-		// Members-only content
+		
 		if strings.Contains(reasonLower, "members") || strings.Contains(reasonLower, "membership") {
 			return yt.ErrorMembersOnly
 		}
-		// Premium content
+		
 		if strings.Contains(reasonLower, "premium") {
 			return yt.ErrorPremiumOnly
 		}
-		// Copyright
+		
 		if strings.Contains(reasonLower, "copyright") {
 			return yt.ErrorCopyright
 		}
-		// Generic unplayable
+		
 		if reason != "" {
 			return fmt.Sprintf(yt.ErrorUnplayableReason, reason)
 		}
 		return yt.ErrorUnplayable
 
 	case "ERROR":
-		// Deleted/unavailable video
+		
 		if strings.Contains(reasonLower, "unavailable") {
 			return yt.ErrorDeletedVideo
 		}
@@ -418,7 +397,7 @@ func classifyRestriction(guildID, status, reason string, msgs []string) string {
 		return yt.ErrorContentCheck
 
 	default:
-		// Unknown status
+		
 		if reason != "" {
 			return fmt.Sprintf(yt.ErrorUnplayableReason, reason)
 		}

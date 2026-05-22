@@ -20,87 +20,82 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// ErrQueueEmpty is returned when skip causes the queue to become empty
 var ErrQueueEmpty = errors.New("queue is empty after skip")
 
 const (
-	channels     = 2                // Stereo
-	frameRate    = 48000            // 48kHz
-	frameSize    = 960              // 20ms frame at 48kHz
-	maxRetries   = 3                // Maximum retry attempts for failed songs
-	lockTimeout  = 30 * time.Second // Play lock timeout
-	stallTimeout = 30 * time.Second // Stream stall detection timeout
+	channels     = 2                
+	frameRate    = 48000            
+	frameSize    = 960              
+	maxRetries   = 3                
+	lockTimeout  = 30 * time.Second 
+	stallTimeout = 30 * time.Second 
 )
 
-// PlayerCommand represents a command to the player
 type PlayerCommand struct {
-	Type    string // "play", "skip", "stop", "pause", "resume"
+	Type    string 
 	Session *discordgo.Session
 	GuildID string
-	Done    chan error // Channel to signal completion
+	Done    chan error 
 }
 
-// GuildPlayer represents a music player for a guild
 type GuildPlayer struct {
 	GuildID          string
 	VoiceConn        *discordgo.VoiceConnection
-	VoiceChannelID   string // Track channel ID separately (not in VoiceConnection in new API)
+	VoiceChannelID   string 
 	Playing          bool
 	Paused           bool
 	Loading          bool
-	TogglingNorm     bool // Signal to restart FFmpeg for normalization change
-	Seeking          bool // Signal to restart FFmpeg at song.SeekTime (user seek)
+	TogglingNorm     bool 
+	Seeking          bool 
 	Volume           float64
 	StopChan         chan struct{}
-	PlaybackDone     chan struct{}      // Signaled when playback terminates
-	CommandChan      chan PlayerCommand // Channel for player commands
-	QuitChan         chan struct{}      // Channel to stop command processor
+	PlaybackDone     chan struct{}      
+	CommandChan      chan PlayerCommand 
+	QuitChan         chan struct{}      
 	PlaybackStart    time.Time
 	mu               sync.Mutex
 	processorRunning bool
 }
 
 var (
-	// Guild players map
+	
 	players   = make(map[string]*GuildPlayer)
 	playersMu sync.RWMutex
 
-	// Play function locks per guild
+	
 	playLocks   = make(map[string]*sync.Mutex)
 	playLocksMu sync.Mutex
 
-	// Global loading messages map (keyed by guild ID)
+	
 	loadingMessages   = make(map[string]*discordgo.Message)
 	loadingMessagesMu sync.RWMutex
 
-	// Global reconnect messages map (keyed by guild ID)
+	
 	reconnectMessages   = make(map[string]*discordgo.Message)
 	reconnectMessagesMu sync.RWMutex
 
-	// Pre-cache storage (kept for backward compatibility with precache.go)
-	// TODO: Migrate to Song-integrated pre-cache
+	
+	
 	preCacheStore   = make(map[string]*PreCache)
 	preCacheStoreMu sync.RWMutex
 
-	// Playback retry tracking (map-based because Song objects are recreated from DB each iteration)
-	playbackRetries   = make(map[string]int) // key: "guildID:songURL"
+	
+	playbackRetries   = make(map[string]int) 
 	playbackRetriesMu sync.Mutex
 
-	// Callback for when song starts playing
+	
 	onSongStartCallback func(guildID string)
 	callbackMu          sync.RWMutex
 )
 
-// PreCache represents pre-cached data for a song
 type PreCache struct {
-	Data       []byte // Pre-cached audio data (for PCM strategies)
-	StreamURL  string // Pre-cached stream URL
+	Data       []byte 
+	StreamURL  string 
 	SongID     int
 	Timestamp  time.Time
 	CancelFunc context.CancelFunc
 }
 
-// acquirePlayLock gets or creates a play lock for a guild
 func acquirePlayLock(guildID string) *sync.Mutex {
 	playLocksMu.Lock()
 	defer playLocksMu.Unlock()
@@ -111,24 +106,23 @@ func acquirePlayLock(guildID string) *sync.Mutex {
 	return playLocks[guildID]
 }
 
-// GetPlayer gets or creates a player for a guild
 func GetPlayer(guildID string) *GuildPlayer {
 	playersMu.Lock()
 	defer playersMu.Unlock()
 
 	if player, exists := players[guildID]; exists {
-		// Check if processor is still running (keep lock while restarting to prevent race)
+		
 		player.mu.Lock()
 		running := player.processorRunning
 		if !running {
-			// Processor died, need to restart it
+			
 			logger.Warnf("[GetPlayer] Processor not running for guild %s, restarting", guildID)
 
-			// Recreate channels under lock to prevent race condition
+			
 			player.CommandChan = make(chan PlayerCommand, 10)
 			player.QuitChan = make(chan struct{})
 
-			// Start processor (processorRunning set here under lock to prevent race)
+			
 			player.processorRunning = true
 			go player.processCommands()
 		}
@@ -144,20 +138,19 @@ func GetPlayer(guildID string) *GuildPlayer {
 		Loading:          false,
 		Volume:           1.0,
 		StopChan:         make(chan struct{}),
-		PlaybackDone:     make(chan struct{}, 1),       // Buffered to prevent blocking
-		CommandChan:      make(chan PlayerCommand, 10), // Buffered channel for commands
+		PlaybackDone:     make(chan struct{}, 1),       
+		CommandChan:      make(chan PlayerCommand, 10), 
 		QuitChan:         make(chan struct{}),
 		processorRunning: true,
 	}
 	players[guildID] = player
 
-	// Start command processor goroutine
+	
 	go player.processCommands()
 
 	return player
 }
 
-// SetLoadingMessage stores a loading message for a guild
 func SetLoadingMessage(guildID string, msg *discordgo.Message) {
 	loadingMessagesMu.Lock()
 	defer loadingMessagesMu.Unlock()
@@ -165,14 +158,12 @@ func SetLoadingMessage(guildID string, msg *discordgo.Message) {
 	logger.Debugf("[LoadingMessage] Stored loading message for guild: %s", guildID)
 }
 
-// GetLoadingMessage retrieves a loading message for a guild
 func GetLoadingMessage(guildID string) *discordgo.Message {
 	loadingMessagesMu.RLock()
 	defer loadingMessagesMu.RUnlock()
 	return loadingMessages[guildID]
 }
 
-// DeleteLoadingMessage removes a loading message for a guild
 func DeleteLoadingMessage(guildID string) {
 	loadingMessagesMu.Lock()
 	defer loadingMessagesMu.Unlock()
@@ -180,8 +171,6 @@ func DeleteLoadingMessage(guildID string) {
 	logger.Debugf("[LoadingMessage] Deleted loading message for guild: %s", guildID)
 }
 
-// sendNowPlayingMessage updates the loading message to "Now Playing" or sends a new one.
-// Also handles reconnect message updates.
 func sendNowPlayingMessage(session *discordgo.Session, guildID string, song *queue.Song, q *queue.Queue) {
 	loadingMsg := GetLoadingMessage(guildID)
 	if loadingMsg != nil {
@@ -223,7 +212,7 @@ func sendNowPlayingMessage(session *discordgo.Session, guildID string, song *que
 		session.ChannelMessageSendEmbed(q.TextChannelID, embed)
 	}
 
-	// Update reconnect message if resuming after a stream stall
+	
 	if reconnectMsg := getReconnectMessage(guildID); reconnectMsg != nil {
 		reconnectedEmbed := messages.CreateSongEmbed(
 			guildID,
@@ -242,28 +231,24 @@ func sendNowPlayingMessage(session *discordgo.Session, guildID string, song *que
 	}
 }
 
-// setReconnectMessage stores a reconnect message for a guild
 func setReconnectMessage(guildID string, msg *discordgo.Message) {
 	reconnectMessagesMu.Lock()
 	defer reconnectMessagesMu.Unlock()
 	reconnectMessages[guildID] = msg
 }
 
-// getReconnectMessage retrieves a reconnect message for a guild
 func getReconnectMessage(guildID string) *discordgo.Message {
 	reconnectMessagesMu.RLock()
 	defer reconnectMessagesMu.RUnlock()
 	return reconnectMessages[guildID]
 }
 
-// deleteReconnectMessage removes a reconnect message for a guild
 func deleteReconnectMessage(guildID string) {
 	reconnectMessagesMu.Lock()
 	defer reconnectMessagesMu.Unlock()
 	delete(reconnectMessages, guildID)
 }
 
-// DeletePlayer removes a player for a guild
 func DeletePlayer(guildID string) {
 	playersMu.Lock()
 	player, exists := players[guildID]
@@ -274,26 +259,24 @@ func DeletePlayer(guildID string) {
 	delete(players, guildID)
 	playersMu.Unlock()
 
-	// Signal command processor to stop
+	
 	close(player.QuitChan)
 
-	// Close command channel to fail any pending commands
+	
 	close(player.CommandChan)
 
-	// Clean up retry tracking for this guild
+	
 	clearRetryCountsForGuild(guildID)
 
 	logger.Debugf("[DeletePlayer] Stopped command processor for guild: %s", guildID)
 }
 
-// SetOnSongStartCallback sets a callback to be called when a song starts playing
 func SetOnSongStartCallback(callback func(guildID string)) {
 	callbackMu.Lock()
 	defer callbackMu.Unlock()
 	onSongStartCallback = callback
 }
 
-// callOnSongStart calls the registered callback if it exists
 func callOnSongStart(guildID string) {
 	callbackMu.RLock()
 	callback := onSongStartCallback
@@ -304,21 +287,20 @@ func callOnSongStart(guildID string) {
 	}
 }
 
-// JoinVoice joins a voice channel
 func JoinVoice(session *discordgo.Session, guildID, channelID string) (*discordgo.VoiceConnection, error) {
 	player := GetPlayer(guildID)
 	player.mu.Lock()
 	defer player.mu.Unlock()
 
-	// If already connected to this channel, return existing connection
+	
 	if player.VoiceConn != nil && player.VoiceChannelID == channelID {
 		return player.VoiceConn, nil
 	}
 
-	// Check if session already has a voice connection for this guild
-	// This can happen if the player state was reset but the bot is still in voice
-	// Since player.VoiceConn is nil (checked above), this is an orphaned/stale connection
-	// (e.g., from a bot restart) — always disconnect and rejoin fresh
+	
+	
+	
+	
 	session.RLock()
 	existingVC, exists := session.VoiceConnections[guildID]
 	session.RUnlock()
@@ -329,14 +311,14 @@ func JoinVoice(session *discordgo.Session, guildID, channelID string) (*discordg
 		cancel()
 	}
 
-	// Disconnect from old channel if connected (player level)
+	
 	if player.VoiceConn != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		player.VoiceConn.Disconnect(ctx)
 		cancel()
 	}
 
-	// Join new voice channel with timeout context
+	
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -345,7 +327,7 @@ func JoinVoice(session *discordgo.Session, guildID, channelID string) (*discordg
 		return nil, fmt.Errorf("failed to join voice channel: %w", err)
 	}
 
-	// Wait for voice connection to be ready with timeout
+	
 	timeout := time.After(10 * time.Second)
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
@@ -370,7 +352,6 @@ func JoinVoice(session *discordgo.Session, guildID, channelID string) (*discordg
 	}
 }
 
-// LeaveVoice leaves the voice channel
 func LeaveVoice(guildID string) error {
 	player := GetPlayer(guildID)
 	player.mu.Lock()
@@ -390,10 +371,9 @@ func LeaveVoice(guildID string) error {
 	return nil
 }
 
-// processCommands processes player commands sequentially using channels
 func (p *GuildPlayer) processCommands() {
 	defer func() {
-		// Panic recovery to prevent goroutine death
+		
 		if r := recover(); r != nil {
 			logger.Errorf("[CommandProcessor] Panic recovered for guild %s: %v", p.GuildID, r)
 		}
@@ -410,14 +390,14 @@ func (p *GuildPlayer) processCommands() {
 		select {
 		case cmd, ok := <-p.CommandChan:
 			if !ok {
-				// Channel closed, exit processor
+				
 				logger.Debugf("[CommandProcessor] CommandChan closed for guild: %s", p.GuildID)
 				return
 			}
 
 			logger.Debugf("[CommandProcessor] Received %s command for guild: %s", cmd.Type, p.GuildID)
 
-			// Process command with panic recovery
+			
 			func() {
 				var err error
 				defer func() {
@@ -428,7 +408,7 @@ func (p *GuildPlayer) processCommands() {
 
 					logger.Debugf("[CommandProcessor] Command %s completed for guild %s with error: %v", cmd.Type, p.GuildID, err)
 
-					// Send result back through Done channel
+					
 					if cmd.Done != nil {
 						select {
 						case cmd.Done <- err:
@@ -457,14 +437,13 @@ func (p *GuildPlayer) processCommands() {
 			}()
 
 		case <-p.QuitChan:
-			// Graceful shutdown requested
+			
 			logger.Debugf("[CommandProcessor] Quit signal received for guild: %s", p.GuildID)
 			return
 		}
 	}
 }
 
-// Play queues a play command (non-blocking, uses channels)
 func Play(session *discordgo.Session, guildID string) error {
 	player := GetPlayer(guildID)
 
@@ -474,7 +453,7 @@ func Play(session *discordgo.Session, guildID string) error {
 		GuildID: guildID,
 	}
 
-	// Send command to queue (with panic recovery for closed channel)
+	
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Warnf("[Play] Recovered from panic (channel likely closed) for guild %s: %v", guildID, r)
@@ -483,23 +462,21 @@ func Play(session *discordgo.Session, guildID string) error {
 
 	select {
 	case player.CommandChan <- cmd:
-		// Command queued successfully - playInternal blocks for entire playback,
-		// so we just return nil after queuing since the command processor handles it
+		
+		
 		return nil
 	default:
-		// Channel full
+		
 		logger.Warnf("[Play] Command queue full for guild %s", guildID)
 		return fmt.Errorf("command queue full, please try again")
 	}
 }
 
-// playInternal is the actual play implementation (called by command processor)
-// Uses a loop to continue playing songs without re-acquiring the lock
 func playInternal(session *discordgo.Session, guildID string) error {
-	// Acquire play lock with timeout - using TryLock pattern to avoid goroutine leaks
+	
 	lock := acquirePlayLock(guildID)
 
-	// Try to acquire lock with timeout using a goroutine-safe pattern
+	
 	lockAcquired := make(chan bool, 1)
 	unlockChan := make(chan struct{})
 
@@ -507,19 +484,19 @@ func playInternal(session *discordgo.Session, guildID string) error {
 		lock.Lock()
 		select {
 		case lockAcquired <- true:
-			// Lock acquired and caller notified
-			<-unlockChan // Wait for signal to unlock
+			
+			<-unlockChan 
 			lock.Unlock()
 		default:
-			// Timeout already occurred, unlock immediately
+			
 			lock.Unlock()
 		}
 	}()
 
 	select {
 	case <-lockAcquired:
-		// Successfully acquired lock
-		defer close(unlockChan) // Signal goroutine to unlock
+		
+		defer close(unlockChan) 
 	case <-time.After(lockTimeout):
 		logger.Warnf("[Play] Lock timeout for guild: %s", guildID)
 		return fmt.Errorf("play lock timeout")
@@ -527,35 +504,33 @@ func playInternal(session *discordgo.Session, guildID string) error {
 
 	logger.Debugf("[Play] Lock acquired for guild: %s", guildID)
 
-	// Use a loop to play songs continuously without releasing/reacquiring the lock
+	
 	for {
 		result := playSingleSong(session, guildID)
 		switch result {
 		case playContinue:
-			// Continue to next song in the loop
+			
 			continue
 		case playStop:
-			// Stop playback (queue empty, stopped by user, etc.)
+			
 			return nil
 		case playError:
-			// An error occurred that should be returned
+			
 			return fmt.Errorf("playback error")
 		}
 	}
 }
 
-// playResult represents the result of playing a single song
 type playResult int
 
 const (
-	playContinue playResult = iota // Continue to next song
-	playStop                       // Stop playback
-	playError                      // Error occurred
+	playContinue playResult = iota 
+	playStop                       
+	playError                      
 )
 
-// playSingleSong plays a single song and returns whether to continue, stop, or error
 func playSingleSong(session *discordgo.Session, guildID string) playResult {
-	// Get queue
+	
 	q, err := queue.GetQueue(guildID, true)
 	if err != nil {
 		logger.Errorf("[Play] Failed to get queue: %v", err)
@@ -567,8 +542,8 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 	if q == nil || len(q.Songs) == 0 {
 		logger.Debugf("[Play] Queue is empty for guild: %s", guildID)
 		sendLeavingMessage(session, guildID, "empty")
-		// Cleanup - call stopInternal directly to avoid deadlock
-		// (we're already inside the command processor, so using Stop() would cause timeout)
+		
+		
 		if err := stopInternal(guildID); err != nil {
 			logger.Errorf("[Play] Failed to cleanup: %v", err)
 		}
@@ -578,20 +553,20 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 	player := GetPlayer(guildID)
 	song := q.Songs[0]
 
-	// Initialize/update player volume from database
+	
 	player.mu.Lock()
 	player.Volume = float64(q.Volume) / 100.0
-	// Reset stop channel for new playback cycle (close-based broadcast requires fresh channel)
+	
 	player.StopChan = make(chan struct{})
 	player.mu.Unlock()
 	logger.Debugf("[Play] Set initial volume to %.0f%% (%.2f) for guild: %s", q.Volume, player.Volume, guildID)
 
-	// Ensure voice connection (reconnect if dead)
+	
 	needsReconnect := false
 	if player.VoiceConn == nil {
 		needsReconnect = true
 	} else {
-		// Check if existing connection is dead
+		
 		select {
 		case <-player.VoiceConn.Dead:
 			logger.Warnf("[Play] Detected dead voice connection, will reconnect for guild: %s", guildID)
@@ -601,7 +576,7 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 			player.VoiceConn = nil
 			needsReconnect = true
 		default:
-			// Connection is alive
+			
 		}
 	}
 
@@ -618,10 +593,10 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 	player.mu.Lock()
 	player.Loading = true
 	player.Playing = false
-	player.Paused = false // Clear paused state
+	player.Paused = false 
 	player.mu.Unlock()
 
-	// Update database states
+	
 	if err := queue.SetPaused(guildID, false); err != nil {
 		logger.Errorf("[Play] Failed to clear paused state: %v", err)
 	}
@@ -634,7 +609,7 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 
 	logger.Infof("[Play] Starting playback: %s", song.Title)
 
-	// Get voice channel bitrate for optimal audio quality
+	
 	voiceChannelBitrate := 0
 	if q.VoiceChannelID != "" {
 		channel, err := session.Channel(q.VoiceChannelID)
@@ -646,7 +621,7 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 		}
 	}
 
-	// Get stream URL (check pre-cache first, then fetch from YouTube)
+	
 	song.SetState(queue.SongStateLoading)
 	var streamURL string
 	var streamErr error
@@ -659,7 +634,7 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 	if streamErr != nil {
 		logger.Errorf("[Play] Failed to get stream URL: %v", streamErr)
 
-		// Check if we were stopped while loading (e.g., skip command)
+		
 		select {
 		case <-player.StopChan:
 			logger.Debugf("[Play] Stop signal received during stream URL fetch, stopping: %s", song.Title)
@@ -669,7 +644,7 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 
 		shouldRetry := handlePlaybackError(session, guildID, song, streamErr)
 		if shouldRetry {
-			// Drain any stale stop signals before retrying
+			
 			select {
 			case <-player.StopChan:
 				logger.Debugf("[Play] Drained stale stop signal before retry for: %s", song.Title)
@@ -677,28 +652,28 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 			default:
 			}
 			time.Sleep(2 * time.Second)
-			return playContinue // Retry the same song
+			return playContinue 
 		}
-		// Remove failed song and try next
+		
 		if err := queue.RemoveFirstSong(guildID); err != nil {
 			logger.Errorf("[Play] Failed to remove failed song: %v", err)
 		}
-		return playContinue // Try next song
+		return playContinue 
 	}
 
-	// Check if song was removed while loading (e.g., by skip command)
+	
 	qRecheck, err := queue.GetQueue(guildID, false)
 	if err != nil || qRecheck == nil || len(qRecheck.Songs) == 0 {
 		logger.Debugf("[Play] Queue empty after loading, song was likely skipped: %s", song.Title)
 		return playStop
 	}
-	// Verify this is still the same song
+	
 	if qRecheck.Songs[0].ID != song.ID {
 		logger.Debugf("[Play] Song changed while loading (was: %s, now: %s), restarting", song.Title, qRecheck.Songs[0].Title)
-		return playContinue // Play the new song
+		return playContinue 
 	}
 
-	// Send "Now Playing" message only after the first audio frame is delivered to Discord
+	
 	firstFrameCh := make(chan struct{}, 1)
 	var firstFrameOnce sync.Once
 	closeFirstFrame := func() { firstFrameOnce.Do(func() { close(firstFrameCh) }) }
@@ -708,7 +683,7 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 		case <-firstFrameCh:
 			sendNowPlayingMessage(session, guildID, song, q)
 		case <-player.StopChan:
-			// Skipped/stopped before first frame — clean up loading message if any
+			
 			if lm := GetLoadingMessage(guildID); lm != nil {
 				session.ChannelMessageDelete(lm.ChannelID, lm.ID)
 				DeleteLoadingMessage(guildID)
@@ -716,7 +691,7 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 		}
 	}()
 
-	// Create audio stream (loop to support restart on normalization toggle)
+	
 	seekTime := song.SeekTime
 	normalization := q.Normalization
 	for {
@@ -726,26 +701,26 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 			break
 		}
 
-		// Check if it was a normalization toggle or user-seek restart
+		
 		player.mu.Lock()
 		toggling := player.TogglingNorm
 		seeking := player.Seeking
 		if toggling {
 			player.TogglingNorm = false
-			// Calculate current position for seamless restart
+			
 			seekTime = int(time.Since(player.PlaybackStart).Milliseconds())
 			player.StopChan = make(chan struct{})
 		}
 		if seeking {
 			player.Seeking = false
-			// User-requested seek time was already written to song.SeekTime
+			
 			seekTime = song.SeekTime
 			player.StopChan = make(chan struct{})
 		}
 		player.mu.Unlock()
 
 		if toggling {
-			// Re-read normalization from DB
+			
 			newNorm, err := queue.GetNormalization(guildID)
 			if err != nil {
 				logger.Warnf("[Play] Failed to get normalization state, using previous: %v", err)
@@ -761,42 +736,42 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 			continue
 		}
 
-		// Check if playback was stopped by user (skip/stop command)
+		
 		if err.Error() == "playback stopped by user" {
 			logger.Debugf("[Play] Playback stopped by user for: %s", song.Title)
-			// Don't remove song - skip/stop command already handled it
+			
 			return playStop
 		}
 
-		// Calculate current playback position for crash recovery
-		// PlaybackStart is adjusted to account for initial seek, so time.Since gives absolute position
+		
+		
 		player.mu.Lock()
 		currentPosition := int(time.Since(player.PlaybackStart).Milliseconds())
 		player.mu.Unlock()
 
-		// Only update seek time if we made progress (avoid resetting to 0 on immediate failures)
-		if currentPosition > song.SeekTime+1000 { // At least 1 second of progress
+		
+		if currentPosition > song.SeekTime+1000 { 
 			song.SeekTime = currentPosition
 			logger.Infof("[Play] Crash recovery: will resume from position %dms for: %s", currentPosition, song.Title)
-			// Update seek time in database
+			
 			if err := queue.UpdateSongSeekTime(guildID, song.ID, currentPosition); err != nil {
 				logger.Warnf("[Play] Failed to update seek time in database: %v", err)
 			}
 		}
 
-		// Check if it's a stream stall - notify user about reconnection
+		
 		isStreamStall := strings.Contains(err.Error(), "stream stalled")
 		if isStreamStall {
 			sendReconnectMessage(session, guildID, song)
 		}
 
-		// Check if it's a voice connection error - need to clear dead connection
+		
 		isVoiceError := strings.Contains(err.Error(), "voice connection")
 		if isVoiceError {
 			logger.Warnf("[Play] Voice connection error detected, clearing dead connection for guild: %s", guildID)
 			player.mu.Lock()
 			if player.VoiceConn != nil {
-				// Disconnect dead connection
+				
 				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 				player.VoiceConn.Disconnect(ctx)
 				cancel()
@@ -809,14 +784,14 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 		logger.Errorf("[Play] Playback error: %v", err)
 		shouldRetry := handlePlaybackError(session, guildID, song, err)
 		if shouldRetry {
-			// Drain any stale stop signals before retrying
+			
 			select {
 			case <-player.StopChan:
 				logger.Debugf("[Play] Drained stale stop signal before retry for: %s", song.Title)
 				return playStop
 			default:
 			}
-			// For voice errors, wait a bit longer to allow reconnection
+			
 			if isVoiceError {
 				logger.Infof("[Play] Waiting 3 seconds before reconnecting voice for guild: %s", guildID)
 				time.Sleep(3 * time.Second)
@@ -824,40 +799,40 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 				time.Sleep(2 * time.Second)
 			}
 			closeFirstFrame()
-			return playContinue // Retry from saved position (will auto-reconnect voice)
+			return playContinue 
 		}
-		// Remove failed song and try next
+		
 		if err := queue.RemoveFirstSong(guildID); err != nil {
 			logger.Errorf("[Play] Failed to remove failed song: %v", err)
 		}
 		closeFirstFrame()
-		return playContinue // Try next song
-	} // end for (playAudio restart loop)
-	closeFirstFrame() // Unblock goroutine if first frame was never sent
+		return playContinue 
+	} 
+	closeFirstFrame() 
 	logger.Debugf("[Play] playAudio completed successfully for: %s", song.Title)
 
-	// Song finished successfully
+	
 	player.mu.Lock()
 	player.Playing = false
 	player.mu.Unlock()
 
-	// Clear retry tracking
+	
 	song.ResetRetry()
 	song.SetState(queue.SongStateCompleted)
 	clearRetryCount(guildID, song.URL)
 
-	// Update database state
+	
 	if err := queue.SetPlaying(guildID, false); err != nil {
 		logger.Errorf("[Play] Failed to clear playing state after song finish: %v", err)
 	}
 
-	// Reload queue to get current repeat setting
+	
 	q, err = queue.GetQueue(guildID, false)
 	if err != nil {
 		logger.Errorf("[Play] Failed to reload queue for repeat check: %v", err)
 	}
 
-	// Store song info for repeat mode before removing
+	
 	repeatMode := queue.RepeatOff
 	if q != nil {
 		repeatMode = q.RepeatMode
@@ -879,21 +854,21 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 		logger.Debugf("[Play] Repeat check: q=%v, repeatMode=%d, song.IsLive=%v", q != nil, repeatMode, song.IsLive)
 	}
 
-	// Remove finished song first (before re-adding for repeat to avoid duplicate check)
+	
 	if err := queue.RemoveFirstSong(guildID); err != nil {
 		logger.Errorf("[Play] Failed to remove finished song: %v", err)
 	}
 
-	// Handle repeat mode - add song back after removing
+	
 	if shouldRepeat {
 		if repeatMode == queue.RepeatSingle {
-			// Single: re-add to beginning so it plays immediately next
+			
 			logger.Debugf("[Play] Single repeat, re-adding song to front: %s", repeatSong.Title)
 			if err := queue.AddSong(guildID, repeatSong, 0); err != nil {
 				logger.Errorf("[Play] Failed to re-add song for single repeat: %v", err)
 			}
 		} else {
-			// All: re-add to end of queue
+			
 			logger.Debugf("[Play] Queue repeat, re-adding song to end: %s", repeatSong.Title)
 			if err := queue.AddSong(guildID, repeatSong, -1); err != nil {
 				logger.Errorf("[Play] Failed to re-add song for queue repeat: %v", err)
@@ -901,28 +876,27 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 		}
 	}
 
-	// Start pre-caching next song
+	
 	go PreCacheNext(guildID, voiceChannelBitrate)
 
-	// Continue to next song in the loop
+	
 	return playContinue
 }
 
-// playAudio streams audio to Discord
 func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime int, volume float64, normalization bool, bitrate int, firstFrameCh chan<- struct{}) error {
 	logger.Debugf("[playAudio] Entered function for guild: %s", player.GuildID)
 
-	// Capture stop channel locally so goroutines reference this specific channel
-	// even if player.StopChan is later reset for the next playback cycle
+	
+	
 	stopCh := player.StopChan
 
-	// Signal PlaybackDone when this function exits (for skip/stop to wait on)
+	
 	defer func() {
 		select {
 		case player.PlaybackDone <- struct{}{}:
 			logger.Debugf("[playAudio] Signaled PlaybackDone for guild: %s", player.GuildID)
 		default:
-			// Channel full, drain it first then signal
+			
 			select {
 			case <-player.PlaybackDone:
 			default:
@@ -941,10 +915,10 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 	guildID := player.GuildID
 	player.mu.Unlock()
 
-	// Mark song as playing
+	
 	song.StartPlayback()
 
-	// Update database states
+	
 	if err := queue.SetPlaying(guildID, true); err != nil {
 		logger.Errorf("[playAudio] Failed to set playing state: %v", err)
 	}
@@ -954,7 +928,7 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 
 	logger.Debugf("[playAudio] Set playing state for guild: %s", guildID)
 
-	// Call callback when song starts (clears skip votes) - only on first attempt, not retries
+	
 	playbackRetriesMu.Lock()
 	retries := playbackRetries[retryKey(guildID, song.URL)]
 	playbackRetriesMu.Unlock()
@@ -965,10 +939,10 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 		logger.Debugf("[playAudio] Skipping onSongStart callback (retry %d) for guild: %s", retries, guildID)
 	}
 
-	// Pre-cache next song so skip doesn't trigger a full yt-dlp call
+	
 	go PreCacheNext(guildID, bitrate)
 
-	// Build FFmpeg command
+	
 	logger.Debugf("[playAudio] Building FFmpeg command for guild: %s", guildID)
 	args := []string{
 		"-reconnect", "1",
@@ -976,13 +950,13 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 		"-reconnect_delay_max", "5",
 	}
 
-	// Add seek if needed
+	
 	if seekTime > 0 {
 		seekSeconds := float64(seekTime) / 1000.0
 		args = append(args, "-ss", fmt.Sprintf("%.3f", seekSeconds))
 	}
 
-	// Build FFmpeg args — volume is handled in Go for live adjustment
+	
 	args = append(args, "-i", streamURL)
 
 	if normalization {
@@ -990,14 +964,14 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 	}
 
 	args = append(args,
-		"-f", "s16le", // Raw PCM 16-bit little-endian
-		"-ar", "48000", // 48kHz sample rate
-		"-ac", "2", // Stereo (2 channels)
+		"-f", "s16le", 
+		"-ar", "48000", 
+		"-ac", "2", 
 		"pipe:1",
 	)
 
 	logger.Debugf("[playAudio] Creating FFmpeg process for guild: %s", guildID)
-	// Create FFmpeg process
+	
 	ffmpeg := exec.Command("ffmpeg", args...)
 	stdout, err := ffmpeg.StdoutPipe()
 	if err != nil {
@@ -1010,7 +984,7 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 	}
 
 	logger.Debugf("[playAudio] FFmpeg started, setting voice speaking state for guild: %s", guildID)
-	// Start speaking
+	
 	logger.Debugf("[playAudio] About to call Speaking(true) for guild: %s", guildID)
 	if player.VoiceConn == nil {
 		ffmpeg.Process.Kill()
@@ -1024,7 +998,7 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 		}
 	}()
 
-	// Create Opus encoder (uses native libopus if available, WASM fallback otherwise)
+	
 	logger.Debugf("[playAudio] Creating Opus encoder (%s) for guild: %s", GetEncoderType(), guildID)
 	opusEncoder, err := NewOpusEncoder(frameRate, channels)
 	if err != nil {
@@ -1032,18 +1006,18 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 		return fmt.Errorf("failed to create opus encoder: %w", err)
 	}
 
-	// Set bitrate for better stability (64kbps stereo)
+	
 	if err := opusEncoder.SetBitrate(64000); err != nil {
 		logger.Warnf("[playAudio] Failed to set opus bitrate: %v", err)
 	}
 
-	// Buffered pipeline: producer buffers raw PCM, consumer applies volume + encodes + sends
-	// Volume is applied at send time so changes take effect instantly
-	const pcmBufSize = 1500 // ~30 seconds of buffered PCM frames
+	
+	
+	const pcmBufSize = 1500 
 	pcmChan := make(chan []int16, pcmBufSize)
 	encodeErr := make(chan error, 1)
 
-	// Producer: read PCM from FFmpeg and buffer raw samples (no volume/encoding)
+	
 	go func() {
 		defer close(pcmChan)
 
@@ -1058,7 +1032,7 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 
 			pcmBuf := make([]int16, frameSize*channels)
 
-			// Read PCM with stall detection
+			
 			readStart := time.Now()
 			readErr := make(chan error, 1)
 			go func() {
@@ -1122,7 +1096,7 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 		}
 	}()
 
-	// Consumer: apply volume, encode to Opus, send to Discord
+	
 	sentFrames := 0
 	var consumerSlowSends int
 	volumeBuf := make([]int16, frameSize*channels)
@@ -1217,7 +1191,6 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 	}
 }
 
-// isDefinitivePlaybackError checks if an error indicates the video is permanently unavailable
 func isDefinitivePlaybackError(errMsg string) bool {
 	errorLower := strings.ToLower(errMsg)
 	definitivePatterns := []string{
@@ -1245,7 +1218,6 @@ func isDefinitivePlaybackError(errMsg string) bool {
 	return false
 }
 
-// cleanPlaybackErrorMessage maps error strings to user-friendly messages
 func cleanPlaybackErrorMessage(guildID, errMsg string) string {
 	errorLower := strings.ToLower(errMsg)
 	t := messages.T(guildID)
@@ -1269,14 +1241,13 @@ func cleanPlaybackErrorMessage(guildID, errMsg string) string {
 			return message
 		}
 	}
-	// Check generic "video unavailable" / "not available" last
+	
 	if strings.Contains(errorLower, "video unavailable") || strings.Contains(errorLower, "not available") {
 		return t.Player.ErrorUnavailable
 	}
 	return t.Player.ErrorUnavailable
 }
 
-// sendReconnectMessage notifies the user that the stream stalled and we're reconnecting
 func sendReconnectMessage(session *discordgo.Session, guildID string, song *queue.Song) {
 	q, err := queue.GetQueue(guildID, false)
 	if err != nil || q == nil || q.TextChannelID == "" {
@@ -1301,7 +1272,6 @@ func sendReconnectMessage(session *discordgo.Session, guildID string, song *queu
 	}
 }
 
-// sendSongErrorMessage sends an error embed to the guild's text channel
 func sendSongErrorMessage(session *discordgo.Session, guildID string, song *queue.Song, reason string) {
 	q, err := queue.GetQueue(guildID, false)
 	if err != nil || q == nil || q.TextChannelID == "" {
@@ -1324,19 +1294,16 @@ func sendSongErrorMessage(session *discordgo.Session, guildID string, song *queu
 	session.ChannelMessageSendEmbed(q.TextChannelID, embed)
 }
 
-// retryKey returns the map key for tracking retries
 func retryKey(guildID, songURL string) string {
 	return guildID + ":" + songURL
 }
 
-// clearRetryCount removes the retry counter for a guild+song
 func clearRetryCount(guildID, songURL string) {
 	playbackRetriesMu.Lock()
 	delete(playbackRetries, retryKey(guildID, songURL))
 	playbackRetriesMu.Unlock()
 }
 
-// clearRetryCountsForGuild removes all retry counters for a guild
 func clearRetryCountsForGuild(guildID string) {
 	prefix := guildID + ":"
 	playbackRetriesMu.Lock()
@@ -1348,22 +1315,20 @@ func clearRetryCountsForGuild(guildID string) {
 	playbackRetriesMu.Unlock()
 }
 
-// handlePlaybackError handles playback errors and determines if we should retry or skip
-// Returns true if should retry, false if should skip to next song
 func handlePlaybackError(session *discordgo.Session, guildID string, song *queue.Song, err error) bool {
 	errMsg := err.Error()
 
-	// Check for definitive errors first — no point retrying these
+	
 	if isDefinitivePlaybackError(errMsg) {
 		reason := cleanPlaybackErrorMessage(guildID, errMsg)
 		logger.Warnf("[Play] Definitive error for song %s in guild %s: %s", song.Title, guildID, reason)
 		song.SetState(queue.SongStateFailed)
 		sendSongErrorMessage(session, guildID, song, reason)
 		clearRetryCount(guildID, song.URL)
-		return false // Skip immediately
+		return false 
 	}
 
-	// Transient error — use map-based retry tracking
+	
 	key := retryKey(guildID, song.URL)
 	playbackRetriesMu.Lock()
 	retries := playbackRetries[key]
@@ -1373,14 +1338,14 @@ func handlePlaybackError(session *discordgo.Session, guildID string, song *queue
 
 	if retries < maxRetries {
 		logger.Warnf("[Play] Retrying song (attempt %d/%d) in guild: %s - %s", retries, maxRetries, guildID, song.Title)
-		return true // Retry
+		return true 
 	}
 
-	// Max retries exceeded
+	
 	song.SetState(queue.SongStateFailed)
 	logger.Errorf("[Play] Max retries exceeded for song %s in guild: %s", song.Title, guildID)
 
-	// If there's a reconnect message, edit it to show failure instead of sending a separate error
+	
 	if reconnectMsg := getReconnectMessage(guildID); reconnectMsg != nil {
 		failedEmbed := messages.CreateSongEmbed(
 			guildID,
@@ -1401,10 +1366,9 @@ func handlePlaybackError(session *discordgo.Session, guildID string, song *queue
 	}
 
 	clearRetryCount(guildID, song.URL)
-	return false // Skip to next song
+	return false 
 }
 
-// Pause immediately pauses playback (bypasses command queue for immediate effect)
 func Pause(guildID string) error {
 	logger.Debugf("[Pause] Pause called for guild %s", guildID)
 	player := GetPlayer(guildID)
@@ -1416,17 +1380,17 @@ func Pause(guildID string) error {
 		return fmt.Errorf("not playing")
 	}
 
-	// Calculate current position while we have the lock
+	
 	elapsed := time.Since(player.PlaybackStart)
 	seekTime := int(elapsed.Milliseconds())
 
-	// Drain any stale PlaybackDone signals first
+	
 	select {
 	case <-player.PlaybackDone:
 	default:
 	}
 
-	// Close stop channel to broadcast termination to all goroutines
+	
 	select {
 	case <-player.StopChan:
 		logger.Debugf("[Pause] Stop signal already pending for guild: %s", guildID)
@@ -1439,7 +1403,7 @@ func Pause(guildID string) error {
 	player.Paused = true
 	player.mu.Unlock()
 
-	// Wait for playback to actually terminate (with timeout)
+	
 	select {
 	case <-player.PlaybackDone:
 		logger.Debugf("[Pause] Playback terminated for guild: %s", guildID)
@@ -1447,7 +1411,7 @@ func Pause(guildID string) error {
 		logger.Warnf("[Pause] Timeout waiting for playback to terminate for guild: %s", guildID)
 	}
 
-	// Get current song and save seek time
+	
 	q, err := queue.GetQueue(guildID, false)
 	if err == nil && q != nil && len(q.Songs) > 0 {
 		currentSong := q.Songs[0]
@@ -1457,7 +1421,7 @@ func Pause(guildID string) error {
 		}
 	}
 
-	// Update database states
+	
 	if err := queue.SetPaused(guildID, true); err != nil {
 		logger.Errorf("[Pause] Failed to set paused state in database: %v", err)
 	}
@@ -1465,7 +1429,7 @@ func Pause(guildID string) error {
 		logger.Errorf("[Pause] Failed to clear playing state in database: %v", err)
 	}
 
-	// Disconnect from voice
+	
 	player.mu.Lock()
 	if player.VoiceConn != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -1480,7 +1444,6 @@ func Pause(guildID string) error {
 	return nil
 }
 
-// pauseInternal is the actual pause implementation (called by command processor)
 func pauseInternal(guildID string) error {
 	player := GetPlayer(guildID)
 	player.mu.Lock()
@@ -1490,11 +1453,11 @@ func pauseInternal(guildID string) error {
 		return fmt.Errorf("not playing")
 	}
 
-	// Calculate current position
+	
 	elapsed := time.Since(player.PlaybackStart)
 	seekTime := int(elapsed.Milliseconds())
 
-	// Close stop channel to broadcast termination to all goroutines
+	
 	select {
 	case <-player.StopChan:
 		logger.Debugf("[pauseInternal] Stop signal already pending for guild: %s", guildID)
@@ -1505,7 +1468,7 @@ func pauseInternal(guildID string) error {
 	player.Playing = false
 	player.Paused = true
 
-	// Disconnect from voice
+	
 	if player.VoiceConn != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		player.VoiceConn.Disconnect(ctx)
@@ -1515,7 +1478,7 @@ func pauseInternal(guildID string) error {
 	}
 	player.mu.Unlock()
 
-	// Get current song and save seek time
+	
 	q, err := queue.GetQueue(guildID, false)
 	if err == nil && q != nil && len(q.Songs) > 0 {
 		currentSong := q.Songs[0]
@@ -1525,7 +1488,7 @@ func pauseInternal(guildID string) error {
 		}
 	}
 
-	// Update database states
+	
 	if err := queue.SetPaused(guildID, true); err != nil {
 		logger.Errorf("[pauseInternal] Failed to set paused state in database: %v", err)
 	}
@@ -1537,11 +1500,6 @@ func pauseInternal(guildID string) error {
 	return nil
 }
 
-// Seek restarts the current song's playback at positionMs without disconnecting
-// from voice. Errors if not playing, no current song, or the song is a live
-// stream. Persists the new position so a later pause/resume continues from
-// here. Mirrors the RestartForNormalization pattern: signal via StopChan +
-// flag, let playSingleSong's loop pick up the new seekTime on its next iter.
 func Seek(guildID string, positionMs int) error {
 	if positionMs < 0 {
 		return fmt.Errorf("seek position cannot be negative")
@@ -1566,7 +1524,7 @@ func Seek(guildID string, positionMs int) error {
 	player.Seeking = true
 	select {
 	case <-player.StopChan:
-		// Already closed
+		
 	default:
 		close(player.StopChan)
 	}
@@ -1580,8 +1538,6 @@ func Seek(guildID string, positionMs int) error {
 	return nil
 }
 
-// RestartForNormalization restarts the FFmpeg pipeline to apply normalization changes.
-// Unlike pause, this keeps the voice connection alive — only kills FFmpeg.
 func RestartForNormalization(guildID string) {
 	player := GetPlayer(guildID)
 	player.mu.Lock()
@@ -1594,14 +1550,13 @@ func RestartForNormalization(guildID string) {
 	player.TogglingNorm = true
 	select {
 	case <-player.StopChan:
-		// Already closed
+		
 	default:
 		close(player.StopChan)
 	}
 	logger.Debugf("[RestartForNormalization] Signaled FFmpeg restart for guild: %s", guildID)
 }
 
-// Resume queues a resume command (uses channels)
 func Resume(session *discordgo.Session, guildID string) error {
 	player := GetPlayer(guildID)
 
@@ -1613,7 +1568,7 @@ func Resume(session *discordgo.Session, guildID string) error {
 		Done:    done,
 	}
 
-	// Send command to queue (with panic recovery for closed channel)
+	
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Warnf("[Resume] Recovered from panic (channel likely closed) for guild %s: %v", guildID, r)
@@ -1622,18 +1577,18 @@ func Resume(session *discordgo.Session, guildID string) error {
 
 	select {
 	case player.CommandChan <- cmd:
-		// Command queued, wait for result with timeout
+		
 		select {
 		case err := <-done:
 			return err
 		case <-time.After(30 * time.Second):
-			// Timeout occurred - verify if operation actually succeeded
+			
 			player.mu.Lock()
 			playing := player.Playing
 			paused := player.Paused
 			player.mu.Unlock()
 
-			// If playing and not paused, the resume succeeded
+			
 			if playing && !paused {
 				logger.Debugf("[Resume] Command completed successfully after timeout for guild %s", guildID)
 				return nil
@@ -1648,25 +1603,24 @@ func Resume(session *discordgo.Session, guildID string) error {
 	}
 }
 
-// resumeInternal is the actual resume implementation (called by command processor)
 func resumeInternal(session *discordgo.Session, guildID string) error {
-	// Get queue to check if current song is a live stream
+	
 	q, err := queue.GetQueue(guildID, false)
 	if err == nil && q != nil && len(q.Songs) > 0 {
 		song := q.Songs[0]
 
-		// If it's a live stream, check if it's still active
+		
 		if song.IsLive {
 			active, err := youtube.IsLiveStreamActive(song.URL)
 			if err != nil || !active {
 				logger.Warnf("[Resume] Live stream ended or unavailable: %s", song.Title)
 
-				// Remove the ended live stream
+				
 				if err := queue.RemoveFirstSong(guildID); err != nil {
 					logger.Errorf("[Resume] Failed to remove ended live stream: %v", err)
 				}
 
-				// Try to play next song
+				
 				player := GetPlayer(guildID)
 				player.mu.Lock()
 				player.Paused = false
@@ -1683,15 +1637,13 @@ func resumeInternal(session *discordgo.Session, guildID string) error {
 	player.Paused = false
 	player.mu.Unlock()
 
-	// Cancel auto-disconnect timer since we're resuming
+	
 	ClearAutoPauseTimer(guildID)
 
 	logger.Debugf("[Resume] Resuming playback for guild: %s", guildID)
 	return playInternal(session, guildID)
 }
 
-// Skip immediately stops current playback and removes the current song
-// This bypasses the command processor to allow immediate interruption
 func Skip(session *discordgo.Session, guildID string) error {
 	logger.Debugf("[Skip] Skip called for guild %s", guildID)
 	player := GetPlayer(guildID)
@@ -1701,13 +1653,13 @@ func Skip(session *discordgo.Session, guildID string) error {
 	wasLoading := player.Loading
 
 	if wasPlaying || wasLoading {
-		// Drain any stale PlaybackDone signals first
+		
 		select {
 		case <-player.PlaybackDone:
 		default:
 		}
 
-		// Close stop channel to broadcast termination to all goroutines
+		
 		select {
 		case <-player.StopChan:
 			logger.Debugf("[Skip] Stop signal already pending for guild: %s", guildID)
@@ -1718,7 +1670,7 @@ func Skip(session *discordgo.Session, guildID string) error {
 	}
 	player.mu.Unlock()
 
-	// Wait for playback to actually terminate (with timeout)
+	
 	if wasPlaying {
 		select {
 		case <-player.PlaybackDone:
@@ -1727,21 +1679,21 @@ func Skip(session *discordgo.Session, guildID string) error {
 			logger.Warnf("[Skip] Timeout waiting for playback to terminate for guild: %s", guildID)
 		}
 
-		// Mark playback as stopped so Stop() won't wait again
+		
 		player.mu.Lock()
 		player.Playing = false
 		player.Loading = false
 		player.mu.Unlock()
 	}
 
-	// Clear retry count and reset state for current song
+	
 	q, err := queue.GetQueue(guildID, false)
 	if err == nil && q != nil && len(q.Songs) > 0 {
 		q.Songs[0].ResetRetry()
 		logger.Debugf("[Skip] Removing song: %s", q.Songs[0].Title)
 	}
 
-	// Remove current song
+	
 	if err := queue.RemoveFirstSong(guildID); err != nil {
 		logger.Errorf("[Skip] Failed to remove song: %v", err)
 		return fmt.Errorf("failed to remove song: %w", err)
@@ -1749,15 +1701,15 @@ func Skip(session *discordgo.Session, guildID string) error {
 
 	logger.Debugf("[Skip] Skipped song for guild: %s", guildID)
 
-	// Check if queue is now empty - if so, return ErrQueueEmpty so caller can send message
+	
 	q, err = queue.GetQueue(guildID, true)
 	if err != nil || q == nil || len(q.Songs) == 0 {
 		logger.Infof("[Skip] Queue is empty after skip for guild: %s", guildID)
 		return ErrQueueEmpty
 	}
 
-	// Start playing next song asynchronously
-	// Check if another play operation is already in progress to avoid lock contention
+	
+	
 	go func() {
 		player := GetPlayer(guildID)
 		player.mu.Lock()
@@ -1770,7 +1722,7 @@ func Skip(session *discordgo.Session, guildID string) error {
 		}
 
 		if err := playInternal(session, guildID); err != nil {
-			// Only log as error if it's not a lock timeout (which is expected during rapid skips)
+			
 			if err.Error() == "play lock timeout" {
 				logger.Debugf("[Skip] Play lock timeout for guild %s (expected during rapid skips)", guildID)
 			} else {
@@ -1782,8 +1734,6 @@ func Skip(session *discordgo.Session, guildID string) error {
 	return nil
 }
 
-// SkipTo stops current playback and starts playing the current first song in queue.
-// Unlike Skip, it does NOT remove any songs — the caller is responsible for queue manipulation.
 func SkipTo(session *discordgo.Session, guildID string) error {
 	logger.Debugf("[SkipTo] Called for guild %s", guildID)
 	player := GetPlayer(guildID)
@@ -1793,13 +1743,13 @@ func SkipTo(session *discordgo.Session, guildID string) error {
 	wasLoading := player.Loading
 
 	if wasPlaying || wasLoading {
-		// Drain any stale PlaybackDone signals first
+		
 		select {
 		case <-player.PlaybackDone:
 		default:
 		}
 
-		// Close stop channel to broadcast termination to all goroutines
+		
 		select {
 		case <-player.StopChan:
 			logger.Debugf("[SkipTo] Stop signal already pending for guild: %s", guildID)
@@ -1810,7 +1760,7 @@ func SkipTo(session *discordgo.Session, guildID string) error {
 	}
 	player.mu.Unlock()
 
-	// Wait for playback to actually terminate (with timeout)
+	
 	if wasPlaying {
 		select {
 		case <-player.PlaybackDone:
@@ -1827,7 +1777,7 @@ func SkipTo(session *discordgo.Session, guildID string) error {
 
 	logger.Debugf("[SkipTo] Starting playback of target song for guild: %s", guildID)
 
-	// Start playing the target song (now at position 0)
+	
 	go func() {
 		player := GetPlayer(guildID)
 		player.mu.Lock()
@@ -1851,7 +1801,6 @@ func SkipTo(session *discordgo.Session, guildID string) error {
 	return nil
 }
 
-// skipInternal is the actual skip implementation (called by command processor)
 func skipInternal(session *discordgo.Session, guildID string) error {
 	logger.Debugf("[skipInternal] Called for guild %s", guildID)
 	player := GetPlayer(guildID)
@@ -1859,13 +1808,13 @@ func skipInternal(session *discordgo.Session, guildID string) error {
 
 	wasPlaying := player.Playing
 	if wasPlaying {
-		// Drain any stale PlaybackDone signals first
+		
 		select {
 		case <-player.PlaybackDone:
 		default:
 		}
 
-		// Close stop channel to broadcast termination to all goroutines
+		
 		select {
 		case <-player.StopChan:
 			logger.Debugf("[Skip] Stop signal already pending for guild: %s", guildID)
@@ -1877,7 +1826,7 @@ func skipInternal(session *discordgo.Session, guildID string) error {
 
 	player.mu.Unlock()
 
-	// Wait for playback to actually terminate (with short timeout)
+	
 	if wasPlaying {
 		select {
 		case <-player.PlaybackDone:
@@ -1886,21 +1835,21 @@ func skipInternal(session *discordgo.Session, guildID string) error {
 			logger.Warnf("[Skip] Timeout waiting for playback to terminate for guild: %s", guildID)
 		}
 
-		// Mark playback as stopped so Stop() won't wait again
+		
 		player.mu.Lock()
 		player.Playing = false
 		player.Loading = false
 		player.mu.Unlock()
 	}
 
-	// Clear retry count and reset state for current song
+	
 	q, err := queue.GetQueue(guildID, false)
 	if err == nil && q != nil && len(q.Songs) > 0 {
 		q.Songs[0].ResetRetry()
 		logger.Debugf("[skipInternal] Removing song: %s", q.Songs[0].Title)
 	}
 
-	// Remove current song
+	
 	if err := queue.RemoveFirstSong(guildID); err != nil {
 		logger.Errorf("[skipInternal] Failed to remove song: %v", err)
 		return fmt.Errorf("failed to remove song: %w", err)
@@ -1908,15 +1857,15 @@ func skipInternal(session *discordgo.Session, guildID string) error {
 
 	logger.Debugf("[skipInternal] Skipped song for guild: %s", guildID)
 
-	// Check if queue is now empty - if so, return ErrQueueEmpty so caller can send message
+	
 	q, err = queue.GetQueue(guildID, true)
 	if err != nil || q == nil || len(q.Songs) == 0 {
 		logger.Debugf("[skipInternal] Queue is empty after skip for guild: %s", guildID)
 		return ErrQueueEmpty
 	}
 
-	// Play next song asynchronously - skip operation is complete once song is removed
-	// Check if another play operation is already in progress to avoid lock contention
+	
+	
 	go func() {
 		player := GetPlayer(guildID)
 		player.mu.Lock()
@@ -1929,7 +1878,7 @@ func skipInternal(session *discordgo.Session, guildID string) error {
 		}
 
 		if err := playInternal(session, guildID); err != nil {
-			// Only log as error if it's not a lock timeout (which is expected during rapid skips)
+			
 			if err.Error() == "play lock timeout" {
 				logger.Debugf("[skipInternal] Play lock timeout for guild %s (expected during rapid skips)", guildID)
 			} else {
@@ -1941,7 +1890,6 @@ func skipInternal(session *discordgo.Session, guildID string) error {
 	return nil
 }
 
-// Stop immediately stops playback and cleans up (bypasses command queue for immediate effect)
 func Stop(guildID string) error {
 	logger.Debugf("[Stop] Stop called for guild %s", guildID)
 	player := GetPlayer(guildID)
@@ -1951,13 +1899,13 @@ func Stop(guildID string) error {
 	wasLoading := player.Loading
 
 	if wasPlaying || wasLoading {
-		// Drain any stale PlaybackDone signals first
+		
 		select {
 		case <-player.PlaybackDone:
 		default:
 		}
 
-		// Close stop channel to broadcast termination to all goroutines
+		
 		select {
 		case <-player.StopChan:
 			logger.Debugf("[Stop] Stop signal already pending for guild: %s", guildID)
@@ -1972,7 +1920,7 @@ func Stop(guildID string) error {
 	player.Loading = false
 	player.mu.Unlock()
 
-	// Wait for playback to actually terminate (with timeout)
+	
 	if wasPlaying {
 		select {
 		case <-player.PlaybackDone:
@@ -1982,33 +1930,32 @@ func Stop(guildID string) error {
 		}
 	}
 
-	// Disconnect from voice
+	
 	if err := LeaveVoice(guildID); err != nil {
 		logger.Errorf("[Stop] Failed to leave voice: %v", err)
 	}
 
-	// Clear queue (this will also clear playing/loading/paused states in database)
+	
 	if err := queue.DeleteQueue(guildID); err != nil {
 		logger.Errorf("[Stop] Failed to delete queue: %v", err)
 	}
 
-	// Clear pre-cache
+	
 	ClearPreCache(guildID)
 
-	// Delete player
+	
 	DeletePlayer(guildID)
 
 	logger.Debugf("[Stop] Stopped playback for guild: %s", guildID)
 	return nil
 }
 
-// stopInternal is the actual stop implementation (called by command processor)
 func stopInternal(guildID string) error {
 	player := GetPlayer(guildID)
 	player.mu.Lock()
 
 	if player.Playing {
-		// Close stop channel to broadcast termination to all goroutines
+		
 		select {
 		case <-player.StopChan:
 			logger.Debugf("[Stop] Stop signal already pending for guild: %s", guildID)
@@ -2023,17 +1970,17 @@ func stopInternal(guildID string) error {
 	player.Loading = false
 	player.mu.Unlock()
 
-	// Disconnect from voice
+	
 	if err := LeaveVoice(guildID); err != nil {
 		logger.Errorf("[Stop] Failed to leave voice: %v", err)
 	}
 
-	// Clear queue (this will also clear playing/loading/paused states in database)
+	
 	if err := queue.DeleteQueue(guildID); err != nil {
 		return fmt.Errorf("failed to delete queue: %w", err)
 	}
 
-	// Clear pre-cache
+	
 	ClearPreCache(guildID)
 
 	DeletePlayer(guildID)
@@ -2041,9 +1988,8 @@ func stopInternal(guildID string) error {
 	return nil
 }
 
-// SetVolume sets the volume for a guild
 func SetVolume(guildID string, volume float64) error {
-	// Check for invalid float values
+	
 	if math.IsNaN(volume) || math.IsInf(volume, 0) {
 		return fmt.Errorf("volume must be a valid number")
 	}
@@ -2065,7 +2011,6 @@ func SetVolume(guildID string, volume float64) error {
 	return nil
 }
 
-// GetCurrentPosition returns the current playback position in milliseconds
 func GetCurrentPosition(guildID string) int {
 	player := GetPlayer(guildID)
 	player.mu.Lock()
@@ -2079,7 +2024,6 @@ func GetCurrentPosition(guildID string) int {
 	return int(elapsed.Milliseconds())
 }
 
-// FormatDuration formats milliseconds to MM:SS or HH:MM:SS
 func FormatDuration(ms int) string {
 	seconds := ms / 1000
 	minutes := seconds / 60
@@ -2091,7 +2035,6 @@ func FormatDuration(ms int) string {
 	return fmt.Sprintf("%d:%02d", minutes, seconds%60)
 }
 
-// int16ToByte converts int16 slice to byte slice
 func int16ToByte(in []int16) []byte {
 	out := make([]byte, len(in)*2)
 	for i, v := range in {
@@ -2100,8 +2043,6 @@ func int16ToByte(in []int16) []byte {
 	return out
 }
 
-// StopAll stops all active players (for graceful shutdown)
-// NOTE: This preserves the database queue so it can be resumed after bot restart
 func StopAll() {
 	playersMu.RLock()
 	guildIDs := make([]string, 0, len(players))
@@ -2110,17 +2051,17 @@ func StopAll() {
 	}
 	playersMu.RUnlock()
 
-	// Clean up each player without deleting database queue
+	
 	for _, guildID := range guildIDs {
 		logger.Debugf("[StopAll] Cleaning up player for guild: %s", guildID)
 		if err := cleanupForShutdown(guildID); err != nil {
 			logger.Errorf("[StopAll] Failed to cleanup guild %s: %v", guildID, err)
 		}
-		// Clean up pre-cache for this guild
+		
 		ClearPreCache(guildID)
 	}
 
-	// Clean up any remaining pre-cache entries
+	
 	preCacheStoreMu.Lock()
 	for key, cache := range preCacheStore {
 		if cache.CancelFunc != nil {
@@ -2133,8 +2074,6 @@ func StopAll() {
 	logger.Info("[StopAll] All players cleaned up and pre-cache cleared")
 }
 
-// cleanupForShutdown cleans up player state without deleting database queue
-// This is used during bot shutdown to preserve queues for later resumption
 func cleanupForShutdown(guildID string) error {
 	logger.Debugf("[CleanupForShutdown] Cleaning up guild %s", guildID)
 	player := GetPlayer(guildID)
@@ -2144,10 +2083,10 @@ func cleanupForShutdown(guildID string) error {
 	wasLoading := player.Loading
 
 	if wasPlaying || wasLoading {
-		// Close stop channel to broadcast termination to all goroutines
+		
 		select {
 		case <-player.StopChan:
-			// Already closed
+			
 		default:
 			close(player.StopChan)
 			logger.Debugf("[CleanupForShutdown] Stop signal sent for guild: %s", guildID)
@@ -2159,7 +2098,7 @@ func cleanupForShutdown(guildID string) error {
 	player.Loading = false
 	player.mu.Unlock()
 
-	// Wait briefly for playback to terminate
+	
 	if wasPlaying {
 		select {
 		case <-player.PlaybackDone:
@@ -2169,12 +2108,12 @@ func cleanupForShutdown(guildID string) error {
 		}
 	}
 
-	// Disconnect from voice without deleting queue
+	
 	if err := LeaveVoice(guildID); err != nil {
 		logger.Debugf("[CleanupForShutdown] Failed to leave voice for guild %s: %v", guildID, err)
 	}
 
-	// Update database to mark as paused (not playing) so it can be resumed
+	
 	if wasPlaying || wasLoading {
 		if err := queue.SetPlaying(guildID, false); err != nil {
 			logger.Debugf("[CleanupForShutdown] Failed to clear playing state for guild %s: %v", guildID, err)
@@ -2184,14 +2123,13 @@ func cleanupForShutdown(guildID string) error {
 		}
 	}
 
-	// Delete in-memory player (but keep database queue)
+	
 	DeletePlayer(guildID)
 
 	logger.Debugf("[CleanupForShutdown] Cleanup complete for guild: %s (queue preserved)", guildID)
 	return nil
 }
 
-// sendLeavingMessage sends a message to the text channel when the bot leaves voice
 func sendLeavingMessage(session *discordgo.Session, guildID, reason string) {
 	q, err := queue.GetQueue(guildID, false)
 	if err != nil || q == nil || q.TextChannelID == "" {
@@ -2236,9 +2174,8 @@ func sendLeavingMessage(session *discordgo.Session, guildID, reason string) {
 	}
 }
 
-// ShutdownWorkerPool closes the global worker pool
 func ShutdownWorkerPool() {
-	// Import worker package dynamically to avoid circular dependency
-	// Worker pool will be closed via worker.GetWorkerPool().Close()
+	
+	
 	logger.Info("[Shutdown] Worker pool will be closed by worker package")
 }

@@ -12,7 +12,6 @@ import (
 	"noraegaori/internal/youtube"
 )
 
-// parseSeekPosition parses "ss", "mm:ss", or "hh:mm:ss" into milliseconds; enforces sub-60 when a higher unit is present.
 func parseSeekPosition(input string) (int, error) {
 	input = strings.TrimSpace(input)
 	if input == "" {

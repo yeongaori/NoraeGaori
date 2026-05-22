@@ -13,23 +13,17 @@ import (
 	"noraegaori/locales"
 )
 
-// guildLangResolver returns the language code stored for a guild, or "" if none.
-// Wired from outside the messages package (in main.go) to avoid an import cycle
-// between messages → queue → database.
 var guildLangResolver func(guildID string) (string, error)
 
-// SetGuildLangResolver registers the function used to look up a guild's language.
-// Called once at startup.
 func SetGuildLangResolver(fn func(guildID string) (string, error)) {
 	guildLangResolver = fn
 }
 
 var (
 	localeCacheMu sync.RWMutex
-	localeCache   = make(map[string]*Locale) // language code → loaded locale
+	localeCache   = make(map[string]*Locale) 
 )
 
-// Locale represents a complete set of translated strings
 type Locale struct {
 	Errors       ErrorMessages              `json:"errors"`
 	Titles       TitleMessages              `json:"titles"`
@@ -470,18 +464,10 @@ type RPCMessages struct {
 	ActivityDefault4 string `json:"activity_default_4"`
 }
 
-// currentLocale holds the loaded locale (initialized to empty struct to avoid nil panics)
 var currentLocale = &Locale{}
 
-// currentLang holds the language code of the loaded locale (e.g. "en", "ko")
 var currentLang = "en"
 
-// T returns the locale for the given guild, falling back to the bot-wide
-// default when no guildID is provided or the guild has no override set.
-//
-// Callers in command handlers should pass i.GuildID so each guild sees its
-// own language. Callers without a guild context (startup, RPC, etc.) call T()
-// with no arguments to get the global default.
 func T(guildID ...string) *Locale {
 	if len(guildID) == 0 || guildID[0] == "" || guildLangResolver == nil {
 		return currentLocale
@@ -496,8 +482,6 @@ func T(guildID ...string) *Locale {
 	return currentLocale
 }
 
-// Lang returns the language code in effect for the given guild (or the global
-// default when no guildID is provided).
 func Lang(guildID ...string) string {
 	if len(guildID) == 0 || guildID[0] == "" || guildLangResolver == nil {
 		return currentLang
@@ -509,10 +493,6 @@ func Lang(guildID ...string) string {
 	return lang
 }
 
-// AvailableLocales scans the locales directory and returns the list of
-// language codes that have a corresponding <code>.json file. The English
-// fallback ("en") is always included even when the file is missing on disk
-// (it is embedded into the binary).
 func AvailableLocales() []string {
 	dir := localesDir()
 	entries, err := os.ReadDir(dir)
@@ -538,9 +518,6 @@ func AvailableLocales() []string {
 	return out
 }
 
-// localeDir returns the directory locale files live in. Mirrors readLocaleFile's
-// fallback to a path relative to the source file when the working directory is
-// not the project root (e.g. in some test harnesses).
 func localesDir() string {
 	const dir = "locales"
 	if _, err := os.Stat(dir); err == nil {
@@ -567,8 +544,6 @@ func getCachedLocale(lang string) *Locale {
 	return loc
 }
 
-// buildLocale loads the English base then overlays the requested language.
-// Returns an error when the requested file is missing or malformed.
 func buildLocale(lang string) (*Locale, error) {
 	enData, err := readLocaleFile(filepath.Join(localesDir(), "en.json"))
 	if err != nil {
@@ -593,8 +568,6 @@ func buildLocale(lang string) (*Locale, error) {
 	return &base, nil
 }
 
-// InvalidateLocaleCache drops cached locales so the next T(guildID) call
-// reloads from disk. Useful after editing a locale file at runtime.
 func InvalidateLocaleCache() {
 	localeCacheMu.Lock()
 	localeCache = make(map[string]*Locale)
@@ -606,13 +579,13 @@ func LoadLocale(lang string) error {
 
 	loc, err := buildLocale(lang)
 	if err != nil {
-		// Build with the embedded English fallback so the bot still starts.
+		
 		var base Locale
 		if jerr := json.Unmarshal(locales.EnglishLocale, &base); jerr != nil {
 			return fmt.Errorf("failed to parse embedded English fallback: %w", jerr)
 		}
 		currentLocale = &base
-		// Warm the cache for "en" so future fallbacks are O(1).
+		
 		localeCacheMu.Lock()
 		localeCache["en"] = &base
 		localeCacheMu.Unlock()
@@ -621,37 +594,29 @@ func LoadLocale(lang string) error {
 
 	currentLocale = loc
 
-	// Warm the cache for the active language.
+	
 	localeCacheMu.Lock()
 	localeCache[lang] = loc
 	localeCacheMu.Unlock()
 	return nil
 }
 
-// readLocaleFile reads a locale JSON file, trying the given path first,
-// then a path relative to the source file location.
 func readLocaleFile(path string) ([]byte, error) {
 	data, err := os.ReadFile(path)
 	if err == nil {
 		return data, nil
 	}
-	// Try relative to the source file location
+	
 	_, filename, _, _ := runtime.Caller(0)
 	dir := filepath.Dir(filename)
 	altPath := filepath.Join(dir, "..", "..", path)
 	return os.ReadFile(altPath)
 }
 
-// mergeLocale copies non-zero fields from overlay into base.
-// For string fields, empty strings in overlay are not copied (base keeps its value).
-// For map fields, individual entries are merged.
-// For the Commands map (map[string]CommandStrings), each command's fields
-// are merged individually so partial translations still work.
 func mergeLocale(base, overlay *Locale) {
 	mergeStruct(reflect.ValueOf(base).Elem(), reflect.ValueOf(overlay).Elem())
 }
 
-// mergeStruct recursively merges non-zero overlay fields into base.
 func mergeStruct(base, overlay reflect.Value) {
 	for i := 0; i < base.NumField(); i++ {
 		baseField := base.Field(i)
@@ -674,8 +639,6 @@ func mergeStruct(base, overlay reflect.Value) {
 	}
 }
 
-// mergeMap merges overlay map entries into base map.
-// For struct-valued maps, fields are merged individually.
 func mergeMap(base, overlay reflect.Value) {
 	if overlay.IsNil() {
 		return
@@ -688,10 +651,10 @@ func mergeMap(base, overlay reflect.Value) {
 		overlayVal := overlay.MapIndex(key)
 		baseVal := base.MapIndex(key)
 
-		// Check if the map value type is a struct (e.g., CommandStrings)
+		
 		mapElemType := base.Type().Elem()
 		if mapElemType.Kind() == reflect.Struct {
-			// Create an addressable copy to merge into
+			
 			merged := reflect.New(mapElemType).Elem()
 			if baseVal.IsValid() {
 				merged.Set(baseVal)
@@ -699,7 +662,7 @@ func mergeMap(base, overlay reflect.Value) {
 			mergeStruct(merged, overlayVal)
 			base.SetMapIndex(key, merged)
 		} else {
-			// For non-struct map values, just overwrite
+			
 			base.SetMapIndex(key, overlayVal)
 		}
 	}

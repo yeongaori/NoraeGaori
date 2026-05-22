@@ -23,7 +23,7 @@ func HandleVolume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return nil
 	}
 
-	// Value is float64 from slash commands, string from text commands.
+	
 	var volume float64
 	switch v := options[0].Value.(type) {
 	case float64:

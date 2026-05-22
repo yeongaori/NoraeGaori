@@ -44,7 +44,7 @@ func HandleSkipTo(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 	targetSong := q.Songs[position-1]
 
-	// Mutate queue BEFORE responding — avoids a race where the player reads the old state.
+	
 	if err := queue.SkipToPosition(i.GuildID, position-1); err != nil {
 		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
 			fmt.Sprintf(messages.T(i.GuildID).Queue.SkipToFailed, err)))

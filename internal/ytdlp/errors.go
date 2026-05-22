@@ -2,9 +2,6 @@ package ytdlp
 
 import "strings"
 
-// IsDefinitiveUnavailableError checks if an error indicates the video is truly unavailable
-// (geo-restricted, age-restricted, private, deleted) vs. a potential false negative.
-// These errors are NOT caused by a broken yt-dlp binary.
 func IsDefinitiveUnavailableError(errorMsg string) bool {
 	errorLower := strings.ToLower(errorMsg)
 	definitivePatterns := []string{
@@ -34,8 +31,6 @@ func IsDefinitiveUnavailableError(errorMsg string) bool {
 	return false
 }
 
-// IsNetworkError checks if an error is a network/timeout issue rather than
-// a yt-dlp binary problem. These errors should not count toward version rollback.
 func IsNetworkError(errorMsg string) bool {
 	errorLower := strings.ToLower(errorMsg)
 	networkPatterns := []string{
