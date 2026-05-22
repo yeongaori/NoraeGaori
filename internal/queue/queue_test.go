@@ -7,7 +7,6 @@ import (
 	"noraegaori/internal/database"
 )
 
-// setupTestDB creates a test database
 func setupTestDB(t *testing.T) {
 	os.RemoveAll("data")
 	if err := database.Initialize(); err != nil {
@@ -15,7 +14,6 @@ func setupTestDB(t *testing.T) {
 	}
 }
 
-// teardownTestDB removes the test database
 func teardownTestDB(t *testing.T) {
 	database.Close()
 	os.RemoveAll("data")
@@ -94,7 +92,7 @@ func TestAddSong(t *testing.T) {
 		})
 	}
 
-	// Verify queue order (only after all sub-tests complete)
+	
 	t.Run("Verify queue order", func(t *testing.T) {
 		q, err := GetQueue("guild1", false)
 		if err != nil {
@@ -110,7 +108,7 @@ func TestRemoveSong(t *testing.T) {
 	setupTestDB(t)
 	defer teardownTestDB(t)
 
-	// Add test songs
+	
 	guildID := "guild1"
 	for i := 0; i < 5; i++ {
 		song := &Song{
@@ -279,7 +277,7 @@ func TestSetRepeatMode(t *testing.T) {
 
 	guildID := "guild1"
 
-	// Test RepeatAll
+	
 	if err := SetRepeatMode(guildID, RepeatAll); err != nil {
 		t.Errorf("Failed to set RepeatAll: %v", err)
 	}
@@ -288,7 +286,7 @@ func TestSetRepeatMode(t *testing.T) {
 		t.Errorf("Expected RepeatAll (%d), got %d", RepeatAll, q.RepeatMode)
 	}
 
-	// Test RepeatSingle
+	
 	if err := SetRepeatMode(guildID, RepeatSingle); err != nil {
 		t.Errorf("Failed to set RepeatSingle: %v", err)
 	}
@@ -297,7 +295,7 @@ func TestSetRepeatMode(t *testing.T) {
 		t.Errorf("Expected RepeatSingle (%d), got %d", RepeatSingle, q.RepeatMode)
 	}
 
-	// Test RepeatOff
+	
 	if err := SetRepeatMode(guildID, RepeatOff); err != nil {
 		t.Errorf("Failed to set RepeatOff: %v", err)
 	}
@@ -313,7 +311,7 @@ func TestSetSponsorBlock(t *testing.T) {
 
 	guildID := "guild1"
 
-	// Test enabling SponsorBlock
+	
 	if err := SetSponsorBlock(guildID, true); err != nil {
 		t.Errorf("Failed to enable SponsorBlock: %v", err)
 	}
@@ -323,7 +321,7 @@ func TestSetSponsorBlock(t *testing.T) {
 		t.Error("SponsorBlock should be enabled")
 	}
 
-	// Test disabling SponsorBlock
+	
 	if err := SetSponsorBlock(guildID, false); err != nil {
 		t.Errorf("Failed to disable SponsorBlock: %v", err)
 	}
@@ -340,7 +338,7 @@ func TestSetShowStartedTrack(t *testing.T) {
 
 	guildID := "guild1"
 
-	// Test enabling ShowStartedTrack
+	
 	if err := SetShowStartedTrack(guildID, true); err != nil {
 		t.Errorf("Failed to enable ShowStartedTrack: %v", err)
 	}
@@ -350,7 +348,7 @@ func TestSetShowStartedTrack(t *testing.T) {
 		t.Error("ShowStartedTrack should be enabled")
 	}
 
-	// Test disabling ShowStartedTrack
+	
 	if err := SetShowStartedTrack(guildID, false); err != nil {
 		t.Errorf("Failed to disable ShowStartedTrack: %v", err)
 	}
@@ -367,7 +365,7 @@ func TestSetNormalization(t *testing.T) {
 
 	guildID := "guild1"
 
-	// Test enabling Normalization
+	
 	if err := SetNormalization(guildID, true); err != nil {
 		t.Errorf("Failed to enable Normalization: %v", err)
 	}
@@ -377,7 +375,7 @@ func TestSetNormalization(t *testing.T) {
 		t.Error("Normalization should be enabled")
 	}
 
-	// Test disabling Normalization
+	
 	if err := SetNormalization(guildID, false); err != nil {
 		t.Errorf("Failed to disable Normalization: %v", err)
 	}
@@ -394,7 +392,7 @@ func TestCacheInvalidation(t *testing.T) {
 
 	guildID := "guild1"
 
-	// Add a song to create cache
+	
 	song := &Song{
 		URL:            "https://youtube.com/watch?v=test",
 		Title:          "Test Song",
@@ -404,13 +402,13 @@ func TestCacheInvalidation(t *testing.T) {
 	}
 	AddSong(guildID, song, -1)
 
-	// Get queue (creates cache)
+	
 	q1, _ := GetQueue(guildID, false)
 
-	// Invalidate cache
+	
 	InvalidateCache(guildID)
 
-	// Get queue again (should fetch from DB)
+	
 	q2, _ := GetQueue(guildID, false)
 
 	if len(q1.Songs) != len(q2.Songs) {
@@ -425,7 +423,7 @@ func TestConcurrentAccess(t *testing.T) {
 	guildID := "guild1"
 	done := make(chan bool)
 
-	// Concurrent adds
+	
 	for i := 0; i < 10; i++ {
 		go func(idx int) {
 			song := &Song{
@@ -440,12 +438,12 @@ func TestConcurrentAccess(t *testing.T) {
 		}(i)
 	}
 
-	// Wait for all goroutines
+	
 	for i := 0; i < 10; i++ {
 		<-done
 	}
 
-	// Verify all songs were added
+	
 	q, _ := GetQueue(guildID, false)
 	if len(q.Songs) != 10 {
 		t.Errorf("Expected 10 songs after concurrent adds, got %d", len(q.Songs))
@@ -459,12 +457,12 @@ func TestUpdateVoiceChannel(t *testing.T) {
 	guildID := "guild1"
 	channelID := "voice_channel_123"
 
-	// Update voice channel
+	
 	if err := UpdateVoiceChannel(guildID, channelID); err != nil {
 		t.Errorf("Failed to update voice channel: %v", err)
 	}
 
-	// Verify update
+	
 	q, _ := GetQueue(guildID, false)
 	if q.VoiceChannelID != channelID {
 		t.Errorf("Expected voice channel %s, got %s", channelID, q.VoiceChannelID)

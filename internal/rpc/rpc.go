@@ -15,7 +15,6 @@ import (
 	"noraegaori/pkg/logger"
 )
 
-// ActivityType maps string types to Discord activity types
 var ActivityTypeMap = map[string]discordgo.ActivityType{
 	"Playing":   discordgo.ActivityTypeGame,
 	"Streaming": discordgo.ActivityTypeStreaming,
@@ -25,13 +24,11 @@ var ActivityTypeMap = map[string]discordgo.ActivityType{
 	"Competing": discordgo.ActivityTypeCompeting,
 }
 
-// Activity represents a single RPC activity
 type Activity struct {
 	Name string `json:"name"`
 	Type string `json:"type"`
 }
 
-// Config represents the RPC configuration
 type Config struct {
 	RPCEnabled         bool       `json:"RPC_ENABLED"`
 	RPCIntervalSeconds int        `json:"RPC_INTERVAL_SECONDS"`
@@ -40,7 +37,6 @@ type Config struct {
 	Activities         []Activity `json:"activities"`
 }
 
-// DefaultConfig returns the default RPC configuration
 func DefaultConfig() *Config {
 	return &Config{
 		RPCEnabled:         true,
@@ -56,8 +52,6 @@ func DefaultConfig() *Config {
 	}
 }
 
-// resolveActivityName resolves an activity name, replacing lang. prefixed
-// keys with the corresponding locale string.
 func resolveActivityName(name string) string {
 	if !strings.HasPrefix(name, "lang.") {
 		return name
@@ -78,21 +72,20 @@ func resolveActivityName(name string) string {
 	}
 }
 
-// LoadConfig loads RPC configuration from file
 func LoadConfig() (*Config, error) {
 	configPath := filepath.Join("config", "rpcConfig.json")
 
-	// Create config directory if it doesn't exist
+	
 	configDir := filepath.Dir(configPath)
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	// Check if config file exists
+	
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		logger.Warn("rpcConfig.json not found. Creating default RPC config file.")
 
-		// Create default config
+		
 		defaultCfg := DefaultConfig()
 		data, err := json.MarshalIndent(defaultCfg, "", "  ")
 		if err != nil {
@@ -107,7 +100,7 @@ func LoadConfig() (*Config, error) {
 		return defaultCfg, nil
 	}
 
-	// Read existing config
+	
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
@@ -127,7 +120,6 @@ var (
 	runningMu sync.Mutex
 )
 
-// UpdateRPC starts the RPC update loop
 func UpdateRPC(session *discordgo.Session) {
 	runningMu.Lock()
 	if running {
@@ -169,10 +161,10 @@ func UpdateRPC(session *discordgo.Session) {
 	ticker := time.NewTicker(time.Duration(cfg.RPCIntervalSeconds) * time.Second)
 	defer ticker.Stop()
 
-	// Update immediately
+	
 	updateActivity(session, cfg, &currentIndex)
 
-	// Update on interval
+	
 	for {
 		select {
 		case <-ticker.C:
@@ -187,7 +179,6 @@ func UpdateRPC(session *discordgo.Session) {
 	}
 }
 
-// Stop stops the RPC update loop
 func Stop() {
 	runningMu.Lock()
 	defer runningMu.Unlock()
@@ -201,30 +192,29 @@ func Stop() {
 	}
 }
 
-// updateActivity updates the bot's activity status
 func updateActivity(session *discordgo.Session, cfg *Config, currentIndex *int) {
 	var activity Activity
 
 	if cfg.RandomizeRPC {
-		// Random selection
+		
 		activity = cfg.Activities[rand.Intn(len(cfg.Activities))]
 	} else {
-		// Sequential selection
+		
 		activity = cfg.Activities[*currentIndex]
 		*currentIndex = (*currentIndex + 1) % len(cfg.Activities)
 	}
 
-	// Get Discord activity type
+	
 	activityType, ok := ActivityTypeMap[activity.Type]
 	if !ok {
 		logger.Warnf("Invalid activity type: %s", activity.Type)
 		return
 	}
 
-	// Resolve activity name (handles lang. prefix for locale strings)
+	
 	name := resolveActivityName(activity.Name)
 
-	// Update presence
+	
 	err := session.UpdateStatusComplex(discordgo.UpdateStatusData{
 		Activities: []*discordgo.Activity{
 			{

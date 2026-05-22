@@ -10,7 +10,6 @@ import (
 	"noraegaori/internal/queue"
 )
 
-// HandleSetPrefix sets the per-guild prefix; an empty argument clears the override.
 func HandleSetPrefix(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	options := i.ApplicationCommandData().Options
 

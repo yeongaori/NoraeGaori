@@ -17,7 +17,6 @@ import (
 	"noraegaori/pkg/logger"
 )
 
-// playlistLocks serialises playlist processing per guild to prevent song-order mixing.
 var (
 	playlistLocks   = make(map[string]*sync.Mutex)
 	playlistLocksMu sync.Mutex
@@ -69,12 +68,12 @@ func handlePurePlaylist(s *discordgo.Session, i *discordgo.InteractionCreate, pl
 }
 
 func handleVideoWithPlaylist(s *discordgo.Session, i *discordgo.InteractionCreate, videoURL string, analysis *youtube.URLAnalysis, voiceState *discordgo.VoiceState) error {
-	// Strip the playlist parameter — yt-dlp sometimes behaves differently with it present.
+	
 	cleanVideoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", analysis.VideoID)
 	song, videoErr := youtube.GetVideoInfo(i.GuildID, cleanVideoURL, i.Member.User.Username, i.Member.User.ID)
 	videoUnavailable := videoErr != nil
 
-	// Some videos are only accessible via the playlist context (e.g. members-only but playlist is public).
+	
 	if videoUnavailable {
 		logger.Debugf("[Play] Direct video fetch failed, trying to get info from playlist")
 		playlistURL := fmt.Sprintf("https://www.youtube.com/playlist?list=%s", analysis.PlaylistID)
@@ -88,7 +87,7 @@ func handleVideoWithPlaylist(s *discordgo.Session, i *discordgo.InteractionCreat
 					break
 				}
 			}
-			// Fallback: use the first playlist video if the ID was re-uploaded under a new ID.
+			
 			if videoUnavailable && len(playlistInfo.Videos) > 0 {
 				song = playlistInfo.Videos[0]
 				logger.Debugf("[Play] Video ID not in playlist, using first video: %s", song.Title)
@@ -187,7 +186,7 @@ func handleVideoWithPlaylist(s *discordgo.Session, i *discordgo.InteractionCreat
 		}
 	}
 
-	// Pass "" when the video was unavailable so playlist processing doesn't skip an unqueued entry.
+	
 	excludeVideoID := analysis.VideoID
 	if videoUnavailable {
 		excludeVideoID = ""
@@ -197,7 +196,6 @@ func handleVideoWithPlaylist(s *discordgo.Session, i *discordgo.InteractionCreat
 	return nil
 }
 
-// handlePlaylistConfirmationReaction waits for ✅ from the requester, then calls addPlaylistSongs.
 func handlePlaylistConfirmationReaction(s *discordgo.Session, originalInteraction *discordgo.InteractionCreate, msg *discordgo.Message, playlistInfo *youtube.PlaylistInfo, voiceState *discordgo.VoiceState) {
 	logger.Debugf("[PlaylistReaction] Starting reaction handler for message %s in channel %s", msg.ID, msg.ChannelID)
 	logger.Debugf("[PlaylistReaction] Expecting reaction from user: %s", originalInteraction.Member.User.ID)
@@ -228,14 +226,14 @@ func handlePlaylistConfirmationReaction(s *discordgo.Session, originalInteractio
 
 		logger.Debugf("[PlaylistReaction] Confirmed by user %s", r.UserID)
 
-		select { // non-blocking: don't block if already confirmed
+		select { 
 		case confirmedChan <- true:
 		default:
 		}
 
 		loadingEmbed := messages.CreateWarningEmbed(messages.T(originalInteraction.GuildID).Music.PlaylistAddingTitle, messages.T(originalInteraction.GuildID).Music.PlaylistAddingAll)
 
-		// text commands use ChannelMessageEdit; slash commands use InteractionResponseEdit
+		
 		if isMessageCommand(originalInteraction) {
 			s.ChannelMessageEditEmbed(msg.ChannelID, msg.ID, loadingEmbed)
 		} else {
@@ -269,7 +267,6 @@ func handlePlaylistConfirmationReaction(s *discordgo.Session, originalInteractio
 	}
 }
 
-// handlePlaylistRestConfirmationReaction waits for ⬇️ from the requester to add the rest of the playlist.
 func handlePlaylistRestConfirmationReaction(s *discordgo.Session, originalInteraction *discordgo.InteractionCreate, msg *discordgo.Message, playlistID, videoID string, voiceState *discordgo.VoiceState) {
 	logger.Debugf("[PlaylistRestReaction] Starting reaction handler for message %s in channel %s", msg.ID, msg.ChannelID)
 	logger.Debugf("[PlaylistRestReaction] Expecting reaction from user: %s", originalInteraction.Member.User.ID)
@@ -366,7 +363,6 @@ func handlePlaylistRestConfirmationReaction(s *discordgo.Session, originalIntera
 	}
 }
 
-// addPlaylistSongs enqueues all playlist videos under a per-guild lock; messageID is the message to update on completion.
 func addPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreate, playlistInfo *youtube.PlaylistInfo, voiceState *discordgo.VoiceState, messageID string) {
 	lock := getPlaylistLock(i.GuildID)
 	lock.Lock()
@@ -412,7 +408,6 @@ func addPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreate, play
 	processAllPlaylistSongs(s, i, playlistInfo.Videos, playlistInfo, startTime, messageID)
 }
 
-// fastTrackFirstSong probes up to 3 entries and queues the first available so playback starts early.
 func fastTrackFirstSong(guildID string, songs []*youtube.Song, s *discordgo.Session, i *discordgo.InteractionCreate) (addedCount, skippedCount int) {
 	maxAttempts := 3
 	if len(songs) < maxAttempts {
@@ -464,7 +459,6 @@ func fastTrackFirstSong(guildID string, songs []*youtube.Song, s *discordgo.Sess
 	return addedCount, skippedCount
 }
 
-// processRemainingPlaylistSongs checks remaining songs in parallel via the worker pool, then enqueues in order.
 func processRemainingPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreate, songs []*youtube.Song, playlistInfo *youtube.PlaylistInfo, startTime time.Time, messageID string) {
 	logger.Debugf("[Playlist Background] Processing %d remaining songs with worker pool", len(songs))
 
@@ -487,7 +481,7 @@ func processRemainingPlaylistSongs(s *discordgo.Session, i *discordgo.Interactio
 	for _, result := range results {
 		song := songs[result.Index]
 
-		// Only skip definitively unavailable; generic errors may be transient so we queue those anyway.
+		
 		if !result.Available && ytdlpUpdater.IsDefinitiveUnavailableError(result.Error) {
 			logger.Debugf("[Playlist Background] Skipping definitively unavailable: %s - %s",
 				song.Title, result.Error)
@@ -557,7 +551,7 @@ func processRemainingPlaylistSongs(s *discordgo.Session, i *discordgo.Interactio
 		Thumbnail: &discordgo.MessageEmbedThumbnail{URL: playlistInfo.ThumbnailURL},
 	}
 
-	// text commands supply messageID; slash commands use InteractionResponseEdit
+	
 	var err error
 	if messageID != "" {
 		_, err = s.ChannelMessageEditEmbed(i.ChannelID, messageID, successEmbed)
@@ -573,7 +567,6 @@ func processRemainingPlaylistSongs(s *discordgo.Session, i *discordgo.Interactio
 	sendBatchedSkipNotice(s, i.GuildID, i.ChannelID, skippedSongs)
 }
 
-// processAllPlaylistSongs is the non-fast-track path used when the queue is non-empty.
 func processAllPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreate, songs []*youtube.Song, playlistInfo *youtube.PlaylistInfo, startTime time.Time, messageID string) {
 	logger.Debugf("[Playlist] Standard processing for %d songs", len(songs))
 
@@ -598,7 +591,7 @@ func processAllPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreat
 	for _, result := range results {
 		song := songs[result.Index]
 
-		// Only skip definitively unavailable; generic errors may be transient so we queue those anyway.
+		
 		if !result.Available && ytdlpUpdater.IsDefinitiveUnavailableError(result.Error) {
 			logger.Debugf("[Playlist] Skipping definitively unavailable: %s - %s",
 				song.Title, result.Error)
@@ -663,7 +656,7 @@ func processAllPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreat
 		Thumbnail: &discordgo.MessageEmbedThumbnail{URL: playlistInfo.ThumbnailURL},
 	}
 
-	// text commands supply messageID; slash commands use InteractionResponseEdit
+	
 	var err error
 	if messageID != "" {
 		_, err = s.ChannelMessageEditEmbed(i.ChannelID, messageID, successEmbed)
@@ -678,7 +671,7 @@ func processAllPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	sendBatchedSkipNotice(s, i.GuildID, i.ChannelID, skippedSongs)
 
-	// Start playing if not already playing. If paused, resume; otherwise begin.
+	
 	p := player.GetPlayer(i.GuildID)
 	q, _ := queue.GetQueue(i.GuildID, true)
 	if q == nil || len(q.Songs) == 0 {

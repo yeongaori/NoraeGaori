@@ -10,7 +10,6 @@ import (
 	"noraegaori/internal/queue"
 )
 
-// HandleForceRemove bulk-deletes all queued songs requested by a target user.
 func HandleForceRemove(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	options := i.ApplicationCommandData().Options
 	if len(options) == 0 {
@@ -43,7 +42,7 @@ func HandleForceRemove(s *discordgo.Session, i *discordgo.InteractionCreate) err
 	}
 
 	var userSongs []*queue.Song
-	startIdx := 1 // skip currently playing song
+	startIdx := 1 
 	if !q.Playing && !q.Loading {
 		startIdx = 0
 	}
@@ -85,7 +84,7 @@ func HandleForceRemove(s *discordgo.Session, i *discordgo.InteractionCreate) err
 		return err
 	}
 
-	// Pre-cache worker is keyed to the next song; rebuild it if that song is gone.
+	
 	if isNextSongRemoved {
 		player.CleanupPreCacheWorker(i.GuildID)
 	}

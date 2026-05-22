@@ -14,7 +14,7 @@ func HandlePause(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return nil
 	}
 
-	// Force refresh — cached queue state may lag actual playback.
+	
 	q, err := queue.GetQueue(i.GuildID, true)
 	if err != nil || q == nil || (!q.Playing && !q.Loading) {
 		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.NotPlayingOrLoading))

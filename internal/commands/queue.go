@@ -7,7 +7,6 @@ import (
 	"noraegaori/pkg/logger"
 )
 
-// HandleQueue renders the current queue, paginated 10 songs per page.
 func HandleQueue(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	q, err := queue.GetQueue(i.GuildID, false)
 	if err != nil || q == nil || len(q.Songs) == 0 {

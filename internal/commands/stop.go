@@ -11,7 +11,6 @@ import (
 	"noraegaori/internal/queue"
 )
 
-// HandleStop stops playback via majority vote; with 1-2 members stops immediately.
 func HandleStop(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	DeferResponse(s, i)
 
@@ -48,7 +47,7 @@ func HandleStop(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		requiredVotes = 1
 	}
 
-	// Solo or duo: stop without a vote.
+	
 	if requiredVotes == 1 {
 		if err := player.Stop(i.GuildID); err != nil {
 			UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Music.StopFailedTitle, fmt.Sprintf(messages.T(i.GuildID).Music.StopFailedDesc, err)))

@@ -12,7 +12,6 @@ import (
 	"noraegaori/pkg/logger"
 )
 
-// HandleSkip skips the current song via majority vote; with 1-2 members skips immediately.
 func HandleSkip(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	DeferResponse(s, i)
 
@@ -46,7 +45,7 @@ func HandleSkip(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 	requiredVotes := int(math.Ceil(float64(voiceMembers) * 0.5))
 
-	// Solo or duo: skip without a vote.
+	
 	if requiredVotes == 1 {
 		songTitle := q.Songs[0].Title
 		songURL := q.Songs[0].URL

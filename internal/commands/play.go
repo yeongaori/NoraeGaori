@@ -12,7 +12,7 @@ import (
 )
 
 func HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	// Validate before DeferResponse so simple errors return as a normal embed.
+	
 	options := i.ApplicationCommandData().Options
 	if len(options) == 0 {
 		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.EnterQuery))
@@ -20,7 +20,7 @@ func HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	}
 	query := options[0].StringValue()
 
-	// e.g. **URL** → URL
+	
 	query = messages.StripMarkdown(query)
 
 	voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
@@ -65,7 +65,7 @@ func HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 			return err
 		}
 	} else {
-		// Refresh stored channel — user may have moved since the queue was created.
+		
 		queue.UpdateVoiceChannel(i.GuildID, voiceState.ChannelID)
 	}
 
@@ -123,7 +123,7 @@ func HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 	UpdateResponseEmbed(s, i, embed)
 
-	// player.SetLoadingMessage stores it by guild ID for later edit-in-place.
+	
 	if isFirstSong {
 		msg, err := GetResponseMessage(s, i)
 		if err == nil {
@@ -131,7 +131,7 @@ func HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		}
 	}
 
-	// Route through Resume when paused so its live re-check and SetPaused ordering run correctly.
+	
 	p := player.GetPlayer(i.GuildID)
 	switch {
 	case p.Paused:

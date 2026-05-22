@@ -13,31 +13,29 @@ import (
 	"noraegaori/pkg/logger"
 )
 
-// Command represents a bot command
 type Command struct {
 	Name        string
 	Description string
 	Options     []*discordgo.ApplicationCommandOption
 	Handler     func(s *discordgo.Session, i *discordgo.InteractionCreate) error
 	AdminOnly   bool
-	TextOnly    bool   // If true, command is only available via text (not registered as slash command)
-	Usage       string // Usage string for help display (e.g., "play <title|URL>")
-	Example     string // Example usage for help display (e.g., "play IU Bam Pyeonji")
+	TextOnly    bool   
+	Usage       string 
+	Example     string 
 }
 
 var (
 	commands          = make(map[string]*Command)
-	aliases           = make(map[string]string) // alias -> command name
-	messageResponders sync.Map                  // token -> *MessageResponse (for message-based commands)
+	aliases           = make(map[string]string) 
+	messageResponders sync.Map                  
 )
 
-// isGuildAdmin checks if a member has Administrator permission in the guild
 func isGuildAdmin(s *discordgo.Session, guildID string, member *discordgo.Member) bool {
 	if member == nil {
 		return false
 	}
 
-	// Get guild from state or API
+	
 	guild, err := s.State.Guild(guildID)
 	if err != nil {
 		guild, err = s.Guild(guildID)
@@ -47,18 +45,18 @@ func isGuildAdmin(s *discordgo.Session, guildID string, member *discordgo.Member
 		}
 	}
 
-	// Calculate member permissions
+	
 	var perms int64 = 0
 
-	// Get @everyone role permissions
+	
 	for _, role := range guild.Roles {
-		if role.ID == guildID { // @everyone role has same ID as guild
+		if role.ID == guildID { 
 			perms |= role.Permissions
 			break
 		}
 	}
 
-	// Apply role permissions
+	
 	for _, roleID := range member.Roles {
 		for _, role := range guild.Roles {
 			if role.ID == roleID {
@@ -68,33 +66,28 @@ func isGuildAdmin(s *discordgo.Session, guildID string, member *discordgo.Member
 		}
 	}
 
-	// Check for Administrator permission (0x8)
+	
 	return (perms & discordgo.PermissionAdministrator) == discordgo.PermissionAdministrator
 }
 
-// RegisterCommand registers a command
 func RegisterCommand(cmd *Command) {
 	commands[cmd.Name] = cmd
 	logger.Debugf("[Commands] Registered command: %s", cmd.Name)
 }
 
-// RegisterAlias registers a command alias
 func RegisterAlias(alias, commandName string) {
 	aliases[alias] = commandName
 	logger.Debugf("[Commands] Registered alias: %s -> %s", alias, commandName)
 }
 
-// registerCommandAliases registers all aliases for a command from the locale
 func registerCommandAliases(name string, cs messages.CommandStrings) {
 	for _, alias := range cs.Aliases {
 		RegisterAlias(alias, name)
 	}
 }
 
-// ReloadAliases clears and re-registers all command aliases and descriptions
-// from the current locale. Called when the language changes at runtime.
 func ReloadAliases() {
-	// Clear existing aliases
+	
 	aliases = make(map[string]string)
 
 	t := messages.T()
@@ -107,7 +100,7 @@ func ReloadAliases() {
 		return messages.CommandStrings{}
 	}
 
-	// Re-register aliases and update descriptions from the new locale
+	
 	for name, c := range commands {
 		cs := cmd(name)
 		registerCommandAliases(name, cs)
@@ -125,7 +118,6 @@ func ReloadAliases() {
 	logger.Info("[Commands] Aliases and descriptions reloaded for new locale")
 }
 
-// InitializeCommands registers all commands
 func InitializeCommands() {
 	t := messages.T()
 	cmd := func(name string) messages.CommandStrings {
@@ -137,7 +129,7 @@ func InitializeCommands() {
 		return messages.CommandStrings{}
 	}
 
-	// Music playback commands
+	
 	RegisterCommand(&Command{
 		Name:        "play",
 		Description: cmd("play").Description,
@@ -302,7 +294,7 @@ func InitializeCommands() {
 	})
 	registerCommandAliases("repeat", cmd("repeat"))
 
-	// Queue management commands
+	
 	RegisterCommand(&Command{
 		Name:        "queue",
 		Description: cmd("queue").Description,
@@ -384,7 +376,7 @@ func InitializeCommands() {
 	})
 	registerCommandAliases("skipto", cmd("skipto"))
 
-	// Voice channel commands
+	
 	RegisterCommand(&Command{
 		Name:        "join",
 		Description: cmd("join").Description,
@@ -437,7 +429,7 @@ func InitializeCommands() {
 	})
 	registerCommandAliases("switchvc", cmd("switchvc"))
 
-	// Settings commands
+	
 	RegisterCommand(&Command{
 		Name:        "sponsorblock",
 		Description: cmd("sponsorblock").Description,
@@ -523,10 +515,10 @@ func InitializeCommands() {
 	})
 	registerCommandAliases("setprefix", cmd("setprefix"))
 
-	// Register the language command under several universal names so it stays
-	// reachable even when a guild has been locked into the wrong language.
-	// /lang and /language are intentionally short, hard-coded labels — a user
-	// who can't read the current locale must still be able to find them.
+	
+	
+	
+	
 	for _, langCmd := range []string{"setlanguage", "lang", "language"} {
 		name := langCmd
 		RegisterCommand(&Command{
@@ -550,7 +542,7 @@ func InitializeCommands() {
 	}
 	registerCommandAliases("setlanguage", cmd("setlanguage"))
 
-	// Admin commands (not registered as slash commands in Node.js)
+	
 	RegisterCommand(&Command{
 		Name:        "forceskip",
 		Description: cmd("forceskip").Description,
@@ -629,7 +621,7 @@ func InitializeCommands() {
 		Example:     cmd("status").Example,
 	})
 
-	// Help command
+	
 	RegisterCommand(&Command{
 		Name:        "help",
 		Description: cmd("help").Description,
@@ -652,10 +644,6 @@ func InitializeCommands() {
 	logger.Debug("[Commands] All commands registered")
 }
 
-// RegisterSlashCommands syncs slash commands with Discord. It deep-compares
-// the desired set against what Discord currently has and only issues a write
-// when something actually changed; in that case it pushes the full set in a
-// single atomic ApplicationCommandBulkOverwrite call.
 func RegisterSlashCommands(session *discordgo.Session) error {
 	logger.Info("[Commands] Syncing slash commands with Discord...")
 
@@ -704,9 +692,6 @@ func RegisterSlashCommands(session *discordgo.Session) error {
 	return nil
 }
 
-// canonicalCommandMap builds a name→canonical-JSON map of a command set,
-// keeping only the fields that define a command's shape so server-assigned
-// fields (ID, ApplicationID, Version, GuildID, …) don't cause false diffs.
 func canonicalCommandMap(cmds []*discordgo.ApplicationCommand) (map[string]string, error) {
 	out := make(map[string]string, len(cmds))
 	for _, cmd := range cmds {
@@ -728,10 +713,6 @@ func canonicalCommandMap(cmds []*discordgo.ApplicationCommand) (map[string]strin
 	return out, nil
 }
 
-// diffCommandSets returns the names added (in desired, not existing),
-// updated (in both but with different shape), and removed (in existing,
-// not desired). Used only for log clarity — control flow keys off whether
-// any of the three slices is non-empty.
 func diffCommandSets(desired, existing map[string]string) (added, updated, removed []string) {
 	for name, want := range desired {
 		got, ok := existing[name]
@@ -749,7 +730,6 @@ func diffCommandSets(desired, existing map[string]string) (added, updated, remov
 	return added, updated, removed
 }
 
-// HandleInteraction handles slash command interactions
 func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if i.Type != discordgo.InteractionApplicationCommand {
 		return
@@ -763,7 +743,7 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
-	// Check admin permission (bot admin or server admin)
+	
 	if cmd.AdminOnly {
 		if !config.IsAdmin(i.Member.User.ID) && !isGuildAdmin(s, i.GuildID, i.Member) {
 			RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.NoPermission, messages.T(i.GuildID).Errors.AdminOnly))
@@ -774,16 +754,15 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	logger.Debugf("[Commands] Executing command: %s (user: %s, guild: %s)",
 		cmdName, i.Member.User.Username, i.GuildID)
 
-	// Execute command
+	
 	if err := cmd.Handler(s, i); err != nil {
 		logger.Errorf("[Commands] Command %s failed: %v", cmdName, err)
 		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, fmt.Sprintf(messages.T(i.GuildID).Errors.CommandExecutionError, err)))
 	}
 }
 
-// HandleMessage handles text-based commands
 func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
-	// Ignore bots
+	
 	if m.Author.Bot {
 		return
 	}
@@ -798,12 +777,12 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 	}
 
-	// Check if message starts with prefix
+	
 	if !strings.HasPrefix(m.Content, prefix) {
 		return
 	}
 
-	// Parse command and args
+	
 	content := strings.TrimPrefix(m.Content, prefix)
 	parts := strings.Fields(content)
 	if len(parts) == 0 {
@@ -811,28 +790,28 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	cmdName := strings.ToLower(parts[0])
-	_ = parts[1:] // args, unused in text commands
+	_ = parts[1:] 
 
-	// Resolve command through aliases only — all user-typeable names
-	// (including the English command name) come from the locale file.
+	
+	
 	aliasTarget, ok := aliases[cmdName]
 	if !ok {
-		return // Silently ignore unknown commands
+		return 
 	}
 	cmdName = aliasTarget
 
-	// Find command
+	
 	cmd, exists := commands[cmdName]
 	if !exists {
-		return // Silently ignore unknown commands
+		return 
 	}
 
-	// Check admin permission (bot admin or server admin)
+	
 	if cmd.AdminOnly {
-		// Get member to check server permissions
+		
 		member, err := s.State.Member(m.GuildID, m.Author.ID)
 		if err != nil {
-			// Try to fetch from API if not in state
+			
 			member, err = s.GuildMember(m.GuildID, m.Author.ID)
 		}
 
@@ -841,7 +820,7 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 		if !isBotAdmin && !isServerAdmin {
 			embed := messages.CreateErrorEmbed(messages.T(m.GuildID).Titles.NoPermission, messages.T(m.GuildID).Errors.AdminOnly)
-			// Send error as reply to original message
+			
 			s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
 				Embeds: []*discordgo.MessageEmbed{embed},
 				Reference: &discordgo.MessageReference{
@@ -856,31 +835,31 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	logger.Debugf("[Commands] Executing text command: %s (user: %s, guild: %s)",
 		cmdName, m.Author.Username, m.GuildID)
 
-	// Parse args (everything after command name)
+	
 	args := parts[1:]
 
-	// Create pseudo-interaction for text commands
+	
 	pseudoInteraction := CreatePseudoInteraction(s, m, cmd, args)
 
-	// Store message context for responses
+	
 	messageResponder := &MessageResponse{
 		Session:       s,
 		ChannelID:     m.ChannelID,
-		Message:       nil, // Will be set to bot's response when SendEmbed is called
-		OriginalMsgID: m.ID, // Store original message ID for reply
+		Message:       nil, 
+		OriginalMsgID: m.ID, 
 	}
 
-	// Store in a map for response handlers to access
+	
 	messageResponders.Store(pseudoInteraction.Token, messageResponder)
 	defer messageResponders.Delete(pseudoInteraction.Token)
 
-	// Execute command handler
+	
 	if err := cmd.Handler(s, pseudoInteraction); err != nil {
 		logger.Errorf("[Commands] Text command %s failed: %v", cmdName, err)
-		// Only send error message if no message was already sent by the command handler
+		
 		if messageResponder.Message == nil {
 			embed := messages.CreateErrorEmbed(messages.T(m.GuildID).Titles.Error, fmt.Sprintf(messages.T(m.GuildID).Errors.CommandExecutionError, err))
-			// Send error as reply to original message
+			
 			s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
 				Embeds: []*discordgo.MessageEmbed{embed},
 				Reference: &discordgo.MessageReference{
@@ -892,12 +871,10 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 }
 
-// isMessageCommand checks if the interaction is from a message command
 func isMessageCommand(i *discordgo.InteractionCreate) bool {
 	return strings.HasPrefix(i.Token, "message_")
 }
 
-// RespondError sends an error response
 func RespondError(s *discordgo.Session, i *discordgo.InteractionCreate, message string) {
 	if isMessageCommand(i) {
 		if mr, ok := messageResponders.Load(i.Token); ok {
@@ -914,7 +891,6 @@ func RespondError(s *discordgo.Session, i *discordgo.InteractionCreate, message 
 	})
 }
 
-// RespondSuccess sends a success response
 func RespondSuccess(s *discordgo.Session, i *discordgo.InteractionCreate, message string) {
 	if isMessageCommand(i) {
 		if mr, ok := messageResponders.Load(i.Token); ok {
@@ -930,7 +906,6 @@ func RespondSuccess(s *discordgo.Session, i *discordgo.InteractionCreate, messag
 	})
 }
 
-// RespondEmbed sends an embed response
 func RespondEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) {
 	if isMessageCommand(i) {
 		if mr, ok := messageResponders.Load(i.Token); ok {
@@ -946,7 +921,6 @@ func RespondEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *d
 	})
 }
 
-// RespondEmbedWithComponents sends an embed response with components (buttons, select menus, etc.)
 func RespondEmbedWithComponents(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, components []discordgo.MessageComponent) (*discordgo.Message, error) {
 	if isMessageCommand(i) {
 		if mr, ok := messageResponders.Load(i.Token); ok {
@@ -966,17 +940,16 @@ func RespondEmbedWithComponents(s *discordgo.Session, i *discordgo.InteractionCr
 		return nil, err
 	}
 
-	// Get the response message
+	
 	return s.InteractionResponse(i.Interaction)
 }
 
-// DeferResponse defers the response (for long-running commands)
 func DeferResponse(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if isMessageCommand(i) {
-		// For message commands, send a loading embed that can be edited later
+		
 		if mr, ok := messageResponders.Load(i.Token); ok {
 			loadingEmbed := &discordgo.MessageEmbed{
-				Color:       0xFFA500, // Orange color
+				Color:       0xFFA500, 
 				Title:       messages.T(i.GuildID).Titles.Loading,
 				Description: messages.T(i.GuildID).Descriptions.Loading,
 			}
@@ -989,7 +962,6 @@ func DeferResponse(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	})
 }
 
-// FollowUpMessage sends a follow-up message
 func FollowUpMessage(s *discordgo.Session, i *discordgo.InteractionCreate, content string) {
 	if isMessageCommand(i) {
 		if mr, ok := messageResponders.Load(i.Token); ok {
@@ -1002,7 +974,6 @@ func FollowUpMessage(s *discordgo.Session, i *discordgo.InteractionCreate, conte
 	})
 }
 
-// FollowUpEmbed sends a follow-up embed
 func FollowUpEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) {
 	if isMessageCommand(i) {
 		if mr, ok := messageResponders.Load(i.Token); ok {
@@ -1015,10 +986,9 @@ func FollowUpEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *
 	})
 }
 
-// UpdateResponseEmbed updates an existing response message (for message commands) or interaction response (for slash commands)
 func UpdateResponseEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error {
 	if isMessageCommand(i) {
-		// For message commands, edit the last sent message
+		
 		if mr, ok := messageResponders.Load(i.Token); ok {
 			responder := mr.(*MessageResponse)
 			if responder.Message != nil {
@@ -1028,17 +998,16 @@ func UpdateResponseEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, e
 		}
 		return fmt.Errorf("message responder or message not found")
 	}
-	// For slash commands, use InteractionResponseEdit
+	
 	_, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 		Embeds: &[]*discordgo.MessageEmbed{embed},
 	})
 	return err
 }
 
-// UpdateResponseEmbedWithComponents updates an existing response with embed and components
 func UpdateResponseEmbedWithComponents(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, components []discordgo.MessageComponent) error {
 	if isMessageCommand(i) {
-		// For message commands, edit the last sent message
+		
 		if mr, ok := messageResponders.Load(i.Token); ok {
 			responder := mr.(*MessageResponse)
 			if responder.Message != nil {
@@ -1060,7 +1029,7 @@ func UpdateResponseEmbedWithComponents(s *discordgo.Session, i *discordgo.Intera
 		logger.Errorf("[UpdateResponse] Message responder not found for token: %s", i.Token)
 		return fmt.Errorf("message responder not found")
 	}
-	// For slash commands, use InteractionResponseEdit
+	
 	_, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 		Embeds:     &[]*discordgo.MessageEmbed{embed},
 		Components: &components,
@@ -1068,9 +1037,6 @@ func UpdateResponseEmbedWithComponents(s *discordgo.Session, i *discordgo.Intera
 	return err
 }
 
-// GetResponseMessage gets the response message for an interaction
-// For text commands: returns the stored Message from MessageResponse
-// For slash commands: calls s.InteractionResponse to get the message
 func GetResponseMessage(s *discordgo.Session, i *discordgo.InteractionCreate) (*discordgo.Message, error) {
 	if isMessageCommand(i) {
 		if mr, ok := messageResponders.Load(i.Token); ok {
@@ -1085,23 +1051,21 @@ func GetResponseMessage(s *discordgo.Session, i *discordgo.InteractionCreate) (*
 	return s.InteractionResponse(i.Interaction)
 }
 
-// checkUserInBotVoiceChannel verifies that the user is in the same voice channel as the bot
-// Returns the voice channel ID if successful, or an error embed if not
 func checkUserInBotVoiceChannel(s *discordgo.Session, i *discordgo.InteractionCreate) (string, *discordgo.MessageEmbed) {
-	// Check if user is in a voice channel
+	
 	voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
 	if err != nil || voiceState.ChannelID == "" {
 		return "", messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.NotInVoiceChannel)
 	}
 
-	// Get the queue to find bot's current voice channel
+	
 	q, err := queue.GetQueue(i.GuildID, false)
 	if err != nil || q == nil || q.VoiceChannelID == "" {
-		// No queue or no voice channel set - bot is not in a channel
+		
 		return voiceState.ChannelID, nil
 	}
 
-	// Check if user is in the same voice channel as the bot
+	
 	if voiceState.ChannelID != q.VoiceChannelID {
 		return "", messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.MustBeInBotChannel)
 	}
@@ -1109,9 +1073,6 @@ func checkUserInBotVoiceChannel(s *discordgo.Session, i *discordgo.InteractionCr
 	return voiceState.ChannelID, nil
 }
 
-// buildLanguageChoices returns slash-command choices for every locale file
-// found on disk. Discord caps choices at 25 — well above the number of
-// locales we ship.
 func buildLanguageChoices() []*discordgo.ApplicationCommandOptionChoice {
 	codes := messages.AvailableLocales()
 	choices := make([]*discordgo.ApplicationCommandOptionChoice, 0, len(codes))

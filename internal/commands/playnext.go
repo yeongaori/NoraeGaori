@@ -11,7 +11,6 @@ import (
 	"noraegaori/pkg/logger"
 )
 
-// HandlePlayNext queues a song at index 1 so it plays immediately after the current one.
 func HandlePlayNext(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	options := i.ApplicationCommandData().Options
 	if len(options) == 0 {

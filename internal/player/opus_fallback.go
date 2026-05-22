@@ -4,8 +4,6 @@ import (
 	"github.com/jj11hh/opus"
 )
 
-// wasmEncoder is the pure-Go WASM-backed opus encoder used as a fallback
-// when libopus cannot be loaded at runtime.
 type wasmEncoder struct {
 	enc *opus.Encoder
 }

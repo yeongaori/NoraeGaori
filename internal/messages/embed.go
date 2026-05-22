@@ -7,7 +7,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// CreateEmbed creates a basic embed with title, description, and color
 func CreateEmbed(color int, title, description string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       title,
@@ -16,7 +15,6 @@ func CreateEmbed(color int, title, description string) *discordgo.MessageEmbed {
 	}
 }
 
-// CreateSongEmbed creates an embed for a song with thumbnail and fields
 func CreateSongEmbed(guildID string, color int, title, description, songTitle, songURL, uploader, duration, requester, thumbnailURL string) *discordgo.MessageEmbed {
 	t := T(guildID)
 	embed := &discordgo.MessageEmbed{
@@ -52,22 +50,18 @@ func CreateSongEmbed(guildID string, color int, title, description, songTitle, s
 	return embed
 }
 
-// CreateErrorEmbed creates a simple error embed
 func CreateErrorEmbed(title, description string) *discordgo.MessageEmbed {
 	return CreateEmbed(ColorError, title, description)
 }
 
-// CreateSuccessEmbed creates a simple success embed
 func CreateSuccessEmbed(title, description string) *discordgo.MessageEmbed {
 	return CreateEmbed(ColorSuccess, title, description)
 }
 
-// CreateWarningEmbed creates a simple warning embed
 func CreateWarningEmbed(title, description string) *discordgo.MessageEmbed {
 	return CreateEmbed(ColorWarning, title, description)
 }
 
-// CreateInfoEmbed creates a simple info embed
 func CreateInfoEmbed(title, description string) *discordgo.MessageEmbed {
 	return CreateEmbed(ColorInfo, title, description)
 }
@@ -110,13 +104,6 @@ func EscapeMessageContent(text string) string {
 	return strings.Join(lines, "\n")
 }
 
-// EscapeLinkText prepares a string for use as masked-link text: [text](url).
-// Discord does NOT process markdown formatting inside link text, so escaping
-// *, _, ~, |, ` is harmful — the backslashes render literally. The only
-// characters that need handling are \ (escape character) and brackets, which
-// terminate the link text. Brackets are substituted with full-width forms
-// rather than escaped, because Discord renders \[ and \] literally inside
-// masked-link text instead of treating them as escapes.
 func EscapeLinkText(text string) string {
 	text = strings.ReplaceAll(text, `\`, `\\`)
 	text = strings.ReplaceAll(text, `[`, `［`)
@@ -151,7 +138,6 @@ func StripMarkdown(s string) string {
 	return strings.TrimSpace(s)
 }
 
-// AddField adds a field to an embed
 func AddField(embed *discordgo.MessageEmbed, name, value string, inline bool) {
 	if embed.Fields == nil {
 		embed.Fields = []*discordgo.MessageEmbedField{}
@@ -163,14 +149,12 @@ func AddField(embed *discordgo.MessageEmbed, name, value string, inline bool) {
 	})
 }
 
-// SetFooter sets the footer of an embed
 func SetFooter(embed *discordgo.MessageEmbed, text string) {
 	embed.Footer = &discordgo.MessageEmbedFooter{
 		Text: text,
 	}
 }
 
-// SetThumbnail sets the thumbnail of an embed
 func SetThumbnail(embed *discordgo.MessageEmbed, url string) {
 	embed.Thumbnail = &discordgo.MessageEmbedThumbnail{
 		URL: url,

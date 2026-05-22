@@ -11,7 +11,6 @@ import (
 	"noraegaori/internal/queue"
 )
 
-// HandleRemove accepts a single index ("3"), a range ("1-5"), or "ALL".
 func HandleRemove(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	options := i.ApplicationCommandData().Options
 	if len(options) == 0 {
@@ -43,7 +42,7 @@ func handleRemoveAll(s *discordgo.Session, i *discordgo.InteractionCreate, q *qu
 	var userSongs []*queue.Song
 	startIdx := 0
 	if q.Playing || q.Loading {
-		startIdx = 1 // skip currently playing song
+		startIdx = 1 
 	}
 
 	for idx := startIdx; idx < len(q.Songs); idx++ {
@@ -84,7 +83,7 @@ func handleRemoveAll(s *discordgo.Session, i *discordgo.InteractionCreate, q *qu
 		return err
 	}
 
-	// Pre-cache worker is keyed to the next song; rebuild it if that song is gone.
+	
 	if isNextSongRemoved {
 		player.CleanupPreCacheWorker(i.GuildID)
 	}
@@ -122,7 +121,7 @@ func handleRemoveRange(s *discordgo.Session, i *discordgo.InteractionCreate, q *
 
 	songsToRemove := q.Songs[start-1 : end]
 
-	// Caller may only remove their own songs; silently ignore others in the range.
+	
 	userID := i.Member.User.ID
 	var userSongs []*queue.Song
 	for _, song := range songsToRemove {

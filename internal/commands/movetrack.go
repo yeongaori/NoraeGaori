@@ -34,7 +34,7 @@ func HandleMoveTrack(s *discordgo.Session, i *discordgo.InteractionCreate) error
 		return nil
 	}
 
-	// Position 0 is the actively playing song; moving it would interrupt playback.
+	
 	if (fromPos == 0 || toPos == 0) && (q.Playing || q.Loading) {
 		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
 			messages.T(i.GuildID).Admin.CannotMovePlaying))
