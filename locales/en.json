@@ -357,7 +357,7 @@
     "excluding_current": " (excluding the currently playing song)",
     "remove_failed": "Remove failed: %v",
     "delete_complete_title": "Deletion Complete",
-    "delete_complete_desc": "Removed **%d** songs by **%s** from the queue.",
+    "delete_complete_desc": "Removed **%[2]d** songs by **%[1]s** from the queue.",
     "enter_positions": "Please enter the source and target positions. (e.g., movetrack 3 1)",
     "enter_valid_range": "Please enter a number between 1 and %d.",
     "same_position": "Cannot move to the same position.",
