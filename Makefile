@@ -113,7 +113,7 @@ format:
 
 ## help: Show this help message
 help:
-	@echo "NoraeDev Bot - Makefile Commands"
+	@echo "NoraeGaori - Makefile Commands"
 	@echo ""
 	@echo "Usage: make [command]"
 	@echo ""
