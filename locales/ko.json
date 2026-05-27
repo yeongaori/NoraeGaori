@@ -493,7 +493,6 @@
     "playlist_complete_desc": "%s\n\n첫 번째 곡이 재생을 시작합니다.\n나머지 곡들이 대기열에 추가되었습니다.",
     "playlist_skipped_count": "%d곡은 재생할 수 없어 건너뛰었습니다.",
     "playlist_skipped_or_dup": "%d곡은 재생할 수 없거나 중복으로 건너뛰었습니다.",
-    "playlist_skipped_more": "그 외 %d곡",
     "playlist_added_count": "추가됨",
     "playlist_added_songs": "추가된 곡 수",
     "playlist_songs_unit": "%d곡",

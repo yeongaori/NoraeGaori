@@ -493,7 +493,6 @@
     "playlist_complete_desc": "%s\n\nThe first song will start playing.\nThe remaining songs have been added to the queue.",
     "playlist_skipped_count": "%d songs could not be played and were skipped.",
     "playlist_skipped_or_dup": "%d songs were skipped due to being unavailable or duplicates.",
-    "playlist_skipped_more": "… and %d more",
     "playlist_added_count": "Added",
     "playlist_added_songs": "Songs Added",
     "playlist_songs_unit": "%d songs",
