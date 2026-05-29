@@ -17,30 +17,45 @@ func CreateEmbed(color int, title, description string) *discordgo.MessageEmbed {
 
 func CreateSongEmbed(guildID string, color int, title, description, songTitle, songURL, uploader, duration, requester, thumbnailURL string) *discordgo.MessageEmbed {
 	t := T(guildID)
+
+	uploaderValue := EscapeMarkdown(uploader)
+	if uploaderValue == "" {
+		uploaderValue = "-"
+	}
+	durationValue := duration
+	if durationValue == "" {
+		durationValue = "-"
+	}
+	requesterValue := EscapeMarkdown(requester)
+	if requesterValue == "" {
+		requesterValue = "-"
+	}
+
 	embed := &discordgo.MessageEmbed{
 		Title:       title,
 		Description: FormatBoldMaskedLink(songTitle, songURL),
 		Color:       color,
-		Thumbnail: &discordgo.MessageEmbedThumbnail{
-			URL: thumbnailURL,
-		},
 		Fields: []*discordgo.MessageEmbedField{
 			{
 				Name:   t.Fields.Uploader,
-				Value:  EscapeMarkdown(uploader),
+				Value:  uploaderValue,
 				Inline: true,
 			},
 			{
 				Name:   t.Fields.Duration,
-				Value:  duration,
+				Value:  durationValue,
 				Inline: true,
 			},
 			{
 				Name:   t.Fields.Requester,
-				Value:  EscapeMarkdown(requester),
+				Value:  requesterValue,
 				Inline: true,
 			},
 		},
+	}
+
+	if thumbnailURL != "" {
+		embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: thumbnailURL}
 	}
 
 	if description != "" {
