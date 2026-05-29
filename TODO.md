@@ -1,1 +1,3 @@
 - [ ] Refactor & Optimize for performance
+- [ ] Add fade-in & fade-out
+- [ ] AutoMix

@@ -104,9 +104,26 @@ func forceRemoveByUser(s *discordgo.Session, i *discordgo.InteractionCreate, q *
 		player.CleanupPreCacheWorker(i.GuildID)
 	}
 
-	embed := messages.CreateSuccessEmbed(messages.T(i.GuildID).Admin.DeleteCompleteTitle,
-		fmt.Sprintf(messages.T(i.GuildID).Admin.DeleteCompleteDesc, messages.EscapeMarkdown(targetUser.Username), len(userSongs)))
-	RespondEmbed(s, i, embed)
+	songLines := make([]string, 0, len(userSongs))
+	for _, song := range userSongs {
+		var titlePart string
+		if song.URL != "" {
+			titlePart = messages.FormatBoldMaskedLink(song.Title, song.URL)
+		} else {
+			titlePart = "**" + messages.EscapeMarkdown(song.Title) + "**"
+		}
+		songLines = append(songLines, "• "+titlePart)
+	}
+	summary := fmt.Sprintf(messages.T(i.GuildID).Admin.DeleteCompleteDesc, messages.EscapeMarkdown(targetUser.Username), len(userSongs))
+	chunks := splitLinesIntoChunks(songLines, 3900)
+	RespondEmbed(s, i, messages.CreateSuccessEmbed(messages.T(i.GuildID).Admin.DeleteCompleteTitle, summary+"\n\n"+chunks[0]))
+	for _, chunk := range chunks[1:] {
+		FollowUpEmbed(s, i, &discordgo.MessageEmbed{
+			Color:       messages.ColorSuccess,
+			Title:       messages.T(i.GuildID).Admin.DeleteCompleteTitle,
+			Description: chunk,
+		})
+	}
 	return nil
 }
 

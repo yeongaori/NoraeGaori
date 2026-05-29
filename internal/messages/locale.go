@@ -341,7 +341,6 @@ type MusicMessages struct {
 	PlaylistCompleteDesc  string `json:"playlist_complete_desc"`
 	PlaylistSkippedCount  string `json:"playlist_skipped_count"`
 	PlaylistSkippedOrDup  string `json:"playlist_skipped_or_dup"`
-	PlaylistSkippedMore   string `json:"playlist_skipped_more"`
 	PlaylistAddedCount    string `json:"playlist_added_count"`
 	PlaylistAddedSongs    string `json:"playlist_added_songs"`
 	PlaylistSongsUnit     string `json:"playlist_songs_unit"`

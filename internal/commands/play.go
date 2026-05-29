@@ -95,16 +95,26 @@ func HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 	var embed *discordgo.MessageEmbed
 	if isFirstSong {
+		uploaderValue := song.Uploader
+		if uploaderValue == "" {
+			uploaderValue = "-"
+		}
+		durationValue := song.Duration
+		if durationValue == "" {
+			durationValue = "-"
+		}
 		embed = &discordgo.MessageEmbed{
 			Color:       messages.ColorWarning,
 			Title:       messages.T(i.GuildID).Titles.Loading,
 			Description: fmt.Sprintf("%s\n\n%s", messages.FormatBoldMaskedLink(song.Title, song.URL), messages.T(i.GuildID).Descriptions.Loading),
-			Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: song.Thumbnail},
 			Fields: []*discordgo.MessageEmbedField{
-				{Name: messages.T(i.GuildID).Fields.Uploader, Value: song.Uploader, Inline: true},
-				{Name: messages.T(i.GuildID).Fields.Duration, Value: song.Duration, Inline: true},
+				{Name: messages.T(i.GuildID).Fields.Uploader, Value: uploaderValue, Inline: true},
+				{Name: messages.T(i.GuildID).Fields.Duration, Value: durationValue, Inline: true},
 				{Name: messages.T(i.GuildID).Fields.Requester, Value: i.Member.User.Username, Inline: true},
 			},
+		}
+		if song.Thumbnail != "" {
+			embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: song.Thumbnail}
 		}
 	} else {
 		embed = messages.CreateSongEmbed(

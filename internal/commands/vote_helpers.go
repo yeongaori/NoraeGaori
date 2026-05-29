@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/messages"
@@ -18,19 +19,12 @@ type skippedSong struct {
 	Error     string
 }
 
-const maxSkippedShown = 10
-
 func sendBatchedSkipNotice(s *discordgo.Session, guildID, channelID string, skipped []skippedSong) {
 	if len(skipped) == 0 {
 		return
 	}
-	limit := len(skipped)
-	if limit > maxSkippedShown {
-		limit = maxSkippedShown
-	}
-	lines := make([]string, 0, limit+1)
-	for idx := 0; idx < limit; idx++ {
-		sk := skipped[idx]
+	lines := make([]string, 0, len(skipped))
+	for _, sk := range skipped {
 		var titlePart string
 		if sk.URL != "" {
 			titlePart = messages.FormatBoldMaskedLink(sk.Title, sk.URL)
@@ -39,18 +33,50 @@ func sendBatchedSkipNotice(s *discordgo.Session, guildID, channelID string, skip
 		}
 		lines = append(lines, fmt.Sprintf("• %s — %s", titlePart, cleanErrorMessage(guildID, sk.Error)))
 	}
-	desc := strings.Join(lines, "\n")
-	if len(skipped) > maxSkippedShown {
-		desc += "\n" + fmt.Sprintf(messages.T(guildID).Music.PlaylistSkippedMore, len(skipped)-maxSkippedShown)
+	for _, chunk := range splitLinesIntoChunks(lines, 3900) {
+		embed := &discordgo.MessageEmbed{
+			Color:       messages.ColorError,
+			Title:       messages.T(guildID).Titles.Unavailable,
+			Description: chunk,
+		}
+		if _, err := s.ChannelMessageSendEmbed(channelID, embed); err != nil {
+			logger.Errorf("[Playlist] Failed to send batched skip notification: %v", err)
+		}
 	}
-	embed := &discordgo.MessageEmbed{
-		Color:       messages.ColorError,
-		Title:       messages.T(guildID).Titles.Unavailable,
-		Description: desc,
+}
+
+func truncateToLimit(s string, limit int) string {
+	if len(s) <= limit {
+		return s
 	}
-	if _, err := s.ChannelMessageSendEmbed(channelID, embed); err != nil {
-		logger.Errorf("[Playlist] Failed to send batched skip notification: %v", err)
+	cut := limit - 3
+	if cut < 0 {
+		cut = 0
 	}
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + "..."
+}
+
+func splitLinesIntoChunks(lines []string, limit int) []string {
+	var chunks []string
+	var current strings.Builder
+	for _, line := range lines {
+		line = truncateToLimit(line, limit)
+		if current.Len() > 0 && current.Len()+1+len(line) > limit {
+			chunks = append(chunks, current.String())
+			current.Reset()
+		}
+		if current.Len() > 0 {
+			current.WriteByte('\n')
+		}
+		current.WriteString(line)
+	}
+	if current.Len() > 0 {
+		chunks = append(chunks, current.String())
+	}
+	return chunks
 }
 
 func cleanErrorMessage(guildID, errorMsg string) string {
