@@ -28,7 +28,7 @@ func initBackend() {
 			return
 		}
 		activeBackend = backendNative
-		logger.Infof("Loaded libopus via dlopen (%s); using native opus encoder", libName)
+		logger.Debugf("Loaded libopus via dlopen (%s); using native opus encoder", libName)
 	})
 }
 

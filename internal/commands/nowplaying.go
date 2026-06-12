@@ -37,6 +37,16 @@ func HandleNowPlaying(s *discordgo.Session, i *discordgo.InteractionCreate) erro
 		positionStr := player.FormatDuration(position)
 		progressText = fmt.Sprintf("%s / %s", positionStr, song.Duration)
 	}
+	if !song.IsLive {
+		trimStart, trimEnd := player.GetTrimRange(i.GuildID)
+		if trimStart > 0 || trimEnd > 0 {
+			endStr := song.Duration
+			if trimEnd > 0 {
+				endStr = player.FormatDuration(trimEnd)
+			}
+			progressText = fmt.Sprintf("%s (%s - %s)", progressText, player.FormatDuration(trimStart), endStr)
+		}
+	}
 
 	embed := &discordgo.MessageEmbed{
 		Color:       color,

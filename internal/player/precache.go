@@ -2,8 +2,10 @@ package player
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 	"os/exec"
 	"time"
 
@@ -12,27 +14,9 @@ import (
 	"noraegaori/pkg/logger"
 )
 
-const (
-	
-	StrategyNone       = 0 
-	StrategyFullMemory = 1 
-	StrategyStreamURL  = 2 
-	StrategyRangeReq   = 3 
-
-	
-	maxFullCacheSize  = 15 * 1024 * 1024 
-	rangeCacheSize    = 4 * 1024 * 1024  
-	preCacheTTL       = 5 * time.Minute  
-	currentStrategy   = StrategyStreamURL 
-)
+const preCacheTTL = time.Hour
 
 func PreCacheNext(guildID string, bitrate int) {
-	if currentStrategy == StrategyNone {
-		logger.Debugf("[PreCache] Pre-caching disabled")
-		return
-	}
-
-	
 	q, err := queue.GetQueue(guildID, false)
 	if err != nil || q == nil || len(q.Songs) < 2 {
 		logger.Debugf("[PreCache] No next song to cache for guild: %s", guildID)
@@ -95,101 +79,11 @@ func preCacheSong(ctx context.Context, guildID string, song *queue.Song, sponsor
 
 	cacheKey := fmt.Sprintf("%s_%d", guildID, song.ID)
 
-	
-	if currentStrategy == StrategyStreamURL {
-		preCacheStoreMu.Lock()
-		if cache, exists := preCacheStore[cacheKey]; exists {
-			cache.StreamURL = streamURL
-		} else {
-			preCacheStore[cacheKey] = &PreCache{
-				StreamURL: streamURL,
-				SongID:    song.ID,
-				Timestamp: time.Now(),
-			}
-		}
-		cache := preCacheStore[cacheKey]
-		preCacheStoreMu.Unlock()
-
-		logger.Debugf("[PreCache] Cached stream URL for: %s", song.Title)
-
-		
-		go func() {
-			time.Sleep(preCacheTTL)
-			preCacheStoreMu.Lock()
-			if cached, exists := preCacheStore[cacheKey]; exists && cached.Timestamp.Equal(cache.Timestamp) {
-				delete(preCacheStore, cacheKey)
-				logger.Debugf("[PreCache] Expired cache for: %s", song.Title)
-			}
-			preCacheStoreMu.Unlock()
-		}()
-		return nil
-	}
-
-	
-	args := []string{
-		"-reconnect", "1",
-		"-reconnect_streamed", "1",
-		"-reconnect_delay_max", "5",
-		"-i", streamURL,
-		"-f", "s16le",
-		"-ar", "48000",
-		"-ac", "2",
-		"-t", "30",
-		"pipe:1",
-	}
-
-	ffmpeg := exec.CommandContext(ctx, "ffmpeg", args...)
-	stdout, err := ffmpeg.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("failed to create stdout pipe: %w", err)
-	}
-
-	if err := ffmpeg.Start(); err != nil {
-		return fmt.Errorf("failed to start ffmpeg: %w", err)
-	}
-
-	var buffer []byte
-	maxSize := rangeCacheSize
-	if currentStrategy == StrategyFullMemory {
-		maxSize = maxFullCacheSize
-	}
-
-	buf := make([]byte, 4096)
-	totalRead := 0
-
-	for totalRead < maxSize {
-		select {
-		case <-ctx.Done():
-			ffmpeg.Process.Kill()
-			return ctx.Err()
-		default:
-			n, err := stdout.Read(buf)
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				ffmpeg.Process.Kill()
-				return fmt.Errorf("read error: %w", err)
-			}
-
-			buffer = append(buffer, buf[:n]...)
-			totalRead += n
-
-			if currentStrategy == StrategyRangeReq && totalRead >= rangeCacheSize {
-				break
-			}
-		}
-	}
-
-	ffmpeg.Process.Kill()
-
 	preCacheStoreMu.Lock()
 	if cache, exists := preCacheStore[cacheKey]; exists {
-		cache.Data = buffer
 		cache.StreamURL = streamURL
 	} else {
 		preCacheStore[cacheKey] = &PreCache{
-			Data:      buffer,
 			StreamURL: streamURL,
 			SongID:    song.ID,
 			Timestamp: time.Now(),
@@ -198,9 +92,21 @@ func preCacheSong(ctx context.Context, guildID string, song *queue.Song, sponsor
 	cache := preCacheStore[cacheKey]
 	preCacheStoreMu.Unlock()
 
-	logger.Debugf("[PreCache] Cached %d KB + stream URL for: %s", len(buffer)/1024, song.Title)
+	logger.Debugf("[PreCache] Cached stream URL for: %s", song.Title)
 
-	
+	if automix, err := queue.GetAutoMix(guildID); err == nil && automix {
+		if analysis, err := analyzeStreamHead(ctx, streamURL); err == nil {
+			preCacheStoreMu.Lock()
+			if entry, exists := preCacheStore[cacheKey]; exists {
+				entry.Analysis = analysis
+			}
+			preCacheStoreMu.Unlock()
+			logger.Debugf("[PreCache] Analyzed head for: %s (BPM %.1f)", song.Title, analysis.BPM)
+		} else {
+			logger.Debugf("[PreCache] Head analysis failed for %s: %v", song.Title, err)
+		}
+	}
+
 	go func() {
 		time.Sleep(preCacheTTL)
 		preCacheStoreMu.Lock()
@@ -237,6 +143,64 @@ func GetCachedStreamURL(guildID string, songID int) string {
 		return ""
 	}
 	return cache.StreamURL
+}
+
+func GetCachedAnalysis(guildID string, songID int) *TrackAnalysis {
+	cache := GetPreCache(guildID, songID)
+	if cache == nil {
+		return nil
+	}
+	return cache.Analysis
+}
+
+func analyzeStreamHead(ctx context.Context, streamURL string) (*TrackAnalysis, error) {
+	args := []string{
+		"-reconnect", "1",
+		"-reconnect_streamed", "1",
+		"-reconnect_delay_max", "5",
+		"-t", "75",
+		"-i", streamURL,
+		"-ac", "1",
+		"-ar", "24000",
+		"-f", "f32le",
+		"pipe:1",
+	}
+
+	ffmpeg := exec.CommandContext(ctx, "ffmpeg", args...)
+	stdout, err := ffmpeg.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+	if err := ffmpeg.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start ffmpeg: %w", err)
+	}
+
+	data, err := io.ReadAll(stdout)
+	if err != nil {
+		ffmpeg.Process.Kill()
+		return nil, fmt.Errorf("read error: %w", err)
+	}
+	if err := ffmpeg.Wait(); err != nil {
+		return nil, fmt.Errorf("ffmpeg failed: %w", err)
+	}
+
+	n := len(data) / 4
+	samples := make([]float32, n)
+	for i := 0; i < n; i++ {
+		bits := binary.LittleEndian.Uint32(data[i*4:])
+		samples[i] = math.Float32frombits(bits)
+	}
+
+	lead := leadingSilentSamples(samples)
+	if lead >= len(samples) {
+		return nil, fmt.Errorf("head is entirely silent")
+	}
+	analysis, err := analyzeTrackSamples(samples[lead:], tailSampleRate)
+	if err != nil {
+		return nil, err
+	}
+	analysis.FirstBeat += float64(lead) / tailSampleRate
+	return analysis, nil
 }
 
 func ClearPreCache(guildID string) {
