@@ -1174,6 +1174,7 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 	}
 
 	sentFrames := 0
+	firstFrameSignaled := false
 	volumeBuf := make([]int16, frameSize*channels)
 
 	player.mu.Lock()
@@ -1363,7 +1364,8 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 			}
 
 			sentFrames++
-			if sentFrames == 1 {
+			if !firstFrameSignaled {
+				firstFrameSignaled = true
 				logger.Debugf("[playAudio] First Opus frame sent successfully for guild: %s", guildID)
 				select {
 				case firstFrameCh <- struct{}{}:
