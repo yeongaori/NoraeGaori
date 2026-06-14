@@ -4,12 +4,16 @@ A feature-rich & high-quality audio Discord music bot written in Go.
 
 ## Features
 
-- **High-Quality Audio Streaming** from YouTube via [yt-dlp](https://github.com/yt-dlp/yt-dlp)
+- **High-Quality Audio Streaming** from YouTube via [yt-dlp](https://github.com/yt-dlp/yt-dlp), with Opus bitrate matched to the voice channel
 - **Persistent Queue**
+- **AutoMix** — beat-aware transitions between songs (BPM detection, beat-grid alignment)
+- **Crossfade** — timed crossfade between songs; combined with AutoMix it fades along the beat-aligned transition
+- **Fade-In / Fade-Out** — smooth volume ramps at song edges, on seek, and on resume
+- **Trim Silence** — skips silent intros and outros (forced on while AutoMix is active)
 - **SponsorBlock**
 - **Live Stream Support**
 - **Queue Management** — move, swap, skip-to, remove by range
-- **Per-Guild Settings** — volume, repeat, normalization, language, SponsorBlock
+- **Per-Guild Settings** — volume, repeat, normalization, fades, AutoMix, language, SponsorBlock
 - **Auto-Pause** when voice channel empties, **auto-resume** when a song is added back to a paused queue
 - **Slash Commands & Prefix Commands**
 - **Multi-Language Support** (per-server, with `/setlanguage`)
@@ -62,19 +66,19 @@ make build
 | Variable | Required | Description |
 |---|---|---|
 | `DISCORD_BOT_TOKEN` | Yes | Your Discord bot token |
-| `DEBUG_MODE` | No | Set to `true` for verbose logging |
+| `DEBUG_MODE` | No | Set to `true` for verbose bot logging |
+| `DISCORDGO_DEBUG` | No | Set to `true` for discordgo library debug logging |
 
 ### `config/config.json`
 
-| Field | Default | Description |
-|---|---|---|
-| `prefix` | `!` | Default command prefix for text commands; each server can override with `setprefix` |
-| `language` | `en` | Default bot language (`en`, `ko`); each server can override with `setlanguage` |
-| `show_started_track` | `true` | Show "Now Playing" messages |
-| `default_volume` | `100` | Default volume (0-1000) |
-| `precache_strategy` | `1` | 0=None, 1=Full memory |
-| `max_precache_memory` | `1` | Max pre-cache memory in GB |
-| `max_download_speed_mbps` | `10` | Max download speed per server |
+| Field | Default      | Description                                                                         |
+|---|--------------|-------------------------------------------------------------------------------------|
+| `prefix` | `!`          | Default command prefix for text commands; each server can override with `setprefix` |
+| `language` | `en`         | Default bot language (`en`, `ko`); each server can override with `setlanguage`      |
+| `show_started_track` | `true`       | Show "Now Playing" messages                                                         |
+| `default_volume` | `100`        | Default volume (0-1000)                                                             |
+| `max_download_speed_mbps` | `10`         | Max download speed per server                                                       |
+| `log_file` | `latest.log` | Save all terminal output to this file; `off` disables                                 |
 
 ### `config/admins.json`
 
@@ -108,7 +112,7 @@ To add a new language, create `locales/<code>.json` using `locales/en.json` as a
 | `/pause` | | Pause and leave channel (state preserved) |
 | `/resume` | | Resume playback |
 | `/skip` | | Vote to skip current song |
-| `/seek <position>` | `jump` | Jump to a position in the current song (e.g. `1:23` or `83`) |
+| `/seek <position>` | `jump` | Jump to a position in the current song (e.g. `1:23`, `83`, or `1:21.5`) |
 | `/stop` | `st` | Stop playback and clear queue |
 | `/nowplaying` | `np` | Show the current song |
 | `/volume [level]` | `vol`, `v` | Get or set volume (0-1000) |
@@ -138,6 +142,12 @@ To add a new language, create `locales/<code>.json` using `locales/en.json` as a
 | `/sponsorblock [on/off]` | `sb` | Toggle SponsorBlock |
 | `/showstartedtrack [on/off]` | `showtrack` | Toggle now-playing messages |
 | `/normalization [on/off]` | `normalize` | Toggle volume normalization |
+| `/fadein [on/off] [seconds]` | `fade-in` | Fade in at song start, on seek, and on resume (1-30s, default 3) |
+| `/fadeout [on/off] [seconds]` | `fade-out` | Fade out at song end and before seek (1-30s, default 3) |
+| `/automix [on/off] [beats]` | `mix` | Beat-aware crossfade between songs (4-64 beats, default 16) |
+| `/crossfade [on/off] [seconds]` | `cf` | Crossfade between songs (1-30s, default 8) |
+| `/fadeonstop [on/off]` | `fos` | Fade out briefly before skip/stop instead of cutting |
+| `/trimsilence [on/off]` | `trim` | Skip silence at the start and end of songs (always active while AutoMix is on) |
 
 ### Admin Only
 

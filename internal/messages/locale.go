@@ -240,6 +240,41 @@ type SettingsMessages struct {
 	NormalizationDesc     string `json:"normalization_desc"`
 	NormalizationWhatTitle string `json:"normalization_what_title"`
 	NormalizationWhatDesc  string `json:"normalization_what_desc"`
+	FadeInError           string `json:"fadein_error"`
+	FadeInTitle           string `json:"fadein_title"`
+	FadeInDesc            string `json:"fadein_desc"`
+	FadeInWhatTitle       string `json:"fadein_what_title"`
+	FadeInWhatDesc        string `json:"fadein_what_desc"`
+	FadeInDurationLabel   string `json:"fadein_duration_label"`
+	FadeOutError          string `json:"fadeout_error"`
+	FadeOutTitle          string `json:"fadeout_title"`
+	FadeOutDesc           string `json:"fadeout_desc"`
+	FadeOutWhatTitle      string `json:"fadeout_what_title"`
+	FadeOutWhatDesc       string `json:"fadeout_what_desc"`
+	FadeOutDurationLabel  string `json:"fadeout_duration_label"`
+	AutoMixError          string `json:"automix_error"`
+	AutoMixTitle          string `json:"automix_title"`
+	AutoMixDesc           string `json:"automix_desc"`
+	AutoMixWhatTitle      string `json:"automix_what_title"`
+	AutoMixWhatDesc       string `json:"automix_what_desc"`
+	AutoMixBeatsLabel     string `json:"automix_beats_label"`
+	CrossfadeError        string `json:"crossfade_error"`
+	CrossfadeTitle        string `json:"crossfade_title"`
+	CrossfadeDesc         string `json:"crossfade_desc"`
+	CrossfadeWhatTitle    string `json:"crossfade_what_title"`
+	CrossfadeWhatDesc     string `json:"crossfade_what_desc"`
+	CrossfadeDurationLabel string `json:"crossfade_duration_label"`
+	FadeOnStopError       string `json:"fadeonstop_error"`
+	FadeOnStopTitle       string `json:"fadeonstop_title"`
+	FadeOnStopDesc        string `json:"fadeonstop_desc"`
+	FadeOnStopWhatTitle   string `json:"fadeonstop_what_title"`
+	FadeOnStopWhatDesc    string `json:"fadeonstop_what_desc"`
+	TrimSilenceError      string `json:"trimsilence_error"`
+	TrimSilenceTitle      string `json:"trimsilence_title"`
+	TrimSilenceDesc       string `json:"trimsilence_desc"`
+	TrimSilenceWhatTitle  string `json:"trimsilence_what_title"`
+	TrimSilenceWhatDesc   string `json:"trimsilence_what_desc"`
+	DurationLabel         string `json:"duration_label"`
 	PrefixEmpty           string `json:"prefix_empty"`
 	PrefixTooLong         string `json:"prefix_too_long"`
 	PrefixError           string `json:"prefix_error"`

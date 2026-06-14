@@ -6,11 +6,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/config"
 	"noraegaori/internal/messages"
 	"noraegaori/internal/queue"
 	"noraegaori/pkg/logger"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 type Command struct {
@@ -19,15 +20,15 @@ type Command struct {
 	Options     []*discordgo.ApplicationCommandOption
 	Handler     func(s *discordgo.Session, i *discordgo.InteractionCreate) error
 	AdminOnly   bool
-	TextOnly    bool   
-	Usage       string 
-	Example     string 
+	TextOnly    bool
+	Usage       string
+	Example     string
 }
 
 var (
 	commands          = make(map[string]*Command)
-	aliases           = make(map[string]string) 
-	messageResponders sync.Map                  
+	aliases           = make(map[string]string)
+	messageResponders sync.Map
 )
 
 func isGuildAdmin(s *discordgo.Session, guildID string, member *discordgo.Member) bool {
@@ -35,7 +36,6 @@ func isGuildAdmin(s *discordgo.Session, guildID string, member *discordgo.Member
 		return false
 	}
 
-	
 	guild, err := s.State.Guild(guildID)
 	if err != nil {
 		guild, err = s.Guild(guildID)
@@ -45,18 +45,15 @@ func isGuildAdmin(s *discordgo.Session, guildID string, member *discordgo.Member
 		}
 	}
 
-	
 	var perms int64 = 0
 
-	
 	for _, role := range guild.Roles {
-		if role.ID == guildID { 
+		if role.ID == guildID {
 			perms |= role.Permissions
 			break
 		}
 	}
 
-	
 	for _, roleID := range member.Roles {
 		for _, role := range guild.Roles {
 			if role.ID == roleID {
@@ -66,7 +63,6 @@ func isGuildAdmin(s *discordgo.Session, guildID string, member *discordgo.Member
 		}
 	}
 
-	
 	return (perms & discordgo.PermissionAdministrator) == discordgo.PermissionAdministrator
 }
 
@@ -87,7 +83,7 @@ func registerCommandAliases(name string, cs messages.CommandStrings) {
 }
 
 func ReloadAliases() {
-	
+
 	aliases = make(map[string]string)
 
 	t := messages.T()
@@ -100,7 +96,6 @@ func ReloadAliases() {
 		return messages.CommandStrings{}
 	}
 
-	
 	for name, c := range commands {
 		cs := cmd(name)
 		registerCommandAliases(name, cs)
@@ -129,7 +124,6 @@ func InitializeCommands() {
 		return messages.CommandStrings{}
 	}
 
-	
 	RegisterCommand(&Command{
 		Name:        "play",
 		Description: cmd("play").Description,
@@ -294,7 +288,6 @@ func InitializeCommands() {
 	})
 	registerCommandAliases("repeat", cmd("repeat"))
 
-	
 	RegisterCommand(&Command{
 		Name:        "queue",
 		Description: cmd("queue").Description,
@@ -376,7 +369,6 @@ func InitializeCommands() {
 	})
 	registerCommandAliases("skipto", cmd("skipto"))
 
-	
 	RegisterCommand(&Command{
 		Name:        "join",
 		Description: cmd("join").Description,
@@ -429,7 +421,6 @@ func InitializeCommands() {
 	})
 	registerCommandAliases("switchvc", cmd("switchvc"))
 
-	
 	RegisterCommand(&Command{
 		Name:        "sponsorblock",
 		Description: cmd("sponsorblock").Description,
@@ -497,6 +488,170 @@ func InitializeCommands() {
 	registerCommandAliases("normalization", cmd("normalization"))
 
 	RegisterCommand(&Command{
+		Name:        "fadein",
+		Description: cmd("fadein").Description,
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "setting",
+				Description: cmd("fadein").Options["setting"],
+				Required:    false,
+				Choices: []*discordgo.ApplicationCommandOptionChoice{
+					{Name: "on", Value: "on"},
+					{Name: "off", Value: "off"},
+				},
+			},
+			{
+				Type:        discordgo.ApplicationCommandOptionInteger,
+				Name:        "duration",
+				Description: cmd("fadein").Options["duration"],
+				Required:    false,
+				MinValue:    func() *float64 { v := 1.0; return &v }(),
+				MaxValue:    30.0,
+			},
+		},
+		Handler:  HandleFadeIn,
+		TextOnly: false,
+		Usage:    cmd("fadein").Usage,
+		Example:  cmd("fadein").Example,
+	})
+	registerCommandAliases("fadein", cmd("fadein"))
+
+	RegisterCommand(&Command{
+		Name:        "fadeout",
+		Description: cmd("fadeout").Description,
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "setting",
+				Description: cmd("fadeout").Options["setting"],
+				Required:    false,
+				Choices: []*discordgo.ApplicationCommandOptionChoice{
+					{Name: "on", Value: "on"},
+					{Name: "off", Value: "off"},
+				},
+			},
+			{
+				Type:        discordgo.ApplicationCommandOptionInteger,
+				Name:        "duration",
+				Description: cmd("fadeout").Options["duration"],
+				Required:    false,
+				MinValue:    func() *float64 { v := 1.0; return &v }(),
+				MaxValue:    30.0,
+			},
+		},
+		Handler:  HandleFadeOut,
+		TextOnly: false,
+		Usage:    cmd("fadeout").Usage,
+		Example:  cmd("fadeout").Example,
+	})
+	registerCommandAliases("fadeout", cmd("fadeout"))
+
+	RegisterCommand(&Command{
+		Name:        "automix",
+		Description: cmd("automix").Description,
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "setting",
+				Description: cmd("automix").Options["setting"],
+				Required:    false,
+				Choices: []*discordgo.ApplicationCommandOptionChoice{
+					{Name: "on", Value: "on"},
+					{Name: "off", Value: "off"},
+				},
+			},
+			{
+				Type:        discordgo.ApplicationCommandOptionInteger,
+				Name:        "beats",
+				Description: cmd("automix").Options["beats"],
+				Required:    false,
+				MinValue:    func() *float64 { v := 4.0; return &v }(),
+				MaxValue:    64.0,
+			},
+		},
+		Handler:  HandleAutoMix,
+		TextOnly: false,
+		Usage:    cmd("automix").Usage,
+		Example:  cmd("automix").Example,
+	})
+	registerCommandAliases("automix", cmd("automix"))
+
+	RegisterCommand(&Command{
+		Name:        "crossfade",
+		Description: cmd("crossfade").Description,
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "setting",
+				Description: cmd("crossfade").Options["setting"],
+				Required:    false,
+				Choices: []*discordgo.ApplicationCommandOptionChoice{
+					{Name: "on", Value: "on"},
+					{Name: "off", Value: "off"},
+				},
+			},
+			{
+				Type:        discordgo.ApplicationCommandOptionInteger,
+				Name:        "duration",
+				Description: cmd("crossfade").Options["duration"],
+				Required:    false,
+				MinValue:    func() *float64 { v := 1.0; return &v }(),
+				MaxValue:    30.0,
+			},
+		},
+		Handler:  HandleCrossfade,
+		TextOnly: false,
+		Usage:    cmd("crossfade").Usage,
+		Example:  cmd("crossfade").Example,
+	})
+	registerCommandAliases("crossfade", cmd("crossfade"))
+
+	RegisterCommand(&Command{
+		Name:        "fadeonstop",
+		Description: cmd("fadeonstop").Description,
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "setting",
+				Description: cmd("fadeonstop").Options["setting"],
+				Required:    false,
+				Choices: []*discordgo.ApplicationCommandOptionChoice{
+					{Name: "on", Value: "on"},
+					{Name: "off", Value: "off"},
+				},
+			},
+		},
+		Handler:  HandleFadeOnStop,
+		TextOnly: false,
+		Usage:    cmd("fadeonstop").Usage,
+		Example:  cmd("fadeonstop").Example,
+	})
+	registerCommandAliases("fadeonstop", cmd("fadeonstop"))
+
+	RegisterCommand(&Command{
+		Name:        "trimsilence",
+		Description: cmd("trimsilence").Description,
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "setting",
+				Description: cmd("trimsilence").Options["setting"],
+				Required:    false,
+				Choices: []*discordgo.ApplicationCommandOptionChoice{
+					{Name: "on", Value: "on"},
+					{Name: "off", Value: "off"},
+				},
+			},
+		},
+		Handler:  HandleTrimSilence,
+		TextOnly: false,
+		Usage:    cmd("trimsilence").Usage,
+		Example:  cmd("trimsilence").Example,
+	})
+	registerCommandAliases("trimsilence", cmd("trimsilence"))
+
+	RegisterCommand(&Command{
 		Name:        "setprefix",
 		Description: cmd("setprefix").Description,
 		Options: []*discordgo.ApplicationCommandOption{
@@ -515,10 +670,6 @@ func InitializeCommands() {
 	})
 	registerCommandAliases("setprefix", cmd("setprefix"))
 
-	
-	
-	
-	
 	for _, langCmd := range []string{"setlanguage", "lang", "language"} {
 		name := langCmd
 		RegisterCommand(&Command{
@@ -542,7 +693,6 @@ func InitializeCommands() {
 	}
 	registerCommandAliases("setlanguage", cmd("setlanguage"))
 
-	
 	RegisterCommand(&Command{
 		Name:        "forceskip",
 		Description: cmd("forceskip").Description,
@@ -621,7 +771,6 @@ func InitializeCommands() {
 		Example:     cmd("status").Example,
 	})
 
-	
 	RegisterCommand(&Command{
 		Name:        "help",
 		Description: cmd("help").Description,
@@ -645,7 +794,7 @@ func InitializeCommands() {
 }
 
 func RegisterSlashCommands(session *discordgo.Session) error {
-	logger.Info("[Commands] Syncing slash commands with Discord...")
+	logger.Debug("[Commands] Syncing slash commands with Discord...")
 
 	appID := session.State.User.ID
 
@@ -678,7 +827,7 @@ func RegisterSlashCommands(session *discordgo.Session) error {
 
 	added, updated, removed := diffCommandSets(desiredJSON, existingJSON)
 	if len(added) == 0 && len(updated) == 0 && len(removed) == 0 {
-		logger.Info("[Commands] Slash commands already in sync, skipping registration")
+		logger.Debug("[Commands] Slash commands already in sync, skipping registration")
 		return nil
 	}
 
@@ -743,7 +892,6 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
-	
 	if cmd.AdminOnly {
 		if !config.IsAdmin(i.Member.User.ID) && !isGuildAdmin(s, i.GuildID, i.Member) {
 			RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.NoPermission, messages.T(i.GuildID).Errors.AdminOnly))
@@ -754,7 +902,6 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	logger.Debugf("[Commands] Executing command: %s (user: %s, guild: %s)",
 		cmdName, i.Member.User.Username, i.GuildID)
 
-	
 	if err := cmd.Handler(s, i); err != nil {
 		logger.Errorf("[Commands] Command %s failed: %v", cmdName, err)
 		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, fmt.Sprintf(messages.T(i.GuildID).Errors.CommandExecutionError, err)))
@@ -762,7 +909,7 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 }
 
 func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
-	
+
 	if m.Author.Bot {
 		return
 	}
@@ -777,12 +924,10 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 	}
 
-	
 	if !strings.HasPrefix(m.Content, prefix) {
 		return
 	}
 
-	
 	content := strings.TrimPrefix(m.Content, prefix)
 	parts := strings.Fields(content)
 	if len(parts) == 0 {
@@ -790,28 +935,24 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	cmdName := strings.ToLower(parts[0])
-	_ = parts[1:] 
+	_ = parts[1:]
 
-	
-	
 	aliasTarget, ok := aliases[cmdName]
 	if !ok {
-		return 
+		return
 	}
 	cmdName = aliasTarget
 
-	
 	cmd, exists := commands[cmdName]
 	if !exists {
-		return 
+		return
 	}
 
-	
 	if cmd.AdminOnly {
-		
+
 		member, err := s.State.Member(m.GuildID, m.Author.ID)
 		if err != nil {
-			
+
 			member, err = s.GuildMember(m.GuildID, m.Author.ID)
 		}
 
@@ -820,7 +961,7 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 		if !isBotAdmin && !isServerAdmin {
 			embed := messages.CreateErrorEmbed(messages.T(m.GuildID).Titles.NoPermission, messages.T(m.GuildID).Errors.AdminOnly)
-			
+
 			s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
 				Embeds: []*discordgo.MessageEmbed{embed},
 				Reference: &discordgo.MessageReference{
@@ -835,31 +976,26 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	logger.Debugf("[Commands] Executing text command: %s (user: %s, guild: %s)",
 		cmdName, m.Author.Username, m.GuildID)
 
-	
 	args := parts[1:]
 
-	
 	pseudoInteraction := CreatePseudoInteraction(s, m, cmd, args)
 
-	
 	messageResponder := &MessageResponse{
 		Session:       s,
 		ChannelID:     m.ChannelID,
-		Message:       nil, 
-		OriginalMsgID: m.ID, 
+		Message:       nil,
+		OriginalMsgID: m.ID,
 	}
 
-	
 	messageResponders.Store(pseudoInteraction.Token, messageResponder)
 	defer messageResponders.Delete(pseudoInteraction.Token)
 
-	
 	if err := cmd.Handler(s, pseudoInteraction); err != nil {
 		logger.Errorf("[Commands] Text command %s failed: %v", cmdName, err)
-		
+
 		if messageResponder.Message == nil {
 			embed := messages.CreateErrorEmbed(messages.T(m.GuildID).Titles.Error, fmt.Sprintf(messages.T(m.GuildID).Errors.CommandExecutionError, err))
-			
+
 			s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
 				Embeds: []*discordgo.MessageEmbed{embed},
 				Reference: &discordgo.MessageReference{
@@ -940,16 +1076,15 @@ func RespondEmbedWithComponents(s *discordgo.Session, i *discordgo.InteractionCr
 		return nil, err
 	}
 
-	
 	return s.InteractionResponse(i.Interaction)
 }
 
 func DeferResponse(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if isMessageCommand(i) {
-		
+
 		if mr, ok := messageResponders.Load(i.Token); ok {
 			loadingEmbed := &discordgo.MessageEmbed{
-				Color:       0xFFA500, 
+				Color:       0xFFA500,
 				Title:       messages.T(i.GuildID).Titles.Loading,
 				Description: messages.T(i.GuildID).Descriptions.Loading,
 			}
@@ -988,7 +1123,7 @@ func FollowUpEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *
 
 func UpdateResponseEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error {
 	if isMessageCommand(i) {
-		
+
 		if mr, ok := messageResponders.Load(i.Token); ok {
 			responder := mr.(*MessageResponse)
 			if responder.Message != nil {
@@ -998,7 +1133,7 @@ func UpdateResponseEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, e
 		}
 		return fmt.Errorf("message responder or message not found")
 	}
-	
+
 	_, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 		Embeds: &[]*discordgo.MessageEmbed{embed},
 	})
@@ -1007,7 +1142,7 @@ func UpdateResponseEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, e
 
 func UpdateResponseEmbedWithComponents(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, components []discordgo.MessageComponent) error {
 	if isMessageCommand(i) {
-		
+
 		if mr, ok := messageResponders.Load(i.Token); ok {
 			responder := mr.(*MessageResponse)
 			if responder.Message != nil {
@@ -1029,7 +1164,7 @@ func UpdateResponseEmbedWithComponents(s *discordgo.Session, i *discordgo.Intera
 		logger.Errorf("[UpdateResponse] Message responder not found for token: %s", i.Token)
 		return fmt.Errorf("message responder not found")
 	}
-	
+
 	_, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 		Embeds:     &[]*discordgo.MessageEmbed{embed},
 		Components: &components,
@@ -1052,20 +1187,18 @@ func GetResponseMessage(s *discordgo.Session, i *discordgo.InteractionCreate) (*
 }
 
 func checkUserInBotVoiceChannel(s *discordgo.Session, i *discordgo.InteractionCreate) (string, *discordgo.MessageEmbed) {
-	
+
 	voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
 	if err != nil || voiceState.ChannelID == "" {
 		return "", messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.NotInVoiceChannel)
 	}
 
-	
 	q, err := queue.GetQueue(i.GuildID, false)
 	if err != nil || q == nil || q.VoiceChannelID == "" {
-		
+
 		return voiceState.ChannelID, nil
 	}
 
-	
 	if voiceState.ChannelID != q.VoiceChannelID {
 		return "", messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.MustBeInBotChannel)
 	}

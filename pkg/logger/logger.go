@@ -1,7 +1,9 @@
 package logger
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"sync"
@@ -11,35 +13,45 @@ import (
 var (
 	debugMode bool
 
-	
 	errorLogFile *os.File
 	errorLogMu   sync.Mutex
 
-	
-	
+	outMu       sync.Mutex
+	output      io.Writer = os.Stdout
+	earlyBuf    *bytes.Buffer
+	logFile     *os.File
+	logFilePath string
 
-	
 	infoBadge = "\033[48;5;10m\x1b[37m INFO \033[0m"
 
-	
 	warnBadge = "\033[48;5;3m\x1b[37m WARN \033[0m"
 
-	
 	errorBadge = "\033[48;5;9m\x1b[37m ERRO \033[0m"
 
-	
 	debugBadge = "\033[48;5;202m\x1b[37m DEBG \033[0m"
 
-	
 	termBadge = "\033[48;5;6m\x1b[37m TERM \033[0m"
 )
 
+type lockedWriter struct{}
+
+func (lockedWriter) Write(p []byte) (int, error) {
+	outMu.Lock()
+	defer outMu.Unlock()
+	return output.Write(p)
+}
+
 func Initialize(debug bool) {
 	debugMode = debug
-	log.SetOutput(os.Stdout)
-	log.SetFlags(0) 
 
-	
+	outMu.Lock()
+	earlyBuf = &bytes.Buffer{}
+	output = io.MultiWriter(earlyBuf, os.Stdout)
+	outMu.Unlock()
+
+	log.SetOutput(lockedWriter{})
+	log.SetFlags(0)
+
 	var err error
 	errorLogFile, err = os.OpenFile("error.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -47,12 +59,62 @@ func Initialize(debug bool) {
 	}
 }
 
+func SetLogFile(path string) {
+	outMu.Lock()
+	defer outMu.Unlock()
+
+	if path == logFilePath {
+		return
+	}
+
+	if logFile != nil {
+		logFile.Close()
+		logFile = nil
+	}
+	logFilePath = path
+
+	if path == "" || path == "off" || path == "none" {
+		output = os.Stdout
+		earlyBuf = nil
+		return
+	}
+
+	f, err := os.OpenFile(path, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		output = os.Stdout
+		earlyBuf = nil
+		fmt.Printf("Warning: Failed to open log file %s: %v\n", path, err)
+		return
+	}
+
+	if earlyBuf != nil {
+		f.Write(earlyBuf.Bytes())
+		earlyBuf = nil
+	}
+	logFile = f
+	output = io.MultiWriter(f, os.Stdout)
+}
+
 func Close() {
+	outMu.Lock()
+	if logFile != nil {
+		logFile.Close()
+		logFile = nil
+	}
+	output = os.Stdout
+	outMu.Unlock()
+
 	errorLogMu.Lock()
 	defer errorLogMu.Unlock()
 	if errorLogFile != nil {
 		errorLogFile.Close()
 	}
+}
+
+func printLine(badge, message string) {
+	outMu.Lock()
+	defer outMu.Unlock()
+	fmt.Fprintf(output, "%s %s\n", badge, message)
 }
 
 func logToFile(level, message string) {
@@ -69,27 +131,27 @@ func logToFile(level, message string) {
 }
 
 func Info(message string) {
-	fmt.Printf("%s %s\n", infoBadge, message)
+	printLine(infoBadge, message)
 }
 
 func Warn(message string) {
-	fmt.Printf("%s %s\n", warnBadge, message)
+	printLine(warnBadge, message)
 	logToFile("WARN", message)
 }
 
 func Error(message string) {
-	fmt.Printf("%s %s\n", errorBadge, message)
+	printLine(errorBadge, message)
 	logToFile("ERRO", message)
 }
 
 func Debug(message string) {
 	if debugMode {
-		fmt.Printf("%s %s\n", debugBadge, message)
+		printLine(debugBadge, message)
 	}
 }
 
 func Term(message string) {
-	fmt.Printf("%s %s\n", termBadge, message)
+	printLine(termBadge, message)
 }
 
 func Infof(format string, args ...interface{}) {

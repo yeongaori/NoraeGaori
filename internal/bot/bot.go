@@ -5,14 +5,16 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/commands"
 	"noraegaori/internal/player"
 	"noraegaori/internal/queue"
 	"noraegaori/internal/rpc"
 	"noraegaori/internal/shutdown"
 	"noraegaori/pkg/logger"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 var (
@@ -22,39 +24,33 @@ var (
 func Start(token string) error {
 	var err error
 
-	
 	session, err = discordgo.New("Bot " + token)
 	if err != nil {
 		return fmt.Errorf("failed to create Discord session: %w", err)
 	}
 
-	
-	if logger.IsDebug() {
+	if os.Getenv("DISCORDGO_DEBUG") == "true" {
 		session.LogLevel = discordgo.LogDebug
 	}
 
-	
 	session.Identify.Intents = discordgo.IntentsGuilds |
 		discordgo.IntentsGuildMessages |
 		discordgo.IntentsGuildVoiceStates |
 		discordgo.IntentsMessageContent |
 		discordgo.IntentsGuildMessageReactions
 
-	
 	session.AddHandler(onReady)
 	session.AddHandler(onInteractionCreate)
 	session.AddHandler(onMessageCreate)
 	session.AddHandler(onVoiceStateUpdate)
 	session.AddHandler(onGuildDelete)
 
-	
 	if err := session.Open(); err != nil {
 		return fmt.Errorf("failed to open Discord connection: %w", err)
 	}
 
-	logger.Info("[Bot] Discord connection opened successfully")
+	logger.Debug("[Bot] Discord connection opened successfully")
 
-	
 	waitForShutdown()
 
 	return nil
@@ -64,21 +60,17 @@ func onReady(s *discordgo.Session, r *discordgo.Ready) {
 	logger.Infof("[Bot] Logged in as %s#%s (ID: %s)", r.User.Username, r.User.Discriminator, r.User.ID)
 	logger.Infof("[Bot] Connected to %d guilds", len(r.Guilds))
 
-	
 	commands.InitializeCommands()
 
-	
 	player.SetOnSongStartCallback(func(guildID string) {
 		commands.ClearSkipVotes(guildID)
 		commands.ClearStopVotes(guildID)
 	})
 
-	
 	if err := commands.RegisterSlashCommands(s); err != nil {
 		logger.Errorf("[Bot] Failed to register slash commands: %v", err)
 	}
 
-	
 	go rpc.UpdateRPC(s)
 
 	logger.Info("[Bot] Bot is ready and operational")
@@ -99,12 +91,10 @@ func onVoiceStateUpdate(s *discordgo.Session, vsu *discordgo.VoiceStateUpdate) {
 func onGuildDelete(s *discordgo.Session, g *discordgo.GuildDelete) {
 	logger.Infof("[Bot] Bot removed from guild: %s - cleaning up data", g.ID)
 
-	
 	if err := player.Stop(g.ID); err != nil {
 		logger.Debugf("[Bot] Failed to stop player for guild %s: %v", g.ID, err)
 	}
 
-	
 	if err := queue.DeleteGuildData(g.ID); err != nil {
 		logger.Errorf("[Bot] Failed to delete guild data for %s: %v", g.ID, err)
 	} else {
@@ -115,39 +105,48 @@ func onGuildDelete(s *discordgo.Session, g *discordgo.GuildDelete) {
 func waitForShutdown() {
 	logger.Info("[Bot] Bot is running. Press Ctrl+C to stop")
 
-	
-	sc := make(chan os.Signal, 1)
+	sc := make(chan os.Signal, 2)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 
-	
 	<-sc
 
-	
 	shutdown.SetShuttingDown()
 
-	logger.Info("[Bot] Received shutdown signal, cleaning up...")
+	logger.Info("[Bot] Received shutdown signal, cleaning up... (press Ctrl+C again to force quit)")
 
-	
-	logger.Info("[Bot] Stopping RPC updates...")
-	rpc.Stop()
+	go func() {
+		<-sc
+		logger.Warn("[Bot] Second shutdown signal received, forcing exit")
+		os.Exit(1)
+	}()
 
-	
-	logger.Info("[Bot] Stopping all active players...")
-	player.StopAll()
+	done := make(chan struct{})
+	go func() {
+		logger.Debug("[RPC] Stopping RPC updates...")
+		rpc.Stop()
 
-	
-	logger.Info("[Bot] Shutting down worker pool...")
-	player.ShutdownWorkerPool()
+		logger.Debug("[Bot] Stopping all active players...")
+		player.StopAll()
 
-	
-	if session != nil {
-		logger.Info("[Bot] Closing Discord session...")
-		if err := session.Close(); err != nil {
-			logger.Errorf("[Bot] Error closing Discord session: %v", err)
+		logger.Debug("[WorkerPool] Shutting down worker pool...")
+		player.ShutdownWorkerPool()
+
+		if session != nil {
+			logger.Debug("[Bot] Closing Discord session...")
+			if err := session.Close(); err != nil {
+				logger.Errorf("[Bot] Error closing Discord session: %v", err)
+			}
 		}
-	}
+		close(done)
+	}()
 
-	logger.Info("[Bot] Shutdown complete")
+	select {
+	case <-done:
+		logger.Debug("[Bot] Shutdown complete")
+	case <-time.After(15 * time.Second):
+		logger.Warn("[Bot] Shutdown timed out after 15s, forcing exit")
+		os.Exit(1)
+	}
 }
 
 func GetSession() *discordgo.Session {

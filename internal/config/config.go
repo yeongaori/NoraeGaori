@@ -8,18 +8,18 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/fsnotify/fsnotify"
 	"noraegaori/pkg/logger"
+
+	"github.com/fsnotify/fsnotify"
 )
 
 type Config struct {
-	Prefix              string  `json:"prefix"`
-	Language            string  `json:"language"`               
-	ShowStartedTrack    bool    `json:"show_started_track"`
-	DefaultVolume       float64 `json:"default_volume"`
-	PreCacheStrategy    int     `json:"precache_strategy"`     
-	MaxPreCacheMemory   float64 `json:"max_precache_memory"`   
-	MaxDownloadSpeedMbps float64 `json:"max_download_speed_mbps"` 
+	Prefix               string  `json:"prefix"`
+	Language             string  `json:"language"`
+	ShowStartedTrack     bool    `json:"show_started_track"`
+	DefaultVolume        float64 `json:"default_volume"`
+	MaxDownloadSpeedMbps float64 `json:"max_download_speed_mbps"`
+	LogFile              string  `json:"log_file"`
 }
 
 type AdminsConfig struct {
@@ -34,7 +34,7 @@ var (
 	watcher     *fsnotify.Watcher
 	configPath  = "config/config.json"
 	adminsPath  = "config/admins.json"
-	lastModTime = make(map[string]int64) 
+	lastModTime = make(map[string]int64)
 	modTimeMux  sync.RWMutex
 
 	onReloadCallbacks []func()
@@ -48,12 +48,11 @@ func OnReload(fn func()) {
 }
 
 func Initialize() error {
-	
+
 	if err := os.MkdirAll("config", 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	
 	if err := loadConfig(); err != nil {
 		return err
 	}
@@ -61,14 +60,12 @@ func Initialize() error {
 		return err
 	}
 
-	
 	var err error
 	watcher, err = fsnotify.NewWatcher()
 	if err != nil {
 		return fmt.Errorf("failed to create file watcher: %w", err)
 	}
 
-	
 	if err := watcher.Add(configPath); err != nil {
 		logger.Warnf("Failed to watch config file: %v", err)
 	}
@@ -76,7 +73,6 @@ func Initialize() error {
 		logger.Warnf("Failed to watch admins file: %v", err)
 	}
 
-	
 	go watchFiles()
 
 	logger.Debugf("Configuration system initialized")
@@ -84,16 +80,15 @@ func Initialize() error {
 }
 
 func loadConfig() error {
-	
+
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		defaultConfig := &Config{
-			Prefix:              "!",
-			Language:            "en",
-			ShowStartedTrack:    true,
-			DefaultVolume:       100,
-			PreCacheStrategy:    1,    
-			MaxPreCacheMemory:   1.0,  
-			MaxDownloadSpeedMbps: 10.0, 
+			Prefix:               "!",
+			Language:             "en",
+			ShowStartedTrack:     true,
+			DefaultVolume:        100,
+			MaxDownloadSpeedMbps: 10.0,
+			LogFile:              "latest.log",
 		}
 		if err := saveConfig(defaultConfig); err != nil {
 			return fmt.Errorf("failed to create default config: %w", err)
@@ -106,7 +101,6 @@ func loadConfig() error {
 		return fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	
 	if len(data) == 0 {
 		logger.Warnf("Config file is empty, using defaults")
 		return fmt.Errorf("config file is empty")
@@ -114,46 +108,36 @@ func loadConfig() error {
 
 	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		
+
 		logger.Errorf("Failed to parse config file (corrupted JSON): %v", err)
 		logger.Warnf("Config file may be corrupted. Please check %s", configPath)
 		return fmt.Errorf("failed to parse config file: %w", err)
 	}
 
-	
-	if cfg.PreCacheStrategy != 0 && cfg.PreCacheStrategy != 1 && cfg.PreCacheStrategy != 3 {
-		logger.Warnf("Invalid precache_strategy=%d, falling back to default (1=FullMemory)", cfg.PreCacheStrategy)
-		cfg.PreCacheStrategy = 1
-	}
-
-	
-	if cfg.MaxPreCacheMemory <= 0 || math.IsNaN(cfg.MaxPreCacheMemory) || math.IsInf(cfg.MaxPreCacheMemory, 0) {
-		logger.Warnf("Invalid max_precache_memory=%.2f, falling back to default (1.0 GB)", cfg.MaxPreCacheMemory)
-		cfg.MaxPreCacheMemory = 1.0
-	}
-
-	
 	if cfg.MaxDownloadSpeedMbps <= 0 || math.IsNaN(cfg.MaxDownloadSpeedMbps) || math.IsInf(cfg.MaxDownloadSpeedMbps, 0) {
 		logger.Warnf("Invalid max_download_speed_mbps=%.2f, falling back to default (10.0 Mbps)", cfg.MaxDownloadSpeedMbps)
 		cfg.MaxDownloadSpeedMbps = 10.0
 	}
 
-	
 	if cfg.Language == "" {
 		cfg.Language = "en"
+	}
+
+	if cfg.LogFile == "" {
+		cfg.LogFile = "latest.log"
 	}
 
 	configMux.Lock()
 	config = &cfg
 	configMux.Unlock()
 
-	logger.Infof("Loaded config: prefix=%s, language=%s, volume=%g, precache_strategy=%d, max_precache_memory=%.2fGB, max_download_speed=%.1fMbps",
-		cfg.Prefix, cfg.Language, cfg.DefaultVolume, cfg.PreCacheStrategy, cfg.MaxPreCacheMemory, cfg.MaxDownloadSpeedMbps)
+	logger.Infof("Loaded config: prefix=%s, language=%s, volume=%g, max_download_speed=%.1fMbps",
+		cfg.Prefix, cfg.Language, cfg.DefaultVolume, cfg.MaxDownloadSpeedMbps)
 	return nil
 }
 
 func loadAdmins() error {
-	
+
 	if _, err := os.Stat(adminsPath); os.IsNotExist(err) {
 		defaultAdmins := &AdminsConfig{
 			Admins: []string{},
@@ -206,7 +190,6 @@ func watchFiles() {
 				return
 			}
 
-			
 			fileInfo, err := os.Stat(event.Name)
 			if err == nil {
 				logger.Debugf("[Config Watcher] Event: %s | Op: %s | File: %s | Size: %d | ModTime: %v",
@@ -221,7 +204,6 @@ func watchFiles() {
 				configAbsPath, _ := filepath.Abs(configPath)
 				adminsAbsPath, _ := filepath.Abs(adminsPath)
 
-				
 				if fileInfo != nil {
 					currentModTime := fileInfo.ModTime().UnixNano()
 
@@ -229,13 +211,11 @@ func watchFiles() {
 					lastMod, exists := lastModTime[absPath]
 					modTimeMux.RUnlock()
 
-					
 					if exists && lastMod == currentModTime {
 						logger.Debugf("[Config Watcher] Skipping duplicate event for %s (same ModTime)", event.Name)
 						continue
 					}
 
-					
 					modTimeMux.Lock()
 					lastModTime[absPath] = currentModTime
 					modTimeMux.Unlock()
@@ -246,7 +226,7 @@ func watchFiles() {
 						logger.Errorf("Failed to reload config: %v", err)
 					} else {
 						logger.Info("Configuration reloaded")
-						
+
 						onReloadMux.Lock()
 						cbs := make([]func(), len(onReloadCallbacks))
 						copy(cbs, onReloadCallbacks)

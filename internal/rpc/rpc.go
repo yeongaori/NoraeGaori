@@ -10,9 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/messages"
 	"noraegaori/pkg/logger"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 var ActivityTypeMap = map[string]discordgo.ActivityType{
@@ -75,17 +76,14 @@ func resolveActivityName(name string) string {
 func LoadConfig() (*Config, error) {
 	configPath := filepath.Join("config", "rpcConfig.json")
 
-	
 	configDir := filepath.Dir(configPath)
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		logger.Warn("rpcConfig.json not found. Creating default RPC config file.")
 
-		
 		defaultCfg := DefaultConfig()
 		data, err := json.MarshalIndent(defaultCfg, "", "  ")
 		if err != nil {
@@ -100,7 +98,6 @@ func LoadConfig() (*Config, error) {
 		return defaultCfg, nil
 	}
 
-	
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
@@ -115,8 +112,8 @@ func LoadConfig() (*Config, error) {
 }
 
 var (
-	stopChan chan bool
-	running  bool
+	stopChan  chan bool
+	running   bool
 	runningMu sync.Mutex
 )
 
@@ -161,16 +158,14 @@ func UpdateRPC(session *discordgo.Session) {
 	ticker := time.NewTicker(time.Duration(cfg.RPCIntervalSeconds) * time.Second)
 	defer ticker.Stop()
 
-	
 	updateActivity(session, cfg, &currentIndex)
 
-	
 	for {
 		select {
 		case <-ticker.C:
 			updateActivity(session, cfg, &currentIndex)
 		case <-stopChan:
-			logger.Info("RPC update loop stopped")
+			logger.Debug("[RPC] RPC update loop stopped")
 			runningMu.Lock()
 			running = false
 			runningMu.Unlock()
@@ -196,25 +191,22 @@ func updateActivity(session *discordgo.Session, cfg *Config, currentIndex *int) 
 	var activity Activity
 
 	if cfg.RandomizeRPC {
-		
+
 		activity = cfg.Activities[rand.Intn(len(cfg.Activities))]
 	} else {
-		
+
 		activity = cfg.Activities[*currentIndex]
 		*currentIndex = (*currentIndex + 1) % len(cfg.Activities)
 	}
 
-	
 	activityType, ok := ActivityTypeMap[activity.Type]
 	if !ok {
 		logger.Warnf("Invalid activity type: %s", activity.Type)
 		return
 	}
 
-	
 	name := resolveActivityName(activity.Name)
 
-	
 	err := session.UpdateStatusComplex(discordgo.UpdateStatusData{
 		Activities: []*discordgo.Activity{
 			{

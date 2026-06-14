@@ -106,7 +106,7 @@ func (versionmanager *VersionManager) load() error {
 	}
 
 	versionmanager.state = state
-	logger.Infof("[yt-dlp] Loaded state: active=%s, %d versions tracked", state.ActiveVersion, len(state.Versions))
+	logger.Debugf("[yt-dlp] Loaded state: active=%s, %d versions tracked", state.ActiveVersion, len(state.Versions))
 	return nil
 }
 
@@ -177,7 +177,6 @@ func (versionmanager *VersionManager) SetActiveVersion(version string) {
 	versionmanager.mu.Lock()
 	defer versionmanager.mu.Unlock()
 
-	
 	if old, ok := versionmanager.state.Versions[versionmanager.state.ActiveVersion]; ok && versionmanager.state.ActiveVersion != version {
 		if old.State == StateActive {
 			old.State = StateVerified
@@ -263,7 +262,7 @@ func (versionmanager *VersionManager) SetLastGitHubCheck(t time.Time) {
 }
 
 func (versionmanager *VersionManager) addToCanaryRing(videoID string) {
-	
+
 	for _, id := range versionmanager.state.CanaryRing {
 		if id == videoID {
 			return
@@ -286,7 +285,6 @@ func (versionmanager *VersionManager) getCanaryIDs() []string {
 		return ids
 	}
 
-	
 	ring := make([]string, len(versionmanager.state.CanaryRing))
 	copy(ring, versionmanager.state.CanaryRing)
 	rand.Shuffle(len(ring), func(i, j int) { ring[i], ring[j] = ring[j], ring[i] })
@@ -315,14 +313,11 @@ func (versionmanager *VersionManager) SaveSuccess(version, videoID string) {
 		versionmanager.addToCanaryRing(videoID)
 	}
 
-	
-	
 	if entry.State == StateProvisional && version == versionmanager.state.ActiveVersion && entry.Successes >= stableSuccessCount {
 		entry.State = StateActive
 		logger.Infof("[yt-dlp] Provisional version %s promoted to Active after %d real successes", version, entry.Successes)
 	}
 
-	
 	if version == versionmanager.state.ActiveVersion && entry.Successes == stableSuccessCount {
 		logger.Infof("[yt-dlp] Active version %s reached %d successes, running cleanup", version, stableSuccessCount)
 		versionmanager.cleanupOldVersions()
@@ -332,7 +327,7 @@ func (versionmanager *VersionManager) SaveSuccess(version, videoID string) {
 }
 
 func (versionmanager *VersionManager) SaveError(version, videoID string, errMsg string) {
-	
+
 	if IsDefinitiveUnavailableError(errMsg) || IsNetworkError(errMsg) {
 		return
 	}
@@ -348,7 +343,6 @@ func (versionmanager *VersionManager) SaveError(version, videoID string, errMsg 
 	now := time.Now()
 	cutoff := now.Add(-rollbackWindow)
 
-	
 	fresh := make([]ErrorRecord, 0, len(entry.Errors))
 	for _, e := range entry.Errors {
 		if e.Time.After(cutoff) {
@@ -357,11 +351,10 @@ func (versionmanager *VersionManager) SaveError(version, videoID string, errMsg 
 	}
 	entry.Errors = fresh
 
-	
 	if videoID != "" {
 		for _, e := range entry.Errors {
 			if e.VideoID == videoID {
-				return 
+				return
 			}
 		}
 	}
@@ -401,10 +394,9 @@ func (versionmanager *VersionManager) selectBestVersion() string {
 	}
 
 	if len(candidates) == 0 {
-		return versionmanager.state.ActiveVersion 
+		return versionmanager.state.ActiveVersion
 	}
 
-	
 	sort.Sort(sort.Reverse(sort.StringSlice(candidates)))
 	return candidates[0]
 }
@@ -413,22 +405,18 @@ func (versionmanager *VersionManager) ActiveBinaryPath() string {
 	versionmanager.mu.Lock()
 	defer versionmanager.mu.Unlock()
 
-	
 	versionmanager.tryPromoteVerified()
 
-	
 	if versionmanager.shouldRollback() {
 		best := versionmanager.selectBestVersion()
 		if best != versionmanager.state.ActiveVersion {
 			logger.Warnf("[yt-dlp] Rolling back from %s to %s", versionmanager.state.ActiveVersion, best)
 
-			
 			if entry, ok := versionmanager.state.Versions[versionmanager.state.ActiveVersion]; ok {
 				entry.State = StateBlacklisted
 				entry.BlacklistedAt = time.Now()
 			}
 
-			
 			if entry, ok := versionmanager.state.Versions[best]; ok {
 				entry.State = StateActive
 			}
@@ -437,10 +425,6 @@ func (versionmanager *VersionManager) ActiveBinaryPath() string {
 		}
 	}
 
-	
-	
-	
-	
 	if entry, ok := versionmanager.state.Versions[versionmanager.state.ActiveVersion]; ok {
 		if _, err := os.Stat(entry.Path); err == nil {
 			return entry.Path
@@ -448,7 +432,6 @@ func (versionmanager *VersionManager) ActiveBinaryPath() string {
 		logger.Errorf("[yt-dlp] Active binary %s missing on disk; falling back to legacy path", entry.Path)
 	}
 
-	
 	return GetLegacyBinaryPath()
 }
 
@@ -468,14 +451,12 @@ func (versionmanager *VersionManager) tryPromoteVerified() {
 
 	logger.Infof("[yt-dlp] Promoting verified version %s to active (was %s)", bestVerified, versionmanager.state.ActiveVersion)
 
-	
 	if old, ok := versionmanager.state.Versions[versionmanager.state.ActiveVersion]; ok {
 		if old.State == StateActive {
 			old.State = StateVerified
 		}
 	}
 
-	
 	versionmanager.state.Versions[bestVerified].State = StateActive
 	versionmanager.state.ActiveVersion = bestVerified
 	versionmanager.persist()
@@ -487,7 +468,7 @@ func (versionmanager *VersionManager) cleanupOldVersions() {
 
 	var toDelete []string
 	for ver, entry := range versionmanager.state.Versions {
-		
+
 		if ver == active || ver == fallback {
 			continue
 		}
@@ -500,19 +481,19 @@ func (versionmanager *VersionManager) cleanupOldVersions() {
 			shouldDelete = true
 			reason = "blacklisted"
 		case StateVerified:
-			
+
 			if ver < active {
 				shouldDelete = true
 				reason = "superseded verified"
 			}
 		case StatePending:
-			
+
 			if time.Since(entry.RegisteredAt) > stalePendingTimeout {
 				shouldDelete = true
 				reason = "stale pending"
 			}
 		default:
-			
+
 			if entry.Successes > 0 && ver < fallback {
 				shouldDelete = true
 				reason = "old working below fallback"
@@ -528,7 +509,6 @@ func (versionmanager *VersionManager) cleanupOldVersions() {
 	for _, ver := range toDelete {
 		entry := versionmanager.state.Versions[ver]
 
-		
 		dir := filepath.Dir(entry.Path)
 		if err := os.RemoveAll(dir); err != nil {
 			logger.Warnf("[yt-dlp] Failed to remove directory %s: %v", dir, err)
@@ -536,7 +516,6 @@ func (versionmanager *VersionManager) cleanupOldVersions() {
 			logger.Debugf("[yt-dlp] Removed version directory: %s", dir)
 		}
 
-		
 		delete(versionmanager.state.Versions, ver)
 	}
 
@@ -549,8 +528,8 @@ func (versionmanager *VersionManager) cleanupOldVersions() {
 type canaryResult struct {
 	videoID      string
 	success      bool
-	network      bool 
-	inconclusive bool 
+	network      bool
+	inconclusive bool
 	errMsg       string
 }
 
@@ -590,18 +569,12 @@ func (versionmanager *VersionManager) RunCanary(version string) (passed bool, ne
 		}
 	}
 
-	
-	
-	
 	if networkCount > 0 && inconclusiveCount == 0 {
-		
+
 		logger.Warnf("[yt-dlp] All canary tests for %s hit network errors; version stays pending", version)
 		return false, true
 	}
 
-	
-	
-	
 	logger.Warnf("[yt-dlp] Canary inconclusive for %s — no testable videos but no evidence of binary breakage", version)
 	return true, false
 }
@@ -635,10 +608,6 @@ func (versionmanager *VersionManager) testExtraction(binaryPath, videoID string)
 		return canaryResult{videoID: videoID, errMsg: errMsg}
 	}
 
-	
-	
-	
-	
 	var info struct {
 		ID      string `json:"id"`
 		URL     string `json:"url"`

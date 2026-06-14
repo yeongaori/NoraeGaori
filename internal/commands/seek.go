@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -21,18 +22,30 @@ func parseSeekPosition(input string) (int, error) {
 	if len(parts) > 3 {
 		return 0, fmt.Errorf("invalid format")
 	}
-	values := make([]int, len(parts))
+	values := make([]float64, len(parts))
 	for idx, p := range parts {
-		n, err := strconv.Atoi(strings.TrimSpace(p))
-		if err != nil || n < 0 {
-			return 0, fmt.Errorf("invalid number %q", p)
+		p = strings.TrimSpace(p)
+		if idx < len(parts)-1 {
+			n, err := strconv.Atoi(p)
+			if err != nil || n < 0 {
+				return 0, fmt.Errorf("invalid number %q", p)
+			}
+			if idx > 0 && n >= 60 {
+				return 0, fmt.Errorf("component out of range %q", p)
+			}
+			values[idx] = float64(n)
+		} else {
+			f, err := strconv.ParseFloat(p, 64)
+			if err != nil || f < 0 || math.IsNaN(f) || math.IsInf(f, 0) {
+				return 0, fmt.Errorf("invalid number %q", p)
+			}
+			if len(parts) > 1 && f >= 60 {
+				return 0, fmt.Errorf("component out of range %q", p)
+			}
+			values[idx] = f
 		}
-		if len(parts) > 1 && idx > 0 && n >= 60 {
-			return 0, fmt.Errorf("component out of range %q", p)
-		}
-		values[idx] = n
 	}
-	var totalSeconds int
+	var totalSeconds float64
 	switch len(values) {
 	case 1:
 		totalSeconds = values[0]
@@ -41,7 +54,7 @@ func parseSeekPosition(input string) (int, error) {
 	case 3:
 		totalSeconds = values[0]*3600 + values[1]*60 + values[2]
 	}
-	return totalSeconds * 1000, nil
+	return int(math.Round(totalSeconds * 1000)), nil
 }
 
 func HandleSeek(s *discordgo.Session, i *discordgo.InteractionCreate) error {

@@ -243,6 +243,16 @@ type Queue struct {
 	Paused           bool
 	Playing          bool
 	Loading          bool
+	FadeIn           bool
+	FadeOut          bool
+	AutoMix          bool
+	FadeOnStop       bool
+	FadeInDuration   float64
+	FadeOutDuration  float64
+	AutoMixBeats     int
+	Crossfade        bool
+	CrossfadeDuration float64
+	TrimSilence      bool
 }
 
 type queueCache struct {
@@ -336,24 +346,44 @@ func loadQueueFromDB(guildID string) (*Queue, error) {
 	
 	var volume float64
 	var repeat, sponsorblock, showStartedTrack, normalization int
+	var fadein, fadeout, automix, fadeOnStop, automixBeats, crossfade, trimSilence int
+	var fadeinDuration, fadeoutDuration, crossfadeDuration float64
 	err = database.DB.QueryRow(
-		`SELECT volume, repeat, sponsorblock, show_started_track, normalization
+		`SELECT volume, repeat, sponsorblock, show_started_track, normalization,
+		 COALESCE(fadein, 0), COALESCE(fadeout, 0), COALESCE(automix, 0),
+		 COALESCE(fade_on_stop, 0), COALESCE(fadein_duration, 3),
+		 COALESCE(fadeout_duration, 3), COALESCE(automix_beats, 16),
+		 COALESCE(crossfade, 0), COALESCE(crossfade_duration, 8),
+		 COALESCE(trim_silence, 0)
 		 FROM guild_settings WHERE guild_id = ?`,
 		guildID,
-	).Scan(&volume, &repeat, &sponsorblock, &showStartedTrack, &normalization)
+	).Scan(&volume, &repeat, &sponsorblock, &showStartedTrack, &normalization,
+		&fadein, &fadeout, &automix, &fadeOnStop, &fadeinDuration,
+		&fadeoutDuration, &automixBeats, &crossfade, &crossfadeDuration,
+		&trimSilence)
 
 	if err == sql.ErrNoRows {
-		
+
 		cfg := config.GetConfig()
 		if cfg != nil {
 			volume = cfg.DefaultVolume
 		} else {
-			volume = 100 
+			volume = 100
 		}
 		repeat = 0
 		sponsorblock = 0
 		showStartedTrack = 1
 		normalization = 0
+		fadein = 0
+		fadeout = 0
+		automix = 0
+		fadeOnStop = 0
+		fadeinDuration = 3
+		fadeoutDuration = 3
+		automixBeats = 16
+		crossfade = 0
+		crossfadeDuration = 8
+		trimSilence = 0
 		logger.Debugf("[LoadQueue] No guild_settings found for guild %s, using defaults (volume=%g)", guildID, volume)
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to query guild settings: %w", err)
@@ -403,6 +433,16 @@ func loadQueueFromDB(guildID string) (*Queue, error) {
 		Paused:           paused == 1,
 		Playing:          playing == 1,
 		Loading:          loading == 1,
+		FadeIn:           fadein == 1,
+		FadeOut:          fadeout == 1,
+		AutoMix:          automix == 1,
+		FadeOnStop:       fadeOnStop == 1,
+		FadeInDuration:   fadeinDuration,
+		FadeOutDuration:  fadeoutDuration,
+		AutoMixBeats:     automixBeats,
+		Crossfade:        crossfade == 1,
+		CrossfadeDuration: crossfadeDuration,
+		TrimSilence:      trimSilence == 1,
 	}
 
 	return queue, nil
@@ -1178,9 +1218,382 @@ func SetNormalization(guildID string, enabled bool) error {
 		return fmt.Errorf("failed to set normalization: %w", err)
 	}
 
-	
+
 	InvalidateCache(guildID)
 	logger.Debugf("[SetNormalization] Set normalization=%v for guild: %s", enabled, guildID)
+	return nil
+}
+
+func boolToInt(enabled bool) int {
+	if enabled {
+		return 1
+	}
+	return 0
+}
+
+func GetFadeIn(guildID string) (bool, error) {
+	var fadein int
+	err := database.DB.QueryRow(
+		`SELECT COALESCE(fadein, 0) FROM guild_settings WHERE guild_id = ?`,
+		guildID,
+	).Scan(&fadein)
+
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to get fadein: %w", err)
+	}
+
+	return fadein == 1, nil
+}
+
+func SetFadeIn(guildID string, enabled bool) error {
+	lock := acquireLock(guildID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	value := boolToInt(enabled)
+	_, err := database.DB.Exec(
+		`INSERT INTO guild_settings (guild_id, fadein) VALUES (?, ?)
+		 ON CONFLICT(guild_id) DO UPDATE SET fadein = ?`,
+		guildID, value, value,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to set fadein: %w", err)
+	}
+
+	InvalidateCache(guildID)
+	logger.Debugf("[SetFadeIn] Set fadein=%v for guild: %s", enabled, guildID)
+	return nil
+}
+
+func GetFadeInDuration(guildID string) (float64, error) {
+	var duration float64
+	err := database.DB.QueryRow(
+		`SELECT COALESCE(fadein_duration, 3) FROM guild_settings WHERE guild_id = ?`,
+		guildID,
+	).Scan(&duration)
+
+	if err == sql.ErrNoRows {
+		return 3, nil
+	}
+	if err != nil {
+		return 3, fmt.Errorf("failed to get fadein_duration: %w", err)
+	}
+
+	return duration, nil
+}
+
+func SetFadeInDuration(guildID string, seconds float64) error {
+	lock := acquireLock(guildID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	_, err := database.DB.Exec(
+		`INSERT INTO guild_settings (guild_id, fadein_duration) VALUES (?, ?)
+		 ON CONFLICT(guild_id) DO UPDATE SET fadein_duration = ?`,
+		guildID, seconds, seconds,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to set fadein_duration: %w", err)
+	}
+
+	InvalidateCache(guildID)
+	logger.Debugf("[SetFadeInDuration] Set fadein_duration=%g for guild: %s", seconds, guildID)
+	return nil
+}
+
+func GetFadeOut(guildID string) (bool, error) {
+	var fadeout int
+	err := database.DB.QueryRow(
+		`SELECT COALESCE(fadeout, 0) FROM guild_settings WHERE guild_id = ?`,
+		guildID,
+	).Scan(&fadeout)
+
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to get fadeout: %w", err)
+	}
+
+	return fadeout == 1, nil
+}
+
+func SetFadeOut(guildID string, enabled bool) error {
+	lock := acquireLock(guildID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	value := boolToInt(enabled)
+	_, err := database.DB.Exec(
+		`INSERT INTO guild_settings (guild_id, fadeout) VALUES (?, ?)
+		 ON CONFLICT(guild_id) DO UPDATE SET fadeout = ?`,
+		guildID, value, value,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to set fadeout: %w", err)
+	}
+
+	InvalidateCache(guildID)
+	logger.Debugf("[SetFadeOut] Set fadeout=%v for guild: %s", enabled, guildID)
+	return nil
+}
+
+func GetFadeOutDuration(guildID string) (float64, error) {
+	var duration float64
+	err := database.DB.QueryRow(
+		`SELECT COALESCE(fadeout_duration, 3) FROM guild_settings WHERE guild_id = ?`,
+		guildID,
+	).Scan(&duration)
+
+	if err == sql.ErrNoRows {
+		return 3, nil
+	}
+	if err != nil {
+		return 3, fmt.Errorf("failed to get fadeout_duration: %w", err)
+	}
+
+	return duration, nil
+}
+
+func SetFadeOutDuration(guildID string, seconds float64) error {
+	lock := acquireLock(guildID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	_, err := database.DB.Exec(
+		`INSERT INTO guild_settings (guild_id, fadeout_duration) VALUES (?, ?)
+		 ON CONFLICT(guild_id) DO UPDATE SET fadeout_duration = ?`,
+		guildID, seconds, seconds,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to set fadeout_duration: %w", err)
+	}
+
+	InvalidateCache(guildID)
+	logger.Debugf("[SetFadeOutDuration] Set fadeout_duration=%g for guild: %s", seconds, guildID)
+	return nil
+}
+
+func GetAutoMix(guildID string) (bool, error) {
+	var automix int
+	err := database.DB.QueryRow(
+		`SELECT COALESCE(automix, 0) FROM guild_settings WHERE guild_id = ?`,
+		guildID,
+	).Scan(&automix)
+
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to get automix: %w", err)
+	}
+
+	return automix == 1, nil
+}
+
+func SetAutoMix(guildID string, enabled bool) error {
+	lock := acquireLock(guildID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	value := boolToInt(enabled)
+	_, err := database.DB.Exec(
+		`INSERT INTO guild_settings (guild_id, automix) VALUES (?, ?)
+		 ON CONFLICT(guild_id) DO UPDATE SET automix = ?`,
+		guildID, value, value,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to set automix: %w", err)
+	}
+
+	InvalidateCache(guildID)
+	logger.Debugf("[SetAutoMix] Set automix=%v for guild: %s", enabled, guildID)
+	return nil
+}
+
+func GetAutoMixBeats(guildID string) (int, error) {
+	var beats int
+	err := database.DB.QueryRow(
+		`SELECT COALESCE(automix_beats, 16) FROM guild_settings WHERE guild_id = ?`,
+		guildID,
+	).Scan(&beats)
+
+	if err == sql.ErrNoRows {
+		return 16, nil
+	}
+	if err != nil {
+		return 16, fmt.Errorf("failed to get automix_beats: %w", err)
+	}
+
+	return beats, nil
+}
+
+func SetAutoMixBeats(guildID string, beats int) error {
+	lock := acquireLock(guildID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	_, err := database.DB.Exec(
+		`INSERT INTO guild_settings (guild_id, automix_beats) VALUES (?, ?)
+		 ON CONFLICT(guild_id) DO UPDATE SET automix_beats = ?`,
+		guildID, beats, beats,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to set automix_beats: %w", err)
+	}
+
+	InvalidateCache(guildID)
+	logger.Debugf("[SetAutoMixBeats] Set automix_beats=%d for guild: %s", beats, guildID)
+	return nil
+}
+
+func GetCrossfade(guildID string) (bool, error) {
+	var crossfade int
+	err := database.DB.QueryRow(
+		`SELECT COALESCE(crossfade, 0) FROM guild_settings WHERE guild_id = ?`,
+		guildID,
+	).Scan(&crossfade)
+
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to get crossfade: %w", err)
+	}
+
+	return crossfade == 1, nil
+}
+
+func SetCrossfade(guildID string, enabled bool) error {
+	lock := acquireLock(guildID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	value := boolToInt(enabled)
+	_, err := database.DB.Exec(
+		`INSERT INTO guild_settings (guild_id, crossfade) VALUES (?, ?)
+		 ON CONFLICT(guild_id) DO UPDATE SET crossfade = ?`,
+		guildID, value, value,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to set crossfade: %w", err)
+	}
+
+	InvalidateCache(guildID)
+	logger.Debugf("[SetCrossfade] Set crossfade=%v for guild: %s", enabled, guildID)
+	return nil
+}
+
+func GetCrossfadeDuration(guildID string) (float64, error) {
+	var duration float64
+	err := database.DB.QueryRow(
+		`SELECT COALESCE(crossfade_duration, 8) FROM guild_settings WHERE guild_id = ?`,
+		guildID,
+	).Scan(&duration)
+
+	if err == sql.ErrNoRows {
+		return 8, nil
+	}
+	if err != nil {
+		return 8, fmt.Errorf("failed to get crossfade_duration: %w", err)
+	}
+
+	return duration, nil
+}
+
+func SetCrossfadeDuration(guildID string, seconds float64) error {
+	lock := acquireLock(guildID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	_, err := database.DB.Exec(
+		`INSERT INTO guild_settings (guild_id, crossfade_duration) VALUES (?, ?)
+		 ON CONFLICT(guild_id) DO UPDATE SET crossfade_duration = ?`,
+		guildID, seconds, seconds,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to set crossfade_duration: %w", err)
+	}
+
+	InvalidateCache(guildID)
+	logger.Debugf("[SetCrossfadeDuration] Set crossfade_duration=%g for guild: %s", seconds, guildID)
+	return nil
+}
+
+func GetFadeOnStop(guildID string) (bool, error) {
+	var fadeOnStop int
+	err := database.DB.QueryRow(
+		`SELECT COALESCE(fade_on_stop, 0) FROM guild_settings WHERE guild_id = ?`,
+		guildID,
+	).Scan(&fadeOnStop)
+
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to get fade_on_stop: %w", err)
+	}
+
+	return fadeOnStop == 1, nil
+}
+
+func SetFadeOnStop(guildID string, enabled bool) error {
+	lock := acquireLock(guildID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	value := boolToInt(enabled)
+	_, err := database.DB.Exec(
+		`INSERT INTO guild_settings (guild_id, fade_on_stop) VALUES (?, ?)
+		 ON CONFLICT(guild_id) DO UPDATE SET fade_on_stop = ?`,
+		guildID, value, value,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to set fade_on_stop: %w", err)
+	}
+
+	InvalidateCache(guildID)
+	logger.Debugf("[SetFadeOnStop] Set fade_on_stop=%v for guild: %s", enabled, guildID)
+	return nil
+}
+
+func GetTrimSilence(guildID string) (bool, error) {
+	var trimSilence int
+	err := database.DB.QueryRow(
+		`SELECT COALESCE(trim_silence, 0) FROM guild_settings WHERE guild_id = ?`,
+		guildID,
+	).Scan(&trimSilence)
+
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to get trim_silence: %w", err)
+	}
+
+	return trimSilence == 1, nil
+}
+
+func SetTrimSilence(guildID string, enabled bool) error {
+	lock := acquireLock(guildID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	value := boolToInt(enabled)
+	_, err := database.DB.Exec(
+		`INSERT INTO guild_settings (guild_id, trim_silence) VALUES (?, ?)
+		 ON CONFLICT(guild_id) DO UPDATE SET trim_silence = ?`,
+		guildID, value, value,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to set trim_silence: %w", err)
+	}
+
+	InvalidateCache(guildID)
+	logger.Debugf("[SetTrimSilence] Set trim_silence=%v for guild: %s", enabled, guildID)
 	return nil
 }
 

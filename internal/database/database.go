@@ -6,8 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
-	_ "github.com/mattn/go-sqlite3"
 	"noraegaori/pkg/logger"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 var (
@@ -15,14 +16,14 @@ var (
 )
 
 func Initialize() error {
-	
+
 	dataDir := "data"
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		return fmt.Errorf("failed to create data directory: %w", err)
 	}
 
 	dbPath := filepath.Join(dataDir, "database.sqlite")
-	logger.Info(fmt.Sprintf("Opening database at: %s", dbPath))
+	logger.Debugf("[Database] Opening database at: %s", dbPath)
 
 	var err error
 	DB, err = sql.Open("sqlite3", dbPath)
@@ -30,28 +31,25 @@ func Initialize() error {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
 
-	
 	DB.SetMaxOpenConns(25)
 	DB.SetMaxIdleConns(5)
 
-	
 	if err := DB.Ping(); err != nil {
 		return fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	logger.Info("Database connection established")
+	logger.Debug("[Database] Database connection established")
 
-	
 	if err := createTables(); err != nil {
 		return fmt.Errorf("failed to create tables: %w", err)
 	}
 
-	logger.Info("Database tables initialized successfully")
+	logger.Debug("[Database] Database tables initialized successfully")
 	return nil
 }
 
 func createTables() error {
-	
+
 	guildSettingsSQL := `
 	CREATE TABLE IF NOT EXISTS guild_settings (
 		guild_id TEXT PRIMARY KEY,
@@ -62,7 +60,6 @@ func createTables() error {
 		normalization INTEGER DEFAULT 0
 	);`
 
-	
 	queuesSQL := `
 	CREATE TABLE IF NOT EXISTS queues (
 		guild_id TEXT PRIMARY KEY,
@@ -71,7 +68,6 @@ func createTables() error {
 		paused INTEGER DEFAULT 0
 	);`
 
-	
 	songsSQL := `
 	CREATE TABLE IF NOT EXISTS songs (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -89,12 +85,10 @@ func createTables() error {
 		FOREIGN KEY (guild_id) REFERENCES queues(guild_id) ON DELETE CASCADE
 	);`
 
-	
 	indexSQL := `
 	CREATE INDEX IF NOT EXISTS idx_songs_guild_position
 	ON songs(guild_id, queue_position);`
 
-	
 	statements := []string{guildSettingsSQL, queuesSQL, songsSQL, indexSQL}
 	for _, stmt := range statements {
 		if _, err := DB.Exec(stmt); err != nil {
@@ -102,7 +96,6 @@ func createTables() error {
 		}
 	}
 
-	
 	if err := runMigrations(); err != nil {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
@@ -126,10 +119,20 @@ func runMigrations() error {
 		{"queues", "loading", "INTEGER DEFAULT 0"},
 		{"guild_settings", "language", "TEXT"},
 		{"guild_settings", "prefix", "TEXT"},
+		{"guild_settings", "fadein", "INTEGER DEFAULT 0"},
+		{"guild_settings", "fadeout", "INTEGER DEFAULT 0"},
+		{"guild_settings", "automix", "INTEGER DEFAULT 0"},
+		{"guild_settings", "fade_on_stop", "INTEGER DEFAULT 0"},
+		{"guild_settings", "fadein_duration", "REAL DEFAULT 3"},
+		{"guild_settings", "fadeout_duration", "REAL DEFAULT 3"},
+		{"guild_settings", "automix_beats", "INTEGER DEFAULT 16"},
+		{"guild_settings", "crossfade", "INTEGER DEFAULT 0"},
+		{"guild_settings", "crossfade_duration", "REAL DEFAULT 8"},
+		{"guild_settings", "trim_silence", "INTEGER DEFAULT 0"},
 	}
 
 	for _, m := range migrations {
-		
+
 		query := fmt.Sprintf("PRAGMA table_info(%s)", m.table)
 		rows, err := DB.Query(query)
 		if err != nil {
@@ -152,7 +155,6 @@ func runMigrations() error {
 		}
 		rows.Close()
 
-		
 		if !columnExists {
 			alterSQL := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", m.table, m.column, m.typ)
 			if _, err := DB.Exec(alterSQL); err != nil {
@@ -168,7 +170,7 @@ func runMigrations() error {
 
 func Close() error {
 	if DB != nil {
-		logger.Info("Closing database connection")
+		logger.Debug("Closing database connection")
 		return DB.Close()
 	}
 	return nil
