@@ -217,6 +217,20 @@ func ClearPreCache(guildID string) {
 	logger.Debugf("[PreCache] Cleared all caches for guild: %s", guildID)
 }
 
+func invalidatePreCacheSong(guildID string, songID int) {
+	cacheKey := fmt.Sprintf("%s_%d", guildID, songID)
+	preCacheStoreMu.Lock()
+	defer preCacheStoreMu.Unlock()
+
+	if cache, exists := preCacheStore[cacheKey]; exists {
+		if cache.CancelFunc != nil {
+			cache.CancelFunc()
+		}
+		delete(preCacheStore, cacheKey)
+		logger.Debugf("[PreCache] Invalidated cache for song ID %d in guild: %s", songID, guildID)
+	}
+}
+
 func CleanupPreCacheWorker(guildID string) {
 	q, err := queue.GetQueue(guildID, false)
 	if err != nil || q == nil || len(q.Songs) < 2 {

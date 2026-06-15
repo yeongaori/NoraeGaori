@@ -187,7 +187,11 @@ func (s *audioStream) produce(stdout io.Reader, collectTail bool) {
 		}
 
 		if err == io.EOF || err == io.ErrUnexpectedEOF {
-			s.ffmpeg.Wait()
+			waitErr := s.ffmpeg.Wait()
+			if waitErr != nil && frameCount == 0 {
+				s.errChan <- fmt.Errorf("ffmpeg produced no audio: %w", waitErr)
+				return
+			}
 			s.finishEndState(frameCount, tail)
 			return
 		}
