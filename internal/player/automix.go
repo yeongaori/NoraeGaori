@@ -300,6 +300,7 @@ func (cs *crossfadeState) consume(player *GuildPlayer, stopCh chan struct{}, pcm
 			return false, nil
 		}
 		if cs.bFailed() {
+			invalidatePreCacheSong(player.GuildID, cs.nextSongID)
 			cs.cancel("next stream failed")
 			return false, nil
 		}

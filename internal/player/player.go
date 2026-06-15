@@ -810,6 +810,7 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 				logger.Infof("[Play] Waiting 3 seconds before reconnecting voice for guild: %s", guildID)
 				time.Sleep(3 * time.Second)
 			} else {
+				invalidatePreCacheSong(guildID, song.ID)
 				time.Sleep(2 * time.Second)
 			}
 			closeFirstFrame()
@@ -1213,7 +1214,7 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 					return err
 				default:
 					if sentFrames == 0 {
-						if resumeMode && stream.endState.Load() != nil {
+						if resumeMode && frameOffset > 0 && stream.endState.Load() != nil {
 							return nil
 						}
 						return fmt.Errorf("playback completed with no audio frames sent")
