@@ -1218,7 +1218,6 @@ func SetNormalization(guildID string, enabled bool) error {
 		return fmt.Errorf("failed to set normalization: %w", err)
 	}
 
-
 	InvalidateCache(guildID)
 	logger.Debugf("[SetNormalization] Set normalization=%v for guild: %s", enabled, guildID)
 	return nil

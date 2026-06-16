@@ -39,7 +39,7 @@ type PlayerCommand struct {
 
 type GuildPlayer struct {
 	GuildID          string
-	VoiceConn        *discordgo.VoiceConnection
+	VoiceConn        voiceConnection
 	VoiceChannelID   string
 	Playing          bool
 	Paused           bool
@@ -54,6 +54,7 @@ type GuildPlayer struct {
 	PlaybackStart    time.Time
 	mu               sync.Mutex
 	processorRunning bool
+	dispatch         func(PlayerCommand) error
 	PendingStream    *PendingStream
 	FadingOut        bool
 	FadingIn         bool
@@ -99,6 +100,8 @@ var (
 
 	onSongStartCallback func(guildID string)
 	callbackMu          sync.RWMutex
+
+	resumePlayback = playInternal
 )
 
 type PreCache struct {
@@ -293,7 +296,32 @@ func callOnSongStart(guildID string) {
 	}
 }
 
-func JoinVoice(session *discordgo.Session, guildID, channelID string) (*discordgo.VoiceConnection, error) {
+type voiceConnection interface {
+	OpusSendChan() chan []byte
+	DeadChan() <-chan struct{}
+	Err() error
+	Speaking(bool) error
+	Disconnect(context.Context) error
+}
+
+type discordVoice struct {
+	vc *discordgo.VoiceConnection
+}
+
+func wrapVoiceConn(vc *discordgo.VoiceConnection) voiceConnection {
+	if vc == nil {
+		return nil
+	}
+	return &discordVoice{vc: vc}
+}
+
+func (d *discordVoice) OpusSendChan() chan []byte            { return d.vc.OpusSend }
+func (d *discordVoice) DeadChan() <-chan struct{}            { return d.vc.Dead }
+func (d *discordVoice) Err() error                           { return d.vc.Err }
+func (d *discordVoice) Speaking(b bool) error                { return d.vc.Speaking(b) }
+func (d *discordVoice) Disconnect(ctx context.Context) error { return d.vc.Disconnect(ctx) }
+
+func JoinVoice(session *discordgo.Session, guildID, channelID string) (voiceConnection, error) {
 	player := GetPlayer(guildID)
 	player.mu.Lock()
 	defer player.mu.Unlock()
@@ -335,9 +363,9 @@ func JoinVoice(session *discordgo.Session, guildID, channelID string) (*discordg
 		case <-ticker.C:
 			if vc.Status == discordgo.VoiceConnectionStatusReady {
 				logger.Debugf("[Voice] Voice connection ready for guild: %s", guildID)
-				player.VoiceConn = vc
+				player.VoiceConn = wrapVoiceConn(vc)
 				player.VoiceChannelID = channelID
-				return vc, nil
+				return player.VoiceConn, nil
 			}
 		case <-vc.Dead:
 			return nil, fmt.Errorf("voice connection died: %v", vc.Err)
@@ -415,21 +443,11 @@ func (p *GuildPlayer) processCommands() {
 					}
 				}()
 
-				switch cmd.Type {
-				case "play":
-					err = playInternal(cmd.Session, cmd.GuildID)
-				case "skip":
-					logger.Debugf("[CommandProcessor] Processing skip command for guild: %s", p.GuildID)
-					err = skipInternal(cmd.Session, cmd.GuildID)
-				case "stop":
-					err = stopInternal(cmd.GuildID)
-				case "pause":
-					err = pauseInternal(cmd.GuildID)
-				case "resume":
-					err = resumeInternal(cmd.Session, cmd.GuildID)
-				default:
-					err = fmt.Errorf("unknown command type: %s", cmd.Type)
+				handler := p.dispatch
+				if handler == nil {
+					handler = p.defaultDispatch
 				}
+				err = handler(cmd)
 			}()
 
 		case <-p.QuitChan:
@@ -437,6 +455,24 @@ func (p *GuildPlayer) processCommands() {
 			logger.Debugf("[CommandProcessor] Quit signal received for guild: %s", p.GuildID)
 			return
 		}
+	}
+}
+
+func (p *GuildPlayer) defaultDispatch(cmd PlayerCommand) error {
+	switch cmd.Type {
+	case "play":
+		return playInternal(cmd.Session, cmd.GuildID)
+	case "skip":
+		logger.Debugf("[CommandProcessor] Processing skip command for guild: %s", p.GuildID)
+		return skipInternal(cmd.Session, cmd.GuildID)
+	case "stop":
+		return stopInternal(cmd.GuildID)
+	case "pause":
+		return pauseInternal(cmd.GuildID)
+	case "resume":
+		return resumeInternal(cmd.Session, cmd.GuildID)
+	default:
+		return fmt.Errorf("unknown command type: %s", cmd.Type)
 	}
 }
 
@@ -557,7 +593,7 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 	} else {
 
 		select {
-		case <-player.VoiceConn.Dead:
+		case <-player.VoiceConn.DeadChan():
 			logger.Warnf("[Play] Detected dead voice connection, will reconnect for guild: %s", guildID)
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			player.VoiceConn.Disconnect(ctx)
@@ -1129,7 +1165,7 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 		)
 
 		var startErr error
-		stream, startErr = startAudioStream(args, collectTail)
+		stream, startErr = newAudioStream(args, collectTail)
 		if startErr != nil {
 			return startErr
 		}
@@ -1353,11 +1389,11 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 			opusData := opusBuffer[:opusLen]
 
 			select {
-			case player.VoiceConn.OpusSend <- opusData:
-			case <-player.VoiceConn.Dead:
+			case player.VoiceConn.OpusSendChan() <- opusData:
+			case <-player.VoiceConn.DeadChan():
 				stream.stop()
 				crossfade.abort()
-				return fmt.Errorf("voice connection died: %v", player.VoiceConn.Err)
+				return fmt.Errorf("voice connection died: %v", player.VoiceConn.Err())
 			case <-stopCh:
 				stream.stop()
 				crossfade.abort()
@@ -1374,10 +1410,10 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 				}
 			}
 
-		case <-player.VoiceConn.Dead:
+		case <-player.VoiceConn.DeadChan():
 			stream.stop()
 			crossfade.abort()
-			return fmt.Errorf("voice connection died: %v", player.VoiceConn.Err)
+			return fmt.Errorf("voice connection died: %v", player.VoiceConn.Err())
 
 		case <-stopCh:
 			stream.stop()
@@ -1925,7 +1961,7 @@ func Skip(session *discordgo.Session, guildID string) error {
 			return
 		}
 
-		if err := playInternal(session, guildID); err != nil {
+		if err := resumePlayback(session, guildID); err != nil {
 
 			if err.Error() == "play lock timeout" {
 				logger.Debugf("[Skip] Play lock timeout for guild %s (expected during rapid skips)", guildID)

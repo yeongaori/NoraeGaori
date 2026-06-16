@@ -52,13 +52,9 @@ func HandleVoiceStateUpdate(session *discordgo.Session, vsu *discordgo.VoiceStat
 			if player.VoiceChannelID != "" && player.VoiceChannelID != botVoiceChannelID {
 				logger.Infof("[VoiceHandler] Bot was moved from %s to %s in guild: %s", player.VoiceChannelID, botVoiceChannelID, vsu.GuildID)
 				player.VoiceChannelID = botVoiceChannelID
-				voiceConn := player.VoiceConn
 				player.mu.Unlock()
 				if err := queue.UpdateVoiceChannel(vsu.GuildID, botVoiceChannelID); err != nil {
 					logger.Errorf("[VoiceHandler] Failed to update queue voice channel: %v", err)
-				}
-				if voiceConn != nil {
-					voiceConn.RekeyDAVE()
 				}
 			} else {
 				player.mu.Unlock()

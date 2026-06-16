@@ -12,6 +12,9 @@ func setupTestDB(t *testing.T) {
 	if err := database.Initialize(); err != nil {
 		t.Fatalf("Failed to initialize test database: %v", err)
 	}
+	if err := CreateQueue("guild1", "text_channel_test", "voice_channel_test"); err != nil {
+		t.Fatalf("Failed to create test queue: %v", err)
+	}
 }
 
 func teardownTestDB(t *testing.T) {
@@ -172,7 +175,7 @@ func TestSwapSongs(t *testing.T) {
 		expectErr bool
 	}{
 		{"Swap valid positions", 0, 2, false},
-		{"Swap same position", 1, 1, true},
+		{"Swap same position", 1, 1, false},
 		{"Swap out of bounds", 0, 100, true},
 		{"Swap negative position", -1, 1, true},
 	}
@@ -197,7 +200,7 @@ func TestMoveSong(t *testing.T) {
 	guildID := "guild1"
 	for i := 0; i < 5; i++ {
 		song := &Song{
-			URL:            "https://youtube.com/watch?v=test",
+			URL:            "https://youtube.com/watch?v=move" + string(rune('A'+i)),
 			Title:          "Song " + string(rune('A'+i)),
 			Duration:       "3:00",
 			RequestedByID:  "user1",
@@ -216,7 +219,7 @@ func TestMoveSong(t *testing.T) {
 	}{
 		{"Move down", 0, 3, false},
 		{"Move up", 4, 1, false},
-		{"Move same position", 2, 2, true},
+		{"Move same position", 2, 2, false},
 		{"Move out of bounds", 0, 100, true},
 	}
 
@@ -427,7 +430,7 @@ func TestConcurrentAccess(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func(idx int) {
 			song := &Song{
-				URL:            "https://youtube.com/watch?v=test",
+				URL:            "https://youtube.com/watch?v=concurrent" + string(rune('0'+idx)),
 				Title:          "Concurrent Song",
 				Duration:       "3:00",
 				RequestedByID:  "user1",

@@ -12,8 +12,25 @@ env:
   LLVM_MINGW_VERSION: "20250114"
 
 jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Run tests
+        env:
+          CGO_ENABLED: "1"
+        run: go test -race ./...
+
   build:
     name: Build ${{ matrix.name }}
+    needs: test
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
