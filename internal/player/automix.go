@@ -154,7 +154,7 @@ func (cs *crossfadeState) plan(player *GuildPlayer, es *streamEndState, sentFram
 	}
 
 	bArgs := buildFFmpegArgs(nextURL, startOffsetSec, normalization)
-	bStream, err := startAudioStream(bArgs, fade.autoMix || fade.trimSilence)
+	bStream, err := newAudioStream(bArgs, fade.autoMix || fade.trimSilence)
 	if err != nil {
 		logger.Debugf("[%s] failed to start next stream for guild %s: %v", tag, guildID, err)
 		return false
@@ -266,10 +266,10 @@ func (cs *crossfadeState) mixAndSend(player *GuildPlayer, stopCh chan struct{}, 
 	opusData := opusBuffer[:opusLen]
 
 	select {
-	case player.VoiceConn.OpusSend <- opusData:
+	case player.VoiceConn.OpusSendChan() <- opusData:
 		return nil
-	case <-player.VoiceConn.Dead:
-		return fmt.Errorf("voice connection died: %v", player.VoiceConn.Err)
+	case <-player.VoiceConn.DeadChan():
+		return fmt.Errorf("voice connection died: %v", player.VoiceConn.Err())
 	case <-stopCh:
 		return fmt.Errorf("playback stopped by user")
 	}

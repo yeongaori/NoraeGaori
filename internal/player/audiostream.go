@@ -118,6 +118,8 @@ func buildFFmpegArgs(streamURL string, seekSeconds float64, normalization bool) 
 	return args
 }
 
+var newAudioStream = startAudioStream
+
 func startAudioStream(args []string, collectTail bool) (*audioStream, error) {
 	ffmpeg := exec.Command("ffmpeg", args...)
 	stdout, err := ffmpeg.StdoutPipe()
