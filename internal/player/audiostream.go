@@ -58,6 +58,7 @@ type audioStream struct {
 	stopChan chan struct{}
 	stopOnce sync.Once
 	ffmpeg   *exec.Cmd
+	stdin    io.Closer
 	endState atomic.Pointer[streamEndState]
 }
 
@@ -118,7 +119,52 @@ func buildFFmpegArgs(streamURL string, seekSeconds float64, normalization bool) 
 	return args
 }
 
+func buildFFmpegArgsPipe(normalization bool) []string {
+	args := []string{"-i", "pipe:0"}
+
+	if normalization {
+		args = append(args, "-af", "dynaudnorm=framelen=500:gausssize=31:peak=0.95")
+	}
+
+	args = append(args,
+		"-f", "s16le",
+		"-ar", "48000",
+		"-ac", "2",
+		"pipe:1",
+	)
+	return args
+}
+
 var newAudioStream = startAudioStream
+
+var newAudioStreamPipe = startAudioStreamPipe
+
+func startAudioStreamPipe(args []string, stdin io.ReadCloser, collectTail bool) (*audioStream, error) {
+	ffmpeg := exec.Command("ffmpeg", args...)
+	ffmpeg.Stdin = stdin
+
+	stdout, err := ffmpeg.StdoutPipe()
+	if err != nil {
+		stdin.Close()
+		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+
+	if err := ffmpeg.Start(); err != nil {
+		stdin.Close()
+		return nil, fmt.Errorf("failed to start ffmpeg: %w", err)
+	}
+
+	s := &audioStream{
+		pcmChan:  make(chan []int16, audioStreamBufSize),
+		errChan:  make(chan error, 1),
+		stopChan: make(chan struct{}),
+		ffmpeg:   ffmpeg,
+		stdin:    stdin,
+	}
+
+	go s.produce(stdout, collectTail)
+	return s, nil
+}
 
 func startAudioStream(args []string, collectTail bool) (*audioStream, error) {
 	ffmpeg := exec.Command("ffmpeg", args...)
@@ -146,6 +192,9 @@ func (s *audioStream) killFFmpeg() {
 	if s.ffmpeg != nil && s.ffmpeg.Process != nil {
 		s.ffmpeg.Process.Kill()
 	}
+	if s.stdin != nil {
+		s.stdin.Close()
+	}
 }
 
 func (s *audioStream) stop() {
@@ -157,6 +206,11 @@ func (s *audioStream) stop() {
 
 func (s *audioStream) produce(stdout io.Reader, collectTail bool) {
 	defer close(s.pcmChan)
+	defer func() {
+		if s.stdin != nil {
+			s.stdin.Close()
+		}
+	}()
 
 	var tail *monoTail
 	if collectTail {

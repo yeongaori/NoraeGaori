@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"strings"
 	"sync"
@@ -102,6 +103,10 @@ var (
 	callbackMu          sync.RWMutex
 
 	resumePlayback = playInternal
+
+	getLiveStreamPipe = func(url string, sponsorBlock bool, bitrate, seekTime int) (io.ReadCloser, error) {
+		return youtube.GetStreamPipe(url, sponsorBlock, bitrate, seekTime)
+	}
 )
 
 type PreCache struct {
@@ -653,7 +658,9 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 
 	var streamURL string
 	var streamErr error
-	if hasPending {
+	if song.IsLive {
+		logger.Debugf("[Play] Live stream, will stream via yt-dlp pipe for: %s", song.Title)
+	} else if hasPending {
 		logger.Debugf("[Play] Using handed-off stream for: %s", song.Title)
 	} else if cached := GetCachedStreamURL(guildID, song.ID); cached != "" {
 		streamURL = cached
@@ -1115,7 +1122,7 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 	player.mu.Unlock()
 
 	if pending != nil {
-		if pending.SongID == song.ID && seekTime == 0 {
+		if !song.IsLive && pending.SongID == song.ID && seekTime == 0 {
 			stream = pending.Stream
 			resumeMode = true
 			frameOffset = pending.FramesConsumed
@@ -1139,35 +1146,51 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 	}
 
 	if stream == nil {
-		logger.Debugf("[playAudio] Building FFmpeg command for guild: %s", guildID)
-		args := []string{
-			"-reconnect", "1",
-			"-reconnect_streamed", "1",
-			"-reconnect_delay_max", "5",
-		}
+		if song.IsLive {
+			logger.Debugf("[playAudio] Opening live yt-dlp pipe for guild: %s", guildID)
+			sp, pipeErr := getLiveStreamPipe(song.URL, false, bitrate, 0)
+			if pipeErr != nil {
+				return pipeErr
+			}
 
-		if seekTime > 0 {
-			seekSeconds := float64(seekTime) / 1000.0
-			args = append(args, "-ss", fmt.Sprintf("%.3f", seekSeconds))
-		}
+			args := buildFFmpegArgsPipe(normalization)
 
-		args = append(args, "-i", streamURL)
+			var startErr error
+			stream, startErr = newAudioStreamPipe(args, sp, collectTail)
+			if startErr != nil {
+				return startErr
+			}
+		} else {
+			logger.Debugf("[playAudio] Building FFmpeg command for guild: %s", guildID)
+			args := []string{
+				"-reconnect", "1",
+				"-reconnect_streamed", "1",
+				"-reconnect_delay_max", "5",
+			}
 
-		if normalization {
-			args = append(args, "-af", "dynaudnorm=framelen=500:gausssize=31:peak=0.95")
-		}
+			if seekTime > 0 {
+				seekSeconds := float64(seekTime) / 1000.0
+				args = append(args, "-ss", fmt.Sprintf("%.3f", seekSeconds))
+			}
 
-		args = append(args,
-			"-f", "s16le",
-			"-ar", "48000",
-			"-ac", "2",
-			"pipe:1",
-		)
+			args = append(args, "-i", streamURL)
 
-		var startErr error
-		stream, startErr = newAudioStream(args, collectTail)
-		if startErr != nil {
-			return startErr
+			if normalization {
+				args = append(args, "-af", "dynaudnorm=framelen=500:gausssize=31:peak=0.95")
+			}
+
+			args = append(args,
+				"-f", "s16le",
+				"-ar", "48000",
+				"-ac", "2",
+				"pipe:1",
+			)
+
+			var startErr error
+			stream, startErr = newAudioStream(args, collectTail)
+			if startErr != nil {
+				return startErr
+			}
 		}
 	}
 
@@ -1254,6 +1277,11 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 							return nil
 						}
 						return fmt.Errorf("playback completed with no audio frames sent")
+					}
+					if song.IsLive {
+						if active, _ := youtube.IsLiveStreamActive(song.URL); active {
+							return fmt.Errorf("stream stalled: live stream interrupted")
+						}
 					}
 					return nil
 				}
@@ -1555,6 +1583,16 @@ func handlePlaybackError(session *discordgo.Session, guildID string, song *queue
 		logger.Warnf("[Play] Definitive error for song %s in guild %s: %s", song.Title, guildID, reason)
 		song.SetState(queue.SongStateFailed)
 		sendSongErrorMessage(session, guildID, song, reason)
+		clearRetryCount(guildID, song.URL)
+		return false
+	}
+
+	if song.IsLive {
+		if active, _ := youtube.IsLiveStreamActive(song.URL); active {
+			logger.Warnf("[Play] Live stream still active, reconnecting in guild: %s - %s", guildID, song.Title)
+			return true
+		}
+		logger.Debugf("[Play] Live stream ended, not retrying in guild: %s - %s", guildID, song.Title)
 		clearRetryCount(guildID, song.URL)
 		return false
 	}

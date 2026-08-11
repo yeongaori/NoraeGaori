@@ -1,5 +1,5 @@
 - [ ] Refactor & Optimize for performance
-- [ ] Fix issue where live streams stop playing before reaching the end 
+- [x] Fix issue where live streams stop playing before reaching the end 
 - [ ] AutoMix Improvements
   - [x] BPM Detection
   - [ ] Pitch Detection
