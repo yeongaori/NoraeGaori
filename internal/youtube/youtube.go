@@ -685,7 +685,11 @@ func GetOptimalAudioFormat(bitrate int) string {
 }
 
 func GetStreamURL(url string, sponsorBlock bool, bitrate int) (string, error) {
-	
+	return GetStreamURLContext(context.Background(), url, sponsorBlock, bitrate)
+}
+
+func GetStreamURLContext(parent context.Context, url string, sponsorBlock bool, bitrate int) (string, error) {
+
 	if err := ytCircuitBreaker.canAttempt(); err != nil {
 		logger.Warnf("[GetStreamURL] Circuit breaker open: %v", err)
 		return "", err
@@ -694,7 +698,7 @@ func GetStreamURL(url string, sponsorBlock bool, bitrate int) (string, error) {
 	audioFormat := GetOptimalAudioFormat(bitrate)
 	logger.Debugf("Getting stream URL for: %s (SponsorBlock: %v, Format: %s)", url, sponsorBlock, audioFormat)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 	defer cancel()
 
 	var streamURL string

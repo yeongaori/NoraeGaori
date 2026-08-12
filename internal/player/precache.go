@@ -14,7 +14,12 @@ import (
 	"noraegaori/pkg/logger"
 )
 
-const preCacheTTL = time.Hour
+const (
+	preCacheTTL        = time.Hour
+	analysisHeadSecs   = 75
+	analysisReadMargin = 5
+	analysisMaxBytes   = int64((analysisHeadSecs + analysisReadMargin) * tailSampleRate * 4)
+)
 
 func PreCacheNext(guildID string, bitrate int) {
 	q, err := queue.GetQueue(guildID, false)
@@ -67,6 +72,7 @@ func PreCacheNext(guildID string, bitrate int) {
 		if err := preCacheSong(ctx, guildID, nextSong, q.SponsorBlock, bitrate); err != nil {
 			logger.Errorf("[PreCache] Failed to pre-cache %s: %v", nextSong.Title, err)
 		}
+		StartAnalysisBackfill(guildID, bitrate)
 	}()
 }
 
@@ -95,15 +101,33 @@ func preCacheSong(ctx context.Context, guildID string, song *queue.Song, sponsor
 	logger.Debugf("[PreCache] Cached stream URL for: %s", song.Title)
 
 	if automix, err := queue.GetAutoMix(guildID); err == nil && automix {
-		if analysis, err := analyzeStreamHead(ctx, streamURL); err == nil {
+		analysis := LoadTrackAnalysis(song.URL, AnalysisSegmentHead)
+		reused := analysis != nil
+
+		var analyzeErr error
+		if analysis == nil {
+			analyzeErr = withAnalysisSlot(ctx, func() error {
+				var err error
+				analysis, err = analyzeStreamHead(ctx, streamURL)
+				return err
+			})
+		}
+
+		if analyzeErr == nil && analysis != nil {
 			preCacheStoreMu.Lock()
 			if entry, exists := preCacheStore[cacheKey]; exists {
 				entry.Analysis = analysis
 			}
 			preCacheStoreMu.Unlock()
-			logger.Debugf("[PreCache] Analyzed head for: %s (BPM %.1f)", song.Title, analysis.BPM)
+
+			if !reused {
+				SaveTrackAnalysis(song.URL, AnalysisSegmentHead, analysis)
+			}
+			logger.Debugf("[PreCache] Analyzed head for: %s (BPM %.1f, key %s / %s, confidence %.3f, reused %v)",
+				song.Title, analysis.BPM, keyName(analysis.Tonic, analysis.Minor),
+				camelotCode(analysis.Tonic, analysis.Minor), analysis.KeyConfidence, reused)
 		} else {
-			logger.Debugf("[PreCache] Head analysis failed for %s: %v", song.Title, err)
+			logger.Debugf("[PreCache] Head analysis failed for %s: %v", song.Title, analyzeErr)
 		}
 	}
 
@@ -158,7 +182,7 @@ func analyzeStreamHead(ctx context.Context, streamURL string) (*TrackAnalysis, e
 		"-reconnect", "1",
 		"-reconnect_streamed", "1",
 		"-reconnect_delay_max", "5",
-		"-t", "75",
+		"-t", fmt.Sprintf("%d", analysisHeadSecs),
 		"-i", streamURL,
 		"-ac", "1",
 		"-ar", "24000",
@@ -175,11 +199,12 @@ func analyzeStreamHead(ctx context.Context, streamURL string) (*TrackAnalysis, e
 		return nil, fmt.Errorf("failed to start ffmpeg: %w", err)
 	}
 
-	data, err := io.ReadAll(stdout)
+	data, err := io.ReadAll(io.LimitReader(stdout, analysisMaxBytes))
 	if err != nil {
 		ffmpeg.Process.Kill()
 		return nil, fmt.Errorf("read error: %w", err)
 	}
+	io.Copy(io.Discard, stdout)
 	if err := ffmpeg.Wait(); err != nil {
 		return nil, fmt.Errorf("ffmpeg failed: %w", err)
 	}

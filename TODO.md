@@ -1,48 +1,48 @@
 - [ ] Refactor & Optimize for performance
 - [x] Fix issue where live streams stop playing before reaching the end 
-- [ ] AutoMix Improvements
+- [x] AutoMix Improvements
   - [x] BPM Detection
-  - [ ] Pitch Detection
+  - [x] Pitch Detection
   <details><summary>Volume</summary>
     
-    - [ ] Smooth crossfade
-    - [ ] Overlap
-    - [ ] Fade in, Fade out
-    - [ ] Cut in, Fade out
-    - [ ] Fade in, Cut out
+    - [x] Smooth crossfade
+    - [x] Overlap
+    - [x] Fade in, Fade out
+    - [x] Cut in, Fade out
+    - [x] Fade in, Cut out
   </details>
   <details><summary>EQ</summary>
     
-    - [ ] Center Bass Swap
-    - [ ] End Bass Swap
-    - [ ] Start Bass Swap
-    - [ ] 3-Band Fade
-    - [ ] Quick Bass
+    - [x] Center Bass Swap
+    - [x] End Bass Swap
+    - [x] Start Bass Swap
+    - [x] 3-Band Fade
+    - [x] Quick Bass
   </details>
   <details><summary>Filter</summary>
     
-    - [ ] None
-    - [ ] Low-pass filter out
-    - [ ] Low-pass filter in
-    - [ ] Low-pass filter in, low-pass filter out
-    - [ ] Low-pass filter in, high-pass filter out
+    - [x] None
+    - [x] Low-pass filter out
+    - [x] Low-pass filter in
+    - [x] Low-pass filter in, low-pass filter out
+    - [x] Low-pass filter in, high-pass filter out
   </details>
   <details><summary>Effect</summary>
     
-    - [ ] None
-    - [ ] Reverb Out Center
-    - [ ] Reverb Cut End
-    - [ ] Reverb Out End
-    - [ ] Echo 1/2 Cut End
+    - [x] None
+    - [x] Reverb Out Center
+    - [x] Reverb Cut End
+    - [x] Reverb Out End
+    - [x] Echo 1/2 Cut End
   </details>
   <details><summary>Loop</summary>
     
-    - [ ] None
-    - [ ] 1-bit loop
-    - [ ] 2-bit loop
-    - [ ] 4-bit loop
-    - [ ] 8-bit loop
+    - [x] None
+    - [x] 1-bit loop
+    - [x] 2-bit loop
+    - [x] 4-bit loop
+    - [x] 8-bit loop
   </details>
   
-  - [ ] Automatically select the above mix according to the song's BPM & pitch
+  - [x] Automatically select the above mix according to the song's BPM & pitch
 - [ ] Add Settings Panel using Modal components

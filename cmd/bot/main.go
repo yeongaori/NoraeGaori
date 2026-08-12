@@ -43,6 +43,10 @@ func main() {
 		logger.Warnf("Failed to clear stale states: %v", err)
 	}
 
+	if err := player.PruneTrackAnalysis(); err != nil {
+		logger.Warnf("Failed to prune stored track analysis: %v", err)
+	}
+
 	logger.Debug("[Database] Loading configuration...")
 	if err := config.Initialize(); err != nil {
 		logger.Errorf("[Database] Failed to initialize config: %v", err)

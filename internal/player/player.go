@@ -9,6 +9,7 @@ import (
 	"math"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"noraegaori/internal/messages"
@@ -29,6 +30,9 @@ const (
 	maxRetries   = 3
 	lockTimeout  = 30 * time.Second
 	stallTimeout = 30 * time.Second
+
+	healthyPlaybackFrames = 500
+	framePacingWarnDelay  = 100 * time.Millisecond
 )
 
 type PlayerCommand struct {
@@ -65,19 +69,21 @@ type GuildPlayer struct {
 	SeekTargetMs     int
 	TrimStartMs      int
 	TrimEndMs        int
+	transitionArmed  atomic.Bool
 }
 
 type fadeSettings struct {
-	fadeIn       bool
-	fadeOut      bool
-	autoMix      bool
-	crossfade    bool
-	trimSilence  bool
-	fadeInSec    float64
-	fadeOutSec   float64
-	crossfadeSec float64
-	autoMixBeats int
-	repeatMode   int
+	fadeIn         bool
+	fadeOut        bool
+	autoMix        bool
+	crossfade      bool
+	trimSilence    bool
+	fadeInSec      float64
+	fadeOutSec     float64
+	crossfadeSec   float64
+	autoMixBeats   int
+	repeatMode     int
+	styleOverrides TransitionStyleOverrides
 }
 
 var (
@@ -98,6 +104,9 @@ var (
 
 	playbackRetries   = make(map[string]int)
 	playbackRetriesMu sync.Mutex
+
+	announcedSongs   = make(map[string]int)
+	announcedSongsMu sync.Mutex
 
 	onSongStartCallback func(guildID string)
 	callbackMu          sync.RWMutex
@@ -661,6 +670,7 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 	if song.IsLive {
 		logger.Debugf("[Play] Live stream, will stream via yt-dlp pipe for: %s", song.Title)
 	} else if hasPending {
+		streamURL = GetCachedStreamURL(guildID, song.ID)
 		logger.Debugf("[Play] Using handed-off stream for: %s", song.Title)
 	} else if cached := GetCachedStreamURL(guildID, song.ID); cached != "" {
 		streamURL = cached
@@ -694,6 +704,7 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 		if err := queue.RemoveFirstSong(guildID); err != nil {
 			logger.Errorf("[Play] Failed to remove failed song: %v", err)
 		}
+		clearAnnounced(guildID)
 		return playContinue
 	}
 
@@ -709,8 +720,9 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 	}
 
 	firstFrameCh := make(chan struct{}, 1)
-	var firstFrameOnce sync.Once
-	closeFirstFrame := func() { firstFrameOnce.Do(func() { close(firstFrameCh) }) }
+	abortCh := make(chan struct{})
+	var abortOnce sync.Once
+	abortPlayback := func() { abortOnce.Do(func() { close(abortCh) }) }
 
 	go func() {
 		for {
@@ -719,9 +731,11 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 			player.mu.Unlock()
 			select {
 			case <-firstFrameCh:
-				if !hasPending {
+				if !hasPending && markAnnounced(guildID, song.ID) {
 					sendNowPlayingMessage(session, guildID, song, q)
 				}
+				return
+			case <-abortCh:
 				return
 			case <-stopCh:
 				player.mu.Lock()
@@ -746,6 +760,9 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 	announceNext := func(next *queue.Song) {
 		nq, err := queue.GetQueue(guildID, false)
 		if err != nil || nq == nil {
+			return
+		}
+		if !markAnnounced(guildID, next.ID) {
 			return
 		}
 		sendNowPlayingMessage(session, guildID, next, nq)
@@ -784,6 +801,12 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 			} else {
 				normalization = newNorm
 			}
+			restartURL, restartErr := resolveRestartStreamURL(guildID, song, q.SponsorBlock, voiceChannelBitrate, streamURL)
+			if restartErr != nil {
+				logger.Warnf("[Play] Failed to resolve stream URL for normalization toggle: %v", restartErr)
+				return playContinue
+			}
+			streamURL = restartURL
 			logger.Debugf("[Play] Restarting FFmpeg for normalization toggle at %dms: %s", seekTime, song.Title)
 			continue
 		}
@@ -795,6 +818,12 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 				player.mu.Unlock()
 				fade = fadeSettingsFromQueue(vq)
 			}
+			restartURL, restartErr := resolveRestartStreamURL(guildID, song, q.SponsorBlock, voiceChannelBitrate, streamURL)
+			if restartErr != nil {
+				logger.Warnf("[Play] Failed to resolve stream URL for seek: %v", restartErr)
+				return playContinue
+			}
+			streamURL = restartURL
 			logger.Debugf("[Play] Restarting FFmpeg for seek to %dms: %s", seekTime, song.Title)
 			continue
 		}
@@ -856,17 +885,22 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 				invalidatePreCacheSong(guildID, song.ID)
 				time.Sleep(2 * time.Second)
 			}
-			closeFirstFrame()
+			abortPlayback()
 			return playContinue
 		}
 
 		if err := queue.RemoveFirstSong(guildID); err != nil {
 			logger.Errorf("[Play] Failed to remove failed song: %v", err)
 		}
-		closeFirstFrame()
+		clearAnnounced(guildID)
+		if lm := GetLoadingMessage(guildID); lm != nil {
+			session.ChannelMessageDelete(lm.ChannelID, lm.ID)
+			DeleteLoadingMessage(guildID)
+		}
+		abortPlayback()
 		return playContinue
 	}
-	closeFirstFrame()
+	abortPlayback()
 	logger.Debugf("[Play] playAudio completed successfully for: %s", song.Title)
 
 	player.mu.Lock()
@@ -883,6 +917,7 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 	song.ResetRetry()
 	song.SetState(queue.SongStateCompleted)
 	clearRetryCount(guildID, song.URL)
+	clearAnnounced(guildID)
 
 	if err := queue.SetPlaying(guildID, false); err != nil {
 		logger.Errorf("[Play] Failed to clear playing state after song finish: %v", err)
@@ -901,14 +936,19 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 	var repeatSong *queue.Song
 	if shouldRepeat {
 		repeatSong = &queue.Song{
-			URL:            song.URL,
-			Title:          song.Title,
-			Duration:       song.Duration,
-			Thumbnail:      song.Thumbnail,
-			Uploader:       song.Uploader,
-			RequestedByID:  song.RequestedByID,
-			RequestedByTag: song.RequestedByTag,
-			IsLive:         song.IsLive,
+			URL:                song.URL,
+			Title:              song.Title,
+			Duration:           song.Duration,
+			Thumbnail:          song.Thumbnail,
+			Uploader:           song.Uploader,
+			RequestedByID:      song.RequestedByID,
+			RequestedByTag:     song.RequestedByTag,
+			IsLive:             song.IsLive,
+			AutoMixStyleVolume: song.AutoMixStyleVolume,
+			AutoMixStyleEQ:     song.AutoMixStyleEQ,
+			AutoMixStyleFilter: song.AutoMixStyleFilter,
+			AutoMixStyleEffect: song.AutoMixStyleEffect,
+			AutoMixStyleLoop:   song.AutoMixStyleLoop,
 		}
 	} else {
 		logger.Debugf("[Play] Repeat check: q=%v, repeatMode=%d, song.IsLive=%v", q != nil, repeatMode, song.IsLive)
@@ -958,6 +998,13 @@ func fadeSettingsFromQueue(q *queue.Queue) fadeSettings {
 		crossfadeSec: q.CrossfadeDuration,
 		autoMixBeats: q.AutoMixBeats,
 		repeatMode:   q.RepeatMode,
+		styleOverrides: TransitionStyleOverrides{
+			Volume: q.AutoMixStyleVolume,
+			EQ:     q.AutoMixStyleEQ,
+			Filter: q.AutoMixStyleFilter,
+			Effect: q.AutoMixStyleEffect,
+			Loop:   q.AutoMixStyleLoop,
+		},
 	}
 }
 
@@ -992,14 +1039,19 @@ func advanceQueueForAutoMix(player *GuildPlayer, song *queue.Song, crossfade *cr
 	var repeatSong *queue.Song
 	if repeatMode != queue.RepeatOff && !song.IsLive {
 		repeatSong = &queue.Song{
-			URL:            song.URL,
-			Title:          song.Title,
-			Duration:       song.Duration,
-			Thumbnail:      song.Thumbnail,
-			Uploader:       song.Uploader,
-			RequestedByID:  song.RequestedByID,
-			RequestedByTag: song.RequestedByTag,
-			IsLive:         song.IsLive,
+			URL:                song.URL,
+			Title:              song.Title,
+			Duration:           song.Duration,
+			Thumbnail:          song.Thumbnail,
+			Uploader:           song.Uploader,
+			RequestedByID:      song.RequestedByID,
+			RequestedByTag:     song.RequestedByTag,
+			IsLive:             song.IsLive,
+			AutoMixStyleVolume: song.AutoMixStyleVolume,
+			AutoMixStyleEQ:     song.AutoMixStyleEQ,
+			AutoMixStyleFilter: song.AutoMixStyleFilter,
+			AutoMixStyleEffect: song.AutoMixStyleEffect,
+			AutoMixStyleLoop:   song.AutoMixStyleLoop,
 		}
 	}
 
@@ -1108,8 +1160,6 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 		logger.Debugf("[playAudio] Skipping onSongStart callback (retry %d) for guild: %s", retries, guildID)
 	}
 
-	go PreCacheNext(guildID, bitrate)
-
 	collectTail := (fade.autoMix || fade.trimSilence) && !song.IsLive
 
 	var stream *audioStream
@@ -1140,6 +1190,10 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 		}
 	}
 
+	if retries == 0 {
+		go PreCacheNext(guildID, bitrate)
+	}
+
 	baseOffsetMs := seekTime
 	if resumeMode {
 		baseOffsetMs = int(pending.StartOffsetSec * 1000)
@@ -1161,6 +1215,9 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 				return startErr
 			}
 		} else {
+			if streamURL == "" {
+				return fmt.Errorf("no stream URL available for playback")
+			}
 			logger.Debugf("[playAudio] Building FFmpeg command for guild: %s", guildID)
 			args := []string{
 				"-reconnect", "1",
@@ -1235,7 +1292,16 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 
 	sentFrames := 0
 	firstFrameSignaled := false
+	retryCreditCleared := false
+	transitionArmedLast := false
+	defer player.transitionArmed.Store(false)
 	volumeBuf := make([]int16, frameSize*channels)
+
+	var activeTail *transitionTail
+	if resumeMode && pending.Tail != nil {
+		activeTail = pending.Tail
+		logger.Debugf("[playAudio] Carrying transition tail into song ID %d for guild: %s", song.ID, guildID)
+	}
 
 	player.mu.Lock()
 	fadeInNext := player.FadeInNext
@@ -1260,6 +1326,7 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 	replanAllowed := true
 	var endStateAdj *streamEndState
 	crossfade := newCrossfadeState()
+	outro := newOutroState()
 
 	for {
 		select {
@@ -1268,6 +1335,7 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 				if done, err := crossfade.finishOnDrain(player, stopCh, opusEncoder, &sentFrames); done {
 					return err
 				}
+				outro.flush(player, stopCh, opusEncoder, &sentFrames)
 				select {
 				case err := <-stream.errChan:
 					return err
@@ -1295,6 +1363,9 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 						fade = fadeSettingsFromQueue(nq)
 					}
 					if !song.IsLive {
+						if es.analysis != nil {
+							SaveTrackAnalysis(song.URL, AnalysisSegmentTail, es.analysis)
+						}
 						if fade.trimSilence && es.silentTailFrames > 0 {
 							player.mu.Lock()
 							player.TrimEndMs = baseOffsetMs + (es.totalFrames-es.silentTailFrames)*20
@@ -1309,7 +1380,10 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 							}
 						}
 						endStateAdj = es
-						planned := crossfade.plan(player, es, sentFrames, fade, normalization)
+						planned := crossfade.plan(player, es, sentFrames, fade, normalization, bitrate)
+						if !planned {
+							planned = outro.plan(player, es, sentFrames, fade)
+						}
 						if !planned && fade.fadeOut {
 							fadeOutStartFrame, fadeOutFrames = planFadeOutWindow(es.totalFrames-es.silentTailFrames, sentFrames, fade.fadeOutSec)
 							logger.Debugf("[Play] Fade-out window planned: start frame %d, %d frames (total %d, sent %d) for guild: %s", fadeOutStartFrame, fadeOutFrames, es.totalFrames, sentFrames, guildID)
@@ -1317,17 +1391,32 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 					}
 				}
 			} else if endStateAdj != nil && replanAllowed && !crossfade.armed && !crossfade.cancelled &&
-				(fade.autoMix || fade.crossfade) &&
+				(fade.autoMix || fade.crossfade) && !outro.committed &&
 				!(fadeOutFrames > 0 && sentFrames >= fadeOutStartFrame) &&
 				sentFrames%50 == 0 {
 				go PreCacheNext(guildID, bitrate)
-				if crossfade.plan(player, endStateAdj, sentFrames, fade, normalization) {
+				if crossfade.plan(player, endStateAdj, sentFrames, fade, normalization, bitrate) {
 					if fadeOutFrames > 0 {
 						logger.Debugf("[Play] Fade-out window cleared, crossfade armed for guild: %s", guildID)
+					}
+					if outro.armed {
+						logger.Debugf("[Play] Outro cancelled, crossfade armed for guild: %s", guildID)
+						outro.cancel()
+					}
+					fadeOutStartFrame = 0
+					fadeOutFrames = 0
+				} else if !outro.armed && outro.plan(player, endStateAdj, sentFrames, fade) {
+					if fadeOutFrames > 0 {
+						logger.Debugf("[Play] Fade-out window cleared, outro armed for guild: %s", guildID)
 					}
 					fadeOutStartFrame = 0
 					fadeOutFrames = 0
 				}
+			}
+
+			if armed := crossfade.armed || outro.armed; armed != transitionArmedLast {
+				transitionArmedLast = armed
+				player.transitionArmed.Store(armed)
 			}
 
 			if skipLeading {
@@ -1350,6 +1439,7 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 			if fade.trimSilence && endStateAdj != nil && endStateAdj.silentTailFrames > 0 &&
 				!crossfade.armed && sentFrames >= endStateAdj.totalFrames-endStateAdj.silentTailFrames {
 				logger.Debugf("[Play] Trimming %d trailing silent frames for guild: %s", endStateAdj.silentTailFrames, guildID)
+				outro.flush(player, stopCh, opusEncoder, &sentFrames)
 				return nil
 			}
 
@@ -1405,7 +1495,15 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 			}
 
 			copy(volumeBuf, pcmData)
-			applyGain(volumeBuf, volumeFactor*gain)
+			if outro.running(sentFrames) {
+				outro.process(volumeBuf, sentFrames, volumeFactor*gain)
+			} else {
+				applyGain(volumeBuf, volumeFactor*gain)
+			}
+
+			if activeTail != nil && !activeTail.apply(volumeBuf) {
+				activeTail = nil
+			}
 
 			opusBuffer := make([]byte, 1500)
 			opusLen, err := opusEncoder.Encode(volumeBuf, opusBuffer)
@@ -1416,6 +1514,7 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 			}
 			opusData := opusBuffer[:opusLen]
 
+			sendStart := time.Now()
 			select {
 			case player.VoiceConn.OpusSendChan() <- opusData:
 			case <-player.VoiceConn.DeadChan():
@@ -1427,6 +1526,10 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 				crossfade.abort()
 				return fmt.Errorf("playback stopped by user")
 			}
+			if blocked := time.Since(sendStart); blocked > framePacingWarnDelay {
+				logger.Warnf("[Pacing] Opus frame delayed %.0fms at frame %d (analysis slots busy: %d) for guild: %s",
+					float64(blocked.Microseconds())/1000, sentFrames, len(analysisSlots), guildID)
+			}
 
 			sentFrames++
 			if !firstFrameSignaled {
@@ -1436,6 +1539,10 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 				case firstFrameCh <- struct{}{}:
 				default:
 				}
+			}
+			if !retryCreditCleared && sentFrames >= healthyPlaybackFrames {
+				retryCreditCleared = true
+				clearRetryCount(guildID, song.URL)
 			}
 
 		case <-player.VoiceConn.DeadChan():
@@ -1558,6 +1665,40 @@ func retryKey(guildID, songURL string) string {
 	return guildID + ":" + songURL
 }
 
+func TransitionPending(guildID string) bool {
+	playersMu.Lock()
+	player, exists := players[guildID]
+	playersMu.Unlock()
+	if !exists {
+		return false
+	}
+	return player.transitionArmed.Load()
+}
+
+func markAnnounced(guildID string, songID int) bool {
+	announcedSongsMu.Lock()
+	defer announcedSongsMu.Unlock()
+	if current, exists := announcedSongs[guildID]; exists && current == songID {
+		return false
+	}
+	announcedSongs[guildID] = songID
+	return true
+}
+
+func clearAnnounced(guildID string) {
+	announcedSongsMu.Lock()
+	defer announcedSongsMu.Unlock()
+	delete(announcedSongs, guildID)
+}
+
+func resolveRestartStreamURL(guildID string, song *queue.Song, sponsorBlock bool, bitrate int, current string) (string, error) {
+	if current != "" || song.IsLive {
+		return current, nil
+	}
+	invalidatePreCacheSong(guildID, song.ID)
+	return youtube.GetStreamURL(song.URL, sponsorBlock, bitrate)
+}
+
 func clearRetryCount(guildID, songURL string) {
 	playbackRetriesMu.Lock()
 	delete(playbackRetries, retryKey(guildID, songURL))
@@ -1565,6 +1706,7 @@ func clearRetryCount(guildID, songURL string) {
 }
 
 func clearRetryCountsForGuild(guildID string) {
+	clearAnnounced(guildID)
 	prefix := guildID + ":"
 	playbackRetriesMu.Lock()
 	for key := range playbackRetries {
@@ -2222,6 +2364,7 @@ func Stop(guildID string) error {
 	}
 
 	ClearPreCache(guildID)
+	StopAnalysisBackfill(guildID)
 
 	DeletePlayer(guildID)
 
@@ -2264,6 +2407,7 @@ func stopInternal(guildID string) error {
 	}
 
 	ClearPreCache(guildID)
+	StopAnalysisBackfill(guildID)
 
 	DeletePlayer(guildID)
 	logger.Debugf("[Stop] Stopped playback for guild: %s", guildID)
@@ -2406,6 +2550,7 @@ func StopAll() {
 				logger.Errorf("[StopAll] Failed to cleanup guild %s: %v", guildID, err)
 			}
 			ClearPreCache(guildID)
+			StopAnalysisBackfill(guildID)
 			logger.Debugf("[StopAll] Cleaned up guild: %s", guildID)
 		}(guildID)
 	}

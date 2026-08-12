@@ -291,6 +291,13 @@
       "example": "automix, automix on, automix on 16, automix off",
       "aliases": ["automix", "mix"]
     },
+    "automixstyle": {
+      "description": "Set the server-wide AutoMix transition style for a category",
+      "options": { "category": "Style category (volume, eq, filter, effect, loop)", "style": "Style value, or auto to let AutoMix choose" },
+      "usage": "automixstyle [category] [style]",
+      "example": "automixstyle, automixstyle effect, automixstyle effect echo_half_cut_end, automixstyle effect auto",
+      "aliases": ["automixstyle", "mixstyle"]
+    },
     "crossfade": {
       "description": "Crossfade settings (simple fade between songs)",
       "options": { "setting": "Setting value", "duration": "Crossfade duration in seconds (1-30)" },
@@ -367,6 +374,18 @@
       "usage": "help [page]",
       "example": "help, help 2",
       "aliases": ["help", "h"]
+    },
+    "automixpanel": {
+      "description": "Open the AutoMix transition panel for the queue",
+      "options": {
+        "page": "Page number"
+      },
+      "usage": "automixpanel [page]",
+      "example": "automixpanel, automixpanel 2",
+      "aliases": [
+        "automixpanel",
+        "mixpanel"
+      ]
     }
   },
 
@@ -452,6 +471,14 @@
     "automix_what_title": "Description",
     "automix_what_desc": "Beat-aware crossfade between songs.",
     "automix_beats_label": "Crossfade Beats",
+    "automixstyle_title": "AutoMix Transition Style",
+    "automixstyle_desc": "Server-wide default style for each category. Set a category to **auto** to let AutoMix choose per transition.",
+    "automixstyle_what_title": "Description",
+    "automixstyle_what_desc": "Applies to every transition in this server unless a single transition overrides it in the AutoMix panel.",
+    "automixstyle_changed": "**%s** has been set to **%s**.",
+    "automixstyle_error": "An error occurred while setting the AutoMix style: %v",
+    "automixstyle_invalid_category": "**%s** is not a valid category. Available categories: %s",
+    "automixstyle_invalid_value": "**%s** is not a valid style for **%s**. Available styles: %s",
     "crossfade_error": "An error occurred while setting crossfade: %v",
     "crossfade_title": "%s Crossfade %s",
     "crossfade_desc": "Crossfade has been set to **%s**.",
@@ -690,5 +717,77 @@
     "activity_default_2": "Songs",
     "activity_default_3": "Playlists",
     "activity_default_4": "Music Videos"
+  },
+
+  "automix_panel": {
+    "title": "AutoMix Transitions",
+    "description": "Each row is the transition between two songs. Pick one to change how it mixes.",
+    "empty_title": "No Transitions",
+    "empty_desc": "Add at least two songs to the queue to set up transitions.",
+    "select_placeholder": "Select a transition to edit",
+    "refresh_button": "Refresh",
+    "mix_button": "Mix",
+    "analyzing": "analyzing…",
+    "unknown": "—",
+    "now_marker": "▶",
+    "override_marker": "✎",
+    "legend": "▶ next to run · ✎ manually set",
+    "repeat_single_notice": "Repeat-single is on, so AutoMix skips every transition.",
+    "automix_off_notice": "AutoMix is off, so no style is auto-selected. Only your overrides apply.",
+    "transitions_off_notice": "AutoMix and crossfade are both off, so no transition will run. Settings here are saved for later.",
+    "editor_title": "Transition %s",
+    "outro_label": "end",
+    "outro_field": "Nothing follows. This is the last track, so AutoMix plays an outro instead of a transition.",
+    "outgoing_field": "Outgoing",
+    "incoming_field": "Incoming",
+    "compatibility_field": "Compatibility",
+    "auto_recipe_field": "Auto-selected",
+    "effective_field": "In use",
+    "bpm_delta": "BPM delta %+.1f%%",
+    "camelot_distance": "Camelot distance %d",
+    "harmonic": "harmonic",
+    "clashing": "clashing",
+    "auto_option": "Auto-select",
+    "auto_option_desc": "Currently: %s",
+    "source_auto": "auto",
+    "source_guild": "server default",
+    "source_song": "manual",
+    "song_gone": "That song is no longer in the queue.",
+    "update_failed": "Failed to update the transition: %v",
+    "category_labels": {
+      "volume": "Volume",
+      "eq": "EQ",
+      "filter": "Filter",
+      "effect": "Effect",
+      "loop": "Loop"
+    },
+    "style_labels": {
+      "volume.smooth": "Smooth Crossfade",
+      "volume.overlap": "Overlap",
+      "volume.fadein_fadeout": "Fade In, Fade Out",
+      "volume.cutin_fadeout": "Cut In, Fade Out",
+      "volume.fadein_cutout": "Fade In, Cut Out",
+      "eq.none": "None",
+      "eq.center_bass_swap": "Center Bass Swap",
+      "eq.end_bass_swap": "End Bass Swap",
+      "eq.start_bass_swap": "Start Bass Swap",
+      "eq.three_band_fade": "3-Band Fade",
+      "eq.quick_bass": "Quick Bass",
+      "filter.none": "None",
+      "filter.lowpass_out": "Low-pass Out",
+      "filter.lowpass_in": "Low-pass In",
+      "filter.lowpass_in_out": "Low-pass In + Out",
+      "filter.lowpass_in_highpass_out": "Low-pass In + High-pass Out",
+      "effect.none": "None",
+      "effect.reverb_out_center": "Reverb Out Center",
+      "effect.reverb_cut_end": "Reverb Cut End",
+      "effect.reverb_out_end": "Reverb Out End",
+      "effect.echo_half_cut_end": "Echo 1/2 Cut End",
+      "loop.none": "None",
+      "loop.one_beat": "1 Beat Loop",
+      "loop.two_beats": "2 Beat Loop",
+      "loop.four_beats": "4 Beat Loop",
+      "loop.eight_beats": "8 Beat Loop"
+    }
   }
 }

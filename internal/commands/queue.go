@@ -31,12 +31,6 @@ func HandleQueue(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	}
 
 	embed := createQueueEmbed(i.GuildID, q.Songs, currentPage, totalPages, songsPerPage)
-
-	if totalPages == 1 {
-		RespondEmbed(s, i, embed)
-		return nil
-	}
-
 	components := createQueueButtons(i.GuildID, currentPage, totalPages)
 
 	msg, err := RespondEmbedWithComponents(s, i, embed, components)

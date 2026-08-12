@@ -3,6 +3,7 @@ package queue
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -47,8 +48,13 @@ type Song struct {
 	Uploader       string
 	IsLive         bool
 
-	
-	State           SongState              
+	AutoMixStyleVolume string
+	AutoMixStyleEQ     string
+	AutoMixStyleFilter string
+	AutoMixStyleEffect string
+	AutoMixStyleLoop   string
+
+	State           SongState
 	RetryCount      int                    
 	LastError       error                  
 	LoadingMessage  *discordgo.Message     
@@ -218,6 +224,11 @@ func (s *Song) Clone() *Song {
 		SeekTime:       s.SeekTime,
 		Uploader:       s.Uploader,
 		IsLive:         s.IsLive,
+		AutoMixStyleVolume: s.AutoMixStyleVolume,
+		AutoMixStyleEQ:     s.AutoMixStyleEQ,
+		AutoMixStyleFilter: s.AutoMixStyleFilter,
+		AutoMixStyleEffect: s.AutoMixStyleEffect,
+		AutoMixStyleLoop:   s.AutoMixStyleLoop,
 		State:          s.State,
 		RetryCount:     s.RetryCount,
 		AddedAt:        s.AddedAt,
@@ -253,6 +264,11 @@ type Queue struct {
 	Crossfade        bool
 	CrossfadeDuration float64
 	TrimSilence      bool
+	AutoMixStyleVolume string
+	AutoMixStyleEQ     string
+	AutoMixStyleFilter string
+	AutoMixStyleEffect string
+	AutoMixStyleLoop   string
 }
 
 type queueCache struct {
@@ -348,19 +364,22 @@ func loadQueueFromDB(guildID string) (*Queue, error) {
 	var repeat, sponsorblock, showStartedTrack, normalization int
 	var fadein, fadeout, automix, fadeOnStop, automixBeats, crossfade, trimSilence int
 	var fadeinDuration, fadeoutDuration, crossfadeDuration float64
+	var styleVolume, styleEQ, styleFilter, styleEffect, styleLoop string
 	err = database.DB.QueryRow(
 		`SELECT volume, repeat, sponsorblock, show_started_track, normalization,
 		 COALESCE(fadein, 0), COALESCE(fadeout, 0), COALESCE(automix, 0),
 		 COALESCE(fade_on_stop, 0), COALESCE(fadein_duration, 3),
 		 COALESCE(fadeout_duration, 3), COALESCE(automix_beats, 16),
 		 COALESCE(crossfade, 0), COALESCE(crossfade_duration, 8),
-		 COALESCE(trim_silence, 0)
+		 COALESCE(trim_silence, 0), COALESCE(automix_style_volume, 'auto'),
+		 COALESCE(automix_style_eq, 'auto'), COALESCE(automix_style_filter, 'auto'),
+		 COALESCE(automix_style_effect, 'auto'), COALESCE(automix_style_loop, 'auto')
 		 FROM guild_settings WHERE guild_id = ?`,
 		guildID,
 	).Scan(&volume, &repeat, &sponsorblock, &showStartedTrack, &normalization,
 		&fadein, &fadeout, &automix, &fadeOnStop, &fadeinDuration,
 		&fadeoutDuration, &automixBeats, &crossfade, &crossfadeDuration,
-		&trimSilence)
+		&trimSilence, &styleVolume, &styleEQ, &styleFilter, &styleEffect, &styleLoop)
 
 	if err == sql.ErrNoRows {
 
@@ -384,6 +403,11 @@ func loadQueueFromDB(guildID string) (*Queue, error) {
 		crossfade = 0
 		crossfadeDuration = 8
 		trimSilence = 0
+		styleVolume = AutoMixStyleAuto
+		styleEQ = AutoMixStyleAuto
+		styleFilter = AutoMixStyleAuto
+		styleEffect = AutoMixStyleAuto
+		styleLoop = AutoMixStyleAuto
 		logger.Debugf("[LoadQueue] No guild_settings found for guild %s, using defaults (volume=%g)", guildID, volume)
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to query guild settings: %w", err)
@@ -395,7 +419,10 @@ func loadQueueFromDB(guildID string) (*Queue, error) {
 	
 	rows, err := database.DB.Query(
 		`SELECT id, guild_id, url, title, duration, thumbnail, requested_by_id,
-		 requested_by_tag, queue_position, seek_time, uploader, is_live
+		 requested_by_tag, queue_position, seek_time, uploader, is_live,
+		 COALESCE(automix_style_volume, 'auto'), COALESCE(automix_style_eq, 'auto'),
+		 COALESCE(automix_style_filter, 'auto'), COALESCE(automix_style_effect, 'auto'),
+		 COALESCE(automix_style_loop, 'auto')
 		 FROM songs WHERE guild_id = ? ORDER BY queue_position ASC`,
 		guildID,
 	)
@@ -412,6 +439,8 @@ func loadQueueFromDB(guildID string) (*Queue, error) {
 			&song.ID, &song.GuildID, &song.URL, &song.Title, &song.Duration,
 			&song.Thumbnail, &song.RequestedByID, &song.RequestedByTag,
 			&song.QueuePosition, &song.SeekTime, &song.Uploader, &isLive,
+			&song.AutoMixStyleVolume, &song.AutoMixStyleEQ, &song.AutoMixStyleFilter,
+			&song.AutoMixStyleEffect, &song.AutoMixStyleLoop,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan song: %w", err)
@@ -443,6 +472,11 @@ func loadQueueFromDB(guildID string) (*Queue, error) {
 		Crossfade:        crossfade == 1,
 		CrossfadeDuration: crossfadeDuration,
 		TrimSilence:      trimSilence == 1,
+		AutoMixStyleVolume: styleVolume,
+		AutoMixStyleEQ:     styleEQ,
+		AutoMixStyleFilter: styleFilter,
+		AutoMixStyleEffect: styleEffect,
+		AutoMixStyleLoop:   styleLoop,
 	}
 
 	return queue, nil
@@ -575,7 +609,7 @@ func AddSongsBatch(guildID string, songs []*Song, position int) error {
 	
 	
 	
-	const maxSongsPerBatch = 99
+	const maxSongsPerBatch = 66
 
 	for batchStart := 0; batchStart < len(songs); batchStart += maxSongsPerBatch {
 		batchEnd := batchStart + maxSongsPerBatch
@@ -586,14 +620,16 @@ func AddSongsBatch(guildID string, songs []*Song, position int) error {
 
 		
 		query := `INSERT INTO songs (guild_id, url, title, duration, thumbnail, requested_by_id,
-			requested_by_tag, queue_position, uploader, is_live) VALUES `
+			requested_by_tag, queue_position, uploader, is_live,
+			automix_style_volume, automix_style_eq, automix_style_filter,
+			automix_style_effect, automix_style_loop) VALUES `
 
 		values := []interface{}{}
 		for i, song := range batch {
 			if i > 0 {
 				query += ", "
 			}
-			query += "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+			query += "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 
 			isLiveInt := 0
 			if song.IsLive {
@@ -603,6 +639,9 @@ func AddSongsBatch(guildID string, songs []*Song, position int) error {
 			values = append(values,
 				guildID, song.URL, song.Title, song.Duration, song.Thumbnail,
 				song.RequestedByID, song.RequestedByTag, position+batchStart+i, song.Uploader, isLiveInt,
+				defaultAutoMixStyle(song.AutoMixStyleVolume), defaultAutoMixStyle(song.AutoMixStyleEQ),
+				defaultAutoMixStyle(song.AutoMixStyleFilter), defaultAutoMixStyle(song.AutoMixStyleEffect),
+				defaultAutoMixStyle(song.AutoMixStyleLoop),
 			)
 		}
 
@@ -675,10 +714,15 @@ func AddSong(guildID string, song *Song, position int) error {
 
 	_, err = database.DB.Exec(
 		`INSERT INTO songs (guild_id, url, title, duration, thumbnail, requested_by_id,
-		 requested_by_tag, queue_position, uploader, is_live)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 requested_by_tag, queue_position, uploader, is_live,
+		 automix_style_volume, automix_style_eq, automix_style_filter,
+		 automix_style_effect, automix_style_loop)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		guildID, song.URL, song.Title, song.Duration, song.Thumbnail,
 		song.RequestedByID, song.RequestedByTag, position, song.Uploader, isLiveInt,
+		defaultAutoMixStyle(song.AutoMixStyleVolume), defaultAutoMixStyle(song.AutoMixStyleEQ),
+		defaultAutoMixStyle(song.AutoMixStyleFilter), defaultAutoMixStyle(song.AutoMixStyleEffect),
+		defaultAutoMixStyle(song.AutoMixStyleLoop),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to insert song: %w", err)
@@ -1446,6 +1490,106 @@ func SetAutoMixBeats(guildID string, beats int) error {
 
 	InvalidateCache(guildID)
 	logger.Debugf("[SetAutoMixBeats] Set automix_beats=%d for guild: %s", beats, guildID)
+	return nil
+}
+
+const AutoMixStyleAuto = "auto"
+
+var autoMixStyleColumns = map[string]string{
+	"volume": "automix_style_volume",
+	"eq":     "automix_style_eq",
+	"filter": "automix_style_filter",
+	"effect": "automix_style_effect",
+	"loop":   "automix_style_loop",
+}
+
+func AutoMixStyleCategories() []string {
+	return []string{"volume", "eq", "filter", "effect", "loop"}
+}
+
+func GetAutoMixStyle(guildID, category string) (string, error) {
+	column, ok := autoMixStyleColumns[category]
+	if !ok {
+		return AutoMixStyleAuto, fmt.Errorf("unknown automix style category: %s", category)
+	}
+
+	var style string
+	err := database.DB.QueryRow(
+		fmt.Sprintf(`SELECT COALESCE(%s, '%s') FROM guild_settings WHERE guild_id = ?`, column, AutoMixStyleAuto),
+		guildID,
+	).Scan(&style)
+
+	if err == sql.ErrNoRows {
+		return AutoMixStyleAuto, nil
+	}
+	if err != nil {
+		return AutoMixStyleAuto, fmt.Errorf("failed to get %s: %w", column, err)
+	}
+
+	if style == "" {
+		return AutoMixStyleAuto, nil
+	}
+	return style, nil
+}
+
+func SetAutoMixStyle(guildID, category, style string) error {
+	column, ok := autoMixStyleColumns[category]
+	if !ok {
+		return fmt.Errorf("unknown automix style category: %s", category)
+	}
+
+	lock := acquireLock(guildID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	_, err := database.DB.Exec(
+		fmt.Sprintf(`INSERT INTO guild_settings (guild_id, %s) VALUES (?, ?)
+		 ON CONFLICT(guild_id) DO UPDATE SET %s = ?`, column, column),
+		guildID, style, style,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to set %s: %w", column, err)
+	}
+
+	InvalidateCache(guildID)
+	logger.Debugf("[SetAutoMixStyle] Set %s=%s for guild: %s", column, style, guildID)
+	return nil
+}
+
+var ErrSongNotInQueue = errors.New("song is no longer in the queue")
+
+func defaultAutoMixStyle(style string) string {
+	if style == "" {
+		return AutoMixStyleAuto
+	}
+	return style
+}
+
+func SetSongAutoMixStyle(guildID string, songID int, category, style string) error {
+	column, ok := autoMixStyleColumns[category]
+	if !ok {
+		return fmt.Errorf("unknown automix style category: %s", category)
+	}
+
+	lock := acquireLock(guildID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	result, err := database.DB.Exec(
+		fmt.Sprintf(`UPDATE songs SET %s = ? WHERE guild_id = ? AND id = ?`, column),
+		defaultAutoMixStyle(style), guildID, songID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to set song %s: %w", column, err)
+	}
+
+	affected, err := result.RowsAffected()
+	if err == nil && affected == 0 {
+		return ErrSongNotInQueue
+	}
+
+	InvalidateCache(guildID)
+	logger.Debugf("[SetSongAutoMixStyle] Set %s=%s for song %d in guild: %s", column, style, songID, guildID)
 	return nil
 }
 

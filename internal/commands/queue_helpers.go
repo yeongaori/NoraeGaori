@@ -73,6 +73,11 @@ func createQueueButtons(guildID string, page, totalPages int) []discordgo.Messag
 					CustomID: "queue_next",
 					Disabled: page == totalPages,
 				},
+				discordgo.Button{
+					Label:    messages.T(guildID).AutoMixPanel.MixButton,
+					Style:    discordgo.SecondaryButton,
+					CustomID: "queue_open_mix",
+				},
 			},
 		},
 	}
@@ -104,6 +109,11 @@ func handleQueueButtons(s *discordgo.Session, i *discordgo.InteractionCreate, or
 		}
 
 		data := ic.MessageComponentData()
+
+		if data.CustomID == "queue_open_mix" {
+			OpenAutoMixPanelFromComponent(s, ic)
+			return
+		}
 
 		if data.CustomID != "queue_prev" && data.CustomID != "queue_next" {
 			return

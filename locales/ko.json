@@ -291,6 +291,13 @@
       "example": "automix, automix on, automix on 16, automix off",
       "aliases": ["automix", "mix"]
     },
+    "automixstyle": {
+      "description": "카테고리별 서버 전체 오토믹스 전환 스타일 설정",
+      "options": { "category": "스타일 카테고리 (volume, eq, filter, effect, loop)", "style": "스타일 값, 또는 auto로 두면 오토믹스가 선택" },
+      "usage": "automixstyle [카테고리] [스타일]",
+      "example": "automixstyle, automixstyle effect, automixstyle effect echo_half_cut_end, automixstyle effect auto",
+      "aliases": ["automixstyle", "mixstyle"]
+    },
     "crossfade": {
       "description": "크로스페이드 설정 (노래 사이 단순 페이드 전환)",
       "options": { "setting": "설정 값", "duration": "크로스페이드 길이(초, 1-30)" },
@@ -367,6 +374,18 @@
       "usage": "help [페이지번호]",
       "example": "help, help 2",
       "aliases": ["help", "h", "도움말"]
+    },
+    "automixpanel": {
+      "description": "대기열의 오토믹스 전환 패널을 엽니다",
+      "options": {
+        "page": "페이지 번호"
+      },
+      "usage": "automixpanel [페이지]",
+      "example": "automixpanel, automixpanel 2",
+      "aliases": [
+        "automixpanel",
+        "mixpanel"
+      ]
     }
   },
 
@@ -452,6 +471,14 @@
     "automix_what_title": "설명",
     "automix_what_desc": "박자를 인식해 노래 사이를 크로스페이드합니다.",
     "automix_beats_label": "크로스페이드 박자",
+    "automixstyle_title": "오토믹스 전환 스타일",
+    "automixstyle_desc": "카테고리별 서버 기본 스타일입니다. **auto**로 두면 오토믹스가 전환마다 알아서 고릅니다.",
+    "automixstyle_what_title": "설명",
+    "automixstyle_what_desc": "오토믹스 패널에서 특정 전환을 따로 지정하지 않는 한, 이 서버의 모든 전환에 적용됩니다.",
+    "automixstyle_changed": "**%s**이(가) **%s**으로 설정되었습니다.",
+    "automixstyle_error": "오토믹스 스타일 설정 중 오류가 발생했습니다: %v",
+    "automixstyle_invalid_category": "**%s**은(는) 올바른 카테고리가 아닙니다. 사용 가능한 카테고리: %s",
+    "automixstyle_invalid_value": "**%s**은(는) **%s**에 사용할 수 없는 스타일입니다. 사용 가능한 스타일: %s",
     "crossfade_error": "크로스페이드 설정 중 오류가 발생했습니다: %v",
     "crossfade_title": "%s 크로스페이드 %s",
     "crossfade_desc": "크로스페이드가 **%s**으로 설정되었습니다.",
@@ -690,5 +717,77 @@
     "activity_default_2": "노래",
     "activity_default_3": "플레이리스트",
     "activity_default_4": "뮤직비디오"
+  },
+
+  "automix_panel": {
+    "title": "오토믹스 전환",
+    "description": "각 줄은 두 곡 사이의 전환입니다. 원하는 전환을 골라 방식을 바꾸세요.",
+    "empty_title": "전환 없음",
+    "empty_desc": "전환을 설정하려면 대기열에 곡이 두 개 이상 있어야 합니다.",
+    "select_placeholder": "수정할 전환을 선택하세요",
+    "refresh_button": "새로고침",
+    "mix_button": "믹스",
+    "analyzing": "분석 중…",
+    "unknown": "—",
+    "now_marker": "▶",
+    "override_marker": "✎",
+    "legend": "▶ 다음 실행 · ✎ 직접 설정함",
+    "repeat_single_notice": "한 곡 반복이 켜져 있어 오토믹스가 모든 전환을 건너뜁니다.",
+    "automix_off_notice": "오토믹스가 꺼져 있어 스타일이 자동 선택되지 않습니다. 직접 지정한 값만 적용됩니다.",
+    "transitions_off_notice": "오토믹스와 크로스페이드가 모두 꺼져 있어 전환이 실행되지 않습니다. 여기서 지정한 값은 저장됩니다.",
+    "editor_title": "전환 %s",
+    "outro_label": "끝",
+    "outro_field": "다음 곡이 없습니다. 마지막 곡이므로 오토믹스가 전환 대신 아웃트로를 재생합니다.",
+    "outgoing_field": "나가는 곡",
+    "incoming_field": "들어오는 곡",
+    "compatibility_field": "믹스 적합도",
+    "auto_recipe_field": "자동 선택",
+    "effective_field": "적용 중",
+    "bpm_delta": "BPM 차이 %+.1f%%",
+    "camelot_distance": "카멜롯 거리 %d",
+    "harmonic": "잘 맞음",
+    "clashing": "안 맞음",
+    "auto_option": "자동 선택",
+    "auto_option_desc": "현재: %s",
+    "source_auto": "자동",
+    "source_guild": "서버 기본값",
+    "source_song": "직접 설정",
+    "song_gone": "해당 곡이 대기열에 더 이상 없습니다.",
+    "update_failed": "전환을 수정하지 못했습니다: %v",
+    "category_labels": {
+      "volume": "볼륨",
+      "eq": "EQ",
+      "filter": "필터",
+      "effect": "이펙트",
+      "loop": "루프"
+    },
+    "style_labels": {
+      "volume.smooth": "부드러운 크로스페이드",
+      "volume.overlap": "겹치기",
+      "volume.fadein_fadeout": "페이드 인 · 페이드 아웃",
+      "volume.cutin_fadeout": "컷 인 · 페이드 아웃",
+      "volume.fadein_cutout": "페이드 인 · 컷 아웃",
+      "eq.none": "없음",
+      "eq.center_bass_swap": "중간 베이스 교체",
+      "eq.end_bass_swap": "끝 베이스 교체",
+      "eq.start_bass_swap": "시작 베이스 교체",
+      "eq.three_band_fade": "3밴드 페이드",
+      "eq.quick_bass": "퀵 베이스",
+      "filter.none": "없음",
+      "filter.lowpass_out": "로우패스 아웃",
+      "filter.lowpass_in": "로우패스 인",
+      "filter.lowpass_in_out": "로우패스 인 + 아웃",
+      "filter.lowpass_in_highpass_out": "로우패스 인 + 하이패스 아웃",
+      "effect.none": "없음",
+      "effect.reverb_out_center": "리버브 아웃 (중간)",
+      "effect.reverb_cut_end": "리버브 컷 엔드",
+      "effect.reverb_out_end": "리버브 아웃 (끝)",
+      "effect.echo_half_cut_end": "에코 1/2 컷 엔드",
+      "loop.none": "없음",
+      "loop.one_beat": "1비트 루프",
+      "loop.two_beats": "2비트 루프",
+      "loop.four_beats": "4비트 루프",
+      "loop.eight_beats": "8비트 루프"
+    }
   }
 }

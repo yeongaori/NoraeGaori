@@ -3,21 +3,27 @@ package player
 import (
 	"fmt"
 	"math"
+
+	"noraegaori/pkg/logger"
 )
 
 const (
-	beatHop    = 512
-	beatWin    = 1024
-	beatMinBPM = 70.0
-	beatMaxBPM = 180.0
+	beatHop        = 512
+	beatWin        = 1024
+	beatMinBPM     = 70.0
+	beatMaxBPM     = 210.0
 	beatMinSeconds = 8.0
 )
 
 type TrackAnalysis struct {
-	BPM       float64
-	PeriodSec float64
-	FirstBeat float64
-	Duration  float64
+	BPM           float64
+	PeriodSec     float64
+	FirstBeat     float64
+	Duration      float64
+	Tonic         int
+	Minor         bool
+	KeyConfidence float64
+	DownbeatPhase int
 }
 
 func onsetEnvelope(samples []float32, sampleRate float64) ([]float64, float64) {
@@ -70,42 +76,77 @@ func onsetEnvelope(samples []float32, sampleRate float64) ([]float64, float64) {
 	return smoothed, sampleRate / beatHop
 }
 
-func estimateTempo(novelty []float64, frameRate float64) (float64, float64) {
-	minLag := int(math.Floor((60 * frameRate) / beatMaxBPM))
-	maxLag := int(math.Ceil((60 * frameRate) / beatMinBPM))
+func tempoLagRange(frameRate float64) (int, int) {
+	minLag := int(math.Ceil((60 * frameRate) / beatMaxBPM))
+	maxLag := int(math.Floor((60 * frameRate) / beatMinBPM))
 	if minLag < 1 {
 		minLag = 1
 	}
+	if maxLag < minLag {
+		maxLag = minLag
+	}
+	return minLag, maxLag
+}
 
-	scores := make([]float64, maxLag+1)
+func estimateTempo(novelty []float64, frameRate float64) (float64, float64) {
+	minLag, maxLag := tempoLagRange(frameRate)
+
+	scanMin := minLag - 1
+	if scanMin < 1 {
+		scanMin = 1
+	}
+	scanMax := maxLag + 1
+
+	scores := make([]float64, scanMax+1)
 	bestLag := minLag
 	bestScore := math.Inf(-1)
-	for lag := minLag; lag <= maxLag; lag++ {
+	for lag := scanMin; lag <= scanMax; lag++ {
 		var acc float64
 		for i := lag; i < len(novelty); i++ {
 			acc += novelty[i] * novelty[i-lag]
 		}
 		score := acc / float64(lag)
 		scores[lag] = score
-		if score > bestScore {
+		if lag >= minLag && lag <= maxLag && score > bestScore {
 			bestScore = score
 			bestLag = lag
 		}
 	}
 
 	periodFrames := float64(bestLag)
-	if bestLag > minLag && bestLag < maxLag {
+	escaped := ""
+	switch {
+	case bestLag == minLag && scanMin < minLag && scores[scanMin] > scores[bestLag]:
+		periodFrames = float64(scanMin)
+		escaped = "faster-than-band"
+	case bestLag == maxLag && scores[scanMax] > scores[bestLag]:
+		periodFrames = float64(scanMax)
+		escaped = "slower-than-band"
+	default:
 		yL := scores[bestLag-1]
 		yC := scores[bestLag]
 		yR := scores[bestLag+1]
 		denom := yL - 2*yC + yR
-		if denom != 0 {
+		if denom < 0 {
 			delta := (0.5 * (yL - yR)) / denom
-			periodFrames = float64(bestLag) + delta
+			if math.Abs(delta) < 1 {
+				periodFrames = float64(bestLag) + delta
+			}
 		}
 	}
 
 	bpm := (60 * frameRate) / periodFrames
+	boundary := "interior"
+	if bestLag == minLag {
+		boundary = "at-min"
+	} else if bestLag == maxLag {
+		boundary = "at-max"
+	}
+	if escaped != "" {
+		boundary = escaped
+	}
+	logger.Debugf("[Tempo] bpm=%.2f period=%.4fs bestLag=%d lag=%.3f range=%d-%d %s frameRate=%.4f",
+		bpm, periodFrames/frameRate, bestLag, periodFrames, minLag, maxLag, boundary, frameRate)
 	return bpm, periodFrames
 }
 
@@ -164,11 +205,18 @@ func analyzeTrackSamples(samples []float32, sampleRate float64) (*TrackAnalysis,
 		return nil, fmt.Errorf("beat period out of range: %.3fs", periodSec)
 	}
 
+	downbeatPhase := estimateDownbeatPhase(novelty, periodFrames, firstBeat*frameRate)
+	tonic, minor, keyConfidence := analyzeKey(samples, sampleRate)
+
 	return &TrackAnalysis{
-		BPM:       bpm,
-		PeriodSec: periodSec,
-		FirstBeat: firstBeat,
-		Duration:  duration,
+		BPM:           bpm,
+		PeriodSec:     periodSec,
+		FirstBeat:     firstBeat,
+		Duration:      duration,
+		Tonic:         tonic,
+		Minor:         minor,
+		KeyConfidence: keyConfidence,
+		DownbeatPhase: downbeatPhase,
 	}, nil
 }
 

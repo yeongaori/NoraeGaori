@@ -578,6 +578,56 @@ func InitializeCommands() {
 	registerCommandAliases("automix", cmd("automix"))
 
 	RegisterCommand(&Command{
+		Name:        "automixstyle",
+		Description: cmd("automixstyle").Description,
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "category",
+				Description: cmd("automixstyle").Options["category"],
+				Required:    false,
+				Choices: []*discordgo.ApplicationCommandOptionChoice{
+					{Name: "volume", Value: "volume"},
+					{Name: "eq", Value: "eq"},
+					{Name: "filter", Value: "filter"},
+					{Name: "effect", Value: "effect"},
+					{Name: "loop", Value: "loop"},
+				},
+			},
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "style",
+				Description: cmd("automixstyle").Options["style"],
+				Required:    false,
+			},
+		},
+		Handler:  HandleAutoMixStyle,
+		TextOnly: false,
+		Usage:    cmd("automixstyle").Usage,
+		Example:  cmd("automixstyle").Example,
+	})
+	registerCommandAliases("automixstyle", cmd("automixstyle"))
+
+	RegisterCommand(&Command{
+		Name:        "automixpanel",
+		Description: cmd("automixpanel").Description,
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionInteger,
+				Name:        "page",
+				Description: cmd("automixpanel").Options["page"],
+				Required:    false,
+				MinValue:    func() *float64 { v := 1.0; return &v }(),
+			},
+		},
+		Handler:  HandleAutoMixPanel,
+		TextOnly: false,
+		Usage:    cmd("automixpanel").Usage,
+		Example:  cmd("automixpanel").Example,
+	})
+	registerCommandAliases("automixpanel", cmd("automixpanel"))
+
+	RegisterCommand(&Command{
 		Name:        "crossfade",
 		Description: cmd("crossfade").Description,
 		Options: []*discordgo.ApplicationCommandOption{
@@ -811,6 +861,8 @@ func RegisterSlashCommands(session *discordgo.Session) error {
 		})
 	}
 
+	fillMissingCommandDescriptions(desired)
+
 	existing, err := session.ApplicationCommands(appID, "")
 	if err != nil {
 		return fmt.Errorf("failed to get existing commands: %w", err)
@@ -839,6 +891,21 @@ func RegisterSlashCommands(session *discordgo.Session) error {
 
 	logger.Info("[Commands] Slash commands registered successfully")
 	return nil
+}
+
+func fillMissingCommandDescriptions(cmds []*discordgo.ApplicationCommand) {
+	for _, command := range cmds {
+		if command.Description == "" {
+			logger.Errorf("[Commands] Missing locale description for command %q, using its name as a placeholder", command.Name)
+			command.Description = command.Name
+		}
+		for _, option := range command.Options {
+			if option.Description == "" {
+				logger.Errorf("[Commands] Missing locale description for option %q of command %q, using its name as a placeholder", option.Name, command.Name)
+				option.Description = option.Name
+			}
+		}
+	}
 }
 
 func canonicalCommandMap(cmds []*discordgo.ApplicationCommand) (map[string]string, error) {
