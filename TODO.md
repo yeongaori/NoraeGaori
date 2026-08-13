@@ -1,4 +1,5 @@
 - [ ] Refactor & Optimize for performance
+- [ ] Add Settings Panel using Modal components
 - [x] Fix issue where live streams stop playing before reaching the end 
 - [x] Derive log tags automatically instead of typing brackets by hand
 - [x] AutoMix Improvements
@@ -46,4 +47,3 @@
   </details>
   
   - [x] Automatically select the above mix according to the song's BPM & pitch
-- [ ] Add Settings Panel using Modal components
