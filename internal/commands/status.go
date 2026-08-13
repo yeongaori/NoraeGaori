@@ -23,7 +23,7 @@ func HandleStatus(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	UpdateResponseEmbed(s, i, loadingEmbed)
 
 	
-	logger.Debugf("[Status] Starting system info gathering")
+	logger.Debugf("Starting system info gathering")
 
 	
 	cpuInfo, err := cpu.Info()
@@ -32,7 +32,7 @@ func HandleStatus(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	if err == nil && len(cpuInfo) > 0 {
 		cpuModel = cpuInfo[0].ModelName
 	}
-	logger.Debugf("[Status] CPU info gathered: %s (%d cores)", cpuModel, cpuCores)
+	logger.Debugf("CPU info gathered: %s (%d cores)", cpuModel, cpuCores)
 
 	
 	cpuPercent, err := cpu.Percent(100*time.Millisecond, false)
@@ -40,7 +40,7 @@ func HandleStatus(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	if err == nil && len(cpuPercent) > 0 {
 		cpuUsage = cpuPercent[0]
 	}
-	logger.Debugf("[Status] CPU usage: %.2f%%", cpuUsage)
+	logger.Debugf("CPU usage: %.2f%%", cpuUsage)
 
 	
 	memInfo, err := mem.VirtualMemory()
@@ -52,22 +52,22 @@ func HandleStatus(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		usedMemoryMB = float64(memInfo.Used) / 1024 / 1024
 		memoryUsagePercent = memInfo.UsedPercent
 	}
-	logger.Debugf("[Status] Memory: %.2f GB total, %.0f MB used (%.2f%%)", totalMemoryGB, usedMemoryMB, memoryUsagePercent)
+	logger.Debugf("Memory: %.2f GB total, %.0f MB used (%.2f%%)", totalMemoryGB, usedMemoryMB, memoryUsagePercent)
 
 	
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 	botHeapUsed := float64(m.HeapAlloc) / 1024 / 1024  
 	botRSS := float64(m.Sys) / 1024 / 1024            
-	logger.Debugf("[Status] Bot memory: Heap %.2f MB, RSS %.2f MB", botHeapUsed, botRSS)
+	logger.Debugf("Bot memory: Heap %.2f MB, RSS %.2f MB", botHeapUsed, botRSS)
 
 	
 	guildMemoryUsage := getGuildMemoryUsage(i.GuildID)
-	logger.Debugf("[Status] Guild memory: %.2f MB", guildMemoryUsage)
+	logger.Debugf("Guild memory: %.2f MB", guildMemoryUsage)
 
 	
 	playingGuildsCount := countPlayingGuilds(s)
-	logger.Debugf("[Status] Playing guilds: %d", playingGuildsCount)
+	logger.Debugf("Playing guilds: %d", playingGuildsCount)
 
 	
 	t := messages.T(i.GuildID)
@@ -119,12 +119,12 @@ func HandleStatus(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	}
 
 	
-	logger.Debugf("[Status] Updating response with info embed")
+	logger.Debugf("Updating response with info embed")
 	if err := UpdateResponseEmbed(s, i, infoEmbed); err != nil {
-		logger.Errorf("[Status] Failed to update response: %v", err)
+		logger.Errorf("Failed to update response: %v", err)
 		return err
 	}
-	logger.Debugf("[Status] Successfully updated response")
+	logger.Debugf("Successfully updated response")
 
 	return nil
 }

@@ -40,7 +40,7 @@ func sendBatchedSkipNotice(s *discordgo.Session, guildID, channelID string, skip
 			Description: chunk,
 		}
 		if _, err := s.ChannelMessageSendEmbed(channelID, embed); err != nil {
-			logger.Errorf("[Playlist] Failed to send batched skip notification: %v", err)
+			logger.Errorf("Failed to send batched skip notification: %v", err)
 		}
 	}
 }
@@ -127,7 +127,7 @@ const voteExpirationTime = 60 * time.Second
 
 func startVoteWithReaction(s *discordgo.Session, guildID, title, emoji string, vs *voteSession, votesMap map[string]*voteSession, votesMutex *sync.RWMutex, onVotePassed func(currentVotes int)) {
 	if err := s.MessageReactionAdd(vs.channelID, vs.messageID, emoji); err != nil {
-		logger.Errorf("[VoteReaction] Failed to add reaction to message: %v", err)
+		logger.Errorf("Failed to add reaction to message: %v", err)
 	}
 
 	voteDone := make(chan bool, 1)
@@ -195,13 +195,13 @@ func startVoteWithReaction(s *discordgo.Session, guildID, title, emoji string, v
 
 	select {
 	case <-vs.cancelTimer:
-		logger.Debugf("[VoteReaction] %s vote cancelled for guild %s", title, guildID)
+		logger.Debugf("%s vote cancelled for guild %s", title, guildID)
 		s.MessageReactionsRemoveAll(vs.channelID, vs.messageID)
 	case <-voteDone:
-		logger.Debugf("[VoteReaction] %s vote passed via reaction for guild %s", title, guildID)
+		logger.Debugf("%s vote passed via reaction for guild %s", title, guildID)
 		s.MessageReactionsRemoveAll(vs.channelID, vs.messageID)
 	case <-time.After(voteExpirationTime):
-		logger.Debugf("[VoteReaction] %s vote expired for guild %s", title, guildID)
+		logger.Debugf("%s vote expired for guild %s", title, guildID)
 		votesMutex.Lock()
 		delete(votesMap, guildID)
 		votesMutex.Unlock()

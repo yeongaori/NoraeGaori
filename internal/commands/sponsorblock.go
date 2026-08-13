@@ -20,7 +20,7 @@ func HandleSponsorBlock(s *discordgo.Session, i *discordgo.InteractionCreate) er
 		
 		currentSponsorBlock, err := queue.GetSponsorBlock(i.GuildID)
 		if err != nil {
-			logger.Errorf("[SponsorBlock] Failed to get current state: %v", err)
+			logger.Errorf("Failed to get current state: %v", err)
 			currentSponsorBlock = false
 		}
 		enabled = !currentSponsorBlock

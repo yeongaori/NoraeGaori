@@ -25,7 +25,7 @@ func HandleSetLanguage(s *discordgo.Session, i *discordgo.InteractionCreate) err
 	if len(options) == 0 {
 		current, err := queue.GetGuildLanguage(i.GuildID)
 		if err != nil {
-			logger.Errorf("[SetLanguage] Failed to get current language: %v", err)
+			logger.Errorf("Failed to get current language: %v", err)
 		}
 		display := current
 		if display == "" {

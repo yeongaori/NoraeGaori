@@ -35,7 +35,7 @@ func HandleQueue(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 	msg, err := RespondEmbedWithComponents(s, i, embed, components)
 	if err != nil {
-		logger.Errorf("[Queue] Failed to send response: %v", err)
+		logger.Errorf("Failed to send response: %v", err)
 		return err
 	}
 

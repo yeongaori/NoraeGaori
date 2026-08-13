@@ -26,7 +26,7 @@ func HandleVoiceStateUpdate(session *discordgo.Session, vsu *discordgo.VoiceStat
 	
 	guild, err := session.State.Guild(vsu.GuildID)
 	if err != nil {
-		logger.Errorf("[VoiceHandler] Failed to get guild: %v", err)
+		logger.Errorf("Failed to get guild: %v", err)
 		return
 	}
 
@@ -50,11 +50,11 @@ func HandleVoiceStateUpdate(session *discordgo.Session, vsu *discordgo.VoiceStat
 		if player != nil {
 			player.mu.Lock()
 			if player.VoiceChannelID != "" && player.VoiceChannelID != botVoiceChannelID {
-				logger.Infof("[VoiceHandler] Bot was moved from %s to %s in guild: %s", player.VoiceChannelID, botVoiceChannelID, vsu.GuildID)
+				logger.Infof("Bot was moved from %s to %s in guild: %s", player.VoiceChannelID, botVoiceChannelID, vsu.GuildID)
 				player.VoiceChannelID = botVoiceChannelID
 				player.mu.Unlock()
 				if err := queue.UpdateVoiceChannel(vsu.GuildID, botVoiceChannelID); err != nil {
-					logger.Errorf("[VoiceHandler] Failed to update queue voice channel: %v", err)
+					logger.Errorf("Failed to update queue voice channel: %v", err)
 				}
 			} else {
 				player.mu.Unlock()
@@ -76,11 +76,11 @@ func HandleVoiceStateUpdate(session *discordgo.Session, vsu *discordgo.VoiceStat
 
 	if humanCount == 0 {
 		
-		logger.Debugf("[VoiceHandler] Voice channel empty for guild: %s, starting auto-pause timer", vsu.GuildID)
+		logger.Debugf("Voice channel empty for guild: %s, starting auto-pause timer", vsu.GuildID)
 		startAutoPauseTimer(session, vsu.GuildID, botVoiceChannelID)
 	} else {
 		
-		logger.Debugf("[VoiceHandler] Humans present in voice channel for guild: %s, canceling auto-pause", vsu.GuildID)
+		logger.Debugf("Humans present in voice channel for guild: %s, canceling auto-pause", vsu.GuildID)
 		cancelAutoPauseTimer(vsu.GuildID)
 	}
 }
@@ -96,7 +96,7 @@ func startAutoPauseTimer(session *discordgo.Session, guildID, channelID string) 
 
 	
 	timer := time.AfterFunc(autoPauseDelay, func() {
-		logger.Infof("[VoiceHandler] Auto-pausing playback for guild: %s", guildID)
+		logger.Infof("Auto-pausing playback for guild: %s", guildID)
 
 		
 		player := GetPlayer(guildID)
@@ -118,10 +118,10 @@ func startAutoPauseTimer(session *discordgo.Session, guildID, channelID string) 
 		
 		select {
 		case <-player.StopChan:
-			logger.Debugf("[VoiceHandler] Stop signal already pending for auto-pause: %s", guildID)
+			logger.Debugf("Stop signal already pending for auto-pause: %s", guildID)
 		default:
 			close(player.StopChan)
-			logger.Debugf("[VoiceHandler] Stop signal sent for auto-pause: %s", guildID)
+			logger.Debugf("Stop signal sent for auto-pause: %s", guildID)
 		}
 
 		player.Playing = false
@@ -134,16 +134,16 @@ func startAutoPauseTimer(session *discordgo.Session, guildID, channelID string) 
 			currentSong := q.Songs[0]
 			_, err = queue.SaveSeekTime(guildID, currentSong.ID, seekTime)
 			if err != nil {
-				logger.Errorf("[VoiceHandler] Failed to save seek time: %v", err)
+				logger.Errorf("Failed to save seek time: %v", err)
 			}
 		}
 
 		
 		if err := queue.SetPaused(guildID, true); err != nil {
-			logger.Errorf("[VoiceHandler] Failed to set paused state: %v", err)
+			logger.Errorf("Failed to set paused state: %v", err)
 		}
 		if err := queue.SetPlaying(guildID, false); err != nil {
-			logger.Errorf("[VoiceHandler] Failed to clear playing state: %v", err)
+			logger.Errorf("Failed to clear playing state: %v", err)
 		}
 
 		
@@ -157,7 +157,7 @@ func startAutoPauseTimer(session *discordgo.Session, guildID, channelID string) 
 		}
 		player.mu.Unlock()
 
-		logger.Debugf("[VoiceHandler] Auto-paused at %dms for guild: %s", seekTime, guildID)
+		logger.Debugf("Auto-paused at %dms for guild: %s", seekTime, guildID)
 
 		
 		go sendAutoPauseNotification(session, guildID, channelID)
@@ -178,7 +178,7 @@ func cancelAutoPauseTimer(guildID string) {
 	if timer, exists := autoPauseTimers[guildID]; exists {
 		timer.Stop()
 		delete(autoPauseTimers, guildID)
-		logger.Debugf("[VoiceHandler] Canceled auto-pause timer for guild: %s", guildID)
+		logger.Debugf("Canceled auto-pause timer for guild: %s", guildID)
 	}
 }
 
@@ -186,14 +186,14 @@ func sendAutoPauseNotification(session *discordgo.Session, guildID, voiceChannel
 	
 	q, err := queue.GetQueue(guildID, false)
 	if err != nil || q == nil {
-		logger.Errorf("[VoiceHandler] Failed to get queue for notification: %v", err)
+		logger.Errorf("Failed to get queue for notification: %v", err)
 		return
 	}
 
 	
 	channel, err := session.Channel(voiceChannelID)
 	if err != nil {
-		logger.Errorf("[VoiceHandler] Failed to get voice channel: %v", err)
+		logger.Errorf("Failed to get voice channel: %v", err)
 		return
 	}
 
@@ -207,7 +207,7 @@ func sendAutoPauseNotification(session *discordgo.Session, guildID, voiceChannel
 
 	
 	if _, err := session.ChannelMessageSendEmbed(q.TextChannelID, embed); err != nil {
-		logger.Errorf("[VoiceHandler] Failed to send auto-pause notification: %v", err)
+		logger.Errorf("Failed to send auto-pause notification: %v", err)
 	}
 }
 

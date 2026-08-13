@@ -23,7 +23,7 @@ func Initialize() error {
 	}
 
 	dbPath := filepath.Join(dataDir, "database.sqlite")
-	logger.Debugf("[Database] Opening database at: %s", dbPath)
+	logger.Debugf("Opening database at: %s", dbPath)
 
 	var err error
 	DB, err = sql.Open("sqlite3", fmt.Sprintf("file:%s?_journal_mode=WAL&_busy_timeout=5000", dbPath))
@@ -38,13 +38,13 @@ func Initialize() error {
 		return fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	logger.Debug("[Database] Database connection established")
+	logger.Debug("Database connection established")
 
 	if err := createTables(); err != nil {
 		return fmt.Errorf("failed to create tables: %w", err)
 	}
 
-	logger.Debug("[Database] Database tables initialized successfully")
+	logger.Debug("Database tables initialized successfully")
 	return nil
 }
 

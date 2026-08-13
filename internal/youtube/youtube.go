@@ -205,7 +205,7 @@ func (cb *circuitBreaker) recordSuccess() {
 	defer cb.mu.Unlock()
 
 	if cb.state == circuitHalfOpen {
-		logger.Info("[CircuitBreaker] Test request succeeded, closing circuit")
+		logger.Info("Test request succeeded, closing circuit")
 		cb.state = circuitClosed
 	}
 	cb.consecutiveFails = 0
@@ -224,7 +224,7 @@ func (cb *circuitBreaker) recordFailure(err error) {
 	cb.lastFailureTime = time.Now()
 
 	if cb.consecutiveFails >= circuitOpenThreshold && cb.state == circuitClosed {
-		logger.Warnf("[CircuitBreaker] Opening circuit after %d consecutive rate limit errors", cb.consecutiveFails)
+		logger.Warnf("Opening circuit after %d consecutive rate limit errors", cb.consecutiveFails)
 		cb.state = circuitOpen
 	}
 }
@@ -244,7 +244,7 @@ func (cb *circuitBreaker) canAttempt() error {
 			cb.mu.Lock()
 			cb.state = circuitHalfOpen
 			cb.mu.Unlock()
-			logger.Info("[CircuitBreaker] Cooldown complete, entering half-open state (testing)")
+			logger.Info("Cooldown complete, entering half-open state (testing)")
 			return nil
 		}
 		return fmt.Errorf("YouTube rate limit exceeded, please wait %v before trying again",
@@ -323,29 +323,29 @@ func CheckVideoAvailability(guildID, url string) (*AvailabilityResult, error) {
 	if cached, ok := availabilityCache.Load(cacheKey); ok {
 		cachedEntry := cached.(*cachedAvailability)
 		if time.Since(cachedEntry.timestamp) < cacheTTL {
-			logger.Debugf("[Availability] Cache hit for: %s (age: %v)", url, time.Since(cachedEntry.timestamp))
+			logger.Debugf("Cache hit for: %s (age: %v)", url, time.Since(cachedEntry.timestamp))
 			return cachedEntry.result, nil
 		}
 		
 		availabilityCache.Delete(cacheKey)
-		logger.Debugf("[Availability] Cache expired for: %s", url)
+		logger.Debugf("Cache expired for: %s", url)
 	}
 
 	
 	if err := ytCircuitBreaker.canAttempt(); err != nil {
-		logger.Warnf("[Availability] Circuit breaker open: %v", err)
+		logger.Warnf("Circuit breaker open: %v", err)
 		return nil, err
 	}
 
 	startTime := time.Now()
-	logger.Debugf("[Availability] Starting check for: %s", url)
+	logger.Debugf("Starting check for: %s", url)
 
 	client := getInnertubeClient()
 	availResult, innertubeErr := client.CheckVideoAvailability(guildID, url)
 
 	if innertubeErr != nil {
 		
-		logger.Warnf("[Availability] Innertube failed, falling back to yt-dlp: %v", innertubeErr)
+		logger.Warnf("Innertube failed, falling back to yt-dlp: %v", innertubeErr)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -364,7 +364,7 @@ func CheckVideoAvailability(guildID, url string) (*AvailabilityResult, error) {
 			ytCircuitBreaker.recordFailure(err)
 			saveVersionResult(url, err)
 			checkTime := time.Since(startTime)
-			logger.Debugf("[Availability] yt-dlp error after %v: %v", checkTime, err)
+			logger.Debugf("yt-dlp error after %v: %v", checkTime, err)
 
 			
 			errorMsg := strings.ToLower(err.Error())
@@ -374,7 +374,7 @@ func CheckVideoAvailability(guildID, url string) (*AvailabilityResult, error) {
 				strings.Contains(errorMsg, "age-restricted") ||
 				strings.Contains(errorMsg, "not available in your country") ||
 				strings.Contains(errorMsg, "geo") {
-				logger.Debugf("[Availability] Video blocked by error: %v (%v)", err, checkTime)
+				logger.Debugf("Video blocked by error: %v (%v)", err, checkTime)
 				unavailResult := &AvailabilityResult{
 					Available: false,
 					Error:     err.Error(),
@@ -406,14 +406,14 @@ func CheckVideoAvailability(guildID, url string) (*AvailabilityResult, error) {
 
 		info := infos[0]
 		checkTime := time.Since(startTime)
-		logger.Debugf("[Availability] yt-dlp info fetched in %v for: %s", checkTime, getStringValue(info.Title))
+		logger.Debugf("yt-dlp info fetched in %v for: %s", checkTime, getStringValue(info.Title))
 
 		unavailableReasons := []string{}
 
 		
 		if info.AgeLimit != nil && *info.AgeLimit > 0 {
 			unavailableReasons = append(unavailableReasons, messages.T(guildID).YouTube.ErrorAgeVerification)
-			logger.Debugf("[Availability] age_limit: %g", *info.AgeLimit)
+			logger.Debugf("age_limit: %g", *info.AgeLimit)
 		}
 
 		
@@ -421,13 +421,13 @@ func CheckVideoAvailability(guildID, url string) (*AvailabilityResult, error) {
 			(info.LiveStatus != nil && (*info.LiveStatus == ytdlp.ExtractedLiveStatusIsLive ||
 				*info.LiveStatus == ytdlp.ExtractedLiveStatusIsUpcoming))
 		if isLive {
-			logger.Debugf("[Availability] \"%s\" is a LIVE stream", getStringValue(info.Title))
+			logger.Debugf("\"%s\" is a LIVE stream", getStringValue(info.Title))
 		}
 
 		
 		if info.Availability != nil {
 			availability := strings.ToLower(string(*info.Availability))
-			logger.Debugf("[Availability] availability: %s", availability)
+			logger.Debugf("availability: %s", availability)
 			
 			if availability != "public" && availability != "unlisted" {
 				unavailableReasons = append(unavailableReasons, messages.T(guildID).YouTube.ErrorRegionRestricted)
@@ -442,20 +442,20 @@ func CheckVideoAvailability(guildID, url string) (*AvailabilityResult, error) {
 				strings.Contains(title, "private video") ||
 				strings.Contains(title, "deleted video") {
 				unavailableReasons = append(unavailableReasons, messages.T(guildID).YouTube.ErrorPrivateOrDeleted)
-				logger.Debugf("[Availability] title_indicates_unavailable: true")
+				logger.Debugf("title_indicates_unavailable: true")
 			}
 		}
 
 		if len(unavailableReasons) > 0 {
 			errorMsg := strings.Join(unavailableReasons, ", ")
-			logger.Debugf("[Availability] \"%s\" unavailable: %s (%v)", getStringValue(info.Title), errorMsg, checkTime)
+			logger.Debugf("\"%s\" unavailable: %s (%v)", getStringValue(info.Title), errorMsg, checkTime)
 			availResult = &AvailabilityResult{
 				Available: false,
 				Error:     errorMsg,
 				IsLive:    isLive,
 			}
 		} else {
-			logger.Debugf("[Availability] \"%s\" is available (%v)", getStringValue(info.Title), checkTime)
+			logger.Debugf("\"%s\" is available (%v)", getStringValue(info.Title), checkTime)
 			availResult = &AvailabilityResult{
 				Available: true,
 				IsLive:    isLive,
@@ -468,7 +468,7 @@ func CheckVideoAvailability(guildID, url string) (*AvailabilityResult, error) {
 		result:    availResult,
 		timestamp: time.Now(),
 	})
-	logger.Debugf("[Availability] Cached result for: %s", url)
+	logger.Debugf("Cached result for: %s", url)
 
 	
 	ytCircuitBreaker.recordSuccess()
@@ -487,7 +487,7 @@ func retryWithBackoff(operation func() error, operationName string) error {
 		err := operation()
 		if err == nil {
 			if attempt > 0 {
-				logger.Infof("[Retry] %s succeeded after %d attempts", operationName, attempt+1)
+				logger.Infof("%s succeeded after %d attempts", operationName, attempt+1)
 			}
 			return nil
 		}
@@ -515,13 +515,13 @@ func retryWithBackoff(operation func() error, operationName string) error {
 				delay = maxDelay
 			}
 
-			logger.Warnf("[Retry] %s failed (attempt %d/%d): %v, retrying in %v",
+			logger.Warnf("%s failed (attempt %d/%d): %v, retrying in %v",
 				operationName, attempt+1, maxRetries, err, delay)
 			time.Sleep(delay)
 		}
 	}
 
-	logger.Errorf("[Retry] %s failed after %d attempts: %v", operationName, maxRetries, lastErr)
+	logger.Errorf("%s failed after %d attempts: %v", operationName, maxRetries, lastErr)
 	return fmt.Errorf("failed after %d retries: %w", maxRetries, lastErr)
 }
 
@@ -537,7 +537,7 @@ func GetVideoInfo(guildID, url, requesterName, requesterID string) (*Song, error
 	}
 
 	
-	logger.Warnf("[GetVideoInfo] Innertube failed, falling back to yt-dlp: %v", innertubeErr)
+	logger.Warnf("Innertube failed, falling back to yt-dlp: %v", innertubeErr)
 
 	
 	availability, err := CheckVideoAvailability(guildID, url)
@@ -643,7 +643,7 @@ func GetVideoInfo(guildID, url, requesterName, requesterID string) (*Song, error
 func GetOptimalAudioFormat(bitrate int) string {
 	if bitrate <= 0 {
 		
-		logger.Debugf("[AudioFormat] Voice channel bitrate unknown, using bestaudio")
+		logger.Debugf("Voice channel bitrate unknown, using bestaudio")
 		return "bestaudio/best"
 	}
 
@@ -656,30 +656,30 @@ func GetOptimalAudioFormat(bitrate int) string {
 	
 
 	bitrateKbps := bitrate / 1000
-	logger.Debugf("[AudioFormat] Voice channel bitrate: %d kbps", bitrateKbps)
+	logger.Debugf("Voice channel bitrate: %d kbps", bitrateKbps)
 
 	
 	
 	
 	if bitrate <= 32000 {
 		
-		logger.Debugf("[AudioFormat] Using low quality audio (≤32k)")
+		logger.Debugf("Using low quality audio (≤32k)")
 		return "bestaudio[abr<=32]/bestaudio[abr<=48]/bestaudio[abr<=64]/bestaudio/best"
 	} else if bitrate <= 64000 {
 		
-		logger.Debugf("[AudioFormat] Using medium quality audio (≤64k)")
+		logger.Debugf("Using medium quality audio (≤64k)")
 		return "bestaudio[abr<=64]/bestaudio[abr<=96]/bestaudio/best"
 	} else if bitrate <= 96000 {
 		
-		logger.Debugf("[AudioFormat] Using high quality audio (≤96k)")
+		logger.Debugf("Using high quality audio (≤96k)")
 		return "bestaudio[abr<=96]/bestaudio[abr<=128]/bestaudio/best"
 	} else if bitrate <= 128000 {
 		
-		logger.Debugf("[AudioFormat] Using very high quality audio (≤128k)")
+		logger.Debugf("Using very high quality audio (≤128k)")
 		return "bestaudio[abr<=128]/bestaudio[abr<=160]/bestaudio/best"
 	} else {
 		
-		logger.Debugf("[AudioFormat] Using maximum quality audio")
+		logger.Debugf("Using maximum quality audio")
 		return "bestaudio/best"
 	}
 }
@@ -691,7 +691,7 @@ func GetStreamURL(url string, sponsorBlock bool, bitrate int) (string, error) {
 func GetStreamURLContext(parent context.Context, url string, sponsorBlock bool, bitrate int) (string, error) {
 
 	if err := ytCircuitBreaker.canAttempt(); err != nil {
-		logger.Warnf("[GetStreamURL] Circuit breaker open: %v", err)
+		logger.Warnf("Circuit breaker open: %v", err)
 		return "", err
 	}
 
@@ -720,23 +720,23 @@ func GetStreamURLContext(parent context.Context, url string, sponsorBlock bool, 
 		}
 
 		
-		logger.Debugf("[GetStreamURL] Running yt-dlp command for: %s", url)
+		logger.Debugf("Running yt-dlp command for: %s", url)
 		result, err := cmd.Run(ctx, url)
 		if err != nil {
-			logger.Errorf("[GetStreamURL] yt-dlp failed: %v", err)
+			logger.Errorf("yt-dlp failed: %v", err)
 			ytCircuitBreaker.recordFailure(err) 
 			saveVersionResult(url, err)
 			return fmt.Errorf("failed to get stream URL: %w", err)
 		}
-		logger.Debugf("[GetStreamURL] yt-dlp completed successfully")
+		logger.Debugf("yt-dlp completed successfully")
 
 		streamURL = result.Stdout
 		if streamURL == "" {
-			logger.Errorf("[GetStreamURL] Empty stream URL returned")
+			logger.Errorf("Empty stream URL returned")
 			return fmt.Errorf("empty stream URL returned")
 		}
 
-		logger.Debugf("[GetStreamURL] Got stream URL (length: %d)", len(streamURL))
+		logger.Debugf("Got stream URL (length: %d)", len(streamURL))
 		return nil
 	}, "GetStreamURL")
 
@@ -799,7 +799,7 @@ func IsLiveStreamActive(url string) (bool, error) {
 	}
 
 	
-	logger.Warnf("[IsLiveStreamActive] Innertube failed, falling back to yt-dlp: %v", err)
+	logger.Warnf("Innertube failed, falling back to yt-dlp: %v", err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -1115,7 +1115,7 @@ func CheckAvailability(url string) (available bool, isLive bool, err error) {
 	if cached, ok := availabilityCache.Load(url); ok {
 		cachedEntry := cached.(*cachedAvailability)
 		if time.Since(cachedEntry.timestamp) < cacheTTL {
-			logger.Debugf("[CheckAvailability] Cache hit for: %s (age: %v)", url, time.Since(cachedEntry.timestamp))
+			logger.Debugf("Cache hit for: %s (age: %v)", url, time.Since(cachedEntry.timestamp))
 			return cachedEntry.result.Available, cachedEntry.result.IsLive, nil
 		}
 		
@@ -1124,7 +1124,7 @@ func CheckAvailability(url string) (available bool, isLive bool, err error) {
 
 	
 	if err := ytCircuitBreaker.canAttempt(); err != nil {
-		logger.Warnf("[CheckAvailability] Circuit breaker open: %v", err)
+		logger.Warnf("Circuit breaker open: %v", err)
 		return false, false, err
 	}
 
@@ -1135,7 +1135,7 @@ func CheckAvailability(url string) (available bool, isLive bool, err error) {
 
 	if err != nil {
 		
-		logger.Warnf("[CheckAvailability] Innertube failed, falling back to yt-dlp: %v", err)
+		logger.Warnf("Innertube failed, falling back to yt-dlp: %v", err)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -1154,7 +1154,7 @@ func CheckAvailability(url string) (available bool, isLive bool, err error) {
 			ytCircuitBreaker.recordFailure(ytdlpErr)
 			saveVersionResult(url, ytdlpErr)
 			checkTime := time.Since(startTime)
-			logger.Debugf("[CheckAvailability] yt-dlp also failed after %v: %v", checkTime, ytdlpErr)
+			logger.Debugf("yt-dlp also failed after %v: %v", checkTime, ytdlpErr)
 			return false, false, ytdlpErr
 		}
 
@@ -1179,11 +1179,11 @@ func CheckAvailability(url string) (available bool, isLive bool, err error) {
 
 		available = true
 		checkTime := time.Since(startTime)
-		logger.Debugf("[CheckAvailability] yt-dlp fallback succeeded in %v", checkTime)
+		logger.Debugf("yt-dlp fallback succeeded in %v", checkTime)
 	}
 
 	checkTime := time.Since(startTime)
-	logger.Debugf("[CheckAvailability] Check completed in %v for: %s (available: %v, isLive: %v)", checkTime, url, available, isLive)
+	logger.Debugf("Check completed in %v for: %s (available: %v, isLive: %v)", checkTime, url, available, isLive)
 
 	
 	if available {

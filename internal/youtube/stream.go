@@ -39,7 +39,7 @@ func (sp *StreamPipe) Close() error {
 	sp.closeMu.Lock()
 	defer sp.closeMu.Unlock()
 
-	logger.Debugf("[StreamPipe] Closing stream pipe")
+	logger.Debugf("Closing stream pipe")
 
 	
 	sp.cancel()
@@ -56,9 +56,9 @@ func (sp *StreamPipe) Close() error {
 	if sp.stderrDone != nil {
 		select {
 		case <-sp.stderrDone:
-			logger.Debugf("[StreamPipe] stderr goroutine finished")
+			logger.Debugf("stderr goroutine finished")
 		case <-time.After(2 * time.Second):
-			logger.Warnf("[StreamPipe] stderr goroutine did not finish in time")
+			logger.Warnf("stderr goroutine did not finish in time")
 		}
 	}
 
@@ -76,14 +76,14 @@ func (sp *StreamPipe) Close() error {
 	case <-time.After(5 * time.Second):
 		
 		if sp.cmd != nil && sp.cmd.Process != nil {
-			logger.Warnf("[StreamPipe] Force killing yt-dlp process")
+			logger.Warnf("Force killing yt-dlp process")
 			sp.cmd.Process.Kill()
 			
 			<-done
 		}
 		return fmt.Errorf("yt-dlp process did not exit gracefully")
 	case err := <-done:
-		logger.Debugf("[StreamPipe] yt-dlp process exited")
+		logger.Debugf("yt-dlp process exited")
 		return err
 	}
 }
@@ -91,12 +91,12 @@ func (sp *StreamPipe) Close() error {
 func GetStreamPipe(url string, sponsorBlock bool, bitrate int, seekTime int) (*StreamPipe, error) {
 	
 	if err := ytCircuitBreaker.canAttempt(); err != nil {
-		logger.Warnf("[StreamPipe] Circuit breaker open: %v", err)
+		logger.Warnf("Circuit breaker open: %v", err)
 		return nil, err
 	}
 
 	audioFormat := GetOptimalAudioFormat(bitrate)
-	logger.Debugf("[StreamPipe] Creating stream pipe for: %s (SponsorBlock: %v, Format: %s)", url, sponsorBlock, audioFormat)
+	logger.Debugf("Creating stream pipe for: %s (SponsorBlock: %v, Format: %s)", url, sponsorBlock, audioFormat)
 
 	
 	
@@ -128,7 +128,7 @@ func GetStreamPipe(url string, sponsorBlock bool, bitrate int, seekTime int) (*S
 		downloadLimitMBs := downloadLimitMbps / 8.0
 		rateLimitStr := fmt.Sprintf("%.2fM", downloadLimitMBs)
 		args = append(args, "--limit-rate", rateLimitStr)
-		logger.Debugf("[StreamPipe] Applying download rate limit: %s MB/s (%.1f Mbps)", rateLimitStr, downloadLimitMbps)
+		logger.Debugf("Applying download rate limit: %s MB/s (%.1f Mbps)", rateLimitStr, downloadLimitMbps)
 	}
 
 	
@@ -144,7 +144,7 @@ func GetStreamPipe(url string, sponsorBlock bool, bitrate int, seekTime int) (*S
 		seekSeconds := float64(seekTime) / 1000.0
 		downloadSection := fmt.Sprintf("*%.1f-inf", seekSeconds)
 		args = append(args, "--download-sections", downloadSection)
-		logger.Debugf("[StreamPipe] Seeking to %.1fs using --download-sections %s", seekSeconds, downloadSection)
+		logger.Debugf("Seeking to %.1fs using --download-sections %s", seekSeconds, downloadSection)
 	}
 
 	args = append(args, url)
@@ -152,7 +152,7 @@ func GetStreamPipe(url string, sponsorBlock bool, bitrate int, seekTime int) (*S
 	binaryPath := ytdlpUpdater.GetBinaryPath()
 	if _, err := os.Stat(binaryPath); err != nil {
 		cancel()
-		logger.Errorf("[StreamPipe] yt-dlp binary missing at %s: %v", binaryPath, err)
+		logger.Errorf("yt-dlp binary missing at %s: %v", binaryPath, err)
 		return nil, fmt.Errorf("yt-dlp binary unavailable; the updater will retry in the background")
 	}
 
@@ -201,7 +201,7 @@ func GetStreamPipe(url string, sponsorBlock bool, bitrate int, seekTime int) (*S
 				if n > 0 {
 					
 					if n > 1 { 
-						logger.Debugf("[StreamPipe stderr] %s", string(buf[:n]))
+						logger.Debugf("%s", string(buf[:n]))
 					}
 				}
 				if err != nil {
@@ -212,7 +212,7 @@ func GetStreamPipe(url string, sponsorBlock bool, bitrate int, seekTime int) (*S
 		}
 	}()
 
-	logger.Debugf("[StreamPipe] Started yt-dlp streaming process for: %s", url)
+	logger.Debugf("Started yt-dlp streaming process for: %s", url)
 
 	
 	ytCircuitBreaker.recordSuccess()

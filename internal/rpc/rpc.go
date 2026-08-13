@@ -165,7 +165,7 @@ func UpdateRPC(session *discordgo.Session) {
 		case <-ticker.C:
 			updateActivity(session, cfg, &currentIndex)
 		case <-stopChan:
-			logger.Debug("[RPC] RPC update loop stopped")
+			logger.Debug("RPC update loop stopped")
 			runningMu.Lock()
 			running = false
 			runningMu.Unlock()

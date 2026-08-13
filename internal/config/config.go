@@ -192,10 +192,10 @@ func watchFiles() {
 
 			fileInfo, err := os.Stat(event.Name)
 			if err == nil {
-				logger.Debugf("[Config Watcher] Event: %s | Op: %s | File: %s | Size: %d | ModTime: %v",
+				logger.Debugf("Event: %s | Op: %s | File: %s | Size: %d | ModTime: %v",
 					event.String(), event.Op.String(), event.Name, fileInfo.Size(), fileInfo.ModTime().UnixNano())
 			} else {
-				logger.Debugf("[Config Watcher] Event: %s | Op: %s | File: %s | (stat error: %v)",
+				logger.Debugf("Event: %s | Op: %s | File: %s | (stat error: %v)",
 					event.String(), event.Op.String(), event.Name, err)
 			}
 
@@ -212,7 +212,7 @@ func watchFiles() {
 					modTimeMux.RUnlock()
 
 					if exists && lastMod == currentModTime {
-						logger.Debugf("[Config Watcher] Skipping duplicate event for %s (same ModTime)", event.Name)
+						logger.Debugf("Skipping duplicate event for %s (same ModTime)", event.Name)
 						continue
 					}
 
@@ -268,7 +268,7 @@ func SetPrefix(prefix string) error {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	logger.Infof("[Config] Prefix updated to: %s", prefix)
+	logger.Infof("Prefix updated to: %s", prefix)
 	return nil
 }
 

@@ -38,7 +38,8 @@ type crossfadeState struct {
 	trimSilence     bool
 	bLoudSeen       bool
 	fadeGains       bool
-	tag             string
+	autoMix         bool
+	scope           *logger.Scoped
 	bStream         *audioStream
 	nextSongID      int
 	startOffsetSec  float64
@@ -67,9 +68,10 @@ type crossfadeState struct {
 
 func newCrossfadeState() *crossfadeState {
 	return &crossfadeState{
-		tag:    "AutoMix",
-		mixBuf: make([]int16, frameSize*channels),
-		recipe: defaultTransitionRecipe(),
+		autoMix: true,
+		scope:   logger.Scope("AutoMix"),
+		mixBuf:  make([]int16, frameSize*channels),
+		recipe:  defaultTransitionRecipe(),
 	}
 }
 
@@ -129,9 +131,9 @@ func (cs *crossfadeState) plan(player *GuildPlayer, es *streamEndState, sentFram
 		aAnal = es.analysis
 		bAnal = LookupAnalysis(guildID, next, AnalysisSegmentHead)
 	}
-	tag := "Crossfade"
+	scope := logger.Scope("Crossfade")
 	if beatAligned {
-		tag = "AutoMix"
+		scope = logger.Scope("AutoMix")
 	}
 
 	crossfadeFrames, crossfadeSec := TransitionCrossfadeFrames(fade.autoMix, fade.autoMixBeats, fade.crossfadeSec, aAnal)
@@ -153,13 +155,13 @@ func (cs *crossfadeState) plan(player *GuildPlayer, es *streamEndState, sentFram
 
 	bDuration := youtube.ParseDurationToSeconds(next.Duration)
 	if bDuration > 0 && float64(bDuration) < crossfadeSec+5 {
-		logger.Debugf("[%s] next song too short for crossfade (%ds < %.1fs), skipping for guild: %s", tag, bDuration, crossfadeSec+5, guildID)
+		scope.Debugf("next song too short for crossfade (%ds < %.1fs), skipping for guild: %s", bDuration, crossfadeSec+5, guildID)
 		return false
 	}
 
 	effectiveEnd := es.totalFrames - es.silentTailFrames
 	if es.silentTailFrames > 0 {
-		logger.Debugf("[%s] trimming %d silent tail frames, effective end %d of %d for guild: %s", tag, es.silentTailFrames, effectiveEnd, es.totalFrames, guildID)
+		scope.Debugf("trimming %d silent tail frames, effective end %d of %d for guild: %s", es.silentTailFrames, effectiveEnd, es.totalFrames, guildID)
 	}
 
 	maxStart := effectiveEnd - crossfadeFrames
@@ -193,7 +195,7 @@ func (cs *crossfadeState) plan(player *GuildPlayer, es *streamEndState, sentFram
 	bArgs := buildFFmpegArgs(nextURL, startOffsetSec, normalization)
 	bStream, err := newAudioStream(bArgs, fade.autoMix || fade.trimSilence)
 	if err != nil {
-		logger.Debugf("[%s] failed to start next stream for guild %s: %v", tag, guildID, err)
+		scope.Debugf("failed to start next stream for guild %s: %v", guildID, err)
 		return false
 	}
 
@@ -211,7 +213,8 @@ func (cs *crossfadeState) plan(player *GuildPlayer, es *streamEndState, sentFram
 	}
 
 	cs.armed = true
-	cs.tag = tag
+	cs.autoMix = beatAligned
+	cs.scope = scope
 	cs.guildID = guildID
 	cs.normalization = normalization
 	cs.bitrate = bitrate
@@ -232,8 +235,8 @@ func (cs *crossfadeState) plan(player *GuildPlayer, es *streamEndState, sentFram
 	cs.processor = newTransitionProcessor(recipe, crossfadeFrames, periodSec)
 	cs.processor.flatGains = !fade.crossfade
 
-	logger.Debugf("[%s] planned crossfade at frame %d (%d frames) into song ID %d for guild: %s", tag, transitionFrame, crossfadeFrames, next.ID, guildID)
-	logger.Debugf("[%s] recipe %s (%s) [%s] for guild: %s", tag, recipe,
+	scope.Debugf("planned crossfade at frame %d (%d frames) into song ID %d for guild: %s", transitionFrame, crossfadeFrames, next.ID, guildID)
+	scope.Debugf("recipe %s (%s) [%s] for guild: %s", recipe,
 		describeTransitionInputs(aAnal, bAnal),
 		describeStyleSources(styleSource), guildID)
 	return true
@@ -293,9 +296,9 @@ func (cs *crossfadeState) slideTransition(reason string) {
 			cs.cancel("transition window exhausted")
 			return
 		}
-		logger.Debugf("[%s] crossfade shrunk to %d frames waiting for next stream", cs.tag, cs.crossfadeFrames)
+		cs.scope.Debugf("crossfade shrunk to %d frames waiting for next stream", cs.crossfadeFrames)
 	}
-	logger.Debugf("[%s] %s, deferred transition to frame %d", cs.tag, reason, cs.transitionFrame)
+	cs.scope.Debugf("%s, deferred transition to frame %d", reason, cs.transitionFrame)
 }
 
 func (cs *crossfadeState) startNextStreamRefetch(player *GuildPlayer) {
@@ -304,7 +307,7 @@ func (cs *crossfadeState) startNextStreamRefetch(player *GuildPlayer) {
 	startOffsetSec := cs.startOffsetSec
 	normalization := cs.normalization
 	bitrate := cs.bitrate
-	collectTail := cs.trimSilence || cs.tag == "AutoMix"
+	collectTail := cs.trimSilence || cs.autoMix
 
 	invalidatePreCacheSong(guildID, songID)
 	cs.bRefetching.Store(true)
@@ -329,13 +332,13 @@ func (cs *crossfadeState) startNextStreamRefetch(player *GuildPlayer) {
 
 		freshURL, err := youtube.GetStreamURL(next.URL, q.SponsorBlock, bitrate)
 		if err != nil {
-			logger.Debugf("[%s] refetch failed for song ID %d in guild %s: %v", cs.tag, songID, guildID, err)
+			cs.scope.Debugf("refetch failed for song ID %d in guild %s: %v", songID, guildID, err)
 			return
 		}
 
 		stream, err := newAudioStream(buildFFmpegArgs(freshURL, startOffsetSec, normalization), collectTail)
 		if err != nil {
-			logger.Debugf("[%s] refetched stream failed to start for guild %s: %v", cs.tag, guildID, err)
+			cs.scope.Debugf("refetched stream failed to start for guild %s: %v", guildID, err)
 			return
 		}
 		if cs.bAborted.Load() {
@@ -357,7 +360,7 @@ func (cs *crossfadeState) cancel(reason string) {
 	cs.abort()
 	cs.armed = false
 	cs.cancelled = true
-	logger.Debugf("[%s] crossfade cancelled (%s)", cs.tag, reason)
+	cs.scope.Debugf("crossfade cancelled (%s)", reason)
 }
 
 func (cs *crossfadeState) pullBFrame() []int16 {
@@ -432,7 +435,7 @@ func (cs *crossfadeState) mixAndSend(player *GuildPlayer, stopCh chan struct{}, 
 	opusBuffer := make([]byte, 1500)
 	opusLen, err := enc.Encode(cs.mixBuf, opusBuffer)
 	if err != nil {
-		logger.Errorf("[%s] opus encoding error: %v", cs.tag, err)
+		cs.scope.Errorf("opus encoding error: %v", err)
 		return nil
 	}
 	opusData := opusBuffer[:opusLen]
@@ -466,7 +469,7 @@ func (cs *crossfadeState) handoff(player *GuildPlayer, enc *OpusEncoder) {
 	player.mu.Unlock()
 	cs.handedOff = true
 	cs.active = false
-	logger.Debugf("[%s] handed off to song ID %d after %d crossfade frames for guild: %s", cs.tag, cs.nextSongID, cs.mixedFrames, player.GuildID)
+	cs.scope.Debugf("handed off to song ID %d after %d crossfade frames for guild: %s", cs.nextSongID, cs.mixedFrames, player.GuildID)
 }
 
 func (cs *crossfadeState) consume(player *GuildPlayer, stopCh chan struct{}, pcmData []int16, volume float64, enc *OpusEncoder, sentFrames *int) (bool, error) {
@@ -484,7 +487,7 @@ func (cs *crossfadeState) consume(player *GuildPlayer, stopCh chan struct{}, pcm
 			}
 			if refetched := cs.bRefetch.Swap(nil); refetched != nil {
 				cs.bStream = refetched
-				logger.Debugf("[%s] next stream reopened with a fresh URL for guild: %s", cs.tag, cs.guildID)
+				cs.scope.Debugf("next stream reopened with a fresh URL for guild: %s", cs.guildID)
 			} else if cs.bRefetching.Load() {
 				cs.slideTransition("next stream refetching")
 				return false, nil

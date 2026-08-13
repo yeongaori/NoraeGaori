@@ -218,19 +218,19 @@ func chromaContrast(chroma [12]float64) float64 {
 func analyzeKey(samples []float32, sampleRate float64) (int, bool, float64) {
 	chroma, windows := chromagram(samples, sampleRate)
 	if windows < keyMinWindows {
-		logger.Debugf("[Key] rejected: only %d chroma windows, need %d", windows, keyMinWindows)
+		logger.Debugf("rejected: only %d chroma windows, need %d", windows, keyMinWindows)
 		return 0, false, 0
 	}
 
 	contrast := chromaContrast(chroma)
 	if contrast <= 0 {
-		logger.Debugf("[Key] rejected: flat chromagram across %d windows", windows)
+		logger.Debugf("rejected: flat chromagram across %d windows", windows)
 		return 0, false, 0
 	}
 
 	tonic, minor, gap := estimateKey(chroma)
 	if contrast < keyContrastFloor {
-		logger.Debugf("[Key] %s verdict=below-contrast gap=%.4f contrast=%.4f contrastFloor=%.4f windows=%d",
+		logger.Debugf("%s verdict=below-contrast gap=%.4f contrast=%.4f contrastFloor=%.4f windows=%d",
 			camelotCode(tonic, minor), gap, contrast, keyContrastFloor, windows)
 		return 0, false, 0
 	}
@@ -239,7 +239,7 @@ func analyzeKey(samples []float32, sampleRate float64) (int, bool, float64) {
 	if gap < keyConfidenceFloor {
 		verdict = "below-gap"
 	}
-	logger.Debugf("[Key] %s verdict=%s gap=%.4f gapFloor=%.4f contrast=%.4f contrastFloor=%.4f windows=%d",
+	logger.Debugf("%s verdict=%s gap=%.4f gapFloor=%.4f contrast=%.4f contrastFloor=%.4f windows=%d",
 		camelotCode(tonic, minor), verdict, gap, keyConfidenceFloor, contrast, keyContrastFloor, windows)
 	return tonic, minor, gap
 }

@@ -145,7 +145,7 @@ func estimateTempo(novelty []float64, frameRate float64) (float64, float64) {
 	if escaped != "" {
 		boundary = escaped
 	}
-	logger.Debugf("[Tempo] bpm=%.2f period=%.4fs bestLag=%d lag=%.3f range=%d-%d %s frameRate=%.4f",
+	logger.Debugf("bpm=%.2f period=%.4fs bestLag=%d lag=%.3f range=%d-%d %s frameRate=%.4f",
 		bpm, periodFrames/frameRate, bestLag, periodFrames, minLag, maxLag, boundary, frameRate)
 	return bpm, periodFrames
 }

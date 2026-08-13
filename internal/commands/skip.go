@@ -53,7 +53,7 @@ func HandleSkip(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 		err := player.Skip(s, i.GuildID)
 		if err != nil && err != player.ErrQueueEmpty {
-			logger.Errorf("[Skip] Failed to skip: %v", err)
+			logger.Errorf("Failed to skip: %v", err)
 			embed := messages.CreateErrorEmbed(messages.T(i.GuildID).Music.SkipFailedTitle,
 				fmt.Sprintf(messages.T(i.GuildID).Music.SkipFailedDesc, err))
 			UpdateResponseEmbed(s, i, embed)
@@ -67,7 +67,7 @@ func HandleSkip(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 			UpdateResponseEmbed(s, i, embed)
 
 			if stopErr := player.Stop(i.GuildID); stopErr != nil {
-				logger.Errorf("[Skip] Failed to cleanup after queue empty: %v", stopErr)
+				logger.Errorf("Failed to cleanup after queue empty: %v", stopErr)
 			}
 			return nil
 		}
@@ -124,7 +124,7 @@ func HandleSkip(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 		err := player.Skip(s, i.GuildID)
 		if err != nil && err != player.ErrQueueEmpty {
-			logger.Errorf("[Skip] Failed to skip: %v", err)
+			logger.Errorf("Failed to skip: %v", err)
 			embed := messages.CreateErrorEmbed(messages.T(i.GuildID).Music.SkipFailedTitle,
 				fmt.Sprintf(messages.T(i.GuildID).Music.SkipFailedDesc, err))
 			messages.AddField(embed, messages.T(i.GuildID).Fields.VoteResult, fmt.Sprintf("%d/%d", currentVotes, requiredVotes), true)
@@ -140,7 +140,7 @@ func HandleSkip(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 			UpdateResponseEmbed(s, i, embed)
 
 			if stopErr := player.Stop(i.GuildID); stopErr != nil {
-				logger.Errorf("[Skip] Failed to cleanup after queue empty: %v", stopErr)
+				logger.Errorf("Failed to cleanup after queue empty: %v", stopErr)
 			}
 			return nil
 		}

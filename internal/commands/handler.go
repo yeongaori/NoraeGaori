@@ -40,7 +40,7 @@ func isGuildAdmin(s *discordgo.Session, guildID string, member *discordgo.Member
 	if err != nil {
 		guild, err = s.Guild(guildID)
 		if err != nil {
-			logger.Debugf("[Permissions] Failed to get guild %s: %v", guildID, err)
+			logger.Debugf("Failed to get guild %s: %v", guildID, err)
 			return false
 		}
 	}
@@ -68,12 +68,12 @@ func isGuildAdmin(s *discordgo.Session, guildID string, member *discordgo.Member
 
 func RegisterCommand(cmd *Command) {
 	commands[cmd.Name] = cmd
-	logger.Debugf("[Commands] Registered command: %s", cmd.Name)
+	logger.Debugf("Registered command: %s", cmd.Name)
 }
 
 func RegisterAlias(alias, commandName string) {
 	aliases[alias] = commandName
-	logger.Debugf("[Commands] Registered alias: %s -> %s", alias, commandName)
+	logger.Debugf("Registered alias: %s -> %s", alias, commandName)
 }
 
 func registerCommandAliases(name string, cs messages.CommandStrings) {
@@ -110,7 +110,7 @@ func ReloadAliases() {
 		}
 	}
 
-	logger.Info("[Commands] Aliases and descriptions reloaded for new locale")
+	logger.Info("Aliases and descriptions reloaded for new locale")
 }
 
 func InitializeCommands() {
@@ -840,18 +840,18 @@ func InitializeCommands() {
 	})
 	registerCommandAliases("help", cmd("help"))
 
-	logger.Debug("[Commands] All commands registered")
+	logger.Debug("All commands registered")
 }
 
 func RegisterSlashCommands(session *discordgo.Session) error {
-	logger.Debug("[Commands] Syncing slash commands with Discord...")
+	logger.Debug("Syncing slash commands with Discord...")
 
 	appID := session.State.User.ID
 
 	desired := make([]*discordgo.ApplicationCommand, 0, len(commands))
 	for _, cmd := range commands {
 		if cmd.TextOnly {
-			logger.Debugf("[Commands] Skipping text-only command from slash registration: %s", cmd.Name)
+			logger.Debugf("Skipping text-only command from slash registration: %s", cmd.Name)
 			continue
 		}
 		desired = append(desired, &discordgo.ApplicationCommand{
@@ -879,29 +879,29 @@ func RegisterSlashCommands(session *discordgo.Session) error {
 
 	added, updated, removed := diffCommandSets(desiredJSON, existingJSON)
 	if len(added) == 0 && len(updated) == 0 && len(removed) == 0 {
-		logger.Debug("[Commands] Slash commands already in sync, skipping registration")
+		logger.Debug("Slash commands already in sync, skipping registration")
 		return nil
 	}
 
-	logger.Infof("[Commands] Slash command changes detected — added: %v, updated: %v, removed: %v", added, updated, removed)
+	logger.Infof("Slash command changes detected — added: %v, updated: %v, removed: %v", added, updated, removed)
 
 	if _, err := session.ApplicationCommandBulkOverwrite(appID, "", desired); err != nil {
 		return fmt.Errorf("failed to bulk overwrite slash commands: %w", err)
 	}
 
-	logger.Info("[Commands] Slash commands registered successfully")
+	logger.Info("Slash commands registered successfully")
 	return nil
 }
 
 func fillMissingCommandDescriptions(cmds []*discordgo.ApplicationCommand) {
 	for _, command := range cmds {
 		if command.Description == "" {
-			logger.Errorf("[Commands] Missing locale description for command %q, using its name as a placeholder", command.Name)
+			logger.Errorf("Missing locale description for command %q, using its name as a placeholder", command.Name)
 			command.Description = command.Name
 		}
 		for _, option := range command.Options {
 			if option.Description == "" {
-				logger.Errorf("[Commands] Missing locale description for option %q of command %q, using its name as a placeholder", option.Name, command.Name)
+				logger.Errorf("Missing locale description for option %q of command %q, using its name as a placeholder", option.Name, command.Name)
 				option.Description = option.Name
 			}
 		}
@@ -954,7 +954,7 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	cmdName := i.ApplicationCommandData().Name
 	cmd, exists := commands[cmdName]
 	if !exists {
-		logger.Warnf("[Commands] Unknown command: %s", cmdName)
+		logger.Warnf("Unknown command: %s", cmdName)
 		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.UnknownCommand))
 		return
 	}
@@ -966,11 +966,11 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		}
 	}
 
-	logger.Debugf("[Commands] Executing command: %s (user: %s, guild: %s)",
+	logger.Debugf("Executing command: %s (user: %s, guild: %s)",
 		cmdName, i.Member.User.Username, i.GuildID)
 
 	if err := cmd.Handler(s, i); err != nil {
-		logger.Errorf("[Commands] Command %s failed: %v", cmdName, err)
+		logger.Errorf("Command %s failed: %v", cmdName, err)
 		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, fmt.Sprintf(messages.T(i.GuildID).Errors.CommandExecutionError, err)))
 	}
 }
@@ -985,7 +985,7 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	prefix := cfg.Prefix
 	if m.GuildID != "" {
 		if guildPrefix, err := queue.GetGuildPrefix(m.GuildID); err != nil {
-			logger.Debugf("[HandleMessage] failed to get guild prefix for %s: %v", m.GuildID, err)
+			logger.Debugf("failed to get guild prefix for %s: %v", m.GuildID, err)
 		} else if guildPrefix != "" {
 			prefix = guildPrefix
 		}
@@ -1040,7 +1040,7 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 	}
 
-	logger.Debugf("[Commands] Executing text command: %s (user: %s, guild: %s)",
+	logger.Debugf("Executing text command: %s (user: %s, guild: %s)",
 		cmdName, m.Author.Username, m.GuildID)
 
 	args := parts[1:]
@@ -1058,7 +1058,7 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	defer messageResponders.Delete(pseudoInteraction.Token)
 
 	if err := cmd.Handler(s, pseudoInteraction); err != nil {
-		logger.Errorf("[Commands] Text command %s failed: %v", cmdName, err)
+		logger.Errorf("Text command %s failed: %v", cmdName, err)
 
 		if messageResponder.Message == nil {
 			embed := messages.CreateErrorEmbed(messages.T(m.GuildID).Titles.Error, fmt.Sprintf(messages.T(m.GuildID).Errors.CommandExecutionError, err))
@@ -1213,7 +1213,7 @@ func UpdateResponseEmbedWithComponents(s *discordgo.Session, i *discordgo.Intera
 		if mr, ok := messageResponders.Load(i.Token); ok {
 			responder := mr.(*MessageResponse)
 			if responder.Message != nil {
-				logger.Debugf("[UpdateResponse] Editing message %s in channel %s", responder.Message.ID, responder.ChannelID)
+				logger.Debugf("Editing message %s in channel %s", responder.Message.ID, responder.ChannelID)
 				_, err := s.ChannelMessageEditComplex(&discordgo.MessageEdit{
 					Channel:    responder.ChannelID,
 					ID:         responder.Message.ID,
@@ -1221,14 +1221,14 @@ func UpdateResponseEmbedWithComponents(s *discordgo.Session, i *discordgo.Intera
 					Components: &components,
 				})
 				if err != nil {
-					logger.Errorf("[UpdateResponse] Failed to edit message: %v", err)
+					logger.Errorf("Failed to edit message: %v", err)
 				}
 				return err
 			}
-			logger.Errorf("[UpdateResponse] Message is nil in responder")
+			logger.Errorf("Message is nil in responder")
 			return fmt.Errorf("message is nil")
 		}
-		logger.Errorf("[UpdateResponse] Message responder not found for token: %s", i.Token)
+		logger.Errorf("Message responder not found for token: %s", i.Token)
 		return fmt.Errorf("message responder not found")
 	}
 

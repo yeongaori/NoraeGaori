@@ -98,8 +98,8 @@ func (os *outroState) plan(player *GuildPlayer, es *streamEndState, sentFrames i
 	os.processor = newTransitionProcessor(recipe, os.outroFrames, periodSec)
 	os.appliedNext = 0
 
-	logger.Debugf("[Outro] planned at frame %d (%d frames) for guild: %s", startFrame, os.outroFrames, guildID)
-	logger.Debugf("[Outro] recipe %s (%s) [%s] for guild: %s", recipe,
+	logger.Debugf("planned at frame %d (%d frames) for guild: %s", startFrame, os.outroFrames, guildID)
+	logger.Debugf("recipe %s (%s) [%s] for guild: %s", recipe,
 		describeOutroInput(analysis), describeStyleSources(styleSource), guildID)
 	return true
 }
@@ -132,7 +132,7 @@ func (os *outroState) process(frame []int16, sentFrames int, volume float64) {
 	}
 	if !os.committed {
 		os.committed = true
-		logger.Debugf("[Outro] started at frame %d", sentFrames)
+		logger.Debugf("started at frame %d", sentFrames)
 	}
 
 	progress := 0.0
@@ -182,7 +182,7 @@ func (os *outroState) flush(player *GuildPlayer, stopCh chan struct{}, enc *Opus
 		opusBuffer := make([]byte, 1500)
 		opusLen, err := enc.Encode(os.tailBuf, opusBuffer)
 		if err != nil {
-			logger.Errorf("[Outro] opus encoding error: %v", err)
+			logger.Errorf("opus encoding error: %v", err)
 			return
 		}
 
@@ -202,6 +202,6 @@ func (os *outroState) flush(player *GuildPlayer, stopCh chan struct{}, enc *Opus
 	}
 
 	if emitted > 0 {
-		logger.Debugf("[Outro] flushed %d tail frames for guild: %s", emitted, player.GuildID)
+		logger.Debugf("flushed %d tail frames for guild: %s", emitted, player.GuildID)
 	}
 }

@@ -593,7 +593,7 @@ func HandleAutoMixPanel(s *discordgo.Session, i *discordgo.InteractionCreate) er
 
 	msg, err := RespondEmbedWithComponents(s, i, embed, components)
 	if err != nil {
-		logger.Errorf("[AutoMixPanel] Failed to send panel: %v", err)
+		logger.Errorf("Failed to send panel: %v", err)
 		return err
 	}
 
@@ -632,13 +632,13 @@ func OpenAutoMixPanelFromComponent(s *discordgo.Session, ic *discordgo.Interacti
 			Components: components,
 		},
 	}); err != nil {
-		logger.Errorf("[AutoMixPanel] Failed to open panel from component: %v", err)
+		logger.Errorf("Failed to open panel from component: %v", err)
 		return
 	}
 
 	msg, err := s.InteractionResponse(ic.Interaction)
 	if err != nil {
-		logger.Errorf("[AutoMixPanel] Failed to resolve panel message: %v", err)
+		logger.Errorf("Failed to resolve panel message: %v", err)
 		return
 	}
 
@@ -793,13 +793,13 @@ func openTransitionEditor(s *discordgo.Session, ic *discordgo.InteractionCreate,
 			Flags:      discordgo.MessageFlagsEphemeral,
 		},
 	}); err != nil {
-		logger.Errorf("[AutoMixPanel] Failed to open editor: %v", err)
+		logger.Errorf("Failed to open editor: %v", err)
 		return
 	}
 
 	editorMsg, err := s.InteractionResponse(ic.Interaction)
 	if err != nil {
-		logger.Errorf("[AutoMixPanel] Failed to resolve editor message: %v", err)
+		logger.Errorf("Failed to resolve editor message: %v", err)
 		return
 	}
 

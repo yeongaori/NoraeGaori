@@ -31,7 +31,7 @@ func HandlePlayNext(s *discordgo.Session, i *discordgo.InteractionCreate) error 
 	searchEmbed := messages.CreateWarningEmbed(messages.T(i.GuildID).Titles.Searching, fmt.Sprintf(messages.T(i.GuildID).Descriptions.Searching, query))
 	UpdateResponseEmbed(s, i, searchEmbed)
 
-	logger.Debugf("[PlayNext] Searching for: %s", query)
+	logger.Debugf("Searching for: %s", query)
 	song, err := youtube.Search(i.GuildID, query, i.Member.User.Username, i.Member.User.ID)
 	if err != nil {
 		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.SongNotFound))

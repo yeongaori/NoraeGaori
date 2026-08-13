@@ -171,7 +171,7 @@ func forceRemoveCurrent(s *discordgo.Session, i *discordgo.InteractionCreate, q 
 
 	if err == player.ErrQueueEmpty {
 		if stopErr := player.Stop(i.GuildID); stopErr != nil {
-			logger.Errorf("[ForceRemove] Failed to cleanup after queue empty: %v", stopErr)
+			logger.Errorf("Failed to cleanup after queue empty: %v", stopErr)
 		}
 	}
 

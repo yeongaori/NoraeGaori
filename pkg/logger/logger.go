@@ -111,13 +111,13 @@ func Close() {
 	}
 }
 
-func printLine(badge, message string) {
+func printLine(badge, tag, message string) {
 	outMu.Lock()
 	defer outMu.Unlock()
-	fmt.Fprintf(output, "%s %s\n", badge, message)
+	fmt.Fprintf(output, "%s [%s] %s\n", badge, tag, message)
 }
 
-func logToFile(level, message string) {
+func logToFile(level, tag, message string) {
 	errorLogMu.Lock()
 	defer errorLogMu.Unlock()
 
@@ -126,48 +126,57 @@ func logToFile(level, message string) {
 	}
 
 	timestamp := time.Now().Format("2006-01-02 15:04:05.000")
-	line := fmt.Sprintf("[%s] [%s] %s\n", timestamp, level, message)
+	line := fmt.Sprintf("[%s] [%s] [%s] %s\n", timestamp, level, tag, message)
 	errorLogFile.WriteString(line)
 }
 
-func Info(message string) {
-	printLine(infoBadge, message)
-}
-
-func Warn(message string) {
-	printLine(warnBadge, message)
-	logToFile("WARN", message)
-}
-
-func Error(message string) {
-	printLine(errorBadge, message)
-	logToFile("ERRO", message)
-}
-
-func Debug(message string) {
-	if debugMode {
-		printLine(debugBadge, message)
+func emit(badge, fileLevel, tag, message string) {
+	printLine(badge, tag, message)
+	if fileLevel != "" {
+		logToFile(fileLevel, tag, message)
 	}
 }
 
+func Info(message string) {
+	emit(infoBadge, "", callerTag(1), message)
+}
+
+func Warn(message string) {
+	emit(warnBadge, "WARN", callerTag(1), message)
+}
+
+func Error(message string) {
+	emit(errorBadge, "ERRO", callerTag(1), message)
+}
+
+func Debug(message string) {
+	if !debugMode {
+		return
+	}
+	emit(debugBadge, "", callerTag(1), message)
+}
+
 func Term(message string) {
-	printLine(termBadge, message)
+	emit(termBadge, "", callerTag(1), message)
 }
 
 func Infof(format string, args ...interface{}) {
-	Info(fmt.Sprintf(format, args...))
+	emit(infoBadge, "", callerTag(1), fmt.Sprintf(format, args...))
 }
 
 func Warnf(format string, args ...interface{}) {
-	Warn(fmt.Sprintf(format, args...))
+	emit(warnBadge, "WARN", callerTag(1), fmt.Sprintf(format, args...))
 }
 
 func Errorf(format string, args ...interface{}) {
-	Error(fmt.Sprintf(format, args...))
+	emit(errorBadge, "ERRO", callerTag(1), fmt.Sprintf(format, args...))
 }
 
 func Debugf(format string, args ...interface{}) {
-	Debug(fmt.Sprintf(format, args...))
+	if !debugMode {
+		return
+	}
+	emit(debugBadge, "", callerTag(1), fmt.Sprintf(format, args...))
 }
 
 func IsDebug() bool {

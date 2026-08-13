@@ -67,6 +67,8 @@ func NewAvailabilityWorkerPool(workerCount int) *AvailabilityWorkerPool {
 func (p *AvailabilityWorkerPool) worker(id int) {
 	defer p.wg.Done()
 
+	scope := logger.Scopef("Worker %d", id)
+
 	for {
 
 		p.stoppingMu.RLock()
@@ -98,8 +100,8 @@ func (p *AvailabilityWorkerPool) worker(id int) {
 			}
 		}
 
-		logger.Debugf("[Worker %d] Checking availability: %s (index: %d, retry: %d, batch: %d)",
-			id, job.URL, job.Index, job.RetryCount, job.BatchID)
+		scope.Debugf("Checking availability: %s (index: %d, retry: %d, batch: %d)",
+			job.URL, job.Index, job.RetryCount, job.BatchID)
 
 		available, isLive, err := youtube.CheckAvailability(job.URL)
 
@@ -120,13 +122,13 @@ func (p *AvailabilityWorkerPool) worker(id int) {
 				strings.Contains(err.Error(), "Too Many Requests") ||
 				strings.Contains(err.Error(), "rate limit") {
 				shouldRetry = true
-				logger.Warnf("[Worker %d] Rate limit detected for: %s (retry: %d/%d)",
-					id, job.URL, job.RetryCount, p.maxRetries)
+				scope.Warnf("Rate limit detected for: %s (retry: %d/%d)",
+					job.URL, job.RetryCount, p.maxRetries)
 			} else if strings.Contains(err.Error(), "timeout") ||
 				strings.Contains(err.Error(), "connection") {
 				shouldRetry = true
-				logger.Warnf("[Worker %d] Network error for: %s (retry: %d/%d)",
-					id, job.URL, job.RetryCount, p.maxRetries)
+				scope.Warnf("Network error for: %s (retry: %d/%d)",
+					job.URL, job.RetryCount, p.maxRetries)
 			}
 
 			if shouldRetry && job.RetryCount < p.maxRetries {
@@ -137,8 +139,8 @@ func (p *AvailabilityWorkerPool) worker(id int) {
 					delay = p.maxRetryDelay
 				}
 
-				logger.Debugf("[Worker %d] Scheduling retry for %s in %v (attempt %d/%d)",
-					id, job.URL, delay, job.RetryCount+1, p.maxRetries)
+				scope.Debugf("Scheduling retry for %s in %v (attempt %d/%d)",
+					job.URL, delay, job.RetryCount+1, p.maxRetries)
 
 				go func(retryJob AvailabilityJob, retryDelay time.Duration) {
 					time.Sleep(retryDelay)
@@ -154,7 +156,7 @@ func (p *AvailabilityWorkerPool) worker(id int) {
 
 				continue
 			} else if job.RetryCount >= p.maxRetries {
-				logger.Errorf("[Worker %d] Max retries exceeded for: %s", id, job.URL)
+				scope.Errorf("Max retries exceeded for: %s", job.URL)
 			}
 		}
 
@@ -230,7 +232,7 @@ func (p *AvailabilityWorkerPool) Close() {
 	p.wg.Wait()
 	close(p.results)
 
-	logger.Infof("[WorkerPool] Shut down successfully")
+	logger.Infof("Shut down successfully")
 }
 
 var (
@@ -245,7 +247,7 @@ func GetWorkerPool() *AvailabilityWorkerPool {
 	if globalPool == nil {
 
 		globalPool = NewAvailabilityWorkerPool(10)
-		logger.Debugf("[WorkerPool] Created global worker pool with 10 workers")
+		logger.Debugf("Created global worker pool with 10 workers")
 	}
 
 	return globalPool
@@ -260,6 +262,6 @@ func CloseGlobalPool() {
 	if pool != nil {
 		pool.Close()
 	} else {
-		logger.Debug("[WorkerPool] No global worker pool to close")
+		logger.Debug("No global worker pool to close")
 	}
 }

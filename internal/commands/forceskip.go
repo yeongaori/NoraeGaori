@@ -25,7 +25,7 @@ func HandleForceSkip(s *discordgo.Session, i *discordgo.InteractionCreate) error
 
 	err = player.Skip(s, i.GuildID)
 	if err != nil && err != player.ErrQueueEmpty {
-		logger.Errorf("[ForceSkip] Failed to skip: %v", err)
+		logger.Errorf("Failed to skip: %v", err)
 		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Music.SkipFailedTitle, fmt.Sprintf(messages.T(i.GuildID).Music.SkipFailedDesc, err)))
 		return nil
 	}
@@ -37,7 +37,7 @@ func HandleForceSkip(s *discordgo.Session, i *discordgo.InteractionCreate) error
 		UpdateResponseEmbed(s, i, embed)
 
 		if stopErr := player.Stop(i.GuildID); stopErr != nil {
-			logger.Errorf("[ForceSkip] Failed to cleanup after queue empty: %v", stopErr)
+			logger.Errorf("Failed to cleanup after queue empty: %v", stopErr)
 		}
 		return nil
 	}

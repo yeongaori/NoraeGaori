@@ -71,7 +71,7 @@ func (s *Song) SetState(state SongState) {
 	defer s.mu.Unlock()
 	s.State = state
 	s.StateChangedAt = time.Now()
-	logger.Debugf("[Song] %s state changed to %s", s.Title, s.getStateName())
+	logger.Debugf("%s state changed to %s", s.Title, s.getStateName())
 }
 
 func (s *Song) GetState() SongState {
@@ -104,7 +104,7 @@ func (s *Song) SetError(err error) {
 	defer s.mu.Unlock()
 	s.LastError = err
 	if err != nil {
-		logger.Errorf("[Song] %s encountered error: %v", s.Title, err)
+		logger.Errorf("%s encountered error: %v", s.Title, err)
 	}
 }
 
@@ -137,7 +137,7 @@ func (s *Song) SetPreCache(data []byte, cancel context.CancelFunc) {
 	defer s.mu.Unlock()
 	s.PreCacheData = data
 	s.PreCacheCancel = cancel
-	logger.Debugf("[Song] Pre-cache set for %s (%d bytes)", s.Title, len(data))
+	logger.Debugf("Pre-cache set for %s (%d bytes)", s.Title, len(data))
 }
 
 func (s *Song) GetPreCache() ([]byte, context.CancelFunc) {
@@ -154,7 +154,7 @@ func (s *Song) ClearPreCache() {
 		s.PreCacheCancel = nil
 	}
 	s.PreCacheData = nil
-	logger.Debugf("[Song] Pre-cache cleared for %s", s.Title)
+	logger.Debugf("Pre-cache cleared for %s", s.Title)
 }
 
 func (s *Song) UpdatePlaybackPosition() int {
@@ -173,7 +173,7 @@ func (s *Song) StartPlayback() {
 	s.State = SongStatePlaying
 	s.PlaybackStarted = time.Now().Add(-time.Duration(s.SeekTime) * time.Millisecond)
 	s.StateChangedAt = time.Now()
-	logger.Debugf("[Song] Started playback: %s", s.Title)
+	logger.Debugf("Started playback: %s", s.Title)
 }
 
 func (s *Song) PausePlayback() {
@@ -185,7 +185,7 @@ func (s *Song) PausePlayback() {
 	}
 	s.State = SongStatePaused
 	s.StateChangedAt = time.Now()
-	logger.Debugf("[Song] Paused at %dms: %s", s.SeekTime, s.Title)
+	logger.Debugf("Paused at %dms: %s", s.SeekTime, s.Title)
 }
 
 func (s *Song) getStateName() string {
@@ -313,7 +313,7 @@ func GetQueue(guildID string, forceRefresh bool) (*Queue, error) {
 		cacheMux.RUnlock()
 
 		if exists && time.Since(cached.timestamp) < cacheTTL {
-			logger.Debugf("[Queue] Using cached queue for guild: %s", guildID)
+			logger.Debugf("Using cached queue for guild: %s", guildID)
 			return cached.queue, nil
 		}
 	}
@@ -336,7 +336,7 @@ func GetQueue(guildID string, forceRefresh bool) (*Queue, error) {
 	}
 	cacheMux.Unlock()
 
-	logger.Debugf("[Queue] Loaded queue for guild %s: %d songs", guildID, len(queue.Songs))
+	logger.Debugf("Loaded queue for guild %s: %d songs", guildID, len(queue.Songs))
 	return queue, nil
 }
 
@@ -408,11 +408,11 @@ func loadQueueFromDB(guildID string) (*Queue, error) {
 		styleFilter = AutoMixStyleAuto
 		styleEffect = AutoMixStyleAuto
 		styleLoop = AutoMixStyleAuto
-		logger.Debugf("[LoadQueue] No guild_settings found for guild %s, using defaults (volume=%g)", guildID, volume)
+		logger.Debugf("No guild_settings found for guild %s, using defaults (volume=%g)", guildID, volume)
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to query guild settings: %w", err)
 	} else {
-		logger.Debugf("[LoadQueue] Loaded guild_settings for guild %s: volume=%g, repeat=%t, sponsorblock=%t, normalization=%t",
+		logger.Debugf("Loaded guild_settings for guild %s: volume=%g, repeat=%t, sponsorblock=%t, normalization=%t",
 			guildID, volume, repeat == 1, sponsorblock == 1, normalization == 1)
 	}
 
@@ -509,7 +509,7 @@ func CreateQueue(guildID, textChannelID, voiceChannelID string) error {
 
 	
 	InvalidateCache(guildID)
-	logger.Debugf("[CreateQueue] Queue created for guild: %s", guildID)
+	logger.Debugf("Queue created for guild: %s", guildID)
 	return nil
 }
 
@@ -530,7 +530,7 @@ func DeleteQueue(guildID string) error {
 
 	
 	InvalidateCache(guildID)
-	logger.Debugf("[DeleteQueue] Queue deleted for guild: %s", guildID)
+	logger.Debugf("Queue deleted for guild: %s", guildID)
 	return nil
 }
 
@@ -560,7 +560,7 @@ func DeleteGuildData(guildID string) error {
 	
 	InvalidateCache(guildID)
 	invalidatePrefixCache(guildID)
-	logger.Infof("[DeleteGuildData] All data deleted for guild: %s", guildID)
+	logger.Infof("All data deleted for guild: %s", guildID)
 	return nil
 }
 
@@ -654,7 +654,7 @@ func AddSongsBatch(guildID string, songs []*Song, position int) error {
 
 	
 	InvalidateCache(guildID)
-	logger.Debugf("[AddSongsBatch] Added %d songs starting at position %d for guild: %s", len(songs), position, guildID)
+	logger.Debugf("Added %d songs starting at position %d for guild: %s", len(songs), position, guildID)
 	return nil
 }
 
@@ -730,7 +730,7 @@ func AddSong(guildID string, song *Song, position int) error {
 
 	
 	InvalidateCache(guildID)
-	logger.Debugf("[AddSong] Added song '%s' at position %d for guild: %s", song.Title, position, guildID)
+	logger.Debugf("Added song '%s' at position %d for guild: %s", song.Title, position, guildID)
 	return nil
 }
 
@@ -749,7 +749,7 @@ func UpdateSongSeekTime(guildID string, songID int, seekTime int) error {
 
 	
 	InvalidateCache(guildID)
-	logger.Debugf("[UpdateSongSeekTime] Updated seek time to %dms for song %d in guild: %s", seekTime, songID, guildID)
+	logger.Debugf("Updated seek time to %dms for song %d in guild: %s", seekTime, songID, guildID)
 	return nil
 }
 
@@ -801,7 +801,7 @@ func RemoveFirstSong(guildID string) error {
 
 	
 	InvalidateCache(guildID)
-	logger.Debugf("[RemoveFirstSong] Removed first song for guild: %s", guildID)
+	logger.Debugf("Removed first song for guild: %s", guildID)
 	return nil
 }
 
@@ -851,7 +851,7 @@ func RemoveSong(guildID string, position int) error {
 
 	
 	InvalidateCache(guildID)
-	logger.Debugf("[RemoveSong] Removed song at position %d for guild: %s", position, guildID)
+	logger.Debugf("Removed song at position %d for guild: %s", position, guildID)
 	return nil
 }
 
@@ -917,7 +917,7 @@ func SkipToPosition(guildID string, targetIndex int) error {
 
 	
 	InvalidateCache(guildID)
-	logger.Debugf("[SkipToPosition] Skipped to position %d for guild: %s", targetIndex, guildID)
+	logger.Debugf("Skipped to position %d for guild: %s", targetIndex, guildID)
 	return nil
 }
 
@@ -969,7 +969,7 @@ func RemoveSongsByIDs(guildID string, songIDs []int) error {
 
 	
 	InvalidateCache(guildID)
-	logger.Debugf("[RemoveSongsByIDs] Removed %d songs for guild: %s", rowsAffected, guildID)
+	logger.Debugf("Removed %d songs for guild: %s", rowsAffected, guildID)
 	return nil
 }
 
@@ -1062,7 +1062,7 @@ func SetRepeatMode(guildID string, mode int) error {
 
 	
 	InvalidateCache(guildID)
-	logger.Debugf("[SetRepeatMode] Set repeat=%d for guild: %s", mode, guildID)
+	logger.Debugf("Set repeat=%d for guild: %s", mode, guildID)
 	return nil
 }
 
@@ -1087,16 +1087,16 @@ func SetVolume(guildID string, volume float64) error {
 		guildID, volume, volume,
 	)
 	if err != nil {
-		logger.Errorf("[SetVolume] Database error for guild %s: %v", guildID, err)
+		logger.Errorf("Database error for guild %s: %v", guildID, err)
 		return fmt.Errorf("failed to set volume: %w", err)
 	}
 
 	rowsAffected, _ := result.RowsAffected()
-	logger.Debugf("[SetVolume] Set volume=%g for guild %s (rows affected: %d)", volume, guildID, rowsAffected)
+	logger.Debugf("Set volume=%g for guild %s (rows affected: %d)", volume, guildID, rowsAffected)
 
 	
 	InvalidateCache(guildID)
-	logger.Debugf("[Cache] Invalidated cache for guild: %s", guildID)
+	logger.Debugf("Invalidated cache for guild: %s", guildID)
 	return nil
 }
 
@@ -1214,7 +1214,7 @@ func SetSponsorBlock(guildID string, enabled bool) error {
 
 	
 	InvalidateCache(guildID)
-	logger.Debugf("[SetSponsorBlock] Set sponsorblock=%v for guild: %s", enabled, guildID)
+	logger.Debugf("Set sponsorblock=%v for guild: %s", enabled, guildID)
 	return nil
 }
 
@@ -1239,7 +1239,7 @@ func SetShowStartedTrack(guildID string, enabled bool) error {
 
 	
 	InvalidateCache(guildID)
-	logger.Debugf("[SetShowStartedTrack] Set show_started_track=%v for guild: %s", enabled, guildID)
+	logger.Debugf("Set show_started_track=%v for guild: %s", enabled, guildID)
 	return nil
 }
 
@@ -1263,7 +1263,7 @@ func SetNormalization(guildID string, enabled bool) error {
 	}
 
 	InvalidateCache(guildID)
-	logger.Debugf("[SetNormalization] Set normalization=%v for guild: %s", enabled, guildID)
+	logger.Debugf("Set normalization=%v for guild: %s", enabled, guildID)
 	return nil
 }
 
@@ -1307,7 +1307,7 @@ func SetFadeIn(guildID string, enabled bool) error {
 	}
 
 	InvalidateCache(guildID)
-	logger.Debugf("[SetFadeIn] Set fadein=%v for guild: %s", enabled, guildID)
+	logger.Debugf("Set fadein=%v for guild: %s", enabled, guildID)
 	return nil
 }
 
@@ -1343,7 +1343,7 @@ func SetFadeInDuration(guildID string, seconds float64) error {
 	}
 
 	InvalidateCache(guildID)
-	logger.Debugf("[SetFadeInDuration] Set fadein_duration=%g for guild: %s", seconds, guildID)
+	logger.Debugf("Set fadein_duration=%g for guild: %s", seconds, guildID)
 	return nil
 }
 
@@ -1380,7 +1380,7 @@ func SetFadeOut(guildID string, enabled bool) error {
 	}
 
 	InvalidateCache(guildID)
-	logger.Debugf("[SetFadeOut] Set fadeout=%v for guild: %s", enabled, guildID)
+	logger.Debugf("Set fadeout=%v for guild: %s", enabled, guildID)
 	return nil
 }
 
@@ -1416,7 +1416,7 @@ func SetFadeOutDuration(guildID string, seconds float64) error {
 	}
 
 	InvalidateCache(guildID)
-	logger.Debugf("[SetFadeOutDuration] Set fadeout_duration=%g for guild: %s", seconds, guildID)
+	logger.Debugf("Set fadeout_duration=%g for guild: %s", seconds, guildID)
 	return nil
 }
 
@@ -1453,7 +1453,7 @@ func SetAutoMix(guildID string, enabled bool) error {
 	}
 
 	InvalidateCache(guildID)
-	logger.Debugf("[SetAutoMix] Set automix=%v for guild: %s", enabled, guildID)
+	logger.Debugf("Set automix=%v for guild: %s", enabled, guildID)
 	return nil
 }
 
@@ -1489,7 +1489,7 @@ func SetAutoMixBeats(guildID string, beats int) error {
 	}
 
 	InvalidateCache(guildID)
-	logger.Debugf("[SetAutoMixBeats] Set automix_beats=%d for guild: %s", beats, guildID)
+	logger.Debugf("Set automix_beats=%d for guild: %s", beats, guildID)
 	return nil
 }
 
@@ -1552,7 +1552,7 @@ func SetAutoMixStyle(guildID, category, style string) error {
 	}
 
 	InvalidateCache(guildID)
-	logger.Debugf("[SetAutoMixStyle] Set %s=%s for guild: %s", column, style, guildID)
+	logger.Debugf("Set %s=%s for guild: %s", column, style, guildID)
 	return nil
 }
 
@@ -1589,7 +1589,7 @@ func SetSongAutoMixStyle(guildID string, songID int, category, style string) err
 	}
 
 	InvalidateCache(guildID)
-	logger.Debugf("[SetSongAutoMixStyle] Set %s=%s for song %d in guild: %s", column, style, songID, guildID)
+	logger.Debugf("Set %s=%s for song %d in guild: %s", column, style, songID, guildID)
 	return nil
 }
 
@@ -1626,7 +1626,7 @@ func SetCrossfade(guildID string, enabled bool) error {
 	}
 
 	InvalidateCache(guildID)
-	logger.Debugf("[SetCrossfade] Set crossfade=%v for guild: %s", enabled, guildID)
+	logger.Debugf("Set crossfade=%v for guild: %s", enabled, guildID)
 	return nil
 }
 
@@ -1662,7 +1662,7 @@ func SetCrossfadeDuration(guildID string, seconds float64) error {
 	}
 
 	InvalidateCache(guildID)
-	logger.Debugf("[SetCrossfadeDuration] Set crossfade_duration=%g for guild: %s", seconds, guildID)
+	logger.Debugf("Set crossfade_duration=%g for guild: %s", seconds, guildID)
 	return nil
 }
 
@@ -1699,7 +1699,7 @@ func SetFadeOnStop(guildID string, enabled bool) error {
 	}
 
 	InvalidateCache(guildID)
-	logger.Debugf("[SetFadeOnStop] Set fade_on_stop=%v for guild: %s", enabled, guildID)
+	logger.Debugf("Set fade_on_stop=%v for guild: %s", enabled, guildID)
 	return nil
 }
 
@@ -1736,7 +1736,7 @@ func SetTrimSilence(guildID string, enabled bool) error {
 	}
 
 	InvalidateCache(guildID)
-	logger.Debugf("[SetTrimSilence] Set trim_silence=%v for guild: %s", enabled, guildID)
+	logger.Debugf("Set trim_silence=%v for guild: %s", enabled, guildID)
 	return nil
 }
 
@@ -1782,7 +1782,7 @@ func SetGuildLanguage(guildID, lang string) error {
 	}
 
 	InvalidateCache(guildID)
-	logger.Debugf("[SetGuildLanguage] Set language=%q for guild: %s", lang, guildID)
+	logger.Debugf("Set language=%q for guild: %s", lang, guildID)
 	return nil
 }
 
@@ -1854,7 +1854,7 @@ func SetGuildPrefix(guildID, prefix string) error {
 	prefixCacheMux.Unlock()
 
 	InvalidateCache(guildID)
-	logger.Debugf("[SetGuildPrefix] Set prefix=%q for guild: %s", prefix, guildID)
+	logger.Debugf("Set prefix=%q for guild: %s", prefix, guildID)
 	return nil
 }
 
@@ -1935,7 +1935,7 @@ func SwapSongs(guildID string, pos1, pos2 int) error {
 	}
 
 	InvalidateCache(guildID)
-	logger.Debugf("[SwapSongs] Swapped songs at positions %d and %d for guild: %s", pos1, pos2, guildID)
+	logger.Debugf("Swapped songs at positions %d and %d for guild: %s", pos1, pos2, guildID)
 	return nil
 }
 
@@ -2016,7 +2016,7 @@ func MoveSong(guildID string, fromPos, toPos int) error {
 	}
 
 	InvalidateCache(guildID)
-	logger.Debugf("[MoveSong] Moved song from position %d to %d for guild: %s", fromPos, toPos, guildID)
+	logger.Debugf("Moved song from position %d to %d for guild: %s", fromPos, toPos, guildID)
 	return nil
 }
 
@@ -2035,7 +2035,7 @@ func SaveSeekTime(guildID string, songID int, seekTime int) (int, error) {
 
 	
 	InvalidateCache(guildID)
-	logger.Debugf("[SaveSeekTime] Saved seek time %dms for song %d in guild: %s", seekTime, songID, guildID)
+	logger.Debugf("Saved seek time %dms for song %d in guild: %s", seekTime, songID, guildID)
 	return seekTime, nil
 }
 
@@ -2052,7 +2052,7 @@ func UpdateVoiceChannel(guildID, channelID string) error {
 	}
 
 	InvalidateCache(guildID)
-	logger.Debugf("[UpdateVoiceChannel] Updated voice channel to %s for guild: %s", channelID, guildID)
+	logger.Debugf("Updated voice channel to %s for guild: %s", channelID, guildID)
 	return nil
 }
 
@@ -2074,7 +2074,7 @@ func SetPaused(guildID string, paused bool) error {
 	}
 
 	InvalidateCache(guildID)
-	logger.Debugf("[SetPaused] Set paused=%v for guild: %s", paused, guildID)
+	logger.Debugf("Set paused=%v for guild: %s", paused, guildID)
 	return nil
 }
 
@@ -2096,7 +2096,7 @@ func SetPlaying(guildID string, playing bool) error {
 	}
 
 	InvalidateCache(guildID)
-	logger.Debugf("[SetPlaying] Set playing=%v for guild: %s", playing, guildID)
+	logger.Debugf("Set playing=%v for guild: %s", playing, guildID)
 	return nil
 }
 
@@ -2118,7 +2118,7 @@ func SetLoading(guildID string, loading bool) error {
 	}
 
 	InvalidateCache(guildID)
-	logger.Debugf("[SetLoading] Set loading=%v for guild: %s", loading, guildID)
+	logger.Debugf("Set loading=%v for guild: %s", loading, guildID)
 	return nil
 }
 
@@ -2126,5 +2126,5 @@ func InvalidateCache(guildID string) {
 	cacheMux.Lock()
 	defer cacheMux.Unlock()
 	delete(cache, guildID)
-	logger.Debugf("[Cache] Invalidated cache for guild: %s", guildID)
+	logger.Debugf("Invalidated cache for guild: %s", guildID)
 }

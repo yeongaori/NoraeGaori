@@ -52,13 +52,13 @@ func handlePurePlaylist(s *discordgo.Session, i *discordgo.InteractionCreate, pl
 
 	msg, err := GetResponseMessage(s, i)
 	if err != nil {
-		logger.Errorf("[Playlist] Failed to get interaction response: %v", err)
+		logger.Errorf("Failed to get interaction response: %v", err)
 		return err
 	}
 
 	err = s.MessageReactionAdd(msg.ChannelID, msg.ID, "✅")
 	if err != nil {
-		logger.Errorf("[Playlist] Failed to add reaction: %v", err)
+		logger.Errorf("Failed to add reaction: %v", err)
 		return err
 	}
 
@@ -75,13 +75,13 @@ func handleVideoWithPlaylist(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	
 	if videoUnavailable {
-		logger.Debugf("[Play] Direct video fetch failed, trying to get info from playlist")
+		logger.Debugf("Direct video fetch failed, trying to get info from playlist")
 		playlistURL := fmt.Sprintf("https://www.youtube.com/playlist?list=%s", analysis.PlaylistID)
 		playlistInfo, playlistErr := youtube.GetPlaylistInfo(playlistURL, i.Member.User.Username, i.Member.User.ID)
 		if playlistErr == nil {
 			for _, video := range playlistInfo.Videos {
 				if strings.Contains(video.URL, analysis.VideoID) {
-					logger.Debugf("[Play] Found video in playlist by ID, using playlist info: %s", video.Title)
+					logger.Debugf("Found video in playlist by ID, using playlist info: %s", video.Title)
 					song = video
 					videoUnavailable = false
 					break
@@ -90,7 +90,7 @@ func handleVideoWithPlaylist(s *discordgo.Session, i *discordgo.InteractionCreat
 			
 			if videoUnavailable && len(playlistInfo.Videos) > 0 {
 				song = playlistInfo.Videos[0]
-				logger.Debugf("[Play] Video ID not in playlist, using first video: %s", song.Title)
+				logger.Debugf("Video ID not in playlist, using first video: %s", song.Title)
 				videoUnavailable = false
 			}
 		}
@@ -112,7 +112,7 @@ func handleVideoWithPlaylist(s *discordgo.Session, i *discordgo.InteractionCreat
 	var embed *discordgo.MessageEmbed
 
 	if videoUnavailable {
-		logger.Warnf("[Play] Specific video unavailable (even from playlist), offering playlist: %v", videoErr)
+		logger.Warnf("Specific video unavailable (even from playlist), offering playlist: %v", videoErr)
 
 		embed = &discordgo.MessageEmbed{
 			Color:       messages.ColorWarning,
@@ -168,13 +168,13 @@ func handleVideoWithPlaylist(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	msg, err := GetResponseMessage(s, i)
 	if err != nil {
-		logger.Errorf("[Play] Failed to get interaction response: %v", err)
+		logger.Errorf("Failed to get interaction response: %v", err)
 		return err
 	}
 
 	err = s.MessageReactionAdd(msg.ChannelID, msg.ID, "⬇️")
 	if err != nil {
-		logger.Errorf("[Play] Failed to add reaction: %v", err)
+		logger.Errorf("Failed to add reaction: %v", err)
 		return err
 	}
 
@@ -197,34 +197,34 @@ func handleVideoWithPlaylist(s *discordgo.Session, i *discordgo.InteractionCreat
 }
 
 func handlePlaylistConfirmationReaction(s *discordgo.Session, originalInteraction *discordgo.InteractionCreate, msg *discordgo.Message, playlistInfo *youtube.PlaylistInfo, voiceState *discordgo.VoiceState) {
-	logger.Debugf("[PlaylistReaction] Starting reaction handler for message %s in channel %s", msg.ID, msg.ChannelID)
-	logger.Debugf("[PlaylistReaction] Expecting reaction from user: %s", originalInteraction.Member.User.ID)
+	logger.Debugf("Starting reaction handler for message %s in channel %s", msg.ID, msg.ChannelID)
+	logger.Debugf("Expecting reaction from user: %s", originalInteraction.Member.User.ID)
 
 	confirmedChan := make(chan bool, 1)
 
 	reactionHandler := func(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
-		logger.Debugf("[PlaylistReaction] Received reaction: emoji=%s, messageID=%s, userID=%s", r.Emoji.Name, r.MessageID, r.UserID)
+		logger.Debugf("Received reaction: emoji=%s, messageID=%s, userID=%s", r.Emoji.Name, r.MessageID, r.UserID)
 
 		if r.UserID == s.State.User.ID {
-			logger.Debugf("[PlaylistReaction] Ignoring bot's own reaction")
+			logger.Debugf("Ignoring bot's own reaction")
 			return
 		}
 
 		if r.MessageID != msg.ID {
-			logger.Debugf("[PlaylistReaction] Message ID mismatch: expected %s, got %s", msg.ID, r.MessageID)
+			logger.Debugf("Message ID mismatch: expected %s, got %s", msg.ID, r.MessageID)
 			return
 		}
 
 		if r.Emoji.Name != "✅" {
-			logger.Debugf("[PlaylistReaction] Emoji mismatch: expected ✅, got %s", r.Emoji.Name)
+			logger.Debugf("Emoji mismatch: expected ✅, got %s", r.Emoji.Name)
 			return
 		}
 		if r.UserID != originalInteraction.Member.User.ID {
-			logger.Debugf("[PlaylistReaction] User ID mismatch: expected %s, got %s", originalInteraction.Member.User.ID, r.UserID)
+			logger.Debugf("User ID mismatch: expected %s, got %s", originalInteraction.Member.User.ID, r.UserID)
 			return
 		}
 
-		logger.Debugf("[PlaylistReaction] Confirmed by user %s", r.UserID)
+		logger.Debugf("Confirmed by user %s", r.UserID)
 
 		select { 
 		case confirmedChan <- true:
@@ -252,9 +252,9 @@ func handlePlaylistConfirmationReaction(s *discordgo.Session, originalInteractio
 
 	select {
 	case <-confirmedChan:
-		logger.Debugf("[PlaylistReaction] Reaction confirmed, handler complete")
+		logger.Debugf("Reaction confirmed, handler complete")
 	case <-time.After(30 * time.Second):
-		logger.Debugf("[PlaylistReaction] Timeout reached, cancelling")
+		logger.Debugf("Timeout reached, cancelling")
 		embed := messages.CreateWarningEmbed(messages.T(originalInteraction.GuildID).Music.PlaylistTimeoutTitle, messages.T(originalInteraction.GuildID).Music.PlaylistTimeoutDesc)
 		if isMessageCommand(originalInteraction) {
 			s.ChannelMessageEditEmbed(msg.ChannelID, msg.ID, embed)
@@ -268,35 +268,35 @@ func handlePlaylistConfirmationReaction(s *discordgo.Session, originalInteractio
 }
 
 func handlePlaylistRestConfirmationReaction(s *discordgo.Session, originalInteraction *discordgo.InteractionCreate, msg *discordgo.Message, playlistID, videoID string, voiceState *discordgo.VoiceState) {
-	logger.Debugf("[PlaylistRestReaction] Starting reaction handler for message %s in channel %s", msg.ID, msg.ChannelID)
-	logger.Debugf("[PlaylistRestReaction] Expecting reaction from user: %s", originalInteraction.Member.User.ID)
+	logger.Debugf("Starting reaction handler for message %s in channel %s", msg.ID, msg.ChannelID)
+	logger.Debugf("Expecting reaction from user: %s", originalInteraction.Member.User.ID)
 
 	confirmedChan := make(chan bool, 1)
 
 	reactionHandler := func(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
-		logger.Debugf("[PlaylistRestReaction] Received reaction: emoji=%s, messageID=%s, userID=%s", r.Emoji.Name, r.MessageID, r.UserID)
+		logger.Debugf("Received reaction: emoji=%s, messageID=%s, userID=%s", r.Emoji.Name, r.MessageID, r.UserID)
 
 		if r.UserID == s.State.User.ID {
-			logger.Debugf("[PlaylistRestReaction] Ignoring bot's own reaction")
+			logger.Debugf("Ignoring bot's own reaction")
 			return
 		}
 
 		if r.MessageID != msg.ID {
-			logger.Debugf("[PlaylistRestReaction] Message ID mismatch: expected %s, got %s", msg.ID, r.MessageID)
+			logger.Debugf("Message ID mismatch: expected %s, got %s", msg.ID, r.MessageID)
 			return
 		}
 
 		if r.Emoji.Name != "⬇️" {
-			logger.Debugf("[PlaylistRestReaction] Emoji mismatch: expected ⬇️, got %s", r.Emoji.Name)
+			logger.Debugf("Emoji mismatch: expected ⬇️, got %s", r.Emoji.Name)
 			return
 		}
 
 		if r.UserID != originalInteraction.Member.User.ID {
-			logger.Debugf("[PlaylistRestReaction] User ID mismatch: expected %s, got %s", originalInteraction.Member.User.ID, r.UserID)
+			logger.Debugf("User ID mismatch: expected %s, got %s", originalInteraction.Member.User.ID, r.UserID)
 			return
 		}
 
-		logger.Debugf("[PlaylistRestReaction] Confirmed by user %s", r.UserID)
+		logger.Debugf("Confirmed by user %s", r.UserID)
 
 		select {
 		case confirmedChan <- true:
@@ -348,9 +348,9 @@ func handlePlaylistRestConfirmationReaction(s *discordgo.Session, originalIntera
 
 	select {
 	case <-confirmedChan:
-		logger.Debugf("[PlaylistRestReaction] Reaction confirmed, handler complete")
+		logger.Debugf("Reaction confirmed, handler complete")
 	case <-time.After(30 * time.Second):
-		logger.Debugf("[PlaylistRestReaction] Timeout reached, cancelling")
+		logger.Debugf("Timeout reached, cancelling")
 		embed := messages.CreateWarningEmbed(messages.T(originalInteraction.GuildID).Music.PlaylistTimeoutTitle, messages.T(originalInteraction.GuildID).Music.PlaylistTimeoutDesc)
 		if isMessageCommand(originalInteraction) {
 			s.ChannelMessageEditEmbed(msg.ChannelID, msg.ID, embed)
@@ -369,14 +369,14 @@ func addPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreate, play
 	defer lock.Unlock()
 
 	startTime := time.Now()
-	logger.Debugf("[Playlist] Starting playlist processing for %d songs", len(playlistInfo.Videos))
+	logger.Debugf("Starting playlist processing for %d songs", len(playlistInfo.Videos))
 
 	q, _ := queue.GetQueue(i.GuildID, false)
 	isQueueEmpty := q == nil || len(q.Songs) == 0
 
 	if q == nil {
 		if err := queue.CreateQueue(i.GuildID, i.ChannelID, voiceState.ChannelID); err != nil {
-			logger.Errorf("[Playlist] Failed to create queue: %v", err)
+			logger.Errorf("Failed to create queue: %v", err)
 			return
 		}
 	} else {
@@ -384,12 +384,12 @@ func addPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreate, play
 	}
 
 	if isQueueEmpty && len(playlistInfo.Videos) > 0 {
-		logger.Debug("[Playlist] Fast-tracking first song for immediate playback")
+		logger.Debug("Fast-tracking first song for immediate playback")
 
 		addedCount, skippedCount := fastTrackFirstSong(i.GuildID, playlistInfo.Videos, s, i)
 
 		initialTime := time.Since(startTime)
-		logger.Debugf("[Playlist] First song processed in %dms: %d added, %d skipped",
+		logger.Debugf("First song processed in %dms: %d added, %d skipped",
 			initialTime.Milliseconds(), addedCount, skippedCount)
 
 		if addedCount > 0 {
@@ -398,7 +398,7 @@ func addPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreate, play
 
 		if len(playlistInfo.Videos) > 1 && addedCount > 0 {
 			remainingSongs := playlistInfo.Videos[1:]
-			logger.Debugf("[Playlist] Processing remaining %d songs (synchronously to maintain order)", len(remainingSongs))
+			logger.Debugf("Processing remaining %d songs (synchronously to maintain order)", len(remainingSongs))
 			processRemainingPlaylistSongs(s, i, remainingSongs, playlistInfo, startTime, messageID)
 		}
 
@@ -419,7 +419,7 @@ func fastTrackFirstSong(guildID string, songs []*youtube.Song, s *discordgo.Sess
 
 		available, isLive, err := youtube.CheckAvailability(song.URL)
 		if err != nil || !available {
-			logger.Debugf("[Playlist] Skipping unavailable video: %s - %v", song.Title, err)
+			logger.Debugf("Skipping unavailable video: %s - %v", song.Title, err)
 			skippedCount++
 			continue
 		}
@@ -442,17 +442,17 @@ func fastTrackFirstSong(guildID string, songs []*youtube.Song, s *discordgo.Sess
 
 		if err := queue.AddSong(guildID, queueSong, -1); err != nil {
 			if strings.Contains(err.Error(), "already in queue") {
-				logger.Debugf("[Playlist] Skipping duplicate: %s", song.Title)
+				logger.Debugf("Skipping duplicate: %s", song.Title)
 				skippedCount++
 				continue
 			}
-			logger.Errorf("[Playlist] Error adding first song: %v", err)
+			logger.Errorf("Error adding first song: %v", err)
 			skippedCount++
 			continue
 		}
 
 		addedCount = 1
-		logger.Debugf("[Playlist] First song added: %s", song.Title)
+		logger.Debugf("First song added: %s", song.Title)
 		break
 	}
 
@@ -460,7 +460,7 @@ func fastTrackFirstSong(guildID string, songs []*youtube.Song, s *discordgo.Sess
 }
 
 func processRemainingPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreate, songs []*youtube.Song, playlistInfo *youtube.PlaylistInfo, startTime time.Time, messageID string) {
-	logger.Debugf("[Playlist Background] Processing %d remaining songs with worker pool", len(songs))
+	logger.Debugf("Processing %d remaining songs with worker pool", len(songs))
 
 	workerPool := worker.GetWorkerPool()
 
@@ -483,7 +483,7 @@ func processRemainingPlaylistSongs(s *discordgo.Session, i *discordgo.Interactio
 
 		
 		if !result.Available && ytdlpUpdater.IsDefinitiveUnavailableError(result.Error) {
-			logger.Debugf("[Playlist Background] Skipping definitively unavailable: %s - %s",
+			logger.Debugf("Skipping definitively unavailable: %s - %s",
 				song.Title, result.Error)
 			skippedCount++
 			skippedSongs = append(skippedSongs, skippedSong{
@@ -510,25 +510,25 @@ func processRemainingPlaylistSongs(s *discordgo.Session, i *discordgo.Interactio
 
 		if err := queue.AddSong(i.GuildID, queueSong, -1); err != nil {
 			if strings.Contains(err.Error(), "already in queue") {
-				logger.Debugf("[Playlist Background] Skipping duplicate: %s", song.Title)
+				logger.Debugf("Skipping duplicate: %s", song.Title)
 				skippedCount++
 			} else {
-				logger.Errorf("[Playlist Background] Error adding song: %v", err)
+				logger.Errorf("Error adding song: %v", err)
 				skippedCount++
 			}
 			continue
 		}
 
 		addedCount++
-		logger.Debugf("[Playlist Background] Added song %d/%d: %s", addedCount, len(songs), song.Title)
+		logger.Debugf("Added song %d/%d: %s", addedCount, len(songs), song.Title)
 	}
 
 	totalTime := time.Since(startTime)
-	logger.Debugf("[Playlist Background] Completed: %d added, %d skipped in %dms total",
+	logger.Debugf("Completed: %d added, %d skipped in %dms total",
 		addedCount, skippedCount, totalTime.Milliseconds())
 
 	if shutdown.IsShuttingDown() {
-		logger.Debug("[Playlist Background] Skipping completion message - bot is shutting down")
+		logger.Debug("Skipping completion message - bot is shutting down")
 		return
 	}
 
@@ -561,14 +561,14 @@ func processRemainingPlaylistSongs(s *discordgo.Session, i *discordgo.Interactio
 		})
 	}
 	if err != nil {
-		logger.Errorf("[Playlist Background] Failed to update completion message: %v", err)
+		logger.Errorf("Failed to update completion message: %v", err)
 	}
 
 	sendBatchedSkipNotice(s, i.GuildID, i.ChannelID, skippedSongs)
 }
 
 func processAllPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreate, songs []*youtube.Song, playlistInfo *youtube.PlaylistInfo, startTime time.Time, messageID string) {
-	logger.Debugf("[Playlist] Standard processing for %d songs", len(songs))
+	logger.Debugf("Standard processing for %d songs", len(songs))
 
 	workerPool := worker.GetWorkerPool()
 
@@ -582,7 +582,7 @@ func processAllPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	results := workerPool.CheckBatch(jobs)
 	checkTime := time.Since(startTime)
-	logger.Debugf("[Playlist] Availability check completed in %dms", checkTime.Milliseconds())
+	logger.Debugf("Availability check completed in %dms", checkTime.Milliseconds())
 
 	addedCount := 0
 	skippedCount := 0
@@ -593,7 +593,7 @@ func processAllPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreat
 
 		
 		if !result.Available && ytdlpUpdater.IsDefinitiveUnavailableError(result.Error) {
-			logger.Debugf("[Playlist] Skipping definitively unavailable: %s - %s",
+			logger.Debugf("Skipping definitively unavailable: %s - %s",
 				song.Title, result.Error)
 			skippedCount++
 			skippedSongs = append(skippedSongs, skippedSong{
@@ -620,10 +620,10 @@ func processAllPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreat
 
 		if err := queue.AddSong(i.GuildID, queueSong, -1); err != nil {
 			if strings.Contains(err.Error(), "already in queue") {
-				logger.Debugf("[Playlist] Skipping duplicate: %s", song.Title)
+				logger.Debugf("Skipping duplicate: %s", song.Title)
 				skippedCount++
 			} else {
-				logger.Errorf("[Playlist] Error adding song: %v", err)
+				logger.Errorf("Error adding song: %v", err)
 				skippedCount++
 			}
 			continue
@@ -633,10 +633,10 @@ func processAllPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreat
 	}
 
 	totalTime := time.Since(startTime)
-	logger.Debugf("[Playlist] Completed: %d added, %d skipped in %dms", addedCount, skippedCount, totalTime.Milliseconds())
+	logger.Debugf("Completed: %d added, %d skipped in %dms", addedCount, skippedCount, totalTime.Milliseconds())
 
 	if shutdown.IsShuttingDown() {
-		logger.Debug("[Playlist] Skipping completion message - bot is shutting down")
+		logger.Debug("Skipping completion message - bot is shutting down")
 		return
 	}
 
@@ -666,7 +666,7 @@ func processAllPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreat
 		})
 	}
 	if err != nil {
-		logger.Errorf("[Playlist] Failed to update completion message: %v", err)
+		logger.Errorf("Failed to update completion message: %v", err)
 	}
 
 	sendBatchedSkipNotice(s, i.GuildID, i.ChannelID, skippedSongs)
@@ -679,10 +679,10 @@ func processAllPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreat
 	}
 	switch {
 	case p.Paused:
-		logger.Debugf("[Playlist] Resuming playback after playlist addition")
+		logger.Debugf("Resuming playback after playlist addition")
 		go player.Resume(s, i.GuildID)
 	case !p.Playing && !p.Loading:
-		logger.Debugf("[Playlist] Starting playback after playlist addition")
+		logger.Debugf("Starting playback after playlist addition")
 		go player.Play(s, i.GuildID)
 	}
 }

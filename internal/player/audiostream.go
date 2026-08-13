@@ -303,7 +303,7 @@ func (s *audioStream) finishEndState(totalFrames int, tail *monoTail) {
 		}
 		es.silentTailFrames = trail / tailSamplesPerFrame
 		if es.silentTailFrames > 0 {
-			logger.Debugf("[audioStream] trailing silence detected: %d frames (%.1fs)", es.silentTailFrames, float64(es.silentTailFrames)/framesPerSecond)
+			logger.Debugf("trailing silence detected: %d frames (%.1fs)", es.silentTailFrames, float64(es.silentTailFrames)/framesPerSecond)
 		}
 
 		audible := samples[lead : len(samples)-trail]
@@ -311,7 +311,7 @@ func (s *audioStream) finishEndState(totalFrames int, tail *monoTail) {
 			analysis.FirstBeat += float64(lead) / tailSampleRate
 			es.analysis = analysis
 		} else {
-			logger.Debugf("[audioStream] tail analysis failed: %v", err)
+			logger.Debugf("tail analysis failed: %v", err)
 		}
 		es.tailStartFrame = int(startSample / tailSamplesPerFrame)
 	}

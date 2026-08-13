@@ -24,7 +24,7 @@ const (
 func PreCacheNext(guildID string, bitrate int) {
 	q, err := queue.GetQueue(guildID, false)
 	if err != nil || q == nil || len(q.Songs) < 2 {
-		logger.Debugf("[PreCache] No next song to cache for guild: %s", guildID)
+		logger.Debugf("No next song to cache for guild: %s", guildID)
 		return
 	}
 
@@ -32,12 +32,12 @@ func PreCacheNext(guildID string, bitrate int) {
 
 	
 	if nextSong.IsLive {
-		logger.Debugf("[PreCache] Skipping pre-cache for live stream: %s", nextSong.Title)
+		logger.Debugf("Skipping pre-cache for live stream: %s", nextSong.Title)
 		return
 	}
 
 	if nextSong.SeekTime > 0 {
-		logger.Debugf("[PreCache] Skipping pre-cache for song with seek time: %s", nextSong.Title)
+		logger.Debugf("Skipping pre-cache for song with seek time: %s", nextSong.Title)
 		return
 	}
 
@@ -48,11 +48,11 @@ func PreCacheNext(guildID string, bitrate int) {
 	preCacheStoreMu.RUnlock()
 
 	if exists && time.Since(cached.Timestamp) < preCacheTTL {
-		logger.Debugf("[PreCache] Song already cached: %s", nextSong.Title)
+		logger.Debugf("Song already cached: %s", nextSong.Title)
 		return
 	}
 
-	logger.Debugf("[PreCache] Starting pre-cache for: %s", nextSong.Title)
+	logger.Debugf("Starting pre-cache for: %s", nextSong.Title)
 
 	
 	go func() {
@@ -70,7 +70,7 @@ func PreCacheNext(guildID string, bitrate int) {
 		preCacheStoreMu.Unlock()
 
 		if err := preCacheSong(ctx, guildID, nextSong, q.SponsorBlock, bitrate); err != nil {
-			logger.Errorf("[PreCache] Failed to pre-cache %s: %v", nextSong.Title, err)
+			logger.Errorf("Failed to pre-cache %s: %v", nextSong.Title, err)
 		}
 		StartAnalysisBackfill(guildID, bitrate)
 	}()
@@ -98,7 +98,7 @@ func preCacheSong(ctx context.Context, guildID string, song *queue.Song, sponsor
 	cache := preCacheStore[cacheKey]
 	preCacheStoreMu.Unlock()
 
-	logger.Debugf("[PreCache] Cached stream URL for: %s", song.Title)
+	logger.Debugf("Cached stream URL for: %s", song.Title)
 
 	if automix, err := queue.GetAutoMix(guildID); err == nil && automix {
 		analysis := LoadTrackAnalysis(song.URL, AnalysisSegmentHead)
@@ -123,11 +123,11 @@ func preCacheSong(ctx context.Context, guildID string, song *queue.Song, sponsor
 			if !reused {
 				SaveTrackAnalysis(song.URL, AnalysisSegmentHead, analysis)
 			}
-			logger.Debugf("[PreCache] Analyzed head for: %s (BPM %.1f, key %s / %s, confidence %.3f, reused %v)",
+			logger.Debugf("Analyzed head for: %s (BPM %.1f, key %s / %s, confidence %.3f, reused %v)",
 				song.Title, analysis.BPM, keyName(analysis.Tonic, analysis.Minor),
 				camelotCode(analysis.Tonic, analysis.Minor), analysis.KeyConfidence, reused)
 		} else {
-			logger.Debugf("[PreCache] Head analysis failed for %s: %v", song.Title, analyzeErr)
+			logger.Debugf("Head analysis failed for %s: %v", song.Title, analyzeErr)
 		}
 	}
 
@@ -136,7 +136,7 @@ func preCacheSong(ctx context.Context, guildID string, song *queue.Song, sponsor
 		preCacheStoreMu.Lock()
 		if cached, exists := preCacheStore[cacheKey]; exists && cached.Timestamp.Equal(cache.Timestamp) {
 			delete(preCacheStore, cacheKey)
-			logger.Debugf("[PreCache] Expired cache for: %s", song.Title)
+			logger.Debugf("Expired cache for: %s", song.Title)
 		}
 		preCacheStoreMu.Unlock()
 	}()
@@ -239,7 +239,7 @@ func ClearPreCache(guildID string) {
 		}
 	}
 
-	logger.Debugf("[PreCache] Cleared all caches for guild: %s", guildID)
+	logger.Debugf("Cleared all caches for guild: %s", guildID)
 }
 
 func invalidatePreCacheSong(guildID string, songID int) {
@@ -252,7 +252,7 @@ func invalidatePreCacheSong(guildID string, songID int) {
 			cache.CancelFunc()
 		}
 		delete(preCacheStore, cacheKey)
-		logger.Debugf("[PreCache] Invalidated cache for song ID %d in guild: %s", songID, guildID)
+		logger.Debugf("Invalidated cache for song ID %d in guild: %s", songID, guildID)
 	}
 }
 
@@ -271,9 +271,9 @@ func CleanupPreCacheWorker(guildID string) {
 	if cache, exists := preCacheStore[cacheKey]; exists {
 		if cache.CancelFunc != nil {
 			cache.CancelFunc() 
-			logger.Debugf("[PreCache] Cancelled pre-cache worker for: %s (song ID: %d)", nextSong.Title, nextSong.ID)
+			logger.Debugf("Cancelled pre-cache worker for: %s (song ID: %d)", nextSong.Title, nextSong.ID)
 		}
 		delete(preCacheStore, cacheKey)
-		logger.Debugf("[PreCache] Cleaned up pre-cache for guild: %s", guildID)
+		logger.Debugf("Cleaned up pre-cache for guild: %s", guildID)
 	}
 }

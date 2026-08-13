@@ -34,7 +34,7 @@ func HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	prefix := config.GetConfig().Prefix
 	if i.GuildID != "" {
 		if guildPrefix, err := queue.GetGuildPrefix(i.GuildID); err != nil {
-			logger.Debugf("[Help] failed to get guild prefix for %s: %v", i.GuildID, err)
+			logger.Debugf("failed to get guild prefix for %s: %v", i.GuildID, err)
 		} else if guildPrefix != "" {
 			prefix = guildPrefix
 		}
@@ -89,7 +89,7 @@ func HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	
 	msg, err := RespondEmbedWithComponents(s, i, embed, components)
 	if err != nil {
-		logger.Errorf("[Help] Failed to send response: %v", err)
+		logger.Errorf("Failed to send response: %v", err)
 		return err
 	}
 

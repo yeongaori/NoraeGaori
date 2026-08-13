@@ -36,7 +36,7 @@ func HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 	if youtube.IsYouTubeURL(query) {
 		analysis := youtube.AnalyzeYouTubeURL(query)
-		logger.Debugf("[Play] URL analysis: type=%s, videoID=%s, playlistID=%s", analysis.Type, analysis.VideoID, analysis.PlaylistID)
+		logger.Debugf("URL analysis: type=%s, videoID=%s, playlistID=%s", analysis.Type, analysis.VideoID, analysis.PlaylistID)
 
 		if analysis.Type == youtube.URLTypePurePlaylist {
 			return handlePurePlaylist(s, i, query, voiceState)
@@ -47,7 +47,7 @@ func HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		}
 	}
 
-	logger.Debugf("[Play] Searching for: %s", query)
+	logger.Debugf("Searching for: %s", query)
 	song, err := youtube.Search(i.GuildID, query, i.Member.User.Username, i.Member.User.ID)
 	if err != nil {
 		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.SongNotFound))

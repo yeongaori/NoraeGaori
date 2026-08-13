@@ -27,7 +27,7 @@ func PruneTrackAnalysis() error {
 		cutoff, analysisVersion,
 	)
 	if err != nil {
-		logger.Warnf("[Analysis] Failed to prune stored analysis: %v", err)
+		logger.Warnf("Failed to prune stored analysis: %v", err)
 		return err
 	}
 
@@ -35,7 +35,7 @@ func PruneTrackAnalysis() error {
 	database.DB.QueryRow(`SELECT count(*) FROM track_analysis`).Scan(&remaining)
 
 	if removed, err := result.RowsAffected(); err == nil {
-		logger.Infof("[Analysis] Pruned %d stored rows (older than %d days or not version %d), %d remain",
+		logger.Infof("Pruned %d stored rows (older than %d days or not version %d), %d remain",
 			removed, analysisRetentionDays, analysisVersion, remaining)
 	}
 	return nil
@@ -61,7 +61,7 @@ func SaveTrackAnalysis(url, segment string, analysis *TrackAnalysis) error {
 		analysis.DownbeatPhase, analysisVersion, time.Now().Unix(),
 	)
 	if err != nil {
-		logger.Warnf("[Analysis] Failed to save %s analysis: %v", segment, err)
+		logger.Warnf("Failed to save %s analysis: %v", segment, err)
 	}
 	return err
 }
@@ -87,11 +87,11 @@ func LoadTrackAnalysis(url, segment string) *TrackAnalysis {
 		return nil
 	}
 	if err != nil {
-		logger.Warnf("[Analysis] Failed to load %s analysis: %v", segment, err)
+		logger.Warnf("Failed to load %s analysis: %v", segment, err)
 		return nil
 	}
 	if version != analysisVersion {
-		logger.Debugf("[Analysis] Discarding %s row for %s: stored version %d, current %d",
+		logger.Debugf("Discarding %s row for %s: stored version %d, current %d",
 			segment, url, version, analysisVersion)
 		return nil
 	}

@@ -50,7 +50,7 @@ func HandleResume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 	
 	if currentSong.IsLive {
-		logger.Debugf("[Resume] Current song is a live stream, checking if it's still live")
+		logger.Debugf("Current song is a live stream, checking if it's still live")
 
 		DeferResponse(s, i)
 
@@ -65,10 +65,10 @@ func HandleResume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 		isStillLive, err := youtube.CheckIfLive(currentSong.URL)
 		if err != nil {
-			logger.Warnf("[Resume] Error checking live stream status: %v", err)
+			logger.Warnf("Error checking live stream status: %v", err)
 			
 		} else if !isStillLive {
-			logger.Infof("[Resume] Live stream has ended, skipping to next song")
+			logger.Infof("Live stream has ended, skipping to next song")
 
 			if err := queue.RemoveSong(i.GuildID, 0); err != nil {
 				UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.PlaybackStartError))
@@ -95,7 +95,7 @@ func HandleResume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 			return nil
 		}
 
-		logger.Debugf("[Resume] Live stream is still live, proceeding with resume")
+		logger.Debugf("Live stream is still live, proceeding with resume")
 
 		successEmbed := messages.CreateSuccessEmbed(messages.T(i.GuildID).Music.LiveStartTitle, messages.T(i.GuildID).Music.LiveStartDesc)
 		UpdateResponseEmbed(s, i, successEmbed)

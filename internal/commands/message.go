@@ -20,7 +20,7 @@ func CreatePseudoInteraction(s *discordgo.Session, m *discordgo.MessageCreate, c
 	
 	member, err := s.GuildMember(m.GuildID, m.Author.ID)
 	if err != nil {
-		logger.Errorf("[MessageCommand] Failed to get member: %v", err)
+		logger.Errorf("Failed to get member: %v", err)
 		member = &discordgo.Member{
 			User: m.Author,
 		}
@@ -82,7 +82,7 @@ func parseCommandOptions(cmd *Command, args []string) []*discordgo.ApplicationCo
 			intVal, err := strconv.ParseInt(args[argIndex], 10, 64)
 			if err != nil {
 				
-				logger.Warnf("[MessageCommand] Invalid integer: %s", args[argIndex])
+				logger.Warnf("Invalid integer: %s", args[argIndex])
 				argIndex++
 				continue
 			}
@@ -140,9 +140,9 @@ func (mr *MessageResponse) SendEmbed(embed *discordgo.MessageEmbed) {
 	})
 	if err == nil {
 		mr.Message = msg 
-		logger.Debugf("[MessageResponse] Sent reply and stored message ID: %s", msg.ID)
+		logger.Debugf("Sent reply and stored message ID: %s", msg.ID)
 	} else {
-		logger.Errorf("[MessageResponse] Failed to send embed reply: %v", err)
+		logger.Errorf("Failed to send embed reply: %v", err)
 	}
 }
 

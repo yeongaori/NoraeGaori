@@ -21,7 +21,7 @@ func HandleNormalization(s *discordgo.Session, i *discordgo.InteractionCreate) e
 		
 		currentNormalization, err := queue.GetNormalization(i.GuildID)
 		if err != nil {
-			logger.Errorf("[Normalization] Failed to get current state: %v", err)
+			logger.Errorf("Failed to get current state: %v", err)
 			currentNormalization = false
 		}
 		enabled = !currentNormalization

@@ -31,14 +31,14 @@ func main() {
 	logger.Initialize(debugMode)
 	defer logger.Close()
 
-	logger.Debug("[Database] Initializing database...")
+	logger.Debug("Initializing database...")
 	if err := database.Initialize(); err != nil {
 		logger.Errorf("Failed to initialize database: %v", err)
 		os.Exit(1)
 	}
 	defer database.Close()
 
-	logger.Debug("[Database] Clearing stale playback states...")
+	logger.Debug("Clearing stale playback states...")
 	if err := clearStalePlaybackStates(); err != nil {
 		logger.Warnf("Failed to clear stale states: %v", err)
 	}
@@ -47,9 +47,9 @@ func main() {
 		logger.Warnf("Failed to prune stored track analysis: %v", err)
 	}
 
-	logger.Debug("[Database] Loading configuration...")
+	logger.Debug("Loading configuration...")
 	if err := config.Initialize(); err != nil {
-		logger.Errorf("[Database] Failed to initialize config: %v", err)
+		logger.Errorf("Failed to initialize config: %v", err)
 		os.Exit(1)
 	}
 	defer config.Close()
@@ -81,7 +81,7 @@ func main() {
 		commands.ReloadAliases()
 	})
 
-	logger.Debug("[yt-dlp] Initializing yt-dlp version manager...")
+	logger.Debug("Initializing yt-dlp version manager...")
 	if err := ytdlpUpdater.InitVersionManager(); err != nil {
 		logger.Warnf("Failed to initialize yt-dlp version manager: %v", err)
 	}
@@ -112,7 +112,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	logger.Debug("[Bot] Bot stopped successfully")
+	logger.Debug("Bot stopped successfully")
 }
 
 func clearStalePlaybackStates() error {
@@ -121,7 +121,7 @@ func clearStalePlaybackStates() error {
 	if err != nil {
 		return fmt.Errorf("failed to clear stale states: %w", err)
 	}
-	logger.Debug("[Database] Cleared stale playback states from database")
+	logger.Debug("Cleared stale playback states from database")
 	return nil
 }
 

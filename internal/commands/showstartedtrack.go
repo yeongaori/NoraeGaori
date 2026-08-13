@@ -20,7 +20,7 @@ func HandleShowStartedTrack(s *discordgo.Session, i *discordgo.InteractionCreate
 		
 		currentShowStartedTrack, err := queue.GetShowStartedTrack(i.GuildID)
 		if err != nil {
-			logger.Errorf("[ShowStartedTrack] Failed to get current state: %v", err)
+			logger.Errorf("Failed to get current state: %v", err)
 			currentShowStartedTrack = true
 		}
 		enabled = !currentShowStartedTrack

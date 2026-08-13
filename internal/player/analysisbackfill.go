@@ -124,7 +124,7 @@ func StopAnalysisBackfill(guildID string) {
 
 	if running {
 		worker.cancel()
-		logger.Debugf("[Backfill] Stopped analysis backfill for guild: %s", guildID)
+		logger.Debugf("Stopped analysis backfill for guild: %s", guildID)
 	}
 }
 
@@ -148,7 +148,7 @@ func runAnalysisBackfill(ctx context.Context, guildID string, bitrate int) {
 	}
 
 	if total > 0 {
-		logger.Debugf("[Backfill] Analyzed %d songs for guild: %s", total, guildID)
+		logger.Debugf("Analyzed %d songs for guild: %s", total, guildID)
 	}
 }
 
@@ -175,7 +175,7 @@ func runAnalysisBackfillPass(ctx context.Context, guildID string, bitrate int) (
 			continue
 		}
 		if TransitionPending(guildID) {
-			logger.Debugf("[Backfill] Deferring pass, transition pending for guild: %s", guildID)
+			logger.Debugf("Deferring pass, transition pending for guild: %s", guildID)
 			return analyzed, nil
 		}
 		if song.IsLive {
@@ -232,7 +232,7 @@ func analyzeBackfillSong(ctx context.Context, guildID string, song *queue.Song, 
 			if ctx.Err() == nil {
 				markAnalysisFailed(song.URL)
 			}
-			logger.Debugf("[Backfill] Stream URL failed for %s: %v", song.Title, err)
+			logger.Debugf("Stream URL failed for %s: %v", song.Title, err)
 			return nil
 		}
 
@@ -241,12 +241,12 @@ func analyzeBackfillSong(ctx context.Context, guildID string, song *queue.Song, 
 			if ctx.Err() == nil {
 				markAnalysisFailed(song.URL)
 			}
-			logger.Debugf("[Backfill] Head analysis failed for %s: %v", song.Title, err)
+			logger.Debugf("Head analysis failed for %s: %v", song.Title, err)
 			return nil
 		}
 
 		SaveTrackAnalysis(song.URL, AnalysisSegmentHead, analysis)
-		logger.Debugf("[Backfill] Analyzed head for: %s (BPM %.1f, key %s / %s, confidence %.3f)",
+		logger.Debugf("Analyzed head for: %s (BPM %.1f, key %s / %s, confidence %.3f)",
 			song.Title, analysis.BPM, keyName(analysis.Tonic, analysis.Minor),
 			camelotCode(analysis.Tonic, analysis.Minor), analysis.KeyConfidence)
 		analyzed = true

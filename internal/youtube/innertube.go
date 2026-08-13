@@ -109,9 +109,9 @@ func fetchAPIKey() (string, error) {
 func initInnertubeClient() {
 	apiKey, err := fetchAPIKey()
 	if err != nil {
-		logger.Warnf("[Innertube] Failed to fetch API key, will try without: %v", err)
+		logger.Warnf("Failed to fetch API key, will try without: %v", err)
 	} else {
-		logger.Debugf("[Innertube] Fetched API key from YouTube")
+		logger.Debugf("Fetched API key from YouTube")
 	}
 
 	innertubeClient = &InnertubeClient{
@@ -123,7 +123,7 @@ func initInnertubeClient() {
 		clientName:    "IOS",
 		clientVersion: "20.03.02",
 	}
-	logger.Debugf("[Innertube] Client initialized")
+	logger.Debugf("Client initialized")
 }
 
 func getInnertubeClient() *InnertubeClient {
@@ -218,7 +218,7 @@ func (c *InnertubeClient) CheckAvailability(url string) (bool, bool, error) {
 	}
 
 	duration := time.Since(startTime)
-	logger.Debugf("[Innertube] CheckAvailability completed in %v for video: %s", duration, videoID)
+	logger.Debugf("CheckAvailability completed in %v for video: %s", duration, videoID)
 
 	
 	status := resp.PlayabilityStatus.Status
@@ -233,7 +233,7 @@ func (c *InnertubeClient) CheckAvailability(url string) (bool, bool, error) {
 	reason := resp.PlayabilityStatus.Reason
 	errorMsg := classifyRestriction("", status, reason, resp.PlayabilityStatus.Messages)
 
-	logger.Debugf("[Innertube] Video unavailable: %s (status: %s, reason: %s)", videoID, status, reason)
+	logger.Debugf("Video unavailable: %s (status: %s, reason: %s)", videoID, status, reason)
 	return false, false, errors.New(errorMsg)
 }
 
@@ -259,7 +259,7 @@ func (c *InnertubeClient) GetVideoInfo(guildID, url, requesterName, requesterID 
 	if status != "OK" {
 		reason := resp.PlayabilityStatus.Reason
 		errorMsg := classifyRestriction(guildID, status, reason, resp.PlayabilityStatus.Messages)
-		logger.Debugf("[Innertube] Video unavailable: %s (%v)", errorMsg, duration)
+		logger.Debugf("Video unavailable: %s (%v)", errorMsg, duration)
 		return nil, &VideoError{
 			Message: errorMsg,
 			Reason:  reason,
@@ -301,7 +301,7 @@ func (c *InnertubeClient) GetVideoInfo(guildID, url, requesterName, requesterID 
 		RequestedByID: requesterID,
 	}
 
-	logger.Debugf("[Innertube] Retrieved video: %s (%s) in %v", song.Title, song.Duration, duration)
+	logger.Debugf("Retrieved video: %s (%s) in %v", song.Title, song.Duration, duration)
 	return song, nil
 }
 
@@ -327,7 +327,7 @@ func (c *InnertubeClient) CheckVideoAvailability(guildID, url string) (*Availabi
 	if status == "OK" {
 		
 		isLive := resp.VideoDetails.IsLiveContent || resp.VideoDetails.IsLive
-		logger.Debugf("[Innertube] \"%s\" is available (%v)", resp.VideoDetails.Title, duration)
+		logger.Debugf("\"%s\" is available (%v)", resp.VideoDetails.Title, duration)
 		return &AvailabilityResult{
 			Available: true,
 			IsLive:    isLive,
@@ -338,7 +338,7 @@ func (c *InnertubeClient) CheckVideoAvailability(guildID, url string) (*Availabi
 	reason := resp.PlayabilityStatus.Reason
 	errorMsg := classifyRestriction(guildID, status, reason, resp.PlayabilityStatus.Messages)
 
-	logger.Debugf("[Innertube] Video unavailable: %s (%v)", errorMsg, duration)
+	logger.Debugf("Video unavailable: %s (%v)", errorMsg, duration)
 	return &AvailabilityResult{
 		Available: false,
 		Error:     errorMsg,
