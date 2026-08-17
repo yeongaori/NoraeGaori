@@ -2,6 +2,7 @@
 - [ ] Add Settings Panel using Modal components
 - [x] Fix issue where live streams stop playing before reaching the end 
 - [x] Derive log tags automatically instead of typing brackets by hand
+- [x] Suggest YouTube autocomplete options while typing a query
 - [x] AutoMix Improvements
   - [x] BPM Detection
   - [x] Pitch Detection

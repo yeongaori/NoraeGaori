@@ -15,14 +15,15 @@ import (
 )
 
 type Command struct {
-	Name        string
-	Description string
-	Options     []*discordgo.ApplicationCommandOption
-	Handler     func(s *discordgo.Session, i *discordgo.InteractionCreate) error
-	AdminOnly   bool
-	TextOnly    bool
-	Usage       string
-	Example     string
+	Name                string
+	Description         string
+	Options             []*discordgo.ApplicationCommandOption
+	Handler             func(s *discordgo.Session, i *discordgo.InteractionCreate) error
+	AutocompleteHandler func(request AutocompleteRequest) []*discordgo.ApplicationCommandOptionChoice
+	AdminOnly           bool
+	TextOnly            bool
+	Usage               string
+	Example             string
 }
 
 var (
@@ -129,16 +130,18 @@ func InitializeCommands() {
 		Description: cmd("play").Description,
 		Options: []*discordgo.ApplicationCommandOption{
 			{
-				Type:        discordgo.ApplicationCommandOptionString,
-				Name:        "query",
-				Description: cmd("play").Options["query"],
-				Required:    true,
+				Type:         discordgo.ApplicationCommandOptionString,
+				Name:         "query",
+				Description:  cmd("play").Options["query"],
+				Required:     true,
+				Autocomplete: true,
 			},
 		},
-		Handler:  HandlePlay,
-		TextOnly: false,
-		Usage:    cmd("play").Usage,
-		Example:  cmd("play").Example,
+		Handler:             HandlePlay,
+		AutocompleteHandler: autocompleteVideoResults,
+		TextOnly:            false,
+		Usage:               cmd("play").Usage,
+		Example:             cmd("play").Example,
 	})
 	registerCommandAliases("play", cmd("play"))
 
@@ -147,16 +150,18 @@ func InitializeCommands() {
 		Description: cmd("playnext").Description,
 		Options: []*discordgo.ApplicationCommandOption{
 			{
-				Type:        discordgo.ApplicationCommandOptionString,
-				Name:        "query",
-				Description: cmd("playnext").Options["query"],
-				Required:    true,
+				Type:         discordgo.ApplicationCommandOptionString,
+				Name:         "query",
+				Description:  cmd("playnext").Options["query"],
+				Required:     true,
+				Autocomplete: true,
 			},
 		},
-		Handler:  HandlePlayNext,
-		TextOnly: false,
-		Usage:    cmd("playnext").Usage,
-		Example:  cmd("playnext").Example,
+		Handler:             HandlePlayNext,
+		AutocompleteHandler: autocompleteVideoResults,
+		TextOnly:            false,
+		Usage:               cmd("playnext").Usage,
+		Example:             cmd("playnext").Example,
 	})
 	registerCommandAliases("playnext", cmd("playnext"))
 
@@ -165,16 +170,18 @@ func InitializeCommands() {
 		Description: cmd("search").Description,
 		Options: []*discordgo.ApplicationCommandOption{
 			{
-				Type:        discordgo.ApplicationCommandOptionString,
-				Name:        "query",
-				Description: cmd("search").Options["query"],
-				Required:    true,
+				Type:         discordgo.ApplicationCommandOptionString,
+				Name:         "query",
+				Description:  cmd("search").Options["query"],
+				Required:     true,
+				Autocomplete: true,
 			},
 		},
-		Handler:  HandleSearch,
-		TextOnly: false,
-		Usage:    cmd("search").Usage,
-		Example:  cmd("search").Example,
+		Handler:             HandleSearch,
+		AutocompleteHandler: autocompleteSuggestTerms,
+		TextOnly:            false,
+		Usage:               cmd("search").Usage,
+		Example:             cmd("search").Example,
 	})
 	registerCommandAliases("search", cmd("search"))
 
@@ -947,6 +954,11 @@ func diffCommandSets(desired, existing map[string]string) (added, updated, remov
 }
 
 func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if i.Type == discordgo.InteractionApplicationCommandAutocomplete {
+		HandleAutocomplete(s, i)
+		return
+	}
+
 	if i.Type != discordgo.InteractionApplicationCommand {
 		return
 	}

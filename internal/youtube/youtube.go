@@ -294,11 +294,10 @@ func Search(guildID, query string, requesterName, requesterID string) (*Song, er
 	return GetVideoInfo(guildID, videoURL, requesterName, requesterID)
 }
 
-func SearchMultiple(query string, limit int) ([]SearchResult, error) {
-	logger.Debugf("Searching YouTube for multiple results: %s", query)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+func SearchMultipleContext(ctx context.Context, query string, limit int) ([]SearchResult, error) {
+	if searchClient == nil {
+		return nil, fmt.Errorf("search client not initialized")
+	}
 
 	response, err := searchClient.Search(ctx, query)
 	if err != nil {
@@ -309,12 +308,20 @@ func SearchMultiple(query string, limit int) ([]SearchResult, error) {
 		return nil, fmt.Errorf("no results found")
 	}
 
-	
-	if len(response.Results) > limit {
+	if limit > 0 && len(response.Results) > limit {
 		return response.Results[:limit], nil
 	}
 
 	return response.Results, nil
+}
+
+func SearchMultiple(query string, limit int) ([]SearchResult, error) {
+	logger.Debugf("Searching YouTube for multiple results: %s", query)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	return SearchMultipleContext(ctx, query, limit)
 }
 
 func CheckVideoAvailability(guildID, url string) (*AvailabilityResult, error) {

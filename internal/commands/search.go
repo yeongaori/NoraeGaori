@@ -57,10 +57,7 @@ func HandleSearch(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	selectOptions := make([]discordgo.SelectMenuOption, 0, len(results))
 	for idx, result := range results {
 		titleWithNumber := fmt.Sprintf("%d. %s", idx+1, result.Title)
-		label := titleWithNumber
-		if len(label) > 100 {
-			label = titleWithNumber[:97] + "..."
-		}
+		label := truncateRunes(titleWithNumber, 100)
 
 		selectOptions = append(selectOptions, discordgo.SelectMenuOption{
 			Label:       label,
