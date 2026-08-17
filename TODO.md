@@ -3,6 +3,7 @@
 - [x] Fix issue where live streams stop playing before reaching the end 
 - [x] Derive log tags automatically instead of typing brackets by hand
 - [x] Suggest YouTube autocomplete options while typing a query
+- [x] Fix autocomplete leaving stale suggestions on the last typed keystroke
 - [x] AutoMix Improvements
   - [x] BPM Detection
   - [x] Pitch Detection

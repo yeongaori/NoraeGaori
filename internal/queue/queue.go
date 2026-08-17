@@ -289,6 +289,10 @@ var (
 	prefixCache       = make(map[string]string)
 	prefixCacheLoaded = make(map[string]bool)
 	prefixCacheMux    sync.RWMutex
+
+	languageCache       = make(map[string]string)
+	languageCacheLoaded = make(map[string]bool)
+	languageCacheMux    sync.RWMutex
 )
 
 func acquireLock(guildID string) *sync.Mutex {
@@ -560,6 +564,7 @@ func DeleteGuildData(guildID string) error {
 	
 	InvalidateCache(guildID)
 	invalidatePrefixCache(guildID)
+	invalidateLanguageCache(guildID)
 	logger.Infof("All data deleted for guild: %s", guildID)
 	return nil
 }
@@ -1740,24 +1745,45 @@ func SetTrimSilence(guildID string, enabled bool) error {
 	return nil
 }
 
+func invalidateLanguageCache(guildID string) {
+	languageCacheMux.Lock()
+	defer languageCacheMux.Unlock()
+	delete(languageCache, guildID)
+	delete(languageCacheLoaded, guildID)
+}
+
 func GetGuildLanguage(guildID string) (string, error) {
+	if guildID == "" {
+		return "", nil
+	}
+
+	languageCacheMux.RLock()
+	if languageCacheLoaded[guildID] {
+		val := languageCache[guildID]
+		languageCacheMux.RUnlock()
+		return val, nil
+	}
+	languageCacheMux.RUnlock()
+
 	var lang sql.NullString
 	err := database.DB.QueryRow(
 		`SELECT language FROM guild_settings WHERE guild_id = ?`,
 		guildID,
 	).Scan(&lang)
 
-	if err == sql.ErrNoRows {
-		return "", nil
-	}
-	if err != nil {
+	value := ""
+	if err == nil && lang.Valid {
+		value = lang.String
+	} else if err != nil && err != sql.ErrNoRows {
 		return "", fmt.Errorf("failed to get guild language: %w", err)
 	}
 
-	if !lang.Valid {
-		return "", nil
-	}
-	return lang.String, nil
+	languageCacheMux.Lock()
+	languageCache[guildID] = value
+	languageCacheLoaded[guildID] = true
+	languageCacheMux.Unlock()
+
+	return value, nil
 }
 
 func SetGuildLanguage(guildID, lang string) error {
@@ -1780,6 +1806,11 @@ func SetGuildLanguage(guildID, lang string) error {
 	if err != nil {
 		return fmt.Errorf("failed to set guild language: %w", err)
 	}
+
+	languageCacheMux.Lock()
+	languageCache[guildID] = lang
+	languageCacheLoaded[guildID] = true
+	languageCacheMux.Unlock()
 
 	InvalidateCache(guildID)
 	logger.Debugf("Set language=%q for guild: %s", lang, guildID)

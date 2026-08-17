@@ -110,8 +110,15 @@ func autocompleteSuggestTerms(request AutocompleteRequest) []*discordgo.Applicat
 		return cached
 	}
 
-	if !allowAutocompleteFetch(request.UserID, request.CommandName) {
+	generation := beginAutocompleteFetch(request.UserID, request.GuildID, request.CommandName)
+	time.Sleep(autocompleteDebounceDelay)
+
+	if !isLatestAutocompleteFetch(request.UserID, request.GuildID, request.CommandName, generation) {
 		return loadNearestAutocompleteChoices("suggest", language, normalized)
+	}
+
+	if cached, found := loadAutocompleteChoices(key); found {
+		return cached
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), autocompleteFetchTimeout)
@@ -157,8 +164,15 @@ func autocompleteVideoResults(request AutocompleteRequest) []*discordgo.Applicat
 		return cached
 	}
 
-	if !allowAutocompleteFetch(request.UserID, request.CommandName) {
+	generation := beginAutocompleteFetch(request.UserID, request.GuildID, request.CommandName)
+	time.Sleep(autocompleteDebounceDelay)
+
+	if !isLatestAutocompleteFetch(request.UserID, request.GuildID, request.CommandName, generation) {
 		return loadNearestAutocompleteChoices("video", language, normalized)
+	}
+
+	if cached, found := loadAutocompleteChoices(key); found {
+		return cached
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), autocompleteFetchTimeout)

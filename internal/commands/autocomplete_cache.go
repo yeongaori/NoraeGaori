@@ -10,12 +10,17 @@ import (
 )
 
 const (
-	autocompleteCacheTTL         = 5 * time.Minute
-	autocompleteCacheCapacity    = 512
-	autocompleteMinFetchInterval = 350 * time.Millisecond
-	autocompleteGateCapacity     = 1024
-	autocompleteGateIdlePeriod   = 10 * time.Minute
+	autocompleteCacheTTL       = 5 * time.Minute
+	autocompleteCacheCapacity  = 512
+	autocompleteDebounceDelay  = 250 * time.Millisecond
+	autocompleteGateCapacity   = 1024
+	autocompleteGateIdlePeriod = 10 * time.Minute
 )
+
+type autocompleteGateState struct {
+	generation uint64
+	lastSeen   time.Time
+}
 
 type autocompleteCacheEntry struct {
 	key       string
@@ -29,7 +34,7 @@ var (
 	autocompleteCacheOrder   = list.New()
 	autocompleteCacheMutex   sync.Mutex
 
-	autocompleteGates      = make(map[string]time.Time)
+	autocompleteGates      = make(map[string]*autocompleteGateState)
 	autocompleteGatesMutex sync.Mutex
 )
 
@@ -57,7 +62,10 @@ func loadAutocompleteChoices(key string) ([]*discordgo.ApplicationCommandOptionC
 	}
 
 	autocompleteCacheOrder.MoveToFront(entry.element)
-	return entry.choices, true
+
+	choices := make([]*discordgo.ApplicationCommandOptionChoice, len(entry.choices))
+	copy(choices, entry.choices)
+	return choices, true
 }
 
 func saveAutocompleteChoices(key string, choices []*discordgo.ApplicationCommandOptionChoice) {
@@ -102,25 +110,44 @@ func loadNearestAutocompleteChoices(kind, language, query string) []*discordgo.A
 	return nil
 }
 
-func allowAutocompleteFetch(userID, commandName string) bool {
-	key := userID + "|" + commandName
+func autocompleteGateKey(userID, guildID, commandName string) string {
+	return userID + "|" + guildID + "|" + commandName
+}
+
+func beginAutocompleteFetch(userID, guildID, commandName string) uint64 {
+	key := autocompleteGateKey(userID, guildID, commandName)
 
 	autocompleteGatesMutex.Lock()
 	defer autocompleteGatesMutex.Unlock()
 
 	now := time.Now()
-	if last, exists := autocompleteGates[key]; exists && now.Sub(last) < autocompleteMinFetchInterval {
-		return false
-	}
-
-	if len(autocompleteGates) >= autocompleteGateCapacity {
-		for gateKey, last := range autocompleteGates {
-			if now.Sub(last) > autocompleteGateIdlePeriod {
-				delete(autocompleteGates, gateKey)
+	state, exists := autocompleteGates[key]
+	if !exists {
+		if len(autocompleteGates) >= autocompleteGateCapacity {
+			for gateKey, gateState := range autocompleteGates {
+				if now.Sub(gateState.lastSeen) > autocompleteGateIdlePeriod {
+					delete(autocompleteGates, gateKey)
+				}
 			}
 		}
+		state = &autocompleteGateState{}
+		autocompleteGates[key] = state
 	}
 
-	autocompleteGates[key] = now
-	return true
+	state.generation++
+	state.lastSeen = now
+	return state.generation
+}
+
+func isLatestAutocompleteFetch(userID, guildID, commandName string, generation uint64) bool {
+	key := autocompleteGateKey(userID, guildID, commandName)
+
+	autocompleteGatesMutex.Lock()
+	defer autocompleteGatesMutex.Unlock()
+
+	state, exists := autocompleteGates[key]
+	if !exists {
+		return false
+	}
+	return state.generation == generation
 }
