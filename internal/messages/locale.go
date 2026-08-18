@@ -194,6 +194,8 @@ type VoteMessages struct {
 	More             string `json:"more"`
 	Expired          string `json:"expired"`
 	StopAlreadyVoted string `json:"stop_already_voted"`
+	InProgress       string `json:"in_progress"`
+	Cancelled        string `json:"cancelled"`
 }
 
 type HelpMessages struct {

@@ -4,6 +4,7 @@
 - [x] Derive log tags automatically instead of typing brackets by hand
 - [x] Suggest YouTube autocomplete options while typing a query
 - [x] Fix autocomplete leaving stale suggestions on the last typed keystroke
+- [x] Strip handled reactions and block duplicate votes of one type
 - [x] AutoMix Improvements
   - [x] BPM Detection
   - [x] Pitch Detection

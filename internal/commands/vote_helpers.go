@@ -111,6 +111,7 @@ type voteSession struct {
 	messageID      string
 	channelID      string
 	voiceChannelID string
+	resolved       bool
 }
 
 var (
@@ -125,11 +126,72 @@ var (
 
 const voteExpirationTime = 60 * time.Second
 
-func startVoteWithReaction(s *discordgo.Session, guildID, title, emoji string, vs *voteSession, votesMap map[string]*voteSession, votesMutex *sync.RWMutex, onVotePassed func(currentVotes int)) {
-	if err := s.MessageReactionAdd(vs.channelID, vs.messageID, emoji); err != nil {
-		logger.Errorf("Failed to add reaction to message: %v", err)
-	}
+func activeVoteFor(votesMap map[string]*voteSession, votesMutex *sync.RWMutex, guildID string) *voteSession {
+	votesMutex.RLock()
+	defer votesMutex.RUnlock()
+	return votesMap[guildID]
+}
 
+func voteMessageURL(guildID, channelID, messageID string) string {
+	return fmt.Sprintf("https://discord.com/channels/%s/%s/%s", guildID, channelID, messageID)
+}
+
+func claimVoteSession(votesMap map[string]*voteSession, votesMutex *sync.RWMutex, guildID string, session *voteSession) *voteSession {
+	votesMutex.Lock()
+	defer votesMutex.Unlock()
+
+	if existing := votesMap[guildID]; existing != nil {
+		return existing
+	}
+	votesMap[guildID] = session
+	return nil
+}
+
+func releaseVoteSession(votesMap map[string]*voteSession, votesMutex *sync.RWMutex, guildID string, session *voteSession) {
+	votesMutex.Lock()
+	defer votesMutex.Unlock()
+
+	if votesMap[guildID] == session {
+		delete(votesMap, guildID)
+	}
+}
+
+func replyVoteInProgress(s *discordgo.Session, i *discordgo.InteractionCreate, title string, vs *voteSession) {
+	description := messages.T(i.GuildID).Votes.InProgress
+	if vs.messageID != "" && vs.channelID != "" {
+		description = fmt.Sprintf("%s\n%s", description, voteMessageURL(i.GuildID, vs.channelID, vs.messageID))
+	}
+	UpdateResponseEmbed(s, i, messages.CreateWarningEmbed(title, description))
+}
+
+func (vs *voteSession) castVote(userID string) (int, bool) {
+	if vs.votes[userID] {
+		return len(vs.votes), false
+	}
+	vs.votes[userID] = true
+	return len(vs.votes), true
+}
+
+func (vs *voteSession) withdrawVote(userID string) (int, bool) {
+	if !vs.votes[userID] {
+		return len(vs.votes), false
+	}
+	delete(vs.votes, userID)
+	return len(vs.votes), true
+}
+
+func renderVoteProgress(s *discordgo.Session, guildID, title, emoji string, vs *voteSession, currentVotes, requiredVotes int) {
+	remaining := int(voteExpirationTime.Seconds()) - int(time.Since(vs.startTime).Seconds())
+	if remaining < 0 {
+		remaining = 0
+	}
+	embed := messages.CreateWarningEmbed(title, "")
+	messages.AddField(embed, messages.T(guildID).Fields.CurrentVote, fmt.Sprintf("%d/%d", currentVotes, requiredVotes), true)
+	messages.SetFooter(embed, fmt.Sprintf(messages.T(guildID).Footers.VoteReaction, emoji, remaining))
+	s.ChannelMessageEditEmbed(vs.channelID, vs.messageID, embed)
+}
+
+func startVoteWithReaction(s *discordgo.Session, guildID, title, emoji string, vs *voteSession, votesMap map[string]*voteSession, votesMutex *sync.RWMutex, onVotePassed func(currentVotes int)) {
 	voteDone := make(chan bool, 1)
 
 	reactionHandler := func(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
@@ -145,28 +207,31 @@ func startVoteWithReaction(s *discordgo.Session, guildID, title, emoji string, v
 
 		member, err := s.State.Member(guildID, r.UserID)
 		if err != nil || member.User.Bot {
+			removeUserReaction(s, vs.channelID, vs.messageID, emoji, r.UserID)
 			return
 		}
 
 		voiceState, err := s.State.VoiceState(guildID, r.UserID)
 		if err != nil || voiceState.ChannelID != vs.voiceChannelID {
+			removeUserReaction(s, vs.channelID, vs.messageID, emoji, r.UserID)
 			return
 		}
 
 		votesMutex.Lock()
 		if votesMap[guildID] != vs {
 			votesMutex.Unlock()
+			removeUserReaction(s, vs.channelID, vs.messageID, emoji, r.UserID)
 			return
 		}
-		if vs.votes[r.UserID] {
+		currentVotes, counted := vs.castVote(r.UserID)
+		if !counted {
 			votesMutex.Unlock()
 			return
 		}
-		vs.votes[r.UserID] = true
-		currentVotes := len(vs.votes)
 		requiredVotes := vs.requiredVotes
 
 		if currentVotes >= requiredVotes {
+			vs.resolved = true
 			delete(votesMap, guildID)
 			votesMutex.Unlock()
 
@@ -179,27 +244,59 @@ func startVoteWithReaction(s *discordgo.Session, guildID, title, emoji string, v
 		} else {
 			votesMutex.Unlock()
 
-			remaining := int(voteExpirationTime.Seconds()) - int(time.Since(vs.startTime).Seconds())
-			if remaining < 0 {
-				remaining = 0
-			}
-			embed := messages.CreateWarningEmbed(title, "")
-			messages.AddField(embed, messages.T(guildID).Fields.CurrentVote, fmt.Sprintf("%d/%d", currentVotes, requiredVotes), true)
-			messages.SetFooter(embed, fmt.Sprintf(messages.T(guildID).Footers.VoteReaction, emoji, remaining))
-			s.ChannelMessageEditEmbed(vs.channelID, vs.messageID, embed)
+			renderVoteProgress(s, guildID, title, emoji, vs, currentVotes, requiredVotes)
 		}
 	}
 
-	removeHandler := s.AddHandler(reactionHandler)
-	defer removeHandler()
+	reactionRemoveHandler := func(s *discordgo.Session, r *discordgo.MessageReactionRemove) {
+		if r.UserID == s.State.User.ID {
+			return
+		}
+		if r.MessageID != vs.messageID {
+			return
+		}
+		if r.Emoji.Name != emoji {
+			return
+		}
+
+		votesMutex.Lock()
+		if votesMap[guildID] != vs {
+			votesMutex.Unlock()
+			return
+		}
+		currentVotes, withdrawn := vs.withdrawVote(r.UserID)
+		if !withdrawn {
+			votesMutex.Unlock()
+			return
+		}
+		requiredVotes := vs.requiredVotes
+		votesMutex.Unlock()
+
+		renderVoteProgress(s, guildID, title, emoji, vs, currentVotes, requiredVotes)
+	}
+
+	removeAddHandler := s.AddHandler(reactionHandler)
+	defer removeAddHandler()
+	removeRemoveHandler := s.AddHandler(reactionRemoveHandler)
+	defer removeRemoveHandler()
+
+	if err := s.MessageReactionAdd(vs.channelID, vs.messageID, emoji); err != nil {
+		logger.Errorf("Failed to add reaction to message: %v", err)
+	}
 
 	select {
 	case <-vs.cancelTimer:
 		logger.Debugf("%s vote cancelled for guild %s", title, guildID)
-		s.MessageReactionsRemoveAll(vs.channelID, vs.messageID)
+		votesMutex.RLock()
+		resolved := vs.resolved
+		votesMutex.RUnlock()
+		if !resolved {
+			s.ChannelMessageEditEmbed(vs.channelID, vs.messageID, messages.CreateWarningEmbed(title, messages.T(guildID).Votes.Cancelled))
+		}
+		clearPromptReactions(s, vs.channelID, vs.messageID)
 	case <-voteDone:
 		logger.Debugf("%s vote passed via reaction for guild %s", title, guildID)
-		s.MessageReactionsRemoveAll(vs.channelID, vs.messageID)
+		clearPromptReactions(s, vs.channelID, vs.messageID)
 	case <-time.After(voteExpirationTime):
 		logger.Debugf("%s vote expired for guild %s", title, guildID)
 		votesMutex.Lock()
@@ -208,7 +305,7 @@ func startVoteWithReaction(s *discordgo.Session, guildID, title, emoji string, v
 
 		embed := messages.CreateWarningEmbed(title, messages.T(guildID).Votes.Expired)
 		s.ChannelMessageEditEmbed(vs.channelID, vs.messageID, embed)
-		s.MessageReactionsRemoveAll(vs.channelID, vs.messageID)
+		clearPromptReactions(s, vs.channelID, vs.messageID)
 	}
 }
 

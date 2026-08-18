@@ -9,6 +9,7 @@ import (
 	"noraegaori/internal/messages"
 	"noraegaori/internal/player"
 	"noraegaori/internal/queue"
+	"noraegaori/pkg/logger"
 )
 
 func HandleStop(s *discordgo.Session, i *discordgo.InteractionCreate) error {
@@ -47,89 +48,66 @@ func HandleStop(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		requiredVotes = 1
 	}
 
-	
+	if existing := activeVoteFor(stopVotes, &stopVotesMutex, i.GuildID); existing != nil {
+		replyVoteInProgress(s, i, messages.T(i.GuildID).Titles.StopVote, existing)
+		return nil
+	}
+
 	if requiredVotes == 1 {
 		if err := player.Stop(i.GuildID); err != nil {
 			UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Music.StopFailedTitle, fmt.Sprintf(messages.T(i.GuildID).Music.StopFailedDesc, err)))
 			return nil
 		}
+
+		ClearSkipVotes(i.GuildID)
+
 		UpdateResponseEmbed(s, i, messages.CreateSuccessEmbed(messages.T(i.GuildID).Music.StopSuccessTitle, messages.T(i.GuildID).Music.StopSuccessDesc))
 		return nil
 	}
 
-	isNewSession := false
-	stopVotesMutex.Lock()
-
-	session := stopVotes[i.GuildID]
-	if session == nil {
-		session = &voteSession{
-			votes:          make(map[string]bool),
-			requiredVotes:  requiredVotes,
-			startTime:      time.Now(),
-			cancelTimer:    make(chan bool, 1),
-			voiceChannelID: voiceState.ChannelID,
-		}
-		stopVotes[i.GuildID] = session
-		isNewSession = true
+	session := &voteSession{
+		votes:          make(map[string]bool),
+		requiredVotes:  requiredVotes,
+		startTime:      time.Now(),
+		cancelTimer:    make(chan bool, 1),
+		voiceChannelID: voiceState.ChannelID,
 	}
-	stopVotesMutex.Unlock()
+	currentVotes, _ := session.castVote(i.Member.User.ID)
 
-	stopVotesMutex.Lock()
-	if session.votes[i.Member.User.ID] {
-		stopVotesMutex.Unlock()
-		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.AlreadyVoted, messages.T(i.GuildID).Music.StopAlreadyVoted))
+	if existing := claimVoteSession(stopVotes, &stopVotesMutex, i.GuildID, session); existing != nil {
+		replyVoteInProgress(s, i, messages.T(i.GuildID).Titles.StopVote, existing)
 		return nil
 	}
 
-	session.votes[i.Member.User.ID] = true
-	currentVotes := len(session.votes)
-	stopVotesMutex.Unlock()
+	embed := messages.CreateWarningEmbed(messages.T(i.GuildID).Titles.StopVote, "")
+	messages.AddField(embed, messages.T(i.GuildID).Fields.CurrentVote, fmt.Sprintf("%d/%d", currentVotes, session.requiredVotes), true)
+	messages.SetFooter(embed, fmt.Sprintf(messages.T(i.GuildID).Footers.VoteReaction, "⏹", int(voteExpirationTime.Seconds())))
+	UpdateResponseEmbed(s, i, embed)
 
-	if currentVotes >= requiredVotes {
-		select {
-		case session.cancelTimer <- true:
-		default:
-		}
-
-		stopVotesMutex.Lock()
-		delete(stopVotes, i.GuildID)
-		stopVotesMutex.Unlock()
-
-		if err := player.Stop(i.GuildID); err != nil {
-			embed := messages.CreateErrorEmbed(messages.T(i.GuildID).Music.StopFailedTitle, fmt.Sprintf(messages.T(i.GuildID).Music.StopFailedDesc, err))
-			messages.AddField(embed, messages.T(i.GuildID).Fields.VoteResult, fmt.Sprintf("%d/%d", currentVotes, requiredVotes), true)
-			UpdateResponseEmbed(s, i, embed)
-			return nil
-		}
-
-		embed := messages.CreateSuccessEmbed(messages.T(i.GuildID).Music.StopSuccessTitle, messages.T(i.GuildID).Music.StopSuccessDesc)
-		messages.AddField(embed, messages.T(i.GuildID).Fields.VoteResult, fmt.Sprintf("%d/%d", currentVotes, requiredVotes), true)
-		UpdateResponseEmbed(s, i, embed)
-	} else {
-		embed := messages.CreateWarningEmbed(messages.T(i.GuildID).Titles.StopVote, "")
-		messages.AddField(embed, messages.T(i.GuildID).Fields.CurrentVote, fmt.Sprintf("%d/%d", currentVotes, requiredVotes), true)
-		messages.SetFooter(embed, fmt.Sprintf(messages.T(i.GuildID).Footers.VoteReaction, "⏹", int(voteExpirationTime.Seconds())))
-		UpdateResponseEmbed(s, i, embed)
-
-		if isNewSession {
-			msg, msgErr := GetResponseMessage(s, i)
-			if msgErr == nil && msg != nil {
-				session.messageID = msg.ID
-				session.channelID = msg.ChannelID
-
-				go startVoteWithReaction(s, i.GuildID, messages.T(i.GuildID).Titles.StopVote, "⏹", session, stopVotes, &stopVotesMutex, func(votes int) {
-					if stopErr := player.Stop(i.GuildID); stopErr != nil {
-						errEmbed := messages.CreateErrorEmbed(messages.T(i.GuildID).Music.StopFailedTitle, fmt.Sprintf(messages.T(i.GuildID).Music.StopFailedDesc, stopErr))
-						s.ChannelMessageEditEmbed(session.channelID, session.messageID, errEmbed)
-						return
-					}
-					stopEmbed := messages.CreateSuccessEmbed(messages.T(i.GuildID).Music.StopSuccessTitle, messages.T(i.GuildID).Music.StopSuccessDesc)
-					messages.AddField(stopEmbed, messages.T(i.GuildID).Fields.VoteResult, fmt.Sprintf("%d/%d", votes, requiredVotes), true)
-					s.ChannelMessageEditEmbed(session.channelID, session.messageID, stopEmbed)
-				})
-			}
-		}
+	msg, msgErr := GetResponseMessage(s, i)
+	if msgErr != nil || msg == nil {
+		logger.Errorf("Failed to get vote message: %v", msgErr)
+		releaseVoteSession(stopVotes, &stopVotesMutex, i.GuildID, session)
+		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.CommandExecutionError))
+		return nil
 	}
+
+	session.messageID = msg.ID
+	session.channelID = msg.ChannelID
+
+	go startVoteWithReaction(s, i.GuildID, messages.T(i.GuildID).Titles.StopVote, "⏹", session, stopVotes, &stopVotesMutex, func(votes int) {
+		if stopErr := player.Stop(i.GuildID); stopErr != nil {
+			errEmbed := messages.CreateErrorEmbed(messages.T(i.GuildID).Music.StopFailedTitle, fmt.Sprintf(messages.T(i.GuildID).Music.StopFailedDesc, stopErr))
+			s.ChannelMessageEditEmbed(session.channelID, session.messageID, errEmbed)
+			return
+		}
+
+		ClearSkipVotes(i.GuildID)
+
+		stopEmbed := messages.CreateSuccessEmbed(messages.T(i.GuildID).Music.StopSuccessTitle, messages.T(i.GuildID).Music.StopSuccessDesc)
+		messages.AddField(stopEmbed, messages.T(i.GuildID).Fields.VoteResult, fmt.Sprintf("%d/%d", votes, session.requiredVotes), true)
+		s.ChannelMessageEditEmbed(session.channelID, session.messageID, stopEmbed)
+	})
 
 	return nil
 }

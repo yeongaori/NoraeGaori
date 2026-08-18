@@ -105,7 +105,9 @@
   "votes": {
     "more": "%d more votes",
     "expired": "The vote has expired.",
-    "stop_already_voted": "You have already voted to stop."
+    "stop_already_voted": "You have already voted to stop.",
+    "in_progress": "A vote is already in progress. React on the vote message to cast your vote.",
+    "cancelled": "The vote has been cancelled."
   },
 
   "help": {

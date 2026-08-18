@@ -44,8 +44,15 @@ func HandleSkip(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	}
 
 	requiredVotes := int(math.Ceil(float64(voiceMembers) * 0.5))
+	if requiredVotes < 1 {
+		requiredVotes = 1
+	}
 
-	
+	if existing := activeVoteFor(skipVotes, &skipVotesMutex, i.GuildID); existing != nil {
+		replyVoteInProgress(s, i, messages.T(i.GuildID).Titles.SkipVote, existing)
+		return nil
+	}
+
 	if requiredVotes == 1 {
 		songTitle := q.Songs[0].Title
 		songURL := q.Songs[0].URL
@@ -59,6 +66,8 @@ func HandleSkip(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 			UpdateResponseEmbed(s, i, embed)
 			return nil
 		}
+
+		ClearStopVotes(i.GuildID)
 
 		if err == player.ErrQueueEmpty {
 			embed := messages.CreateSuccessEmbed(messages.T(i.GuildID).Music.PlaybackEndedTitle,
@@ -84,109 +93,62 @@ func HandleSkip(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	songURL := q.Songs[0].URL
 	songThumbnail := q.Songs[0].Thumbnail
 
-	isNewSession := false
-	skipVotesMutex.Lock()
-
-	session := skipVotes[i.GuildID]
-	if session == nil {
-		session = &voteSession{
-			votes:          make(map[string]bool),
-			requiredVotes:  requiredVotes,
-			startTime:      time.Now(),
-			cancelTimer:    make(chan bool, 1),
-			voiceChannelID: voiceState.ChannelID,
-		}
-		skipVotes[i.GuildID] = session
-		isNewSession = true
+	session := &voteSession{
+		votes:          make(map[string]bool),
+		requiredVotes:  requiredVotes,
+		startTime:      time.Now(),
+		cancelTimer:    make(chan bool, 1),
+		voiceChannelID: voiceState.ChannelID,
 	}
-	skipVotesMutex.Unlock()
+	currentVotes, _ := session.castVote(i.Member.User.ID)
 
-	skipVotesMutex.Lock()
-	if session.votes[i.Member.User.ID] {
-		skipVotesMutex.Unlock()
-		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.AlreadyVoted, messages.T(i.GuildID).Errors.AlreadyVoted))
+	if existing := claimVoteSession(skipVotes, &skipVotesMutex, i.GuildID, session); existing != nil {
+		replyVoteInProgress(s, i, messages.T(i.GuildID).Titles.SkipVote, existing)
 		return nil
 	}
 
-	session.votes[i.Member.User.ID] = true
-	currentVotes := len(session.votes)
-	skipVotesMutex.Unlock()
+	embed := messages.CreateWarningEmbed(messages.T(i.GuildID).Titles.SkipVote, "")
+	messages.AddField(embed, messages.T(i.GuildID).Fields.CurrentVote, fmt.Sprintf("%d/%d", currentVotes, session.requiredVotes), true)
+	messages.SetFooter(embed, fmt.Sprintf(messages.T(i.GuildID).Footers.VoteReaction, "⏭", int(voteExpirationTime.Seconds())))
+	UpdateResponseEmbed(s, i, embed)
 
-	if currentVotes >= requiredVotes {
-		select {
-		case session.cancelTimer <- true:
-		default:
-		}
-
-		skipVotesMutex.Lock()
-		delete(skipVotes, i.GuildID)
-		skipVotesMutex.Unlock()
-
-		err := player.Skip(s, i.GuildID)
-		if err != nil && err != player.ErrQueueEmpty {
-			logger.Errorf("Failed to skip: %v", err)
-			embed := messages.CreateErrorEmbed(messages.T(i.GuildID).Music.SkipFailedTitle,
-				fmt.Sprintf(messages.T(i.GuildID).Music.SkipFailedDesc, err))
-			messages.AddField(embed, messages.T(i.GuildID).Fields.VoteResult, fmt.Sprintf("%d/%d", currentVotes, requiredVotes), true)
-			UpdateResponseEmbed(s, i, embed)
-			return nil
-		}
-
-		if err == player.ErrQueueEmpty {
-			embed := messages.CreateSuccessEmbed(messages.T(i.GuildID).Music.PlaybackEndedTitle,
-				fmt.Sprintf(messages.T(i.GuildID).Music.PlaybackEndedSkip, messages.FormatMaskedLink(songTitle, songURL)))
-			messages.SetThumbnail(embed, songThumbnail)
-			messages.AddField(embed, messages.T(i.GuildID).Fields.VoteResult, fmt.Sprintf("%d/%d", currentVotes, requiredVotes), true)
-			UpdateResponseEmbed(s, i, embed)
-
-			if stopErr := player.Stop(i.GuildID); stopErr != nil {
-				logger.Errorf("Failed to cleanup after queue empty: %v", stopErr)
-			}
-			return nil
-		}
-
-		embed := messages.CreateSuccessEmbed(messages.T(i.GuildID).Titles.Skipped,
-			fmt.Sprintf(messages.T(i.GuildID).Descriptions.Skipped, messages.FormatMaskedLink(songTitle, songURL)))
-		messages.SetThumbnail(embed, songThumbnail)
-		messages.AddField(embed, messages.T(i.GuildID).Fields.VoteResult, fmt.Sprintf("%d/%d", currentVotes, requiredVotes), true)
-		UpdateResponseEmbed(s, i, embed)
-	} else {
-		embed := messages.CreateWarningEmbed(messages.T(i.GuildID).Titles.SkipVote, "")
-		messages.AddField(embed, messages.T(i.GuildID).Fields.CurrentVote, fmt.Sprintf("%d/%d", currentVotes, requiredVotes), true)
-		messages.SetFooter(embed, fmt.Sprintf(messages.T(i.GuildID).Footers.VoteReaction, "⏭", int(voteExpirationTime.Seconds())))
-		UpdateResponseEmbed(s, i, embed)
-
-		if isNewSession {
-			msg, msgErr := GetResponseMessage(s, i)
-			if msgErr == nil && msg != nil {
-				session.messageID = msg.ID
-				session.channelID = msg.ChannelID
-
-				go startVoteWithReaction(s, i.GuildID, messages.T(i.GuildID).Titles.SkipVote, "⏭", session, skipVotes, &skipVotesMutex, func(votes int) {
-					skipErr := player.Skip(s, i.GuildID)
-					if skipErr != nil && skipErr != player.ErrQueueEmpty {
-						errEmbed := messages.CreateErrorEmbed(messages.T(i.GuildID).Music.SkipFailedTitle, fmt.Sprintf(messages.T(i.GuildID).Music.SkipFailedDesc, skipErr))
-						s.ChannelMessageEditEmbed(session.channelID, session.messageID, errEmbed)
-						return
-					}
-					if skipErr == player.ErrQueueEmpty {
-						doneEmbed := messages.CreateSuccessEmbed(messages.T(i.GuildID).Music.PlaybackEndedTitle,
-							fmt.Sprintf(messages.T(i.GuildID).Music.PlaybackEndedSkip, messages.FormatMaskedLink(songTitle, songURL)))
-						messages.SetThumbnail(doneEmbed, songThumbnail)
-						messages.AddField(doneEmbed, messages.T(i.GuildID).Fields.VoteResult, fmt.Sprintf("%d/%d", votes, requiredVotes), true)
-						s.ChannelMessageEditEmbed(session.channelID, session.messageID, doneEmbed)
-						player.Stop(i.GuildID)
-						return
-					}
-					skipEmbed := messages.CreateSuccessEmbed(messages.T(i.GuildID).Titles.Skipped,
-						fmt.Sprintf(messages.T(i.GuildID).Descriptions.Skipped, messages.FormatMaskedLink(songTitle, songURL)))
-					messages.SetThumbnail(skipEmbed, songThumbnail)
-					messages.AddField(skipEmbed, messages.T(i.GuildID).Fields.VoteResult, fmt.Sprintf("%d/%d", votes, requiredVotes), true)
-					s.ChannelMessageEditEmbed(session.channelID, session.messageID, skipEmbed)
-				})
-			}
-		}
+	msg, msgErr := GetResponseMessage(s, i)
+	if msgErr != nil || msg == nil {
+		logger.Errorf("Failed to get vote message: %v", msgErr)
+		releaseVoteSession(skipVotes, &skipVotesMutex, i.GuildID, session)
+		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.CommandExecutionError))
+		return nil
 	}
+
+	session.messageID = msg.ID
+	session.channelID = msg.ChannelID
+
+	go startVoteWithReaction(s, i.GuildID, messages.T(i.GuildID).Titles.SkipVote, "⏭", session, skipVotes, &skipVotesMutex, func(votes int) {
+		skipErr := player.Skip(s, i.GuildID)
+		if skipErr != nil && skipErr != player.ErrQueueEmpty {
+			errEmbed := messages.CreateErrorEmbed(messages.T(i.GuildID).Music.SkipFailedTitle, fmt.Sprintf(messages.T(i.GuildID).Music.SkipFailedDesc, skipErr))
+			s.ChannelMessageEditEmbed(session.channelID, session.messageID, errEmbed)
+			return
+		}
+
+		ClearStopVotes(i.GuildID)
+
+		if skipErr == player.ErrQueueEmpty {
+			doneEmbed := messages.CreateSuccessEmbed(messages.T(i.GuildID).Music.PlaybackEndedTitle,
+				fmt.Sprintf(messages.T(i.GuildID).Music.PlaybackEndedSkip, messages.FormatMaskedLink(songTitle, songURL)))
+			messages.SetThumbnail(doneEmbed, songThumbnail)
+			messages.AddField(doneEmbed, messages.T(i.GuildID).Fields.VoteResult, fmt.Sprintf("%d/%d", votes, session.requiredVotes), true)
+			s.ChannelMessageEditEmbed(session.channelID, session.messageID, doneEmbed)
+			player.Stop(i.GuildID)
+			return
+		}
+
+		skipEmbed := messages.CreateSuccessEmbed(messages.T(i.GuildID).Titles.Skipped,
+			fmt.Sprintf(messages.T(i.GuildID).Descriptions.Skipped, messages.FormatMaskedLink(songTitle, songURL)))
+		messages.SetThumbnail(skipEmbed, songThumbnail)
+		messages.AddField(skipEmbed, messages.T(i.GuildID).Fields.VoteResult, fmt.Sprintf("%d/%d", votes, session.requiredVotes), true)
+		s.ChannelMessageEditEmbed(session.channelID, session.messageID, skipEmbed)
+	})
 
 	return nil
 }

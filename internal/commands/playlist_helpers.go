@@ -56,13 +56,14 @@ func handlePurePlaylist(s *discordgo.Session, i *discordgo.InteractionCreate, pl
 		return err
 	}
 
+	waitForConfirmation := handlePlaylistConfirmationReaction(s, i, msg, playlistInfo, voiceState)
+	go waitForConfirmation()
+
 	err = s.MessageReactionAdd(msg.ChannelID, msg.ID, "✅")
 	if err != nil {
 		logger.Errorf("Failed to add reaction: %v", err)
 		return err
 	}
-
-	go handlePlaylistConfirmationReaction(s, i, msg, playlistInfo, voiceState)
 
 	return nil
 }
@@ -172,6 +173,13 @@ func handleVideoWithPlaylist(s *discordgo.Session, i *discordgo.InteractionCreat
 		return err
 	}
 
+	excludeVideoID := analysis.VideoID
+	if videoUnavailable {
+		excludeVideoID = ""
+	}
+	waitForConfirmation := handlePlaylistRestConfirmationReaction(s, i, msg, analysis.PlaylistID, excludeVideoID, voiceState)
+	go waitForConfirmation()
+
 	err = s.MessageReactionAdd(msg.ChannelID, msg.ID, "⬇️")
 	if err != nil {
 		logger.Errorf("Failed to add reaction: %v", err)
@@ -186,17 +194,10 @@ func handleVideoWithPlaylist(s *discordgo.Session, i *discordgo.InteractionCreat
 		}
 	}
 
-	
-	excludeVideoID := analysis.VideoID
-	if videoUnavailable {
-		excludeVideoID = ""
-	}
-	go handlePlaylistRestConfirmationReaction(s, i, msg, analysis.PlaylistID, excludeVideoID, voiceState)
-
 	return nil
 }
 
-func handlePlaylistConfirmationReaction(s *discordgo.Session, originalInteraction *discordgo.InteractionCreate, msg *discordgo.Message, playlistInfo *youtube.PlaylistInfo, voiceState *discordgo.VoiceState) {
+func handlePlaylistConfirmationReaction(s *discordgo.Session, originalInteraction *discordgo.InteractionCreate, msg *discordgo.Message, playlistInfo *youtube.PlaylistInfo, voiceState *discordgo.VoiceState) func() {
 	logger.Debugf("Starting reaction handler for message %s in channel %s", msg.ID, msg.ChannelID)
 	logger.Debugf("Expecting reaction from user: %s", originalInteraction.Member.User.ID)
 
@@ -221,6 +222,7 @@ func handlePlaylistConfirmationReaction(s *discordgo.Session, originalInteractio
 		}
 		if r.UserID != originalInteraction.Member.User.ID {
 			logger.Debugf("User ID mismatch: expected %s, got %s", originalInteraction.Member.User.ID, r.UserID)
+			removeUserReaction(s, msg.ChannelID, msg.ID, r.Emoji.Name, r.UserID)
 			return
 		}
 
@@ -242,32 +244,35 @@ func handlePlaylistConfirmationReaction(s *discordgo.Session, originalInteractio
 			})
 		}
 
-		s.MessageReactionsRemoveAll(msg.ChannelID, msg.ID)
+		clearPromptReactions(s, msg.ChannelID, msg.ID)
 
 		go addPlaylistSongs(s, originalInteraction, playlistInfo, voiceState, msg.ID)
 	}
 
 	removeHandler := s.AddHandler(reactionHandler)
-	defer removeHandler()
 
-	select {
-	case <-confirmedChan:
-		logger.Debugf("Reaction confirmed, handler complete")
-	case <-time.After(30 * time.Second):
-		logger.Debugf("Timeout reached, cancelling")
-		embed := messages.CreateWarningEmbed(messages.T(originalInteraction.GuildID).Music.PlaylistTimeoutTitle, messages.T(originalInteraction.GuildID).Music.PlaylistTimeoutDesc)
-		if isMessageCommand(originalInteraction) {
-			s.ChannelMessageEditEmbed(msg.ChannelID, msg.ID, embed)
-		} else {
-			s.InteractionResponseEdit(originalInteraction.Interaction, &discordgo.WebhookEdit{
-				Embeds: &[]*discordgo.MessageEmbed{embed},
-			})
+	return func() {
+		defer removeHandler()
+
+		select {
+		case <-confirmedChan:
+			logger.Debugf("Reaction confirmed, handler complete")
+		case <-time.After(30 * time.Second):
+			logger.Debugf("Timeout reached, cancelling")
+			embed := messages.CreateWarningEmbed(messages.T(originalInteraction.GuildID).Music.PlaylistTimeoutTitle, messages.T(originalInteraction.GuildID).Music.PlaylistTimeoutDesc)
+			if isMessageCommand(originalInteraction) {
+				s.ChannelMessageEditEmbed(msg.ChannelID, msg.ID, embed)
+			} else {
+				s.InteractionResponseEdit(originalInteraction.Interaction, &discordgo.WebhookEdit{
+					Embeds: &[]*discordgo.MessageEmbed{embed},
+				})
+			}
+			clearPromptReactions(s, msg.ChannelID, msg.ID)
 		}
-		s.MessageReactionsRemoveAll(msg.ChannelID, msg.ID)
 	}
 }
 
-func handlePlaylistRestConfirmationReaction(s *discordgo.Session, originalInteraction *discordgo.InteractionCreate, msg *discordgo.Message, playlistID, videoID string, voiceState *discordgo.VoiceState) {
+func handlePlaylistRestConfirmationReaction(s *discordgo.Session, originalInteraction *discordgo.InteractionCreate, msg *discordgo.Message, playlistID, videoID string, voiceState *discordgo.VoiceState) func() {
 	logger.Debugf("Starting reaction handler for message %s in channel %s", msg.ID, msg.ChannelID)
 	logger.Debugf("Expecting reaction from user: %s", originalInteraction.Member.User.ID)
 
@@ -293,6 +298,7 @@ func handlePlaylistRestConfirmationReaction(s *discordgo.Session, originalIntera
 
 		if r.UserID != originalInteraction.Member.User.ID {
 			logger.Debugf("User ID mismatch: expected %s, got %s", originalInteraction.Member.User.ID, r.UserID)
+			removeUserReaction(s, msg.ChannelID, msg.ID, r.Emoji.Name, r.UserID)
 			return
 		}
 
@@ -314,7 +320,7 @@ func handlePlaylistRestConfirmationReaction(s *discordgo.Session, originalIntera
 					Embeds: &[]*discordgo.MessageEmbed{errorEmbed},
 				})
 			}
-			s.MessageReactionsRemoveAll(msg.ChannelID, msg.ID)
+			clearPromptReactions(s, msg.ChannelID, msg.ID)
 			return
 		}
 
@@ -338,28 +344,31 @@ func handlePlaylistRestConfirmationReaction(s *discordgo.Session, originalIntera
 			})
 		}
 
-		s.MessageReactionsRemoveAll(msg.ChannelID, msg.ID)
+		clearPromptReactions(s, msg.ChannelID, msg.ID)
 
 		go addPlaylistSongs(s, originalInteraction, playlistInfo, voiceState, msg.ID)
 	}
 
 	removeHandler := s.AddHandler(reactionHandler)
-	defer removeHandler()
 
-	select {
-	case <-confirmedChan:
-		logger.Debugf("Reaction confirmed, handler complete")
-	case <-time.After(30 * time.Second):
-		logger.Debugf("Timeout reached, cancelling")
-		embed := messages.CreateWarningEmbed(messages.T(originalInteraction.GuildID).Music.PlaylistTimeoutTitle, messages.T(originalInteraction.GuildID).Music.PlaylistTimeoutDesc)
-		if isMessageCommand(originalInteraction) {
-			s.ChannelMessageEditEmbed(msg.ChannelID, msg.ID, embed)
-		} else {
-			s.InteractionResponseEdit(originalInteraction.Interaction, &discordgo.WebhookEdit{
-				Embeds: &[]*discordgo.MessageEmbed{embed},
-			})
+	return func() {
+		defer removeHandler()
+
+		select {
+		case <-confirmedChan:
+			logger.Debugf("Reaction confirmed, handler complete")
+		case <-time.After(30 * time.Second):
+			logger.Debugf("Timeout reached, cancelling")
+			embed := messages.CreateWarningEmbed(messages.T(originalInteraction.GuildID).Music.PlaylistTimeoutTitle, messages.T(originalInteraction.GuildID).Music.PlaylistTimeoutDesc)
+			if isMessageCommand(originalInteraction) {
+				s.ChannelMessageEditEmbed(msg.ChannelID, msg.ID, embed)
+			} else {
+				s.InteractionResponseEdit(originalInteraction.Interaction, &discordgo.WebhookEdit{
+					Embeds: &[]*discordgo.MessageEmbed{embed},
+				})
+			}
+			clearPromptReactions(s, msg.ChannelID, msg.ID)
 		}
-		s.MessageReactionsRemoveAll(msg.ChannelID, msg.ID)
 	}
 }
 

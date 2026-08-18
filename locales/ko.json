@@ -105,7 +105,9 @@
   "votes": {
     "more": "%d표 더",
     "expired": "투표가 만료되었습니다.",
-    "stop_already_voted": "이미 정지 투표를 하셨습니다."
+    "stop_already_voted": "이미 정지 투표를 하셨습니다.",
+    "in_progress": "이미 진행 중인 투표가 있습니다. 해당 투표 메시지에 반응을 남겨 투표해 주세요.",
+    "cancelled": "투표가 취소되었습니다."
   },
 
   "help": {
