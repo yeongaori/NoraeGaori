@@ -6,13 +6,16 @@ A feature-rich & high-quality audio Discord music bot written in Go.
 
 - **High-Quality Audio Streaming** from YouTube via [yt-dlp](https://github.com/yt-dlp/yt-dlp), with Opus bitrate matched to the voice channel
 - **Persistent Queue**
-- **AutoMix** — beat-aware transitions between songs (BPM detection, beat-grid alignment)
+- **AutoMix** — beat- and key-aware transitions between songs (BPM detection, musical key detection, beat-grid alignment); track analysis is stored in SQLite and reused on later plays
+- **AutoMix Transition Styles** — volume, EQ, filter, effect, and loop styles set per server, or left on `auto` so AutoMix picks per transition from the song's BPM and key; a single upcoming transition can be overridden from the AutoMix panel
 - **Crossfade** — timed crossfade between songs; combined with AutoMix it fades along the beat-aligned transition
 - **Fade-In / Fade-Out** — smooth volume ramps at song edges, on seek, and on resume
 - **Trim Silence** — skips silent intros and outros (forced on while AutoMix is active)
 - **SponsorBlock**
 - **Live Stream Support**
 - **Queue Management** — move, swap, skip-to, remove by range
+- **Search Autocomplete** — YouTube suggestions while typing on `/play`, `/playnext`, and `/search`
+- **Reaction Votes** — skip and stop votes are cast by reacting; un-react to withdraw a vote. Only one vote of each type runs at a time, and completing one cancels the other
 - **Per-Guild Settings** — volume, repeat, normalization, fades, AutoMix, language, SponsorBlock
 - **Auto-Pause** when voice channel empties, **auto-resume** when a song is added back to a paused queue
 - **Slash Commands & Prefix Commands**
@@ -145,6 +148,8 @@ To add a new language, create `locales/<code>.json` using `locales/en.json` as a
 | `/fadein [on/off] [seconds]` | `fade-in` | Fade in at song start, on seek, and on resume (1-30s, default 3) |
 | `/fadeout [on/off] [seconds]` | `fade-out` | Fade out at song end and before seek (1-30s, default 3) |
 | `/automix [on/off] [beats]` | `mix` | Beat-aware crossfade between songs (4-64 beats, default 16) |
+| `/automixstyle [category] [style]` | `mixstyle` | Set the server-wide AutoMix style for a category (`volume`, `eq`, `filter`, `effect`, `loop`); `auto` lets AutoMix choose per transition. No arguments shows the current styles |
+| `/automixpanel [page]` | `mixpanel` | Open the AutoMix panel to override the transition style for a single upcoming song |
 | `/crossfade [on/off] [seconds]` | `cf` | Crossfade between songs (1-30s, default 8) |
 | `/fadeonstop [on/off]` | `fos` | Fade out briefly before skip/stop instead of cutting |
 | `/trimsilence [on/off]` | `trim` | Skip silence at the start and end of songs (always active while AutoMix is on) |
@@ -174,18 +179,19 @@ Admin commands are **text-only** (prefix commands, not slash commands). Invoke t
 ```
 NoraeGaori/
 ├── cmd/bot/            Entry point
+├── cmd/automixcheck/   Self-check harness for AutoMix and the AutoMix panel
 ├── internal/
 │   ├── bot/            Discord session and event handlers
 │   ├── commands/       All command handlers
 │   ├── config/         Config loading with hot-reload
 │   ├── database/       SQLite
 │   ├── messages/       Locale system and embed helpers
-│   ├── player/         Audio streaming and voice (libopus via dlopen, WASM fallback)
+│   ├── player/         Audio streaming, transitions, and track analysis (libopus via dlopen, WASM fallback)
 │   ├── queue/          Queue management with caching
 │   ├── rpc/            Discord Rich Presence
 │   ├── shutdown/       Graceful shutdown coordination
 │   ├── worker/         Background worker pools
-│   ├── youtube/        InnerTube integration
+│   ├── youtube/        InnerTube integration and search suggestions
 │   └── ytdlp/          yt-dlp version management and updater
 ├── locales/            Language files (ko.json, en.json)
 ├── config/             Runtime config (gitignored, see *.example.json)
