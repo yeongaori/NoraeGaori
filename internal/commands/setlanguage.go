@@ -47,7 +47,7 @@ func HandleSetLanguage(s *discordgo.Session, i *discordgo.InteractionCreate) err
 				fmt.Sprintf(t.Settings.LanguageSaveFailed, err)))
 			return err
 		}
-		
+
 		t = messages.T(i.GuildID)
 		embed := &discordgo.MessageEmbed{
 			Color:       messages.ColorSuccess,
@@ -78,7 +78,6 @@ func HandleSetLanguage(s *discordgo.Session, i *discordgo.InteractionCreate) err
 		return err
 	}
 
-	
 	t = messages.T(i.GuildID)
 	embed := &discordgo.MessageEmbed{
 		Color:       messages.ColorSuccess,

@@ -18,7 +18,6 @@ func HandleResume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return nil
 	}
 
-	
 	q, err := queue.GetQueue(i.GuildID, true)
 	if err != nil || q == nil || len(q.Songs) == 0 {
 		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.NoSongsToResume))
@@ -48,25 +47,24 @@ func HandleResume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 	currentSong := q.Songs[0]
 
-	
 	if currentSong.IsLive {
 		logger.Debugf("Current song is a live stream, checking if it's still live")
 
 		DeferResponse(s, i)
 
 		checkingEmbed := &discordgo.MessageEmbed{
-			Color:       messages.ColorWarning,
-			Title:       messages.T(i.GuildID).Music.LiveCheckingTitle,
+			Color: messages.ColorWarning,
+			Title: messages.T(i.GuildID).Music.LiveCheckingTitle,
 			Description: fmt.Sprintf(messages.T(i.GuildID).Music.LiveCheckingDesc,
 				messages.FormatBoldMaskedLink(currentSong.Title, currentSong.URL)),
-			Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: currentSong.Thumbnail},
+			Thumbnail: &discordgo.MessageEmbedThumbnail{URL: currentSong.Thumbnail},
 		}
 		UpdateResponseEmbed(s, i, checkingEmbed)
 
 		isStillLive, err := youtube.CheckIfLive(currentSong.URL)
 		if err != nil {
 			logger.Warnf("Error checking live stream status: %v", err)
-			
+
 		} else if !isStillLive {
 			logger.Infof("Live stream has ended, skipping to next song")
 
@@ -84,8 +82,8 @@ func HandleResume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 			}
 
 			skipEmbed := &discordgo.MessageEmbed{
-				Color:       messages.ColorWarning,
-				Title:       messages.T(i.GuildID).Music.LiveEndedTitle,
+				Color: messages.ColorWarning,
+				Title: messages.T(i.GuildID).Music.LiveEndedTitle,
 				Description: fmt.Sprintf(messages.T(i.GuildID).Music.LiveEndedSkip,
 					messages.FormatBoldMaskedLink(currentSong.Title, currentSong.URL)),
 			}
@@ -104,14 +102,13 @@ func HandleResume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return nil
 	}
 
-	
-	const seekLoadingThreshold = 120000 
+	const seekLoadingThreshold = 120000
 	if currentSong.SeekTime > seekLoadingThreshold {
 		DeferResponse(s, i)
 
 		loadingEmbed := &discordgo.MessageEmbed{
-			Color:       messages.ColorWarning,
-			Title:       messages.T(i.GuildID).Titles.Loading,
+			Color: messages.ColorWarning,
+			Title: messages.T(i.GuildID).Titles.Loading,
 			Description: fmt.Sprintf("%s\n\n%s",
 				messages.FormatBoldMaskedLink(currentSong.Title, currentSong.URL), messages.T(i.GuildID).Descriptions.Loading),
 			Thumbnail: &discordgo.MessageEmbedThumbnail{URL: currentSong.Thumbnail},

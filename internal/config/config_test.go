@@ -67,8 +67,8 @@ func TestSetPrefix(t *testing.T) {
 		{"Valid special char", "?", false},
 		{"Valid dot", ".", false},
 		{"Valid arrow", ">", false},
-		{"Empty prefix", "", false}, 
-		{"Long prefix", "verylongprefix", false}, 
+		{"Empty prefix", "", false},
+		{"Long prefix", "verylongprefix", false},
 	}
 
 	for _, tc := range testCases {
@@ -95,7 +95,6 @@ func TestIsAdmin(t *testing.T) {
 	setupTestConfig(t)
 	defer teardownTestConfig(t)
 
-	
 	adminsConf = &AdminsConfig{
 		Admins: []string{"admin1", "admin2", "admin3"},
 	}
@@ -159,7 +158,6 @@ func TestConcurrentConfigAccess(t *testing.T) {
 
 	done := make(chan bool)
 
-	
 	for i := 0; i < 10; i++ {
 		go func() {
 			cfg := GetConfig()
@@ -170,7 +168,6 @@ func TestConcurrentConfigAccess(t *testing.T) {
 		}()
 	}
 
-	
 	for i := 0; i < 10; i++ {
 		go func(idx int) {
 			SetPrefix("!")
@@ -178,7 +175,6 @@ func TestConcurrentConfigAccess(t *testing.T) {
 		}(i)
 	}
 
-	
 	for i := 0; i < 20; i++ {
 		<-done
 	}
@@ -188,27 +184,22 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	setupTestConfig(t)
 	defer teardownTestConfig(t)
 
-	
 	config = &Config{
 		Prefix:           "?",
 		ShowStartedTrack: false,
 		DefaultVolume:    75,
 	}
 
-	
 	if err := saveConfig(config); err != nil {
 		t.Fatalf("Failed to save config: %v", err)
 	}
 
-	
 	config = nil
 
-	
 	if err := loadConfig(); err != nil {
 		t.Fatalf("Failed to load config: %v", err)
 	}
 
-	
 	if config.Prefix != "?" {
 		t.Errorf("Expected prefix ?, got %s", config.Prefix)
 	}

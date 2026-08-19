@@ -2,7 +2,6 @@ package commands
 
 import (
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -27,25 +26,10 @@ func HandleStop(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return nil
 	}
 
-	guild, err := s.State.Guild(i.GuildID)
+	requiredVotes, err := requiredVotesInChannel(s, i.GuildID, voiceState.ChannelID)
 	if err != nil {
 		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.ServerInfoFailed))
 		return err
-	}
-
-	voiceMembers := 0
-	for _, vs := range guild.VoiceStates {
-		if vs.ChannelID == voiceState.ChannelID {
-			member, err := s.State.Member(i.GuildID, vs.UserID)
-			if err == nil && !member.User.Bot {
-				voiceMembers++
-			}
-		}
-	}
-
-	requiredVotes := int(math.Ceil(float64(voiceMembers) * 0.5))
-	if requiredVotes < 1 {
-		requiredVotes = 1
 	}
 
 	if existing := activeVoteFor(stopVotes, &stopVotesMutex, i.GuildID); existing != nil {

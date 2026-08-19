@@ -42,7 +42,7 @@ func handleRemoveAll(s *discordgo.Session, i *discordgo.InteractionCreate, q *qu
 	var userSongs []*queue.Song
 	startIdx := 0
 	if q.Playing || q.Loading {
-		startIdx = 1 
+		startIdx = 1
 	}
 
 	for idx := startIdx; idx < len(q.Songs); idx++ {
@@ -83,7 +83,6 @@ func handleRemoveAll(s *discordgo.Session, i *discordgo.InteractionCreate, q *qu
 		return err
 	}
 
-	
 	if isNextSongRemoved {
 		player.CleanupPreCacheWorker(i.GuildID)
 	}
@@ -121,7 +120,6 @@ func handleRemoveRange(s *discordgo.Session, i *discordgo.InteractionCreate, q *
 
 	songsToRemove := q.Songs[start-1 : end]
 
-	
 	userID := i.Member.User.ID
 	var userSongs []*queue.Song
 	for _, song := range songsToRemove {

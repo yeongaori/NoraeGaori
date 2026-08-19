@@ -8,12 +8,12 @@ import (
 
 func TestParseCommandOptions(t *testing.T) {
 	testCases := []struct {
-		name           string
-		cmd            *Command
-		args           []string
-		expectedCount  int
-		expectedName   string
-		expectedValue  interface{}
+		name          string
+		cmd           *Command
+		args          []string
+		expectedCount int
+		expectedName  string
+		expectedValue interface{}
 	}{
 		{
 			name: "String option - single word",
@@ -292,7 +292,6 @@ func TestMessageResponseFunctions(t *testing.T) {
 		Description: "Test Description",
 	}
 
-	
 	defer func() {
 		if r := recover(); r != nil {
 			t.Errorf("MessageResponse method panicked: %v", r)

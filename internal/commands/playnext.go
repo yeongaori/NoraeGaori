@@ -43,27 +43,11 @@ func HandlePlayNext(s *discordgo.Session, i *discordgo.InteractionCreate) error 
 		return err
 	}
 
-	if q == nil {
-		if err := queue.CreateQueue(i.GuildID, i.ChannelID, voiceState.ChannelID); err != nil {
-			UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.QueueCreateFailed))
-			return err
-		}
-	} else {
-		if err := queue.UpdateVoiceChannel(i.GuildID, voiceState.ChannelID); err != nil {
-			logger.Errorf("Failed to update voice channel for %s: %v", i.GuildID, err)
-		}
+	if err := ensureQueueForVoice(s, i, q, voiceState.ChannelID); err != nil {
+		return err
 	}
 
-	queueSong := &queue.Song{
-		URL:            song.URL,
-		Title:          song.Title,
-		Duration:       song.Duration,
-		Thumbnail:      song.Thumbnail,
-		Uploader:       song.Uploader,
-		RequestedByID:  song.RequestedByID,
-		RequestedByTag: song.RequestedBy,
-		IsLive:         song.IsLive,
-	}
+	queueSong := queueSongFrom(song)
 
 	if err := queue.AddSong(i.GuildID, queueSong, 1); err != nil {
 		if err.Error() == "song already in queue: "+song.Title {

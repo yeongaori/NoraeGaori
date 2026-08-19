@@ -21,6 +21,8 @@ const (
 	analysisMaxBytes   = int64((analysisHeadSecs + analysisReadMargin) * tailSampleRate * 4)
 )
 
+var preCacheNext = PreCacheNext
+
 func PreCacheNext(guildID string, bitrate int) {
 	q, err := queue.GetQueue(guildID, false)
 	if err != nil || q == nil || len(q.Songs) < 2 {
@@ -30,7 +32,6 @@ func PreCacheNext(guildID string, bitrate int) {
 
 	nextSong := q.Songs[1]
 
-	
 	if nextSong.IsLive {
 		logger.Debugf("Skipping pre-cache for live stream: %s", nextSong.Title)
 		return
@@ -41,7 +42,6 @@ func PreCacheNext(guildID string, bitrate int) {
 		return
 	}
 
-	
 	cacheKey := fmt.Sprintf("%s_%d", guildID, nextSong.ID)
 	preCacheStoreMu.RLock()
 	cached, exists := preCacheStore[cacheKey]
@@ -54,12 +54,10 @@ func PreCacheNext(guildID string, bitrate int) {
 
 	logger.Debugf("Starting pre-cache for: %s", nextSong.Title)
 
-	
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 
-		
 		cacheKey := fmt.Sprintf("%s_%d", guildID, nextSong.ID)
 		preCacheStoreMu.Lock()
 		preCacheStore[cacheKey] = &PreCache{
@@ -77,7 +75,7 @@ func PreCacheNext(guildID string, bitrate int) {
 }
 
 func preCacheSong(ctx context.Context, guildID string, song *queue.Song, sponsorBlock bool, bitrate int) error {
-	
+
 	streamURL, err := youtube.GetStreamURL(song.URL, sponsorBlock, bitrate)
 	if err != nil {
 		return fmt.Errorf("failed to get stream URL: %w", err)
@@ -274,7 +272,7 @@ func CleanupPreCacheWorker(guildID string) {
 
 	if cache, exists := preCacheStore[cacheKey]; exists {
 		if cache.CancelFunc != nil {
-			cache.CancelFunc() 
+			cache.CancelFunc()
 			logger.Debugf("Cancelled pre-cache worker for: %s (song ID: %d)", nextSong.Title, nextSong.ID)
 		}
 		delete(preCacheStore, cacheKey)

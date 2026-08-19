@@ -18,7 +18,7 @@ func HandleNormalization(s *discordgo.Session, i *discordgo.InteractionCreate) e
 		mode := options[0].StringValue()
 		enabled = mode == "on"
 	} else {
-		
+
 		currentNormalization, err := queue.GetNormalization(i.GuildID)
 		if err != nil {
 			logger.Errorf("Failed to get current state: %v", err)
@@ -33,7 +33,6 @@ func HandleNormalization(s *discordgo.Session, i *discordgo.InteractionCreate) e
 		return err
 	}
 
-	
 	player.RestartForNormalization(i.GuildID)
 
 	statusText := messages.T(i.GuildID).Settings.StatusOff

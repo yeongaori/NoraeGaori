@@ -23,14 +23,13 @@ type CommandInfo struct {
 }
 
 func HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	
+
 	page := 1
 	options := i.ApplicationCommandData().Options
 	if len(options) > 0 {
 		page = int(options[0].IntValue())
 	}
 
-	
 	prefix := config.GetConfig().Prefix
 	if i.GuildID != "" {
 		if guildPrefix, err := queue.GetGuildPrefix(i.GuildID); err != nil {
@@ -40,10 +39,8 @@ func HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		}
 	}
 
-	
 	commandList := getAllCommands(i.GuildID)
 
-	
 	isAdmin := config.IsAdmin(i.Member.User.ID)
 	filteredCommands := make([]CommandInfo, 0)
 	for _, cmd := range commandList {
@@ -57,7 +54,6 @@ func HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return nil
 	}
 
-	
 	const commandsPerPage = 5
 	totalPages := (len(filteredCommands) + commandsPerPage - 1) / commandsPerPage
 
@@ -68,7 +64,6 @@ func HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		page = totalPages
 	}
 
-	
 	start := (page - 1) * commandsPerPage
 	end := start + commandsPerPage
 	if end > len(filteredCommands) {
@@ -78,7 +73,6 @@ func HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 	embed := buildHelpEmbed(i.GuildID, pageCommands, page, totalPages, start, len(filteredCommands), prefix)
 
-	
 	if totalPages == 1 {
 		RespondEmbed(s, i, embed)
 		return nil
@@ -86,14 +80,12 @@ func HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 	components := createHelpButtons(i.GuildID, page, totalPages)
 
-	
 	msg, err := RespondEmbedWithComponents(s, i, embed, components)
 	if err != nil {
 		logger.Errorf("Failed to send response: %v", err)
 		return err
 	}
 
-	
 	go handleHelpButtons(s, i, msg, i.GuildID, totalPages, commandsPerPage, filteredCommands, prefix)
 
 	return nil
@@ -163,30 +155,25 @@ func handleHelpButtons(s *discordgo.Session, i *discordgo.InteractionCreate, ori
 	timeout := time.After(5 * time.Minute)
 	currentPage := 1
 
-	
 	options := i.ApplicationCommandData().Options
 	if len(options) > 0 {
 		currentPage = int(options[0].IntValue())
 	}
 
-	
 	originalMsgID := ""
 	if originalMsg != nil {
 		originalMsgID = originalMsg.ID
 	}
 
-	
 	buttonHandler := func(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 		if ic.Type != discordgo.InteractionMessageComponent {
 			return
 		}
 
-		
 		if originalMsgID != "" && (ic.Message == nil || ic.Message.ID != originalMsgID) {
 			return
 		}
 
-		
 		data := ic.MessageComponentData()
 		if data.CustomID != "help_prev" && data.CustomID != "help_next" {
 			return
@@ -205,7 +192,6 @@ func handleHelpButtons(s *discordgo.Session, i *discordgo.InteractionCreate, ori
 			return
 		}
 
-		
 		start := (currentPage - 1) * perPage
 		end := start + perPage
 		if end > len(allCommands) {
@@ -217,7 +203,6 @@ func handleHelpButtons(s *discordgo.Session, i *discordgo.InteractionCreate, ori
 
 		components := createHelpButtons(guildID, currentPage, totalPages)
 
-		
 		s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseUpdateMessage,
 			Data: &discordgo.InteractionResponseData{
@@ -227,14 +212,11 @@ func handleHelpButtons(s *discordgo.Session, i *discordgo.InteractionCreate, ori
 		})
 	}
 
-	
 	removeHandler := s.AddHandler(buttonHandler)
 	defer removeHandler()
 
-	
 	<-timeout
 
-	
 	start := (currentPage - 1) * perPage
 	end := start + perPage
 	if end > len(allCommands) {
@@ -244,12 +226,11 @@ func handleHelpButtons(s *discordgo.Session, i *discordgo.InteractionCreate, ori
 
 	embed := buildHelpEmbed(guildID, pageCommands, currentPage, totalPages, start, len(allCommands), prefix)
 
-	
 	var msg *discordgo.Message
 	if i.Interaction.Message != nil {
 		msg = i.Interaction.Message
 	} else {
-		
+
 		msg, err := GetResponseMessage(s, i)
 		if err != nil {
 			return
@@ -258,7 +239,7 @@ func handleHelpButtons(s *discordgo.Session, i *discordgo.InteractionCreate, ori
 			ID:         msg.ID,
 			Channel:    msg.ChannelID,
 			Embeds:     &[]*discordgo.MessageEmbed{embed},
-			Components: &[]discordgo.MessageComponent{}, 
+			Components: &[]discordgo.MessageComponent{},
 		})
 		return
 	}
@@ -267,7 +248,7 @@ func handleHelpButtons(s *discordgo.Session, i *discordgo.InteractionCreate, ori
 		ID:         msg.ID,
 		Channel:    msg.ChannelID,
 		Embeds:     &[]*discordgo.MessageEmbed{embed},
-		Components: &[]discordgo.MessageComponent{}, 
+		Components: &[]discordgo.MessageComponent{},
 	})
 }
 
@@ -303,7 +284,6 @@ func getAllCommands(guildID string) []CommandInfo {
 			example = name
 		}
 
-		
 		cmdAliases := []string{name}
 		cmdAliases = append(cmdAliases, cs.Aliases...)
 
@@ -317,7 +297,6 @@ func getAllCommands(guildID string) []CommandInfo {
 		})
 	}
 
-	
 	sort.Slice(commandList, func(i, j int) bool {
 		return commandList[i].Name < commandList[j].Name
 	})

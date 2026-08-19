@@ -1,4 +1,4 @@
-- [ ] Refactor & Optimize for performance
+- [x] Refactor & Optimize for performance
 - [ ] Add Settings Panel using Modal components
 - [x] Verify the SHA256 checksum and GPG signature of the yt-dlp binary
 - [x] Fix issue where live streams stop playing before reaching the end 

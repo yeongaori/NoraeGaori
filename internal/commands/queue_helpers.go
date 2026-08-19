@@ -103,7 +103,6 @@ func handleQueueButtons(s *discordgo.Session, i *discordgo.InteractionCreate, or
 			return
 		}
 
-		
 		if originalMsgID != "" && (ic.Message == nil || ic.Message.ID != originalMsgID) {
 			return
 		}

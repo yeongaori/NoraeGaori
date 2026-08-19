@@ -409,23 +409,109 @@ func DownloadFile(url, destination string) (string, error) {
 	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
+func resolveCurrentVersion(versionmanager *VersionManager) string {
+	if versionmanager != nil {
+		if version := versionmanager.GetActiveVersion(); version != "" {
+			return version
+		}
+	}
+
+	version, err := GetCurrentVersion()
+	if err != nil {
+		logger.Debugf("No version currently installed: %v", err)
+		return ""
+	}
+	return version
+}
+
+func verifyBinaryRuns(binaryPath string) (string, error) {
+	output, err := exec.Command(binaryPath, "--version").Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+func installVersionBinary(release *GitHubRelease, version string) (string, string, error) {
+	assetName, downloadURL, err := GetDownloadAsset(release)
+	if err != nil {
+		return "", "", err
+	}
+
+	binaryPath := VersionedBinaryPath(version)
+	versionDir := filepath.Dir(binaryPath)
+	if err := os.MkdirAll(versionDir, 0755); err != nil {
+		return "", "", fmt.Errorf("failed to create version directory for %s: %w", version, err)
+	}
+
+	if err := DownloadVerified(release, assetName, downloadURL, binaryPath); err != nil {
+		os.RemoveAll(versionDir)
+		return "", "", err
+	}
+
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(binaryPath, 0755); err != nil {
+			logger.Warnf("Failed to set permissions: %v", err)
+		}
+	}
+
+	reportedVersion, err := verifyBinaryRuns(binaryPath)
+	if err != nil {
+		os.RemoveAll(versionDir)
+		return "", "", fmt.Errorf("failed to verify %s after download: %w", version, err)
+	}
+
+	return binaryPath, reportedVersion, nil
+}
+
+func ensureVersionBinary(release *GitHubRelease, version string) (string, error) {
+	binaryPath := VersionedBinaryPath(version)
+	if _, statErr := os.Stat(binaryPath); statErr == nil {
+		if _, err := verifyBinaryRuns(binaryPath); err != nil {
+			os.RemoveAll(filepath.Dir(binaryPath))
+			return "", fmt.Errorf("failed to verify the installed %s: %w", version, err)
+		}
+		return binaryPath, nil
+	}
+
+	binaryPath, _, err := installVersionBinary(release, version)
+	return binaryPath, err
+}
+
+type canaryVerdict int
+
+const (
+	canaryActivated canaryVerdict = iota
+	canaryPending
+	canaryRejected
+)
+
+var runCanary = (*VersionManager).RunCanary
+
+func runCanaryAndActivate(versionmanager *VersionManager, version string) canaryVerdict {
+	passed, networkErr := runCanary(versionmanager, version)
+	if passed {
+		versionmanager.SetVersionState(version, StateVerified)
+		versionmanager.SetActiveVersion(version)
+		logger.Infof("Version %s verified by canary and activated", version)
+		return canaryActivated
+	}
+
+	if networkErr {
+		logger.Warnf("Canary failed due to network, version %s stays pending", version)
+		return canaryPending
+	}
+
+	logger.Warnf("Canary FAILED for %s, blacklisting", version)
+	versionmanager.SetVersionState(version, StateBlacklisted)
+	return canaryRejected
+}
+
 func UpdateYtDlp(force bool) (bool, error) {
 	logger.Debug("Checking for updates...")
 
 	versionmanager := GetVersionManager()
-
-	var currentVersion string
-	if versionmanager != nil {
-		currentVersion = versionmanager.GetActiveVersion()
-	}
-	if currentVersion == "" {
-		ver, err := GetCurrentVersion()
-		if err != nil {
-			logger.Debugf("No version currently installed: %v", err)
-		} else {
-			currentVersion = ver
-		}
-	}
+	currentVersion := resolveCurrentVersion(versionmanager)
 
 	release, err := GetLatestRelease()
 	if err != nil {
@@ -454,24 +540,17 @@ func UpdateYtDlp(force bool) (bool, error) {
 				return false, nil
 			}
 
-			binaryPath := VersionedBinaryPath(latestVersion)
-			if _, statErr := os.Stat(binaryPath); statErr == nil {
-				passed, networkErr := versionmanager.RunCanary(latestVersion)
-				if !passed {
-					if networkErr {
-						logger.Warnf("Canary failed due to network, version %s stays pending", latestVersion)
-						return false, nil
-					}
-					logger.Warnf("Canary FAILED for %s, blacklisting and trying previous releases", latestVersion)
-					versionmanager.SetVersionState(latestVersion, StateBlacklisted)
+			if _, statErr := os.Stat(VersionedBinaryPath(latestVersion)); statErr == nil {
+				switch runCanaryAndActivate(versionmanager, latestVersion) {
+				case canaryActivated:
+					return true, nil
+				case canaryPending:
+					return false, nil
+				default:
+					logger.Warnf("Trying previous releases after %s failed canary", latestVersion)
 					return installFallbackVersion(versionmanager, latestVersion, release)
 				}
-				versionmanager.SetVersionState(latestVersion, StateVerified)
-				versionmanager.SetActiveVersion(latestVersion)
-				logger.Infof("Version %s verified by canary and activated", latestVersion)
-				return true, nil
 			}
-
 		}
 	}
 
@@ -483,63 +562,29 @@ func UpdateYtDlp(force bool) (bool, error) {
 		logger.Infof("Installing version %s", latestVersion)
 	}
 
-	assetName, downloadURL, err := GetDownloadAsset(release)
-	if err != nil {
-		return false, err
-	}
-
-	binaryPath := VersionedBinaryPath(latestVersion)
-	versionDir := filepath.Dir(binaryPath)
-
-	if err := os.MkdirAll(versionDir, 0755); err != nil {
-		return false, fmt.Errorf("failed to create version directory: %w", err)
-	}
-
 	logger.Debug("Downloading new version...")
-	if err := DownloadVerified(release, assetName, downloadURL, binaryPath); err != nil {
-
-		os.RemoveAll(versionDir)
+	binaryPath, actualVersion, err := installVersionBinary(release, latestVersion)
+	if err != nil {
 		return false, err
 	}
-
-	if runtime.GOOS != "windows" {
-		if err := os.Chmod(binaryPath, 0755); err != nil {
-			logger.Warnf("Failed to set permissions: %v", err)
-		}
-	}
-
-	cmd := exec.Command(binaryPath, "--version")
-	output, err := cmd.Output()
-	if err != nil {
-		os.RemoveAll(versionDir)
-		return false, fmt.Errorf("failed to verify version after download: %w", err)
-	}
-	actualVersion := strings.TrimSpace(string(output))
 	logger.Infof("Downloaded version: %s", actualVersion)
 
-	if versionmanager != nil {
-		versionmanager.RegisterVersion(latestVersion, binaryPath)
-
-		passed, networkErr := versionmanager.RunCanary(latestVersion)
-		if !passed {
-			if networkErr {
-				logger.Warnf("Canary failed due to network, version %s stays pending", latestVersion)
-				return false, nil
-			}
-			logger.Warnf("Canary FAILED for %s, blacklisting and trying previous releases", latestVersion)
-			versionmanager.SetVersionState(latestVersion, StateBlacklisted)
-			return installFallbackVersion(versionmanager, latestVersion, release)
-		}
-
-		versionmanager.SetVersionState(latestVersion, StateVerified)
-		versionmanager.SetActiveVersion(latestVersion)
-		logger.Infof("Version %s verified by canary and activated", latestVersion)
-	} else {
-
+	if versionmanager == nil {
 		logger.Infof("Update complete! Version: %s", actualVersion)
+		return true, nil
 	}
 
-	return true, nil
+	versionmanager.RegisterVersion(latestVersion, binaryPath)
+
+	switch runCanaryAndActivate(versionmanager, latestVersion) {
+	case canaryActivated:
+		return true, nil
+	case canaryPending:
+		return false, nil
+	default:
+		logger.Warnf("Trying previous releases after %s failed canary", latestVersion)
+		return installFallbackVersion(versionmanager, latestVersion, release)
+	}
 }
 
 func installFallbackVersion(versionmanager *VersionManager, latestVersion string, latestRelease *GitHubRelease) (bool, error) {
@@ -565,8 +610,7 @@ func installFallbackVersion(versionmanager *VersionManager, latestVersion string
 				continue
 			}
 			if state == StateVerified || state == StateActive {
-				binaryPath := VersionedBinaryPath(ver)
-				if _, statErr := os.Stat(binaryPath); statErr == nil {
+				if _, statErr := os.Stat(VersionedBinaryPath(ver)); statErr == nil {
 					logger.Debugf("Reusing existing %s version %s", state, ver)
 					return true, nil
 				}
@@ -575,85 +619,30 @@ func installFallbackVersion(versionmanager *VersionManager, latestVersion string
 
 		logger.Infof("Fallback candidate %d/%d: trying version %s", considered, maxFallbackAttempts, ver)
 
-		assetName, downloadURL, urlErr := GetDownloadAsset(rel)
-		if urlErr != nil {
-			logger.Warnf("No download URL for %s: %v", ver, urlErr)
-			continue
-		}
-
-		binaryPath := VersionedBinaryPath(ver)
-		versionDir := filepath.Dir(binaryPath)
-		if err := os.MkdirAll(versionDir, 0755); err != nil {
-			logger.Warnf("Failed to create version dir for %s: %v", ver, err)
-			continue
-		}
-
-		if err := DownloadVerified(rel, assetName, downloadURL, binaryPath); err != nil {
-			logger.Warnf("Download of %s failed: %v", ver, err)
-			os.RemoveAll(versionDir)
-			continue
-		}
-
-		if runtime.GOOS != "windows" {
-			if err := os.Chmod(binaryPath, 0755); err != nil {
-				logger.Warnf("Failed to set permissions on %s: %v", ver, err)
-			}
-		}
-
-		cmd := exec.Command(binaryPath, "--version")
-		if _, err := cmd.Output(); err != nil {
-			logger.Warnf("Version check failed for %s: %v", ver, err)
-			os.RemoveAll(versionDir)
+		binaryPath, _, installErr := installVersionBinary(rel, ver)
+		if installErr != nil {
+			logger.Warnf("Fallback candidate %s could not be installed: %v", ver, installErr)
 			continue
 		}
 
 		versionmanager.RegisterVersion(ver, binaryPath)
 
-		passed, networkErr := versionmanager.RunCanary(ver)
-		if !passed {
-			if networkErr {
-				logger.Warnf("Canary network error on fallback %s; aborting fallback chain", ver)
-				return false, nil
-			}
-			logger.Warnf("Fallback %s failed canary, blacklisting", ver)
-			versionmanager.SetVersionState(ver, StateBlacklisted)
+		switch runCanaryAndActivate(versionmanager, ver) {
+		case canaryActivated:
+			return true, nil
+		case canaryPending:
+			logger.Warnf("Aborting the fallback chain after a canary network error on %s", ver)
+			return false, nil
+		default:
 			continue
 		}
-
-		versionmanager.SetVersionState(ver, StateVerified)
-		versionmanager.SetActiveVersion(ver)
-		logger.Infof("Fallback version %s verified by canary and activated", ver)
-		return true, nil
 	}
 
 	logger.Warnf("All fallback attempts failed canary; provisionally activating latest %s as last resort", latestVersion)
 
-	assetName, downloadURL, err := GetDownloadAsset(latestRelease)
+	binaryPath, err := ensureVersionBinary(latestRelease, latestVersion)
 	if err != nil {
-		return false, fmt.Errorf("last-resort: no download URL for %s: %w", latestVersion, err)
-	}
-
-	binaryPath := VersionedBinaryPath(latestVersion)
-	versionDir := filepath.Dir(binaryPath)
-	if err := os.MkdirAll(versionDir, 0755); err != nil {
-		return false, fmt.Errorf("last-resort: failed to create version dir: %w", err)
-	}
-
-	if _, statErr := os.Stat(binaryPath); statErr != nil {
-		if err := DownloadVerified(latestRelease, assetName, downloadURL, binaryPath); err != nil {
-			os.RemoveAll(versionDir)
-			return false, fmt.Errorf("last-resort: download failed: %w", err)
-		}
-		if runtime.GOOS != "windows" {
-			if err := os.Chmod(binaryPath, 0755); err != nil {
-				logger.Warnf("Failed to set permissions: %v", err)
-			}
-		}
-	}
-
-	if _, err := exec.Command(binaryPath, "--version").Output(); err != nil {
-		os.RemoveAll(versionDir)
-		return false, fmt.Errorf("last-resort: --version check failed: %w", err)
+		return false, fmt.Errorf("last-resort: %w", err)
 	}
 
 	versionmanager.ProvisionallyActivate(latestVersion, binaryPath)

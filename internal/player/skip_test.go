@@ -16,6 +16,13 @@ import (
 
 func TestMain(m *testing.M) {
 	resumePlayback = func(*discordgo.Session, string) error { return nil }
+	preCacheNext = func(string, int) {}
+	announceNowPlaying = func(*discordgo.Session, string, *queue.Song, *queue.Queue) {}
+	announceLeaving = func(*discordgo.Session, string, string) {}
+	announceReconnect = func(*discordgo.Session, string, *queue.Song) {}
+	dismissLoadingMessage = func(*discordgo.Session, string) {}
+	lookupVoiceChannelBitrate = func(*discordgo.Session, string) int { return 128000 }
+	announceSongError = func(*discordgo.Session, string, *queue.Song, string) {}
 	os.Exit(m.Run())
 }
 
@@ -150,7 +157,7 @@ func TestPlayAudioStopsOnSignal(t *testing.T) {
 	firstFrame := make(chan struct{}, 1)
 	done := make(chan error, 1)
 	go func() {
-		done <- playAudio(player, song, "fake://url", 0, 100, false, 128000, firstFrame, fadeSettings{}, func(*queue.Song) {})
+		done <- playAudio(player, song, "fake://url", 0, false, 128000, firstFrame, fadeSettings{}, func(*queue.Song) {})
 	}()
 
 	select {

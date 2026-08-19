@@ -98,30 +98,108 @@ func snapTransitionToBar(target, tailStartFrame int, a *TrackAnalysis) int {
 	return int(math.Round(firstBeatFrame + beat*periodFrames))
 }
 
-func (cs *crossfadeState) plan(player *GuildPlayer, es *streamEndState, sentFrames int, fade fadeSettings, normalization bool, bitrate int) bool {
+func nextCrossfadeCandidate(guildID string) (*queue.Song, *queue.Song, string) {
+	q, err := queue.GetQueue(guildID, true)
+	if err != nil || q == nil || len(q.Songs) < 2 {
+		return nil, nil, ""
+	}
+	if q.Songs[0].IsLive || q.Songs[1].IsLive {
+		return nil, nil, ""
+	}
+
+	nextURL := GetCachedStreamURL(guildID, q.Songs[1].ID)
+	if nextURL == "" {
+		return nil, nil, ""
+	}
+
+	return q.Songs[0], q.Songs[1], nextURL
+}
+
+func analysisPeriodSec(a *TrackAnalysis) float64 {
+	if a == nil {
+		return 0
+	}
+	return a.PeriodSec
+}
+
+func analysisFirstBeat(a *TrackAnalysis) float64 {
+	if a == nil {
+		return 0
+	}
+	return a.FirstBeat
+}
+
+func resolveSlideFrames(a *TrackAnalysis) int {
+	if a == nil {
+		return fallbackSlideFrames
+	}
+
+	slideFrames := int(math.Round(a.PeriodSec * framesPerSecond))
+	if slideFrames < 1 {
+		return fallbackSlideFrames
+	}
+	return slideFrames
+}
+
+func resolveTransitionFrame(transitionFrame, maxStart, sentFrames, tailStartFrame int, beatAligned bool, loopBeats int, a *TrackAnalysis) int {
+	if beatAligned {
+		transitionFrame -= int(tailMarginSec * framesPerSecond)
+		transitionFrame = snapTransitionToBeats(transitionFrame, tailStartFrame, loopBeats, a)
+	}
+	if transitionFrame > maxStart {
+		transitionFrame = maxStart
+	}
+	if transitionFrame < sentFrames+1 {
+		return sentFrames + 1
+	}
+	return transitionFrame
+}
+
+func snapTransitionToBeats(transitionFrame, tailStartFrame, loopBeats int, a *TrackAnalysis) int {
+	if a == nil {
+		return transitionFrame
+	}
+	if loopBeats >= keyBarBeats {
+		return snapTransitionToBar(transitionFrame, tailStartFrame, a)
+	}
+	return snapTransitionToGrid(transitionFrame, tailStartFrame, a)
+}
+
+type crossfadePlan struct {
+	autoMix         bool
+	scope           *logger.Scoped
+	guildID         string
+	normalization   bool
+	bitrate         int
+	trimSilence     bool
+	fadeGains       bool
+	bStream         *audioStream
+	nextSongID      int
+	startOffsetSec  float64
+	transitionFrame int
+	crossfadeFrames int
+	minUsableFrames int
+	totalFrames     int
+	slideFrames     int
+	recipe          TransitionRecipe
+	loopFrames      int
+	periodSec       float64
+	flatGains       bool
+	description     string
+}
+
+func (cs *crossfadeState) buildPlan(player *GuildPlayer, es *streamEndState, sentFrames int, fade fadeSettings, normalization bool, bitrate int) *crossfadePlan {
 	if (!fade.autoMix && !fade.crossfade) || cs.armed {
-		return false
+		return nil
 	}
 	if fade.repeatMode == queue.RepeatSingle {
-		return false
+		return nil
 	}
 
 	guildID := player.GuildID
-	q, err := queue.GetQueue(guildID, true)
-	if err != nil || q == nil || len(q.Songs) < 2 {
-		return false
-	}
-	if q.Songs[0].IsLive {
-		return false
-	}
-	next := q.Songs[1]
-	if next.IsLive {
-		return false
-	}
-
-	nextURL := GetCachedStreamURL(guildID, next.ID)
-	if nextURL == "" {
-		return false
+	current, next, nextURL := nextCrossfadeCandidate(guildID)
+	if next == nil {
+		return nil
 	}
 
 	var aAnal *TrackAnalysis
@@ -138,16 +216,13 @@ func (cs *crossfadeState) plan(player *GuildPlayer, es *streamEndState, sentFram
 
 	crossfadeFrames, crossfadeSec := TransitionCrossfadeFrames(fade.autoMix, fade.autoMixBeats, fade.crossfadeSec, aAnal)
 	if crossfadeFrames < 1 {
-		return false
+		return nil
 	}
 
-	songOverrides := songTransitionOverrides(q.Songs[0])
+	songOverrides := songTransitionOverrides(current)
 	recipe, _, styleSource := ResolveTransitionStyles(aAnal, bAnal, fade.autoMix, fade.styleOverrides, songOverrides)
 
-	periodSec := 0.0
-	if aAnal != nil {
-		periodSec = aAnal.PeriodSec
-	}
+	periodSec := analysisPeriodSec(aAnal)
 
 	loopStyle, loopFrames := ClampLoopStyle(recipe.Loop, periodSec, crossfadeFrames)
 	recipe.Loop = loopStyle
@@ -156,7 +231,7 @@ func (cs *crossfadeState) plan(player *GuildPlayer, es *streamEndState, sentFram
 	bDuration := youtube.ParseDurationToSeconds(next.Duration)
 	if bDuration > 0 && float64(bDuration) < crossfadeSec+5 {
 		scope.Debugf("next song too short for crossfade (%ds < %.1fs), skipping for guild: %s", bDuration, crossfadeSec+5, guildID)
-		return false
+		return nil
 	}
 
 	effectiveEnd := es.totalFrames - es.silentTailFrames
@@ -166,79 +241,81 @@ func (cs *crossfadeState) plan(player *GuildPlayer, es *streamEndState, sentFram
 
 	maxStart := effectiveEnd - crossfadeFrames
 	if maxStart < sentFrames+1 {
-		return false
+		return nil
 	}
 
-	transitionFrame := effectiveEnd - crossfadeFrames
-	if beatAligned {
-		transitionFrame -= int(tailMarginSec * framesPerSecond)
-		if aAnal != nil {
-			if loopBeats >= keyBarBeats {
-				transitionFrame = snapTransitionToBar(transitionFrame, es.tailStartFrame, aAnal)
-			} else {
-				transitionFrame = snapTransitionToGrid(transitionFrame, es.tailStartFrame, aAnal)
-			}
-		}
-	}
-	if transitionFrame > maxStart {
-		transitionFrame = maxStart
-	}
-	if transitionFrame < sentFrames+1 {
-		transitionFrame = sentFrames + 1
-	}
-
-	startOffsetSec := 0.0
-	if bAnal != nil {
-		startOffsetSec = bAnal.FirstBeat
-	}
+	transitionFrame := resolveTransitionFrame(effectiveEnd-crossfadeFrames, maxStart, sentFrames, es.tailStartFrame, beatAligned, loopBeats, aAnal)
+	startOffsetSec := analysisFirstBeat(bAnal)
 
 	bArgs := buildFFmpegArgs(nextURL, startOffsetSec, normalization)
 	bStream, err := newAudioStream(bArgs, fade.autoMix || fade.trimSilence)
 	if err != nil {
 		scope.Debugf("failed to start next stream for guild %s: %v", guildID, err)
+		return nil
+	}
+
+	slideFrames := resolveSlideFrames(aAnal)
+	minUsableFrames := min(minUsableCrossfadeFrames, crossfadeFrames)
+
+	return &crossfadePlan{
+		autoMix:         beatAligned,
+		scope:           scope,
+		guildID:         guildID,
+		normalization:   normalization,
+		bitrate:         bitrate,
+		trimSilence:     fade.trimSilence,
+		fadeGains:       fade.crossfade,
+		bStream:         bStream,
+		nextSongID:      next.ID,
+		startOffsetSec:  startOffsetSec,
+		transitionFrame: transitionFrame,
+		crossfadeFrames: crossfadeFrames,
+		minUsableFrames: minUsableFrames,
+		totalFrames:     effectiveEnd,
+		slideFrames:     slideFrames,
+		recipe:          recipe,
+		loopFrames:      loopFrames,
+		periodSec:       periodSec,
+		flatGains:       !fade.crossfade,
+		description:     fmt.Sprintf("recipe %s (%s) [%s]", recipe, describeTransitionInputs(aAnal, bAnal), describeStyleSources(styleSource)),
+	}
+}
+
+func (cs *crossfadeState) commit(p *crossfadePlan) {
+	cs.armed = true
+	cs.autoMix = p.autoMix
+	cs.scope = p.scope
+	cs.guildID = p.guildID
+	cs.normalization = p.normalization
+	cs.bitrate = p.bitrate
+	cs.trimSilence = p.trimSilence
+	cs.fadeGains = p.fadeGains
+	cs.bStream = p.bStream
+	cs.nextSongID = p.nextSongID
+	cs.startOffsetSec = p.startOffsetSec
+	cs.transitionFrame = p.transitionFrame
+	cs.crossfadeFrames = p.crossfadeFrames
+	cs.minUsableFrames = p.minUsableFrames
+	cs.totalFrames = p.totalFrames
+	cs.slideFrames = p.slideFrames
+	cs.recipe = p.recipe
+	cs.loopFrames = p.loopFrames
+	cs.loopBuffer = nil
+	cs.loopIndex = 0
+	cs.processor = newTransitionProcessor(p.recipe, p.crossfadeFrames, p.periodSec)
+	cs.processor.flatGains = p.flatGains
+}
+
+func (cs *crossfadeState) plan(player *GuildPlayer, es *streamEndState, sentFrames int, fade fadeSettings, normalization bool, bitrate int) bool {
+	p := cs.buildPlan(player, es, sentFrames, fade, normalization, bitrate)
+	if p == nil {
 		return false
 	}
 
-	slideFrames := fallbackSlideFrames
-	if aAnal != nil {
-		slideFrames = int(math.Round(aAnal.PeriodSec * framesPerSecond))
-		if slideFrames < 1 {
-			slideFrames = fallbackSlideFrames
-		}
-	}
+	cs.commit(p)
 
-	minUsableFrames := minUsableCrossfadeFrames
-	if minUsableFrames > crossfadeFrames {
-		minUsableFrames = crossfadeFrames
-	}
-
-	cs.armed = true
-	cs.autoMix = beatAligned
-	cs.scope = scope
-	cs.guildID = guildID
-	cs.normalization = normalization
-	cs.bitrate = bitrate
-	cs.trimSilence = fade.trimSilence
-	cs.fadeGains = fade.crossfade
-	cs.bStream = bStream
-	cs.nextSongID = next.ID
-	cs.startOffsetSec = startOffsetSec
-	cs.transitionFrame = transitionFrame
-	cs.crossfadeFrames = crossfadeFrames
-	cs.minUsableFrames = minUsableFrames
-	cs.totalFrames = effectiveEnd
-	cs.slideFrames = slideFrames
-	cs.recipe = recipe
-	cs.loopFrames = loopFrames
-	cs.loopBuffer = nil
-	cs.loopIndex = 0
-	cs.processor = newTransitionProcessor(recipe, crossfadeFrames, periodSec)
-	cs.processor.flatGains = !fade.crossfade
-
-	scope.Debugf("planned crossfade at frame %d (%d frames) into song ID %d for guild: %s", transitionFrame, crossfadeFrames, next.ID, guildID)
-	scope.Debugf("recipe %s (%s) [%s] for guild: %s", recipe,
-		describeTransitionInputs(aAnal, bAnal),
-		describeStyleSources(styleSource), guildID)
+	p.scope.Debugf("planned crossfade at frame %d (%d frames) into song ID %d for guild: %s", p.transitionFrame, p.crossfadeFrames, p.nextSongID, p.guildID)
+	p.scope.Debugf("%s for guild: %s", p.description, p.guildID)
 	return true
 }
 

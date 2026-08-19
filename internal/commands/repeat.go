@@ -24,7 +24,7 @@ func HandleRepeat(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 			mode = queue.RepeatOff
 		}
 	} else {
-		
+
 		currentMode, err := queue.GetRepeatMode(i.GuildID)
 		if err != nil {
 			logger.Errorf("Failed to get current repeat mode: %v", err)

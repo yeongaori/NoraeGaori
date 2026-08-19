@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -83,17 +84,17 @@ func cleanErrorMessage(guildID, errorMsg string) string {
 	errorLower := strings.ToLower(errorMsg)
 	t := messages.T(guildID)
 	errorMappings := map[string]string{
-		"private video":              t.Music.ErrorPrivateVideo,
-		"deleted video":              t.Music.ErrorDeletedVideo,
-		"age-restricted":             t.Music.ErrorAgeRestricted,
-		"age restricted":             t.Music.ErrorAgeRestricted,
+		"private video":                 t.Music.ErrorPrivateVideo,
+		"deleted video":                 t.Music.ErrorDeletedVideo,
+		"age-restricted":                t.Music.ErrorAgeRestricted,
+		"age restricted":                t.Music.ErrorAgeRestricted,
 		"not available in your country": t.Music.ErrorGeoRestricted,
-		"geo":                        t.Music.ErrorGeoRestricted,
-		"members-only":               t.Music.ErrorMembersOnly,
-		"members only":               t.Music.ErrorMembersOnly,
-		"premium":                    t.Music.ErrorPremiumOnly,
-		"copyright":                  t.Music.ErrorCopyright,
-		"blocked":                    t.Music.ErrorBlocked,
+		"geo":                           t.Music.ErrorGeoRestricted,
+		"members-only":                  t.Music.ErrorMembersOnly,
+		"members only":                  t.Music.ErrorMembersOnly,
+		"premium":                       t.Music.ErrorPremiumOnly,
+		"copyright":                     t.Music.ErrorCopyright,
+		"blocked":                       t.Music.ErrorBlocked,
 	}
 	for pattern, message := range errorMappings {
 		if strings.Contains(errorLower, pattern) {
@@ -103,8 +104,31 @@ func cleanErrorMessage(guildID, errorMsg string) string {
 	return t.Music.ErrorUnavailable
 }
 
+func requiredVotesInChannel(s *discordgo.Session, guildID, voiceChannelID string) (int, error) {
+	guild, err := s.State.Guild(guildID)
+	if err != nil {
+		return 0, err
+	}
+
+	humansPresent := 0
+	for _, vs := range guild.VoiceStates {
+		if vs.ChannelID != voiceChannelID {
+			continue
+		}
+		if member, err := s.State.Member(guildID, vs.UserID); err == nil && !member.User.Bot {
+			humansPresent++
+		}
+	}
+
+	required := int(math.Ceil(float64(humansPresent) * 0.5))
+	if required < 1 {
+		return 1, nil
+	}
+	return required, nil
+}
+
 type voteSession struct {
-	votes          map[string]bool 
+	votes          map[string]bool
 	requiredVotes  int
 	startTime      time.Time
 	cancelTimer    chan bool
@@ -115,12 +139,12 @@ type voteSession struct {
 }
 
 var (
-	skipVotes      = make(map[string]*voteSession) 
+	skipVotes      = make(map[string]*voteSession)
 	skipVotesMutex sync.RWMutex
 )
 
 var (
-	stopVotes      = make(map[string]*voteSession) 
+	stopVotes      = make(map[string]*voteSession)
 	stopVotesMutex sync.RWMutex
 )
 
@@ -191,122 +215,145 @@ func renderVoteProgress(s *discordgo.Session, guildID, title, emoji string, vs *
 	s.ChannelMessageEditEmbed(vs.channelID, vs.messageID, embed)
 }
 
+type voteReaction struct {
+	guildID      string
+	title        string
+	emoji        string
+	session      *voteSession
+	votesMap     map[string]*voteSession
+	votesMutex   *sync.RWMutex
+	onVotePassed func(currentVotes int)
+	voteDone     chan bool
+}
+
+func (v *voteReaction) targetsThisVote(s *discordgo.Session, userID, messageID, emojiName string) bool {
+	return userID != s.State.User.ID && messageID == v.session.messageID && emojiName == v.emoji
+}
+
+func (v *voteReaction) voterIsEligible(s *discordgo.Session, userID string) bool {
+	member, err := s.State.Member(v.guildID, userID)
+	if err != nil || member.User.Bot {
+		return false
+	}
+
+	voiceState, err := s.State.VoiceState(v.guildID, userID)
+	return err == nil && voiceState.ChannelID == v.session.voiceChannelID
+}
+
+func (v *voteReaction) rejectReaction(s *discordgo.Session, userID string) {
+	removeUserReaction(s, v.session.channelID, v.session.messageID, v.emoji, userID)
+}
+
+func (v *voteReaction) onReactionAdd(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
+	if !v.targetsThisVote(s, r.UserID, r.MessageID, r.Emoji.Name) {
+		return
+	}
+
+	if !v.voterIsEligible(s, r.UserID) {
+		v.rejectReaction(s, r.UserID)
+		return
+	}
+
+	v.votesMutex.Lock()
+	if v.votesMap[v.guildID] != v.session {
+		v.votesMutex.Unlock()
+		v.rejectReaction(s, r.UserID)
+		return
+	}
+
+	currentVotes, counted := v.session.castVote(r.UserID)
+	if !counted {
+		v.votesMutex.Unlock()
+		return
+	}
+	requiredVotes := v.session.requiredVotes
+
+	if currentVotes < requiredVotes {
+		v.votesMutex.Unlock()
+		renderVoteProgress(s, v.guildID, v.title, v.emoji, v.session, currentVotes, requiredVotes)
+		return
+	}
+
+	v.session.resolved = true
+	delete(v.votesMap, v.guildID)
+	v.votesMutex.Unlock()
+
+	v.onVotePassed(currentVotes)
+
+	select {
+	case v.voteDone <- true:
+	default:
+	}
+}
+
+func (v *voteReaction) onReactionRemove(s *discordgo.Session, r *discordgo.MessageReactionRemove) {
+	if !v.targetsThisVote(s, r.UserID, r.MessageID, r.Emoji.Name) {
+		return
+	}
+
+	v.votesMutex.Lock()
+	if v.votesMap[v.guildID] != v.session {
+		v.votesMutex.Unlock()
+		return
+	}
+
+	currentVotes, withdrawn := v.session.withdrawVote(r.UserID)
+	if !withdrawn {
+		v.votesMutex.Unlock()
+		return
+	}
+	requiredVotes := v.session.requiredVotes
+	v.votesMutex.Unlock()
+
+	renderVoteProgress(s, v.guildID, v.title, v.emoji, v.session, currentVotes, requiredVotes)
+}
+
+func (v *voteReaction) awaitOutcome(s *discordgo.Session) {
+	select {
+	case <-v.session.cancelTimer:
+		logger.Debugf("%s vote cancelled for guild %s", v.title, v.guildID)
+		v.votesMutex.RLock()
+		resolved := v.session.resolved
+		v.votesMutex.RUnlock()
+		if !resolved {
+			s.ChannelMessageEditEmbed(v.session.channelID, v.session.messageID, messages.CreateWarningEmbed(v.title, messages.T(v.guildID).Votes.Cancelled))
+		}
+	case <-v.voteDone:
+		logger.Debugf("%s vote passed via reaction for guild %s", v.title, v.guildID)
+	case <-time.After(voteExpirationTime):
+		logger.Debugf("%s vote expired for guild %s", v.title, v.guildID)
+		v.votesMutex.Lock()
+		delete(v.votesMap, v.guildID)
+		v.votesMutex.Unlock()
+
+		s.ChannelMessageEditEmbed(v.session.channelID, v.session.messageID, messages.CreateWarningEmbed(v.title, messages.T(v.guildID).Votes.Expired))
+	}
+
+	clearPromptReactions(s, v.session.channelID, v.session.messageID)
+}
+
 func startVoteWithReaction(s *discordgo.Session, guildID, title, emoji string, vs *voteSession, votesMap map[string]*voteSession, votesMutex *sync.RWMutex, onVotePassed func(currentVotes int)) {
-	voteDone := make(chan bool, 1)
-
-	reactionHandler := func(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
-		if r.UserID == s.State.User.ID {
-			return
-		}
-		if r.MessageID != vs.messageID {
-			return
-		}
-		if r.Emoji.Name != emoji {
-			return
-		}
-
-		member, err := s.State.Member(guildID, r.UserID)
-		if err != nil || member.User.Bot {
-			removeUserReaction(s, vs.channelID, vs.messageID, emoji, r.UserID)
-			return
-		}
-
-		voiceState, err := s.State.VoiceState(guildID, r.UserID)
-		if err != nil || voiceState.ChannelID != vs.voiceChannelID {
-			removeUserReaction(s, vs.channelID, vs.messageID, emoji, r.UserID)
-			return
-		}
-
-		votesMutex.Lock()
-		if votesMap[guildID] != vs {
-			votesMutex.Unlock()
-			removeUserReaction(s, vs.channelID, vs.messageID, emoji, r.UserID)
-			return
-		}
-		currentVotes, counted := vs.castVote(r.UserID)
-		if !counted {
-			votesMutex.Unlock()
-			return
-		}
-		requiredVotes := vs.requiredVotes
-
-		if currentVotes >= requiredVotes {
-			vs.resolved = true
-			delete(votesMap, guildID)
-			votesMutex.Unlock()
-
-			onVotePassed(currentVotes)
-
-			select {
-			case voteDone <- true:
-			default:
-			}
-		} else {
-			votesMutex.Unlock()
-
-			renderVoteProgress(s, guildID, title, emoji, vs, currentVotes, requiredVotes)
-		}
+	vote := &voteReaction{
+		guildID:      guildID,
+		title:        title,
+		emoji:        emoji,
+		session:      vs,
+		votesMap:     votesMap,
+		votesMutex:   votesMutex,
+		onVotePassed: onVotePassed,
+		voteDone:     make(chan bool, 1),
 	}
 
-	reactionRemoveHandler := func(s *discordgo.Session, r *discordgo.MessageReactionRemove) {
-		if r.UserID == s.State.User.ID {
-			return
-		}
-		if r.MessageID != vs.messageID {
-			return
-		}
-		if r.Emoji.Name != emoji {
-			return
-		}
-
-		votesMutex.Lock()
-		if votesMap[guildID] != vs {
-			votesMutex.Unlock()
-			return
-		}
-		currentVotes, withdrawn := vs.withdrawVote(r.UserID)
-		if !withdrawn {
-			votesMutex.Unlock()
-			return
-		}
-		requiredVotes := vs.requiredVotes
-		votesMutex.Unlock()
-
-		renderVoteProgress(s, guildID, title, emoji, vs, currentVotes, requiredVotes)
-	}
-
-	removeAddHandler := s.AddHandler(reactionHandler)
+	removeAddHandler := s.AddHandler(vote.onReactionAdd)
 	defer removeAddHandler()
-	removeRemoveHandler := s.AddHandler(reactionRemoveHandler)
+	removeRemoveHandler := s.AddHandler(vote.onReactionRemove)
 	defer removeRemoveHandler()
 
 	if err := s.MessageReactionAdd(vs.channelID, vs.messageID, emoji); err != nil {
 		logger.Errorf("Failed to add reaction to message: %v", err)
 	}
 
-	select {
-	case <-vs.cancelTimer:
-		logger.Debugf("%s vote cancelled for guild %s", title, guildID)
-		votesMutex.RLock()
-		resolved := vs.resolved
-		votesMutex.RUnlock()
-		if !resolved {
-			s.ChannelMessageEditEmbed(vs.channelID, vs.messageID, messages.CreateWarningEmbed(title, messages.T(guildID).Votes.Cancelled))
-		}
-		clearPromptReactions(s, vs.channelID, vs.messageID)
-	case <-voteDone:
-		logger.Debugf("%s vote passed via reaction for guild %s", title, guildID)
-		clearPromptReactions(s, vs.channelID, vs.messageID)
-	case <-time.After(voteExpirationTime):
-		logger.Debugf("%s vote expired for guild %s", title, guildID)
-		votesMutex.Lock()
-		delete(votesMap, guildID)
-		votesMutex.Unlock()
-
-		embed := messages.CreateWarningEmbed(title, messages.T(guildID).Votes.Expired)
-		s.ChannelMessageEditEmbed(vs.channelID, vs.messageID, embed)
-		clearPromptReactions(s, vs.channelID, vs.messageID)
-	}
+	vote.awaitOutcome(s)
 }
 
 func ClearSkipVotes(guildID string) {

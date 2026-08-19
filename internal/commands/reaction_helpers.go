@@ -5,7 +5,7 @@ import (
 	"noraegaori/pkg/logger"
 )
 
-func removeUserReaction(s *discordgo.Session, channelID, messageID, emoji, userID string) {
+var removeUserReaction = func(s *discordgo.Session, channelID, messageID, emoji, userID string) {
 	if err := s.MessageReactionRemove(channelID, messageID, emoji, userID); err != nil {
 		logger.Warnf("Failed to remove reaction %s from user %s: %v", emoji, userID, err)
 	}

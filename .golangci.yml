@@ -65,3 +65,7 @@ linters:
           - unused
         path: internal/player/dsp\.go
         source: func \(.*\) reset\(\)
+
+formatters:
+  enable:
+    - gofmt

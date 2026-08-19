@@ -17,7 +17,7 @@ type MessageCommandAdapter struct {
 }
 
 func CreatePseudoInteraction(s *discordgo.Session, m *discordgo.MessageCreate, cmd *Command, args []string) *discordgo.InteractionCreate {
-	
+
 	member, err := s.GuildMember(m.GuildID, m.Author.ID)
 	if err != nil {
 		logger.Errorf("Failed to get member: %v", err)
@@ -26,14 +26,13 @@ func CreatePseudoInteraction(s *discordgo.Session, m *discordgo.MessageCreate, c
 		}
 	}
 
-	
 	options := parseCommandOptions(cmd, args)
 
 	interaction := &discordgo.InteractionCreate{
 		Interaction: &discordgo.Interaction{
-			Type:    discordgo.InteractionApplicationCommand,
-			GuildID: m.GuildID,
-			Member:  member,
+			Type:      discordgo.InteractionApplicationCommand,
+			GuildID:   m.GuildID,
+			Member:    member,
 			ChannelID: m.ChannelID,
 			Data: discordgo.ApplicationCommandInteractionData{
 				Name:    cmd.Name,
@@ -56,9 +55,9 @@ func parseCommandOptions(cmd *Command, args []string) []*discordgo.ApplicationCo
 
 	for _, opt := range cmd.Options {
 		if argIndex >= len(args) {
-			
+
 			if opt.Required {
-				
+
 				break
 			}
 			continue
@@ -69,7 +68,7 @@ func parseCommandOptions(cmd *Command, args []string) []*discordgo.ApplicationCo
 
 		switch opt.Type {
 		case discordgo.ApplicationCommandOptionString:
-			
+
 			if argIndex == len(cmd.Options)-1 || opt.Name == "query" || opt.Name == "position" || opt.Name == "target" {
 				value = strings.Join(args[argIndex:], " ")
 				consumed = len(args) - argIndex
@@ -81,12 +80,12 @@ func parseCommandOptions(cmd *Command, args []string) []*discordgo.ApplicationCo
 		case discordgo.ApplicationCommandOptionInteger:
 			intVal, err := strconv.ParseInt(args[argIndex], 10, 64)
 			if err != nil {
-				
+
 				logger.Warnf("Invalid integer: %s", args[argIndex])
 				argIndex++
 				continue
 			}
-			
+
 			value = float64(intVal)
 			consumed = 1
 
@@ -96,7 +95,7 @@ func parseCommandOptions(cmd *Command, args []string) []*discordgo.ApplicationCo
 			consumed = 1
 
 		case discordgo.ApplicationCommandOptionChannel:
-			
+
 			channelID := args[argIndex]
 			if strings.HasPrefix(channelID, "<#") && strings.HasSuffix(channelID, ">") {
 				channelID = strings.TrimPrefix(channelID, "<#")
@@ -123,14 +122,14 @@ func parseCommandOptions(cmd *Command, args []string) []*discordgo.ApplicationCo
 }
 
 type MessageResponse struct {
-	Session          *discordgo.Session
-	ChannelID        string
-	Message          *discordgo.Message
-	OriginalMsgID    string 
+	Session       *discordgo.Session
+	ChannelID     string
+	Message       *discordgo.Message
+	OriginalMsgID string
 }
 
 func (mr *MessageResponse) SendEmbed(embed *discordgo.MessageEmbed) {
-	
+
 	msg, err := mr.Session.ChannelMessageSendComplex(mr.ChannelID, &discordgo.MessageSend{
 		Embeds: []*discordgo.MessageEmbed{embed},
 		Reference: &discordgo.MessageReference{
@@ -139,7 +138,7 @@ func (mr *MessageResponse) SendEmbed(embed *discordgo.MessageEmbed) {
 		},
 	})
 	if err == nil {
-		mr.Message = msg 
+		mr.Message = msg
 		logger.Debugf("Sent reply and stored message ID: %s", msg.ID)
 	} else {
 		logger.Errorf("Failed to send embed reply: %v", err)
@@ -147,7 +146,7 @@ func (mr *MessageResponse) SendEmbed(embed *discordgo.MessageEmbed) {
 }
 
 func (mr *MessageResponse) SendMessage(content string) {
-	
+
 	msg, err := mr.Session.ChannelMessageSendComplex(mr.ChannelID, &discordgo.MessageSend{
 		Content: content,
 		Reference: &discordgo.MessageReference{
@@ -156,7 +155,7 @@ func (mr *MessageResponse) SendMessage(content string) {
 		},
 	})
 	if err == nil {
-		mr.Message = msg 
+		mr.Message = msg
 	}
 }
 
@@ -178,7 +177,7 @@ func (mr *MessageResponse) SendEmbedWithComponents(embed *discordgo.MessageEmbed
 		},
 	})
 	if err == nil {
-		mr.Message = msg 
+		mr.Message = msg
 	}
 	return msg, err
 }

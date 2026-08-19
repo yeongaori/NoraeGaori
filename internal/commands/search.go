@@ -9,14 +9,13 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/messages"
-	"noraegaori/internal/player"
 	"noraegaori/internal/queue"
 	"noraegaori/internal/youtube"
 	"noraegaori/pkg/logger"
 )
 
 var (
-	searchSelections   = make(map[string]bool) 
+	searchSelections   = make(map[string]bool)
 	searchSelectionsMu sync.Mutex
 )
 
@@ -50,11 +49,9 @@ func HandleSearch(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return nil
 	}
 
-	
 	searchMessageID := fmt.Sprintf("%s_%s_%d", i.GuildID, i.Member.User.ID, time.Now().UnixNano())
 	logger.Debugf("HandleSearch called, generated searchMessageID='%s'", searchMessageID)
 
-	
 	selectOptions := make([]discordgo.SelectMenuOption, 0, len(results))
 	for idx, result := range results {
 		titleWithNumber := fmt.Sprintf("%d. %s", idx+1, result.Title)
@@ -119,6 +116,185 @@ func parseSearchSelection(value string) (string, int, error) {
 	return parts[0], index, nil
 }
 
+type searchSelection struct {
+	results         []youtube.SearchResult
+	customID        string
+	voiceChannelID  string
+	searchMessageID string
+	original        *discordgo.InteractionCreate
+	done            chan struct{}
+}
+
+func (c *searchSelection) handle(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	logger.Debugf("selectionHandler triggered, captured c.searchMessageID='%s', captured c.customID='%s'", c.searchMessageID, c.customID)
+
+	if i.Type != discordgo.InteractionMessageComponent {
+		logger.Debugf("Not a message component, ignoring (type=%d)", i.Type)
+		return
+	}
+
+	data := i.MessageComponentData()
+	logger.Debugf("Message component received, data.CustomID='%s', checking against c.customID='%s'", data.CustomID, c.customID)
+
+	if data.CustomID != c.customID {
+		logger.Debugf("CustomID mismatch, ignoring (expected='%s', got='%s')", c.customID, data.CustomID)
+		return
+	}
+
+	if i.Member.User.ID != c.original.Member.User.ID {
+		embed := messages.CreateWarningEmbed(messages.T(i.GuildID).Titles.NoPermission, messages.T(i.GuildID).Queue.OnlyRequester)
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Embeds: []*discordgo.MessageEmbed{embed},
+				Flags:  discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+
+	if len(data.Values) == 0 {
+		logger.Warnf("No value in selection data")
+		return
+	}
+
+	logger.Debugf("Parsing value: '%s'", data.Values[0])
+
+	valueSearchID, selectedIndex, parseErr := parseSearchSelection(data.Values[0])
+	if parseErr != nil {
+		logger.Warnf("Invalid selection value %q: %v", data.Values[0], parseErr)
+		return
+	}
+
+	logger.Debugf("Parsed value: valueSearchID='%s', selectedIndex=%d", valueSearchID, selectedIndex)
+
+	if valueSearchID != c.searchMessageID {
+		logger.Debugf("Value searchID mismatch: expected %s, got %s - ignoring", c.searchMessageID, valueSearchID)
+		return
+	}
+
+	searchSelectionsMu.Lock()
+	logger.Debugf("Checking duplicate map with c.searchMessageID='%s', already_selected=%v", c.searchMessageID, searchSelections[c.searchMessageID])
+	if searchSelections[c.searchMessageID] {
+		searchSelectionsMu.Unlock()
+		logger.Debugf("Duplicate selection attempt ignored for search message: '%s'", c.searchMessageID)
+		embed := messages.CreateWarningEmbed(messages.T(i.GuildID).Queue.AlreadySelectedTitle, messages.T(i.GuildID).Queue.AlreadySelectedDesc)
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Embeds: []*discordgo.MessageEmbed{embed},
+				Flags:  discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+	logger.Debugf("Marking search as selected: c.searchMessageID='%s'", c.searchMessageID)
+	searchSelections[c.searchMessageID] = true
+	searchSelectionsMu.Unlock()
+
+	if selectedIndex < 0 || selectedIndex >= len(c.results) {
+		logger.Warnf("Invalid index %d for search with %d c.results", selectedIndex, len(c.results))
+		return
+	}
+
+	selectedResult := c.results[selectedIndex]
+
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredMessageUpdate,
+	})
+
+	processingEmbed := messages.CreateWarningEmbed(messages.T(i.GuildID).Queue.ProcessingTitle,
+		fmt.Sprintf(messages.T(i.GuildID).Queue.ProcessingDesc, selectedResult.Title))
+
+	if _, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+		Embeds:     &[]*discordgo.MessageEmbed{processingEmbed},
+		Components: &[]discordgo.MessageComponent{},
+	}); err != nil {
+		logger.Errorf("Failed to edit message to processing state: %v", err)
+	}
+
+	videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", selectedResult.VideoID)
+	logger.Debugf("Fetching detailed info for selected song: %s", selectedResult.Title)
+	fetchStartTime := time.Now()
+
+	song, err := youtube.GetVideoInfo(c.original.GuildID, videoURL, c.original.Member.User.Username, c.original.Member.User.ID)
+	if err != nil {
+		logger.Errorf("Error fetching detailed info: %v", err)
+		errorEmbed := messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Queue.SearchAddError)
+		if _, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+			Embeds:     &[]*discordgo.MessageEmbed{errorEmbed},
+			Components: &[]discordgo.MessageComponent{},
+		}); err != nil {
+			logger.Errorf("Failed to edit message to fetch-error state: %v", err)
+		}
+		return
+	}
+
+	fetchEndTime := time.Now()
+	logger.Debugf("Detailed info fetched in %dms for: %s, uploader: %s",
+		fetchEndTime.Sub(fetchStartTime).Milliseconds(), song.Title, song.Uploader)
+
+	q, err := queue.GetQueue(c.original.GuildID, false)
+	if err != nil {
+		logger.Errorf("Error getting queue: %v", err)
+		return
+	}
+
+	if q == nil {
+		if err := queue.CreateQueue(c.original.GuildID, c.original.ChannelID, c.voiceChannelID); err != nil {
+			logger.Errorf("Error creating queue: %v", err)
+			errorEmbed := messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.QueueCreateFailed)
+			if _, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+				Embeds:     &[]*discordgo.MessageEmbed{errorEmbed},
+				Components: &[]discordgo.MessageComponent{},
+			}); err != nil {
+				logger.Errorf("Failed to edit message to queue-create-error state: %v", err)
+			}
+			return
+		}
+		_, _ = queue.GetQueue(c.original.GuildID, false)
+	}
+
+	queueSong := queueSongFrom(song)
+
+	if err := queue.AddSong(c.original.GuildID, queueSong, -1); err != nil {
+		logger.Errorf("Error adding song to queue: %v", err)
+		errorEmbed := messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
+			fmt.Sprintf(messages.T(i.GuildID).Music.SongAddFailed, err))
+		if _, editErr := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+			Embeds:     &[]*discordgo.MessageEmbed{errorEmbed},
+			Components: &[]discordgo.MessageComponent{},
+		}); editErr != nil {
+			logger.Errorf("Failed to edit message to add-error state: %v", editErr)
+		}
+		return
+	}
+
+	addedEmbed := messages.CreateSongEmbed(
+		i.GuildID,
+		messages.ColorSuccess,
+		messages.T(i.GuildID).Titles.Added,
+		"",
+		song.Title,
+		song.URL,
+		song.Uploader,
+		song.Duration,
+		song.RequestedBy,
+		song.Thumbnail,
+	)
+
+	if _, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+		Embeds:     &[]*discordgo.MessageEmbed{addedEmbed},
+		Components: &[]discordgo.MessageComponent{},
+	}); err != nil {
+		logger.Errorf("Failed to edit message to added state: %v", err)
+	}
+
+	close(c.done)
+
+	startPlaybackIfFirstSong(s, c.original.GuildID)
+}
+
 func handleSearchSelection(s *discordgo.Session, originalInteraction *discordgo.InteractionCreate, results []youtube.SearchResult, customID, voiceChannelID, searchMessageID string) {
 	logger.Debugf("handleSearchSelection started, customID='%s', searchMessageID='%s'", customID, searchMessageID)
 	timeout := time.After(30 * time.Second)
@@ -130,190 +306,16 @@ func handleSearchSelection(s *discordgo.Session, originalInteraction *discordgo.
 		searchSelectionsMu.Unlock()
 	}()
 
-	selectionHandler := func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		logger.Debugf("selectionHandler triggered, captured searchMessageID='%s', captured customID='%s'", searchMessageID, customID)
-
-		if i.Type != discordgo.InteractionMessageComponent {
-			logger.Debugf("Not a message component, ignoring (type=%d)", i.Type)
-			return
-		}
-
-		data := i.MessageComponentData()
-		logger.Debugf("Message component received, data.CustomID='%s', checking against customID='%s'", data.CustomID, customID)
-
-		if data.CustomID != customID {
-			logger.Debugf("CustomID mismatch, ignoring (expected='%s', got='%s')", customID, data.CustomID)
-			return
-		}
-
-		if i.Member.User.ID != originalInteraction.Member.User.ID {
-			embed := messages.CreateWarningEmbed(messages.T(i.GuildID).Titles.NoPermission, messages.T(i.GuildID).Queue.OnlyRequester)
-			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Embeds: []*discordgo.MessageEmbed{embed},
-					Flags:  discordgo.MessageFlagsEphemeral,
-				},
-			})
-			return
-		}
-
-		if len(data.Values) == 0 {
-			logger.Warnf("No value in selection data")
-			return
-		}
-
-		logger.Debugf("Parsing value: '%s'", data.Values[0])
-
-		valueSearchID, selectedIndex, parseErr := parseSearchSelection(data.Values[0])
-		if parseErr != nil {
-			logger.Warnf("Invalid selection value %q: %v", data.Values[0], parseErr)
-			return
-		}
-
-		logger.Debugf("Parsed value: valueSearchID='%s', selectedIndex=%d", valueSearchID, selectedIndex)
-
-		if valueSearchID != searchMessageID {
-			logger.Debugf("Value searchID mismatch: expected %s, got %s - ignoring", searchMessageID, valueSearchID)
-			return
-		}
-
-		searchSelectionsMu.Lock()
-		logger.Debugf("Checking duplicate map with searchMessageID='%s', already_selected=%v", searchMessageID, searchSelections[searchMessageID])
-		if searchSelections[searchMessageID] {
-			searchSelectionsMu.Unlock()
-			logger.Debugf("Duplicate selection attempt ignored for search message: '%s'", searchMessageID)
-			embed := messages.CreateWarningEmbed(messages.T(i.GuildID).Queue.AlreadySelectedTitle, messages.T(i.GuildID).Queue.AlreadySelectedDesc)
-			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Embeds: []*discordgo.MessageEmbed{embed},
-					Flags:  discordgo.MessageFlagsEphemeral,
-				},
-			})
-			return
-		}
-		logger.Debugf("Marking search as selected: searchMessageID='%s'", searchMessageID)
-		searchSelections[searchMessageID] = true
-		searchSelectionsMu.Unlock()
-
-		if selectedIndex < 0 || selectedIndex >= len(results) {
-			logger.Warnf("Invalid index %d for search with %d results", selectedIndex, len(results))
-			return
-		}
-
-		selectedResult := results[selectedIndex]
-
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseDeferredMessageUpdate,
-		})
-
-		processingEmbed := messages.CreateWarningEmbed(messages.T(i.GuildID).Queue.ProcessingTitle,
-			fmt.Sprintf(messages.T(i.GuildID).Queue.ProcessingDesc, selectedResult.Title))
-
-		if _, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-			Embeds:     &[]*discordgo.MessageEmbed{processingEmbed},
-			Components: &[]discordgo.MessageComponent{},
-		}); err != nil {
-			logger.Errorf("Failed to edit message to processing state: %v", err)
-		}
-
-		videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", selectedResult.VideoID)
-		logger.Debugf("Fetching detailed info for selected song: %s", selectedResult.Title)
-		fetchStartTime := time.Now()
-
-		song, err := youtube.GetVideoInfo(originalInteraction.GuildID, videoURL, originalInteraction.Member.User.Username, originalInteraction.Member.User.ID)
-		if err != nil {
-			logger.Errorf("Error fetching detailed info: %v", err)
-			errorEmbed := messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Queue.SearchAddError)
-			if _, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-				Embeds:     &[]*discordgo.MessageEmbed{errorEmbed},
-				Components: &[]discordgo.MessageComponent{},
-			}); err != nil {
-				logger.Errorf("Failed to edit message to fetch-error state: %v", err)
-			}
-			return
-		}
-
-		fetchEndTime := time.Now()
-		logger.Debugf("Detailed info fetched in %dms for: %s, uploader: %s",
-			fetchEndTime.Sub(fetchStartTime).Milliseconds(), song.Title, song.Uploader)
-
-		q, err := queue.GetQueue(originalInteraction.GuildID, false)
-		if err != nil {
-			logger.Errorf("Error getting queue: %v", err)
-			return
-		}
-
-		if q == nil {
-			if err := queue.CreateQueue(originalInteraction.GuildID, originalInteraction.ChannelID, voiceChannelID); err != nil {
-				logger.Errorf("Error creating queue: %v", err)
-				errorEmbed := messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.QueueCreateFailed)
-				if _, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-					Embeds:     &[]*discordgo.MessageEmbed{errorEmbed},
-					Components: &[]discordgo.MessageComponent{},
-				}); err != nil {
-					logger.Errorf("Failed to edit message to queue-create-error state: %v", err)
-				}
-				return
-			}
-			_, _ = queue.GetQueue(originalInteraction.GuildID, false)
-		}
-
-		queueSong := &queue.Song{
-			URL:            song.URL,
-			Title:          song.Title,
-			Duration:       song.Duration,
-			Thumbnail:      song.Thumbnail,
-			Uploader:       song.Uploader,
-			RequestedByID:  song.RequestedByID,
-			RequestedByTag: song.RequestedBy,
-			IsLive:         song.IsLive,
-		}
-
-		if err := queue.AddSong(originalInteraction.GuildID, queueSong, -1); err != nil {
-			logger.Errorf("Error adding song to queue: %v", err)
-			errorEmbed := messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
-				fmt.Sprintf(messages.T(i.GuildID).Music.SongAddFailed, err))
-			if _, editErr := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-				Embeds:     &[]*discordgo.MessageEmbed{errorEmbed},
-				Components: &[]discordgo.MessageComponent{},
-			}); editErr != nil {
-				logger.Errorf("Failed to edit message to add-error state: %v", editErr)
-			}
-			return
-		}
-
-		addedEmbed := messages.CreateSongEmbed(
-			i.GuildID,
-			messages.ColorSuccess,
-			messages.T(i.GuildID).Titles.Added,
-			"",
-			song.Title,
-			song.URL,
-			song.Uploader,
-			song.Duration,
-			song.RequestedBy,
-			song.Thumbnail,
-		)
-
-		if _, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-			Embeds:     &[]*discordgo.MessageEmbed{addedEmbed},
-			Components: &[]discordgo.MessageComponent{},
-		}); err != nil {
-			logger.Errorf("Failed to edit message to added state: %v", err)
-		}
-
-		close(done)
-
-		q, _ = queue.GetQueue(originalInteraction.GuildID, false)
-		p := player.GetPlayer(originalInteraction.GuildID)
-		if q != nil && len(q.Songs) == 1 && !p.Playing && !p.Loading {
-			go player.Play(s, originalInteraction.GuildID)
-		}
+	selection := &searchSelection{
+		results:         results,
+		customID:        customID,
+		voiceChannelID:  voiceChannelID,
+		searchMessageID: searchMessageID,
+		original:        originalInteraction,
+		done:            done,
 	}
 
-	removeHandler := s.AddHandler(selectionHandler)
+	removeHandler := s.AddHandler(selection.handle)
 	defer removeHandler()
 
 	select {

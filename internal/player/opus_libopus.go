@@ -11,14 +11,14 @@ import (
 )
 
 const (
-	opusApplicationAudio = 2049 
-	opusSetBitrateReq    = 4002 
+	opusApplicationAudio = 2049
+	opusSetBitrateReq    = 4002
 )
 
 var (
-	libopusOnce      sync.Once
-	libopusLibName   string
-	libopusLoadErr   error
+	libopusOnce    sync.Once
+	libopusLibName string
+	libopusLoadErr error
 
 	cOpusEncoderCreate  func(fs, channels, application int32, errPtr *int32) uintptr
 	cOpusEncoderDestroy func(st uintptr)
@@ -60,7 +60,6 @@ func tryLoadLibopus() (libName string, err error) {
 			return
 		}
 
-		
 		defer func() {
 			if r := recover(); r != nil {
 				libopusLoadErr = fmt.Errorf("libopus symbol registration failed: %v", r)

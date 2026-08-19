@@ -182,6 +182,83 @@ func saveAdmins(admins *AdminsConfig) error {
 	return os.WriteFile(adminsPath, data, 0644)
 }
 
+func isDuplicateWriteEvent(absPath string, fileInfo os.FileInfo) bool {
+	if fileInfo == nil {
+		return false
+	}
+
+	currentModTime := fileInfo.ModTime().UnixNano()
+
+	modTimeMux.RLock()
+	lastMod, exists := lastModTime[absPath]
+	modTimeMux.RUnlock()
+
+	if exists && lastMod == currentModTime {
+		return true
+	}
+
+	modTimeMux.Lock()
+	lastModTime[absPath] = currentModTime
+	modTimeMux.Unlock()
+
+	return false
+}
+
+func notifyReloadCallbacks() {
+	onReloadMux.Lock()
+	callbacks := make([]func(), len(onReloadCallbacks))
+	copy(callbacks, onReloadCallbacks)
+	onReloadMux.Unlock()
+
+	for _, fn := range callbacks {
+		fn()
+	}
+}
+
+func reloadWatchedFile(absPath string) {
+	configAbsPath, _ := filepath.Abs(configPath)
+	adminsAbsPath, _ := filepath.Abs(adminsPath)
+
+	switch absPath {
+	case configAbsPath:
+		if err := loadConfig(); err != nil {
+			logger.Errorf("Failed to reload config: %v", err)
+			return
+		}
+		logger.Info("Configuration reloaded")
+		notifyReloadCallbacks()
+	case adminsAbsPath:
+		if err := loadAdmins(); err != nil {
+			logger.Errorf("Failed to reload admins: %v", err)
+			return
+		}
+		logger.Info("Admins configuration reloaded")
+	}
+}
+
+func handleWatchEvent(event fsnotify.Event) {
+	fileInfo, err := os.Stat(event.Name)
+	if err == nil {
+		logger.Debugf("Event: %s | Op: %s | File: %s | Size: %d | ModTime: %v",
+			event.String(), event.Op.String(), event.Name, fileInfo.Size(), fileInfo.ModTime().UnixNano())
+	} else {
+		logger.Debugf("Event: %s | Op: %s | File: %s | (stat error: %v)",
+			event.String(), event.Op.String(), event.Name, err)
+	}
+
+	if event.Op&fsnotify.Write != fsnotify.Write {
+		return
+	}
+
+	absPath, _ := filepath.Abs(event.Name)
+	if isDuplicateWriteEvent(absPath, fileInfo) {
+		logger.Debugf("Skipping duplicate event for %s (same ModTime)", event.Name)
+		return
+	}
+
+	reloadWatchedFile(absPath)
+}
+
 func watchFiles() {
 	for {
 		select {
@@ -189,60 +266,7 @@ func watchFiles() {
 			if !ok {
 				return
 			}
-
-			fileInfo, err := os.Stat(event.Name)
-			if err == nil {
-				logger.Debugf("Event: %s | Op: %s | File: %s | Size: %d | ModTime: %v",
-					event.String(), event.Op.String(), event.Name, fileInfo.Size(), fileInfo.ModTime().UnixNano())
-			} else {
-				logger.Debugf("Event: %s | Op: %s | File: %s | (stat error: %v)",
-					event.String(), event.Op.String(), event.Name, err)
-			}
-
-			if event.Op&fsnotify.Write == fsnotify.Write {
-				absPath, _ := filepath.Abs(event.Name)
-				configAbsPath, _ := filepath.Abs(configPath)
-				adminsAbsPath, _ := filepath.Abs(adminsPath)
-
-				if fileInfo != nil {
-					currentModTime := fileInfo.ModTime().UnixNano()
-
-					modTimeMux.RLock()
-					lastMod, exists := lastModTime[absPath]
-					modTimeMux.RUnlock()
-
-					if exists && lastMod == currentModTime {
-						logger.Debugf("Skipping duplicate event for %s (same ModTime)", event.Name)
-						continue
-					}
-
-					modTimeMux.Lock()
-					lastModTime[absPath] = currentModTime
-					modTimeMux.Unlock()
-				}
-
-				if absPath == configAbsPath {
-					if err := loadConfig(); err != nil {
-						logger.Errorf("Failed to reload config: %v", err)
-					} else {
-						logger.Info("Configuration reloaded")
-
-						onReloadMux.Lock()
-						cbs := make([]func(), len(onReloadCallbacks))
-						copy(cbs, onReloadCallbacks)
-						onReloadMux.Unlock()
-						for _, fn := range cbs {
-							fn()
-						}
-					}
-				} else if absPath == adminsAbsPath {
-					if err := loadAdmins(); err != nil {
-						logger.Errorf("Failed to reload admins: %v", err)
-					} else {
-						logger.Info("Admins configuration reloaded")
-					}
-				}
-			}
+			handleWatchEvent(event)
 		case err, ok := <-watcher.Errors:
 			if !ok {
 				return

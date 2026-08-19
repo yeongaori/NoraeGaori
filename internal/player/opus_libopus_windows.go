@@ -1,5 +1,3 @@
-
-
 package player
 
 import "golang.org/x/sys/windows"

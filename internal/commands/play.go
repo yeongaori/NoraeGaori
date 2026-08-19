@@ -12,7 +12,7 @@ import (
 )
 
 func HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	
+
 	options := i.ApplicationCommandData().Options
 	if len(options) == 0 {
 		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.EnterQuery))
@@ -20,7 +20,6 @@ func HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	}
 	query := options[0].StringValue()
 
-	
 	query = messages.StripMarkdown(query)
 
 	voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
@@ -59,28 +58,11 @@ func HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return err
 	}
 
-	if q == nil {
-		if err := queue.CreateQueue(i.GuildID, i.ChannelID, voiceState.ChannelID); err != nil {
-			UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.QueueCreateFailed))
-			return err
-		}
-	} else {
-		
-		if err := queue.UpdateVoiceChannel(i.GuildID, voiceState.ChannelID); err != nil {
-			logger.Errorf("Failed to update voice channel for %s: %v", i.GuildID, err)
-		}
+	if err := ensureQueueForVoice(s, i, q, voiceState.ChannelID); err != nil {
+		return err
 	}
 
-	queueSong := &queue.Song{
-		URL:            song.URL,
-		Title:          song.Title,
-		Duration:       song.Duration,
-		Thumbnail:      song.Thumbnail,
-		Uploader:       song.Uploader,
-		RequestedByID:  song.RequestedByID,
-		RequestedByTag: song.RequestedBy,
-		IsLive:         song.IsLive,
-	}
+	queueSong := queueSongFrom(song)
 
 	if err := queue.AddSong(i.GuildID, queueSong, -1); err != nil {
 		if err.Error() == "song already in queue: "+song.Title {
@@ -135,7 +117,6 @@ func HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 	UpdateResponseEmbed(s, i, embed)
 
-	
 	if isFirstSong {
 		msg, err := GetResponseMessage(s, i)
 		if err == nil {
@@ -143,14 +124,7 @@ func HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		}
 	}
 
-	
-	p := player.GetPlayer(i.GuildID)
-	switch {
-	case p.Paused:
-		go player.Resume(s, i.GuildID)
-	case !p.Playing && !p.Loading:
-		go player.Play(s, i.GuildID)
-	}
+	resumeOrStartPlayback(s, i.GuildID)
 
 	return nil
 }

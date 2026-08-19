@@ -23,7 +23,6 @@ func HandleVolume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return nil
 	}
 
-	
 	var volume float64
 	switch v := options[0].Value.(type) {
 	case float64:
