@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -21,6 +22,7 @@ const (
 	framesPerSecond     = 50.0
 	silencePeakLevel    = 0.01
 	silenceSampleLevel  = 327
+	stderrTailBytes     = 2048
 )
 
 func frameSilent(buf []int16) bool {
@@ -60,6 +62,30 @@ type audioStream struct {
 	ffmpeg   *exec.Cmd
 	stdin    io.Closer
 	endState atomic.Pointer[streamEndState]
+	diag     *stderrTail
+}
+
+type stderrTail struct {
+	mu  sync.Mutex
+	buf []byte
+}
+
+func (t *stderrTail) Write(p []byte) (int, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	t.buf = append(t.buf, p...)
+	if len(t.buf) > stderrTailBytes {
+		t.buf = t.buf[len(t.buf)-stderrTailBytes:]
+	}
+	return len(p), nil
+}
+
+func (t *stderrTail) String() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	return strings.TrimSpace(string(t.buf))
 }
 
 type monoTail struct {
@@ -95,6 +121,9 @@ func (m *monoTail) snapshot() ([]float32, int64) {
 
 func buildFFmpegArgs(streamURL string, seekSeconds float64, normalization bool) []string {
 	args := []string{
+		"-hide_banner",
+		"-nostats",
+		"-loglevel", "error",
 		"-reconnect", "1",
 		"-reconnect_streamed", "1",
 		"-reconnect_delay_max", "5",
@@ -120,7 +149,7 @@ func buildFFmpegArgs(streamURL string, seekSeconds float64, normalization bool) 
 }
 
 func buildFFmpegArgsPipe(normalization bool) []string {
-	args := []string{"-i", "pipe:0"}
+	args := []string{"-hide_banner", "-nostats", "-loglevel", "error", "-i", "pipe:0"}
 
 	if normalization {
 		args = append(args, "-af", "dynaudnorm=framelen=500:gausssize=31:peak=0.95")
@@ -143,6 +172,9 @@ func startAudioStreamPipe(args []string, stdin io.ReadCloser, collectTail bool) 
 	ffmpeg := exec.Command("ffmpeg", args...)
 	ffmpeg.Stdin = stdin
 
+	diag := &stderrTail{}
+	ffmpeg.Stderr = diag
+
 	stdout, err := ffmpeg.StdoutPipe()
 	if err != nil {
 		stdin.Close()
@@ -160,6 +192,7 @@ func startAudioStreamPipe(args []string, stdin io.ReadCloser, collectTail bool) 
 		stopChan: make(chan struct{}),
 		ffmpeg:   ffmpeg,
 		stdin:    stdin,
+		diag:     diag,
 	}
 
 	go s.produce(stdout, collectTail)
@@ -168,6 +201,10 @@ func startAudioStreamPipe(args []string, stdin io.ReadCloser, collectTail bool) 
 
 func startAudioStream(args []string, collectTail bool) (*audioStream, error) {
 	ffmpeg := exec.Command("ffmpeg", args...)
+
+	diag := &stderrTail{}
+	ffmpeg.Stderr = diag
+
 	stdout, err := ffmpeg.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
@@ -182,10 +219,22 @@ func startAudioStream(args []string, collectTail bool) (*audioStream, error) {
 		errChan:  make(chan error, 1),
 		stopChan: make(chan struct{}),
 		ffmpeg:   ffmpeg,
+		diag:     diag,
 	}
 
 	go s.produce(stdout, collectTail)
 	return s, nil
+}
+
+func (s *audioStream) diagnostics() string {
+	if s.diag == nil {
+		return ""
+	}
+
+	if detail := s.diag.String(); detail != "" {
+		return ": " + detail
+	}
+	return ""
 }
 
 func (s *audioStream) killFFmpeg() {
@@ -247,7 +296,7 @@ func (s *audioStream) produce(stdout io.Reader, collectTail bool) {
 		if err == io.EOF || err == io.ErrUnexpectedEOF {
 			waitErr := s.ffmpeg.Wait()
 			if waitErr != nil && frameCount == 0 {
-				s.errChan <- fmt.Errorf("ffmpeg produced no audio: %w", waitErr)
+				s.errChan <- fmt.Errorf("ffmpeg produced no audio: %w%s", waitErr, s.diagnostics())
 				return
 			}
 			s.finishEndState(frameCount, tail)
