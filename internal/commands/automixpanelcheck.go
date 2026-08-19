@@ -1,3 +1,5 @@
+//go:build automixcheck
+
 package commands
 
 import (

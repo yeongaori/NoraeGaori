@@ -32,7 +32,9 @@ func PruneTrackAnalysis() error {
 	}
 
 	var remaining int
-	database.DB.QueryRow(`SELECT count(*) FROM track_analysis`).Scan(&remaining)
+	if scanErr := database.DB.QueryRow(`SELECT count(*) FROM track_analysis`).Scan(&remaining); scanErr != nil {
+		logger.Debugf("Failed to count remaining analysis rows: %v", scanErr)
+	}
 
 	if removed, err := result.RowsAffected(); err == nil {
 		logger.Infof("Pruned %d stored rows (older than %d days or not version %d), %d remain",

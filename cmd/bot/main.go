@@ -36,7 +36,11 @@ func main() {
 		logger.Errorf("Failed to initialize database: %v", err)
 		os.Exit(1)
 	}
-	defer database.Close()
+	defer func() {
+		if err := database.Close(); err != nil {
+			logger.Errorf("Failed to close database: %v", err)
+		}
+	}()
 
 	logger.Debug("Clearing stale playback states...")
 	if err := clearStalePlaybackStates(); err != nil {
@@ -52,7 +56,11 @@ func main() {
 		logger.Errorf("Failed to initialize config: %v", err)
 		os.Exit(1)
 	}
-	defer config.Close()
+	defer func() {
+		if err := config.Close(); err != nil {
+			logger.Errorf("Failed to close config watcher: %v", err)
+		}
+	}()
 
 	logger.SetLogFile(config.GetConfig().LogFile)
 	config.OnReload(func() {

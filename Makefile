@@ -1,4 +1,4 @@
-.PHONY: all build run clean test deps install help local
+.PHONY: all build run clean test deps install help local lint format automixcheck
 
 ifeq ($(OS),Windows_NT)
     NULL := nul
@@ -117,6 +117,11 @@ lint:
 	@echo Running linter...
 	@which golangci-lint > /dev/null || (echo "\e[91mgolangci-lint not installed\e[0m" && exit 1)
 	@golangci-lint run
+
+## automixcheck: Run the AutoMix check harness
+automixcheck:
+	@echo Running AutoMix checks...
+	@go run -tags automixcheck ./cmd/automixcheck
 
 ## format: Format code
 format:

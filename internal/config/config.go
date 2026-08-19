@@ -262,11 +262,18 @@ func SetPrefix(prefix string) error {
 	configMux.Lock()
 	defer configMux.Unlock()
 
-	config.Prefix = prefix
+	if config == nil {
+		return fmt.Errorf("config is not initialized")
+	}
 
-	if err := saveConfig(config); err != nil {
+	updated := *config
+	updated.Prefix = prefix
+
+	if err := saveConfig(&updated); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
+
+	config = &updated
 
 	logger.Infof("Prefix updated to: %s", prefix)
 	return nil

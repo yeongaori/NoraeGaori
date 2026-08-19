@@ -27,10 +27,36 @@ type Command struct {
 }
 
 var (
+	commandsMu        sync.RWMutex
 	commands          = make(map[string]*Command)
 	aliases           = make(map[string]string)
 	messageResponders sync.Map
 )
+
+func lookupCommand(name string) (*Command, bool) {
+	commandsMu.RLock()
+	defer commandsMu.RUnlock()
+	cmd, ok := commands[name]
+	return cmd, ok
+}
+
+func lookupAlias(alias string) (string, bool) {
+	commandsMu.RLock()
+	defer commandsMu.RUnlock()
+	name, ok := aliases[alias]
+	return name, ok
+}
+
+func snapshotCommands() map[string]*Command {
+	commandsMu.RLock()
+	defer commandsMu.RUnlock()
+
+	snapshot := make(map[string]*Command, len(commands))
+	for name, cmd := range commands {
+		snapshot[name] = cmd
+	}
+	return snapshot
+}
 
 func isGuildAdmin(s *discordgo.Session, guildID string, member *discordgo.Member) bool {
 	if member == nil {
@@ -68,12 +94,16 @@ func isGuildAdmin(s *discordgo.Session, guildID string, member *discordgo.Member
 }
 
 func RegisterCommand(cmd *Command) {
+	commandsMu.Lock()
 	commands[cmd.Name] = cmd
+	commandsMu.Unlock()
 	logger.Debugf("Registered command: %s", cmd.Name)
 }
 
 func RegisterAlias(alias, commandName string) {
+	commandsMu.Lock()
 	aliases[alias] = commandName
+	commandsMu.Unlock()
 	logger.Debugf("Registered alias: %s -> %s", alias, commandName)
 }
 
@@ -84,9 +114,6 @@ func registerCommandAliases(name string, cs messages.CommandStrings) {
 }
 
 func ReloadAliases() {
-
-	aliases = make(map[string]string)
-
 	t := messages.T()
 	cmd := func(name string) messages.CommandStrings {
 		if t != nil {
@@ -97,19 +124,35 @@ func ReloadAliases() {
 		return messages.CommandStrings{}
 	}
 
-	for name, c := range commands {
+	current := snapshotCommands()
+
+	rebuiltCommands := make(map[string]*Command, len(current))
+	rebuiltAliases := make(map[string]string)
+
+	for name, c := range current {
 		cs := cmd(name)
-		registerCommandAliases(name, cs)
+
+		for _, alias := range cs.Aliases {
+			rebuiltAliases[alias] = name
+		}
+
+		rebuilt := *c
 		if cs.Description != "" {
-			c.Description = cs.Description
+			rebuilt.Description = cs.Description
 		}
 		if cs.Usage != "" {
-			c.Usage = cs.Usage
+			rebuilt.Usage = cs.Usage
 		}
 		if cs.Example != "" {
-			c.Example = cs.Example
+			rebuilt.Example = cs.Example
 		}
+		rebuiltCommands[name] = &rebuilt
 	}
+
+	commandsMu.Lock()
+	commands = rebuiltCommands
+	aliases = rebuiltAliases
+	commandsMu.Unlock()
 
 	logger.Info("Aliases and descriptions reloaded for new locale")
 }
@@ -855,8 +898,10 @@ func RegisterSlashCommands(session *discordgo.Session) error {
 
 	appID := session.State.User.ID
 
-	desired := make([]*discordgo.ApplicationCommand, 0, len(commands))
-	for _, cmd := range commands {
+	registered := snapshotCommands()
+
+	desired := make([]*discordgo.ApplicationCommand, 0, len(registered))
+	for _, cmd := range registered {
 		if cmd.TextOnly {
 			logger.Debugf("Skipping text-only command from slash registration: %s", cmd.Name)
 			continue
@@ -964,7 +1009,7 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 
 	cmdName := i.ApplicationCommandData().Name
-	cmd, exists := commands[cmdName]
+	cmd, exists := lookupCommand(cmdName)
 	if !exists {
 		logger.Warnf("Unknown command: %s", cmdName)
 		RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.UnknownCommand))
@@ -1016,13 +1061,13 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	cmdName := strings.ToLower(parts[0])
 	_ = parts[1:]
 
-	aliasTarget, ok := aliases[cmdName]
+	aliasTarget, ok := lookupAlias(cmdName)
 	if !ok {
 		return
 	}
 	cmdName = aliasTarget
 
-	cmd, exists := commands[cmdName]
+	cmd, exists := lookupCommand(cmdName)
 	if !exists {
 		return
 	}

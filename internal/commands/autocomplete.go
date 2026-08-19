@@ -32,7 +32,7 @@ type AutocompleteRequest struct {
 func HandleAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	data := i.ApplicationCommandData()
 
-	cmd, exists := commands[data.Name]
+	cmd, exists := lookupCommand(data.Name)
 	if !exists || cmd.AutocompleteHandler == nil {
 		respondAutocompleteChoices(s, i, nil)
 		return

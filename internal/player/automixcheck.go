@@ -1,3 +1,5 @@
+//go:build automixcheck
+
 package player
 
 import (
@@ -643,7 +645,7 @@ func checkTails(c *checkCollector) {
 
 	var nilTail *transitionTail
 	frame := make([]int16, frameSize*channels)
-	c.add("nil tail apply is safe", nilTail.apply(frame) == false, "returned false without panic")
+	c.add("nil tail apply is safe", !nilTail.apply(frame), "returned false without panic")
 }
 
 func checkLoopBuffer(c *checkCollector) {

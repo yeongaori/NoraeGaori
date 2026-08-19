@@ -1,0 +1,67 @@
+version: "2"
+
+run:
+  build-tags:
+    - automixcheck
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+
+  settings:
+    staticcheck:
+      checks:
+        - all
+        - -SA1019
+        - -ST1000
+        - -ST1003
+        - -QF1001
+        - -QF1003
+        - -QF1008
+        - -QF1012
+
+    errcheck:
+      exclude-functions:
+        - (*github.com/bwmarrin/discordgo.Session).InteractionRespond
+        - (*github.com/bwmarrin/discordgo.Session).InteractionResponseEdit
+        - (*github.com/bwmarrin/discordgo.Session).FollowupMessageCreate
+        - (*github.com/bwmarrin/discordgo.Session).ChannelMessageSend
+        - (*github.com/bwmarrin/discordgo.Session).ChannelMessageSendEmbed
+        - (*github.com/bwmarrin/discordgo.Session).ChannelMessageSendComplex
+        - (*github.com/bwmarrin/discordgo.Session).ChannelMessageEditEmbed
+        - (*github.com/bwmarrin/discordgo.Session).ChannelMessageEditComplex
+        - (*github.com/bwmarrin/discordgo.Session).ChannelMessageDelete
+        - (*github.com/bwmarrin/discordgo.VoiceConnection).Disconnect
+        - (*github.com/bwmarrin/discordgo.VoiceConnection).Speaking
+        - (*os.File).Close
+        - (noraegaori/internal/player.voiceConnection).Disconnect
+        - (noraegaori/internal/player.voiceConnection).Speaking
+        - noraegaori/internal/player.Play
+        - noraegaori/internal/player.Resume
+        - noraegaori/internal/player.Stop
+        - noraegaori/internal/player.LeaveVoice
+        - (*database/sql.Rows).Close
+        - (*database/sql.Tx).Rollback
+        - (*database/sql.DB).Close
+        - (io.Closer).Close
+        - os.Remove
+        - os.RemoveAll
+        - io.Copy
+
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+      - linters:
+          - errcheck
+        source: UpdateResponseEmbed\(
+      - linters:
+          - unused
+        path: internal/player/dsp\.go
+        source: func \(.*\) reset\(\)

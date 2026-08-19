@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -104,6 +105,20 @@ func HandleSearch(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	return nil
 }
 
+func parseSearchSelection(value string) (string, int, error) {
+	parts := strings.Split(value, ":")
+	if len(parts) != 2 {
+		return "", 0, fmt.Errorf("expected 2 parts, got %d", len(parts))
+	}
+
+	index, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return "", 0, fmt.Errorf("invalid selection index %q: %w", parts[1], err)
+	}
+
+	return parts[0], index, nil
+}
+
 func handleSearchSelection(s *discordgo.Session, originalInteraction *discordgo.InteractionCreate, results []youtube.SearchResult, customID, voiceChannelID, searchMessageID string) {
 	logger.Debugf("handleSearchSelection started, customID='%s', searchMessageID='%s'", customID, searchMessageID)
 	timeout := time.After(30 * time.Second)
@@ -150,16 +165,11 @@ func handleSearchSelection(s *discordgo.Session, originalInteraction *discordgo.
 
 		logger.Debugf("Parsing value: '%s'", data.Values[0])
 
-		var valueSearchID string
-		var selectedIndex int
-		parts := strings.Split(data.Values[0], ":")
-		if len(parts) != 2 {
-			logger.Warnf("Invalid value format: %s (expected 2 parts, got %d)", data.Values[0], len(parts))
+		valueSearchID, selectedIndex, parseErr := parseSearchSelection(data.Values[0])
+		if parseErr != nil {
+			logger.Warnf("Invalid selection value %q: %v", data.Values[0], parseErr)
 			return
 		}
-
-		valueSearchID = parts[0]
-		fmt.Sscanf(parts[1], "%d", &selectedIndex)
 
 		logger.Debugf("Parsed value: valueSearchID='%s', selectedIndex=%d", valueSearchID, selectedIndex)
 
@@ -247,7 +257,7 @@ func handleSearchSelection(s *discordgo.Session, originalInteraction *discordgo.
 				}
 				return
 			}
-			q, _ = queue.GetQueue(originalInteraction.GuildID, false)
+			_, _ = queue.GetQueue(originalInteraction.GuildID, false)
 		}
 
 		queueSong := &queue.Song{

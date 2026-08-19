@@ -1,0 +1,53 @@
+package youtube
+
+import (
+	"sync"
+	"sync/atomic"
+	"testing"
+)
+
+func TestGetInnertubeClientInitializesExactlyOnce(t *testing.T) {
+	previousInit := innertubeInit
+	previousClient := innertubeClient
+	previousOnce := innertubeOnce
+
+	t.Cleanup(func() {
+		innertubeInit = previousInit
+		innertubeClient = previousClient
+		innertubeOnce = previousOnce
+	})
+
+	var calls int64
+	innertubeClient = nil
+	innertubeOnce = &sync.Once{}
+	innertubeInit = func() {
+		atomic.AddInt64(&calls, 1)
+		innertubeClient = &InnertubeClient{clientName: "TEST"}
+	}
+
+	const goroutines = 32
+	seen := make([]*InnertubeClient, goroutines)
+
+	var wg sync.WaitGroup
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			seen[index] = getInnertubeClient()
+		}(i)
+	}
+	wg.Wait()
+
+	if got := atomic.LoadInt64(&calls); got != 1 {
+		t.Errorf("the initializer ran %d times, want exactly 1", got)
+	}
+
+	for index, client := range seen {
+		if client == nil {
+			t.Fatalf("goroutine %d observed a nil client", index)
+		}
+		if client != seen[0] {
+			t.Errorf("goroutine %d observed a different client instance", index)
+		}
+	}
+}

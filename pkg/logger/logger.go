@@ -88,7 +88,9 @@ func SetLogFile(path string) {
 	}
 
 	if earlyBuf != nil {
-		f.Write(earlyBuf.Bytes())
+		if _, err := f.Write(earlyBuf.Bytes()); err != nil {
+			fmt.Printf("Warning: Failed to flush buffered logs to %s: %v\n", path, err)
+		}
 		earlyBuf = nil
 	}
 	logFile = f
@@ -114,7 +116,7 @@ func Close() {
 func printLine(badge, tag, message string) {
 	outMu.Lock()
 	defer outMu.Unlock()
-	fmt.Fprintf(output, "%s [%s] %s\n", badge, tag, message)
+	_, _ = fmt.Fprintf(output, "%s [%s] %s\n", badge, tag, message)
 }
 
 func logToFile(level, tag, message string) {
@@ -127,7 +129,9 @@ func logToFile(level, tag, message string) {
 
 	timestamp := time.Now().Format("2006-01-02 15:04:05.000")
 	line := fmt.Sprintf("[%s] [%s] [%s] %s\n", timestamp, level, tag, message)
-	errorLogFile.WriteString(line)
+	if _, err := errorLogFile.WriteString(line); err != nil {
+		fmt.Printf("Warning: Failed to write to error log: %v\n", err)
+	}
 }
 
 func emit(badge, fileLevel, tag, message string) {

@@ -978,40 +978,6 @@ func RemoveSongsByIDs(guildID string, songIDs []int) error {
 	return nil
 }
 
-func reorderSongsAfterRemoval(guildID string) error {
-	
-	rows, err := database.DB.Query(
-		`SELECT id FROM songs WHERE guild_id = ? ORDER BY queue_position ASC`,
-		guildID,
-	)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	var songIDs []int
-	for rows.Next() {
-		var id int
-		if err := rows.Scan(&id); err != nil {
-			return err
-		}
-		songIDs = append(songIDs, id)
-	}
-
-	
-	for i, id := range songIDs {
-		_, err := database.DB.Exec(
-			`UPDATE songs SET queue_position = ? WHERE id = ?`,
-			i, id,
-		)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func reorderSongsAfterRemovalTx(tx *sql.Tx, guildID string) error {
 	
 	rows, err := tx.Query(

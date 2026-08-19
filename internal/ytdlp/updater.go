@@ -1,7 +1,12 @@
 package ytdlp
 
 import (
+	"bufio"
+	"bytes"
 	"context"
+	"crypto/sha256"
+	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,8 +19,16 @@ import (
 	"strings"
 	"time"
 
+	"noraegaori/internal/config"
 	"noraegaori/pkg/logger"
+
+	"github.com/ProtonMail/go-crypto/openpgp"
 )
+
+//go:embed keys/yt-dlp.asc
+var ytdlpSigningKey []byte
+
+var signingKeyArmor = ytdlpSigningKey
 
 const (
 	githubAPIURL         = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"
@@ -24,6 +37,11 @@ const (
 	minCheckInterval     = 1 * time.Hour
 	maxFallbackAttempts  = 5
 	fallbackReleaseFetch = 15
+	checksumAssetName    = "SHA2-256SUMS"
+	checksumSigAssetName = "SHA2-256SUMS.sig"
+	checksumDigestPrefix = "sha256:"
+	defaultDownloadMbps  = 10.0
+	downloadTimeout      = 30 * time.Minute
 )
 
 type GitHubRelease struct {
@@ -33,6 +51,7 @@ type GitHubRelease struct {
 		Name               string `json:"name"`
 		BrowserDownloadURL string `json:"browser_download_url"`
 		Size               int64  `json:"size"`
+		Digest             string `json:"digest"`
 	} `json:"assets"`
 }
 
@@ -129,7 +148,7 @@ func GetReleases(perPage int) ([]*GitHubRelease, error) {
 	return releases, nil
 }
 
-func GetDownloadURL(release *GitHubRelease) (string, error) {
+func GetDownloadAsset(release *GitHubRelease) (string, string, error) {
 	var assetName string
 
 	switch runtime.GOOS {
@@ -142,42 +161,206 @@ func GetDownloadURL(release *GitHubRelease) (string, error) {
 		case "arm64", "aarch64":
 			assetName = "yt-dlp_linux_aarch64"
 		case "arm":
-			return "", fmt.Errorf("Linux ARMv7l is not directly supported")
+			return "", "", fmt.Errorf("ARMv7l on Linux is not directly supported")
 		default:
 			assetName = "yt-dlp"
 		}
 	default:
-		return "", fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+		return "", "", fmt.Errorf("unsupported platform: %s", runtime.GOOS)
 	}
 
 	for _, asset := range release.Assets {
 		if asset.Name == assetName {
 			sizeMB := float64(asset.Size) / 1024 / 1024
 			logger.Debugf("Found asset: %s (%.2f MB)", asset.Name, sizeMB)
-			return asset.BrowserDownloadURL, nil
+			return asset.Name, asset.BrowserDownloadURL, nil
 		}
 	}
 
-	return "", fmt.Errorf("asset not found: %s", assetName)
+	return "", "", fmt.Errorf("asset not found: %s", assetName)
 }
 
-func DownloadFile(url, destination string) error {
-	logger.Debugf("Starting download from: %s", url)
+func parseChecksums(r io.Reader) (map[string]string, error) {
+	checksums := make(map[string]string)
 
-	client := &http.Client{Timeout: 5 * time.Minute}
-	resp, err := client.Get(url)
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+
+		fields := strings.Fields(line)
+		if len(fields) != 2 {
+			return nil, fmt.Errorf("malformed checksum line: %q", line)
+		}
+
+		sum := strings.ToLower(fields[0])
+		decoded, err := hex.DecodeString(sum)
+		if err != nil || len(decoded) != sha256.Size {
+			return nil, fmt.Errorf("malformed checksum for %s: %q", fields[1], fields[0])
+		}
+
+		checksums[strings.TrimPrefix(fields[1], "*")] = sum
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("failed to read checksums: %w", err)
+	}
+
+	if len(checksums) == 0 {
+		return nil, fmt.Errorf("%s contained no entries", checksumAssetName)
+	}
+
+	return checksums, nil
+}
+
+func assetURL(release *GitHubRelease, name string) string {
+	for _, asset := range release.Assets {
+		if asset.Name == name {
+			return asset.BrowserDownloadURL
+		}
+	}
+	return ""
+}
+
+func fetchAsset(url string) ([]byte, error) {
+	client := &http.Client{Timeout: 30 * time.Second}
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return fmt.Errorf("download failed: %w", err)
+		return nil, err
+	}
+
+	req.Header.Set("User-Agent", "yt-dlp-updater")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("asset request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("download returned status: %d", resp.StatusCode)
+		return nil, fmt.Errorf("asset request returned status: %d", resp.StatusCode)
+	}
+
+	return io.ReadAll(resp.Body)
+}
+
+func VerifyChecksumSignature(checksums, signature []byte) error {
+	keyring, err := openpgp.ReadArmoredKeyRing(bytes.NewReader(signingKeyArmor))
+	if err != nil {
+		return fmt.Errorf("failed to read the bundled signing key: %w", err)
+	}
+
+	if _, err := openpgp.CheckDetachedSignature(keyring, bytes.NewReader(checksums), bytes.NewReader(signature), nil); err != nil {
+		return fmt.Errorf("signature verification failed: %w", err)
+	}
+
+	return nil
+}
+
+func fetchChecksums(release *GitHubRelease) (map[string]string, error) {
+	checksumURL := assetURL(release, checksumAssetName)
+	if checksumURL == "" {
+		return nil, fmt.Errorf("release %s has no %s asset", release.TagName, checksumAssetName)
+	}
+
+	signatureURL := assetURL(release, checksumSigAssetName)
+	if signatureURL == "" {
+		return nil, fmt.Errorf("release %s has no %s asset", release.TagName, checksumSigAssetName)
+	}
+
+	checksums, err := fetchAsset(checksumURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch %s: %w", checksumAssetName, err)
+	}
+
+	signature, err := fetchAsset(signatureURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch %s: %w", checksumSigAssetName, err)
+	}
+
+	if err := VerifyChecksumSignature(checksums, signature); err != nil {
+		return nil, fmt.Errorf("%s for release %s: %w", checksumAssetName, release.TagName, err)
+	}
+
+	logger.Debugf("Verified %s signature for release %s", checksumAssetName, release.TagName)
+
+	return parseChecksums(bytes.NewReader(checksums))
+}
+
+func assetDigest(release *GitHubRelease, assetName string) string {
+	for _, asset := range release.Assets {
+		if asset.Name == assetName && strings.HasPrefix(asset.Digest, checksumDigestPrefix) {
+			return strings.ToLower(strings.TrimPrefix(asset.Digest, checksumDigestPrefix))
+		}
+	}
+	return ""
+}
+
+func ExpectedChecksum(release *GitHubRelease, assetName string) (string, error) {
+	checksums, err := fetchChecksums(release)
+	if err != nil {
+		return "", err
+	}
+
+	sum, ok := checksums[assetName]
+	if !ok {
+		return "", fmt.Errorf("%s has no entry for %s", checksumAssetName, assetName)
+	}
+
+	if digest := assetDigest(release, assetName); digest != "" && digest != sum {
+		return "", fmt.Errorf("%s disagrees with the signed %s for %s: %s vs %s", "the GitHub asset digest", checksumAssetName, assetName, digest, sum)
+	}
+
+	return sum, nil
+}
+
+func DownloadVerified(release *GitHubRelease, assetName, url, destination string) error {
+	expected, err := ExpectedChecksum(release, assetName)
+	if err != nil {
+		return fmt.Errorf("failed to resolve checksum for %s: %w", assetName, err)
+	}
+
+	actual, err := DownloadFile(url, destination)
+	if err != nil {
+		return err
+	}
+
+	if actual != expected {
+		os.Remove(destination)
+		return fmt.Errorf("checksum mismatch for %s: expected %s, got %s", assetName, expected, actual)
+	}
+
+	logger.Debugf("Checksum verified for %s", assetName)
+	return nil
+}
+
+func downloadRateLimit() float64 {
+	mbps := defaultDownloadMbps
+	if cfg := config.GetConfig(); cfg != nil && cfg.MaxDownloadSpeedMbps > 0 {
+		mbps = cfg.MaxDownloadSpeedMbps
+	}
+	return mbps * 1000 * 1000 / 8
+}
+
+func DownloadFile(url, destination string) (string, error) {
+	logger.Debugf("Starting download from: %s", url)
+
+	client := &http.Client{Timeout: downloadTimeout}
+	resp, err := client.Get(url)
+	if err != nil {
+		return "", fmt.Errorf("download failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("download returned status: %d", resp.StatusCode)
 	}
 
 	out, err := os.Create(destination)
 	if err != nil {
-		return fmt.Errorf("failed to create file: %w", err)
+		return "", fmt.Errorf("failed to create file: %w", err)
 	}
 	defer out.Close()
 
@@ -185,15 +368,18 @@ func DownloadFile(url, destination string) error {
 	downloaded := int64(0)
 	lastProgress := 0
 
-	const downloadRateLimit = 256 * 1024
+	hasher := sha256.New()
+	sink := io.MultiWriter(out, hasher)
+
+	rateLimit := downloadRateLimit()
 	buffer := make([]byte, 16*1024)
-	chunkDelay := time.Duration(float64(len(buffer)) / float64(downloadRateLimit) * float64(time.Second))
+	chunkDelay := time.Duration(float64(len(buffer)) / rateLimit * float64(time.Second))
 
 	for {
 		n, err := resp.Body.Read(buffer)
 		if n > 0 {
-			if _, writeErr := out.Write(buffer[:n]); writeErr != nil {
-				return fmt.Errorf("failed to write to file: %w", writeErr)
+			if _, writeErr := sink.Write(buffer[:n]); writeErr != nil {
+				return "", fmt.Errorf("failed to write to file: %w", writeErr)
 			}
 			downloaded += int64(n)
 
@@ -211,12 +397,16 @@ func DownloadFile(url, destination string) error {
 			break
 		}
 		if err != nil {
-			return fmt.Errorf("download interrupted: %w", err)
+			return "", fmt.Errorf("download interrupted: %w", err)
 		}
 	}
 
+	if err := out.Sync(); err != nil {
+		return "", fmt.Errorf("failed to flush file: %w", err)
+	}
+
 	logger.Debugf("Download completed")
-	return nil
+	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
 func UpdateYtDlp(force bool) (bool, error) {
@@ -293,7 +483,7 @@ func UpdateYtDlp(force bool) (bool, error) {
 		logger.Infof("Installing version %s", latestVersion)
 	}
 
-	downloadURL, err := GetDownloadURL(release)
+	assetName, downloadURL, err := GetDownloadAsset(release)
 	if err != nil {
 		return false, err
 	}
@@ -306,7 +496,7 @@ func UpdateYtDlp(force bool) (bool, error) {
 	}
 
 	logger.Debug("Downloading new version...")
-	if err := DownloadFile(downloadURL, binaryPath); err != nil {
+	if err := DownloadVerified(release, assetName, downloadURL, binaryPath); err != nil {
 
 		os.RemoveAll(versionDir)
 		return false, err
@@ -385,7 +575,7 @@ func installFallbackVersion(versionmanager *VersionManager, latestVersion string
 
 		logger.Infof("Fallback candidate %d/%d: trying version %s", considered, maxFallbackAttempts, ver)
 
-		downloadURL, urlErr := GetDownloadURL(rel)
+		assetName, downloadURL, urlErr := GetDownloadAsset(rel)
 		if urlErr != nil {
 			logger.Warnf("No download URL for %s: %v", ver, urlErr)
 			continue
@@ -398,7 +588,7 @@ func installFallbackVersion(versionmanager *VersionManager, latestVersion string
 			continue
 		}
 
-		if err := DownloadFile(downloadURL, binaryPath); err != nil {
+		if err := DownloadVerified(rel, assetName, downloadURL, binaryPath); err != nil {
 			logger.Warnf("Download of %s failed: %v", ver, err)
 			os.RemoveAll(versionDir)
 			continue
@@ -438,7 +628,7 @@ func installFallbackVersion(versionmanager *VersionManager, latestVersion string
 
 	logger.Warnf("All fallback attempts failed canary; provisionally activating latest %s as last resort", latestVersion)
 
-	downloadURL, err := GetDownloadURL(latestRelease)
+	assetName, downloadURL, err := GetDownloadAsset(latestRelease)
 	if err != nil {
 		return false, fmt.Errorf("last-resort: no download URL for %s: %w", latestVersion, err)
 	}
@@ -450,7 +640,7 @@ func installFallbackVersion(versionmanager *VersionManager, latestVersion string
 	}
 
 	if _, statErr := os.Stat(binaryPath); statErr != nil {
-		if err := DownloadFile(downloadURL, binaryPath); err != nil {
+		if err := DownloadVerified(latestRelease, assetName, downloadURL, binaryPath); err != nil {
 			os.RemoveAll(versionDir)
 			return false, fmt.Errorf("last-resort: download failed: %w", err)
 		}
@@ -543,7 +733,9 @@ func MigrateFromLegacyLayout() error {
 	}
 
 	if runtime.GOOS != "windows" {
-		os.Chmod(newPath, 0755)
+		if err := os.Chmod(newPath, 0755); err != nil {
+			logger.Warnf("Failed to set permissions on %s: %v", newPath, err)
+		}
 	}
 
 	versionmanager.RegisterVersion(version, newPath)
@@ -609,7 +801,10 @@ func tryNvm() bool {
 	}
 	sort.Strings(matches)
 	nodeBin := filepath.Dir(matches[len(matches)-1])
-	os.Setenv("PATH", nodeBin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if err := os.Setenv("PATH", nodeBin+string(os.PathListSeparator)+os.Getenv("PATH")); err != nil {
+		logger.Warnf("Failed to add %s to PATH: %v", nodeBin, err)
+		return false
+	}
 	return true
 }
 

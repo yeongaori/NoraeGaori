@@ -66,7 +66,9 @@ func HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		}
 	} else {
 		
-		queue.UpdateVoiceChannel(i.GuildID, voiceState.ChannelID)
+		if err := queue.UpdateVoiceChannel(i.GuildID, voiceState.ChannelID); err != nil {
+			logger.Errorf("Failed to update voice channel for %s: %v", i.GuildID, err)
+		}
 	}
 
 	queueSong := &queue.Song{

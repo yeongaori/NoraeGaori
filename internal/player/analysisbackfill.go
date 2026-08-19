@@ -211,7 +211,7 @@ func runAnalysisBackfillPass(ctx context.Context, guildID string, bitrate int) (
 
 func analyzeBackfillSong(ctx context.Context, guildID string, song *queue.Song, bitrate int) bool {
 	analyzed := false
-	withAnalysisSlot(ctx, func() error {
+	if slotErr := withAnalysisSlot(ctx, func() error {
 		if ctx.Err() != nil {
 			return nil
 		}
@@ -245,12 +245,16 @@ func analyzeBackfillSong(ctx context.Context, guildID string, song *queue.Song, 
 			return nil
 		}
 
-		SaveTrackAnalysis(song.URL, AnalysisSegmentHead, analysis)
+		if saveErr := SaveTrackAnalysis(song.URL, AnalysisSegmentHead, analysis); saveErr != nil {
+			logger.Warnf("Failed to save head analysis for %s: %v", song.Title, saveErr)
+		}
 		logger.Debugf("Analyzed head for: %s (BPM %.1f, key %s / %s, confidence %.3f)",
 			song.Title, analysis.BPM, keyName(analysis.Tonic, analysis.Minor),
 			camelotCode(analysis.Tonic, analysis.Minor), analysis.KeyConfidence)
 		analyzed = true
 		return nil
-	})
+	}); slotErr != nil {
+		logger.Debugf("Backfill slot failed for %s: %v", song.Title, slotErr)
+	}
 	return analyzed
 }

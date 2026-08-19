@@ -220,14 +220,6 @@ func analyzeTrackSamples(samples []float32, sampleRate float64) (*TrackAnalysis,
 	}, nil
 }
 
-func snapToBeat(t, firstBeat, periodSec float64) float64 {
-	if periodSec <= 0 {
-		return t
-	}
-	k := math.Round((t - firstBeat) / periodSec)
-	return firstBeat + k*periodSec
-}
-
 func qsinIn(p float64) float64 {
 	if p <= 0 {
 		return 0

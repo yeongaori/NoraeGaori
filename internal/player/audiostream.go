@@ -190,7 +190,9 @@ func startAudioStream(args []string, collectTail bool) (*audioStream, error) {
 
 func (s *audioStream) killFFmpeg() {
 	if s.ffmpeg != nil && s.ffmpeg.Process != nil {
-		s.ffmpeg.Process.Kill()
+		if err := s.ffmpeg.Process.Kill(); err != nil {
+			logger.Debugf("Failed to kill ffmpeg: %v", err)
+		}
 	}
 	if s.stdin != nil {
 		s.stdin.Close()

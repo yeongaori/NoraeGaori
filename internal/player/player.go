@@ -2,7 +2,6 @@ package player
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -577,7 +576,9 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 	if err != nil {
 		logger.Errorf("Failed to get queue: %v", err)
 		sendLeavingMessage(session, guildID, "error")
-		stopInternal(guildID)
+		if stopErr := stopInternal(guildID); stopErr != nil {
+			logger.Errorf("Failed to stop player for %s: %v", guildID, stopErr)
+		}
 		return playStop
 	}
 
@@ -1364,7 +1365,9 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 					}
 					if !song.IsLive {
 						if es.analysis != nil {
-							SaveTrackAnalysis(song.URL, AnalysisSegmentTail, es.analysis)
+							if saveErr := SaveTrackAnalysis(song.URL, AnalysisSegmentTail, es.analysis); saveErr != nil {
+								logger.Warnf("Failed to save tail analysis for %s: %v", song.Title, saveErr)
+							}
 						}
 						if fade.trimSilence && es.silentTailFrames > 0 {
 							player.mu.Lock()
@@ -2521,14 +2524,6 @@ func FormatDuration(ms int) string {
 		return fmt.Sprintf("%d:%02d:%02d", hours, minutes%60, seconds%60)
 	}
 	return fmt.Sprintf("%d:%02d", minutes, seconds%60)
-}
-
-func int16ToByte(in []int16) []byte {
-	out := make([]byte, len(in)*2)
-	for i, v := range in {
-		binary.LittleEndian.PutUint16(out[i*2:], uint16(v))
-	}
-	return out
 }
 
 func StopAll() {

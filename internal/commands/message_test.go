@@ -349,7 +349,7 @@ func TestEdgeCases(t *testing.T) {
 			Options: []*discordgo.ApplicationCommandOption{},
 		}
 		options := parseCommandOptions(cmd, []string{})
-		if options != nil && len(options) > 0 {
+		if len(options) > 0 {
 			t.Error("Expected nil or empty options")
 		}
 	})

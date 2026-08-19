@@ -113,6 +113,7 @@ func LoadConfig() (*Config, error) {
 
 var (
 	stopChan  chan bool
+	stopOnce  *sync.Once
 	running   bool
 	runningMu sync.Mutex
 )
@@ -126,6 +127,7 @@ func UpdateRPC(session *discordgo.Session) {
 	}
 	running = true
 	stopChan = make(chan bool, 1)
+	stopOnce = &sync.Once{}
 	runningMu.Unlock()
 
 	cfg, err := LoadConfig()
@@ -176,15 +178,14 @@ func UpdateRPC(session *discordgo.Session) {
 
 func Stop() {
 	runningMu.Lock()
-	defer runningMu.Unlock()
+	once, ch := stopOnce, stopChan
+	runningMu.Unlock()
 
-	if !running {
+	if once == nil || ch == nil {
 		return
 	}
 
-	if stopChan != nil {
-		close(stopChan)
-	}
+	once.Do(func() { close(ch) })
 }
 
 func updateActivity(session *discordgo.Session, cfg *Config, currentIndex *int) {

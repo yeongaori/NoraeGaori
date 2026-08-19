@@ -9,7 +9,9 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"noraegaori/internal/messages"
@@ -69,7 +71,11 @@ type innertubeResponse struct {
 	} `json:"streamingData"`
 }
 
-var innertubeClient *InnertubeClient
+var (
+	innertubeClient *InnertubeClient
+	innertubeOnce   = &sync.Once{}
+	innertubeInit   = initInnertubeClient
+)
 
 func fetchAPIKey() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -127,9 +133,7 @@ func initInnertubeClient() {
 }
 
 func getInnertubeClient() *InnertubeClient {
-	if innertubeClient == nil {
-		initInnertubeClient()
-	}
+	innertubeOnce.Do(innertubeInit)
 	return innertubeClient
 }
 
@@ -276,9 +280,7 @@ func (c *InnertubeClient) GetVideoInfo(guildID, url, requesterName, requesterID 
 	if vd.IsLiveContent || vd.IsLive {
 		durationStr = "🔴 LIVE"
 		isLive = true
-	} else if vd.LengthSeconds != "" {
-		var seconds int
-		fmt.Sscanf(vd.LengthSeconds, "%d", &seconds)
+	} else if seconds, parseErr := strconv.Atoi(vd.LengthSeconds); vd.LengthSeconds != "" && parseErr == nil {
 		durationStr = formatDuration(seconds)
 	} else {
 		durationStr = "Unknown"

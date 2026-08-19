@@ -276,7 +276,7 @@ func getAllCommands(guildID string) []CommandInfo {
 
 	t := messages.T(guildID)
 
-	for name, cmd := range commands {
+	for name, cmd := range snapshotCommands() {
 		var cs messages.CommandStrings
 		if t != nil {
 			cs = t.Commands[name]

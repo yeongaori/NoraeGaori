@@ -91,9 +91,6 @@ func TestConcurrentAddAndRemoveFirst(t *testing.T) {
 	if q == nil {
 		t.Fatal("Queue should still exist")
 	}
-	if len(q.Songs) < 0 {
-		t.Errorf("Negative song count: %d", len(q.Songs))
-	}
 	for i, s := range q.Songs {
 		if s.QueuePosition != i {
 			t.Errorf("Position corruption: song at index %d has QueuePosition %d", i, s.QueuePosition)

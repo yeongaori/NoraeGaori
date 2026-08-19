@@ -37,31 +37,60 @@ type AvailabilityWorkerPool struct {
 	retryJobs     chan AvailabilityJob
 	results       chan AvailabilityResult
 	wg            sync.WaitGroup
-	stopping      bool
-	stoppingMu    sync.RWMutex
+	retryWg       sync.WaitGroup
+	retryMu       sync.Mutex
+	done          chan struct{}
+	closeOnce     sync.Once
 	maxRetries    int
 	retryDelay    time.Duration
 	maxRetryDelay time.Duration
+	checkFn       func(string) (bool, bool, error)
 }
 
-func NewAvailabilityWorkerPool(workerCount int) *AvailabilityWorkerPool {
-	pool := &AvailabilityWorkerPool{
+func newAvailabilityWorkerPool(workerCount int) *AvailabilityWorkerPool {
+	return &AvailabilityWorkerPool{
 		workerCount:   workerCount,
 		jobs:          make(chan AvailabilityJob, workerCount*2),
 		retryJobs:     make(chan AvailabilityJob, workerCount*2),
 		results:       make(chan AvailabilityResult, workerCount*2),
-		stopping:      false,
+		done:          make(chan struct{}),
 		maxRetries:    5,
 		retryDelay:    1 * time.Second,
 		maxRetryDelay: 30 * time.Second,
+		checkFn:       youtube.CheckAvailability,
 	}
+}
 
-	for i := 0; i < workerCount; i++ {
-		pool.wg.Add(1)
-		go pool.worker(i)
+func (p *AvailabilityWorkerPool) start() {
+	for i := 0; i < p.workerCount; i++ {
+		p.wg.Add(1)
+		go p.worker(i)
 	}
+}
 
+func NewAvailabilityWorkerPool(workerCount int) *AvailabilityWorkerPool {
+	pool := newAvailabilityWorkerPool(workerCount)
+	pool.start()
 	return pool
+}
+
+func (p *AvailabilityWorkerPool) nextJob() (AvailabilityJob, bool) {
+	select {
+	case <-p.done:
+		return AvailabilityJob{}, false
+	case job := <-p.retryJobs:
+		return job, true
+	default:
+	}
+
+	select {
+	case <-p.done:
+		return AvailabilityJob{}, false
+	case job := <-p.retryJobs:
+		return job, true
+	case job := <-p.jobs:
+		return job, true
+	}
 }
 
 func (p *AvailabilityWorkerPool) worker(id int) {
@@ -70,40 +99,15 @@ func (p *AvailabilityWorkerPool) worker(id int) {
 	scope := logger.Scopef("Worker %d", id)
 
 	for {
-
-		p.stoppingMu.RLock()
-		stopping := p.stopping
-		p.stoppingMu.RUnlock()
-
-		if stopping {
+		job, ok := p.nextJob()
+		if !ok {
 			return
-		}
-
-		var job AvailabilityJob
-		var ok bool
-
-		select {
-		case job, ok = <-p.retryJobs:
-			if !ok {
-				return
-			}
-		default:
-			select {
-			case job, ok = <-p.retryJobs:
-				if !ok {
-					return
-				}
-			case job, ok = <-p.jobs:
-				if !ok {
-					return
-				}
-			}
 		}
 
 		scope.Debugf("Checking availability: %s (index: %d, retry: %d, batch: %d)",
 			job.URL, job.Index, job.RetryCount, job.BatchID)
 
-		available, isLive, err := youtube.CheckAvailability(job.URL)
+		available, isLive, err := p.checkFn(job.URL)
 
 		result := AvailabilityResult{
 			URL:         job.URL,
@@ -134,18 +138,12 @@ func (p *AvailabilityWorkerPool) worker(id int) {
 			if shouldRetry && job.RetryCount < p.maxRetries {
 				result.ShouldRetry = true
 
-				delay := time.Duration(1<<uint(job.RetryCount)) * p.retryDelay
-				if delay > p.maxRetryDelay {
-					delay = p.maxRetryDelay
-				}
+				delay := p.backoffDelay(job.RetryCount)
 
 				scope.Debugf("Scheduling retry for %s in %v (attempt %d/%d)",
 					job.URL, delay, job.RetryCount+1, p.maxRetries)
 
-				go func(retryJob AvailabilityJob, retryDelay time.Duration) {
-					time.Sleep(retryDelay)
-					p.retryJobs <- retryJob
-				}(AvailabilityJob{
+				p.scheduleRetry(AvailabilityJob{
 					URL:         job.URL,
 					Index:       job.Index,
 					RetryCount:  job.RetryCount + 1,
@@ -160,12 +158,76 @@ func (p *AvailabilityWorkerPool) worker(id int) {
 			}
 		}
 
+		target := p.results
 		if job.ResultsChan != nil {
-			job.ResultsChan <- result
-		} else {
-			p.results <- result
+			target = job.ResultsChan
+		}
+
+		select {
+		case target <- result:
+		case <-p.done:
+			return
 		}
 	}
+}
+
+func (p *AvailabilityWorkerPool) backoffDelay(retryCount int) time.Duration {
+	delay := time.Duration(1<<uint(retryCount)) * p.retryDelay
+	if delay > p.maxRetryDelay {
+		delay = p.maxRetryDelay
+	}
+	return delay
+}
+
+func (p *AvailabilityWorkerPool) scheduleRetry(job AvailabilityJob, delay time.Duration) {
+	p.retryMu.Lock()
+	select {
+	case <-p.done:
+		p.retryMu.Unlock()
+		return
+	default:
+	}
+	p.retryWg.Add(1)
+	p.retryMu.Unlock()
+
+	go p.awaitRetry(job, delay)
+}
+
+func (p *AvailabilityWorkerPool) awaitRetry(job AvailabilityJob, delay time.Duration) {
+	defer p.retryWg.Done()
+
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case <-p.done:
+		return
+	case <-timer.C:
+	}
+
+	select {
+	case <-p.done:
+	case p.retryJobs <- job:
+	}
+}
+
+func (p *AvailabilityWorkerPool) submit(jobs []AvailabilityJob, batchResults chan AvailabilityResult) int {
+	batchID := atomic.AddUint64(&batchIDCounter, 1)
+
+	submitted := 0
+	for i := range jobs {
+		jobs[i].BatchID = batchID
+		jobs[i].ResultsChan = batchResults
+
+		select {
+		case p.jobs <- jobs[i]:
+			submitted++
+		case <-p.done:
+			return submitted
+		}
+	}
+
+	return submitted
 }
 
 func (p *AvailabilityWorkerPool) CheckBatch(jobs []AvailabilityJob) []AvailabilityResult {
@@ -173,27 +235,19 @@ func (p *AvailabilityWorkerPool) CheckBatch(jobs []AvailabilityJob) []Availabili
 		return []AvailabilityResult{}
 	}
 
-	batchID := atomic.AddUint64(&batchIDCounter, 1)
-
 	batchResults := make(chan AvailabilityResult, len(jobs))
+	submitted := p.submit(jobs, batchResults)
 
-	for i := range jobs {
-		jobs[i].BatchID = batchID
-		jobs[i].ResultsChan = batchResults
-		p.jobs <- jobs[i]
-	}
-
-	results := make([]AvailabilityResult, 0, len(jobs))
-	for i := 0; i < len(jobs); i++ {
-		result := <-batchResults
-		results = append(results, result)
-	}
-
-	close(batchResults)
-
-	sortedResults := make([]AvailabilityResult, len(results))
-	for _, result := range results {
-		sortedResults[result.Index] = result
+	sortedResults := make([]AvailabilityResult, len(jobs))
+	for i := 0; i < submitted; i++ {
+		select {
+		case result := <-batchResults:
+			if result.Index >= 0 && result.Index < len(sortedResults) {
+				sortedResults[result.Index] = result
+			}
+		case <-p.done:
+			return sortedResults
+		}
 	}
 
 	return sortedResults
@@ -204,35 +258,29 @@ func (p *AvailabilityWorkerPool) CheckBatchImmediate(jobs []AvailabilityJob, cal
 		return
 	}
 
-	batchID := atomic.AddUint64(&batchIDCounter, 1)
-
 	batchResults := make(chan AvailabilityResult, len(jobs))
+	submitted := p.submit(jobs, batchResults)
 
-	for i := range jobs {
-		jobs[i].BatchID = batchID
-		jobs[i].ResultsChan = batchResults
-		p.jobs <- jobs[i]
+	for i := 0; i < submitted; i++ {
+		select {
+		case result := <-batchResults:
+			callback(result)
+		case <-p.done:
+			return
+		}
 	}
-
-	for i := 0; i < len(jobs); i++ {
-		result := <-batchResults
-		callback(result)
-	}
-
-	close(batchResults)
 }
 
 func (p *AvailabilityWorkerPool) Close() {
-	p.stoppingMu.Lock()
-	p.stopping = true
-	p.stoppingMu.Unlock()
+	p.closeOnce.Do(func() {
+		p.retryMu.Lock()
+		close(p.done)
+		p.retryMu.Unlock()
 
-	close(p.jobs)
-	close(p.retryJobs)
-	p.wg.Wait()
-	close(p.results)
-
-	logger.Infof("Shut down successfully")
+		p.retryWg.Wait()
+		p.wg.Wait()
+		logger.Infof("Shut down successfully")
+	})
 }
 
 var (

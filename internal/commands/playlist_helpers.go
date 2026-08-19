@@ -389,7 +389,9 @@ func addPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreate, play
 			return
 		}
 	} else {
-		queue.UpdateVoiceChannel(i.GuildID, voiceState.ChannelID)
+		if err := queue.UpdateVoiceChannel(i.GuildID, voiceState.ChannelID); err != nil {
+			logger.Errorf("Failed to update voice channel for %s: %v", i.GuildID, err)
+		}
 	}
 
 	if isQueueEmpty && len(playlistInfo.Videos) > 0 {

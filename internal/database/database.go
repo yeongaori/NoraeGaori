@@ -184,15 +184,18 @@ func runMigrations() error {
 				break
 			}
 		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return fmt.Errorf("failed to read column info for %s: %w", m.table, err)
+		}
 		rows.Close()
 
 		if !columnExists {
 			alterSQL := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", m.table, m.column, m.typ)
 			if _, err := DB.Exec(alterSQL); err != nil {
-				logger.Warn(fmt.Sprintf("Failed to add column %s.%s (may already exist): %v", m.table, m.column, err))
-			} else {
-				logger.Info(fmt.Sprintf("Added column %s.%s", m.table, m.column))
+				return fmt.Errorf("failed to add column %s.%s: %w", m.table, m.column, err)
 			}
+			logger.Infof("Added column %s.%s", m.table, m.column)
 		}
 	}
 

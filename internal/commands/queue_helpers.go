@@ -187,10 +187,3 @@ func formatSeconds(seconds int) string {
 	}
 	return fmt.Sprintf("%d:%02d", minutes, secs)
 }
-
-func boolToOnOff(b bool) string {
-	if b {
-		return "On"
-	}
-	return "Off"
-}

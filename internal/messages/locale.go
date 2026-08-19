@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"noraegaori/locales"
 )
@@ -548,31 +549,44 @@ type RPCMessages struct {
 	ActivityDefault4 string `json:"activity_default_4"`
 }
 
-var currentLocale = &Locale{}
+type localeState struct {
+	locale *Locale
+	lang   string
+}
 
-var currentLang = "en"
+var activeLocale atomic.Pointer[localeState]
+
+func init() {
+	activeLocale.Store(&localeState{locale: &Locale{}, lang: "en"})
+}
+
+func setActiveLocale(loc *Locale, lang string) {
+	activeLocale.Store(&localeState{locale: loc, lang: lang})
+}
 
 func T(guildID ...string) *Locale {
+	active := activeLocale.Load()
 	if len(guildID) == 0 || guildID[0] == "" || guildLangResolver == nil {
-		return currentLocale
+		return active.locale
 	}
 	lang, err := guildLangResolver(guildID[0])
-	if err != nil || lang == "" || lang == currentLang {
-		return currentLocale
+	if err != nil || lang == "" || lang == active.lang {
+		return active.locale
 	}
 	if loc := getCachedLocale(lang); loc != nil {
 		return loc
 	}
-	return currentLocale
+	return active.locale
 }
 
 func Lang(guildID ...string) string {
+	active := activeLocale.Load()
 	if len(guildID) == 0 || guildID[0] == "" || guildLangResolver == nil {
-		return currentLang
+		return active.lang
 	}
 	lang, err := guildLangResolver(guildID[0])
 	if err != nil || lang == "" {
-		return currentLang
+		return active.lang
 	}
 	return lang
 }
@@ -659,8 +673,6 @@ func InvalidateLocaleCache() {
 }
 
 func LoadLocale(lang string) error {
-	currentLang = lang
-
 	loc, err := buildLocale(lang)
 	if err != nil {
 
@@ -668,7 +680,7 @@ func LoadLocale(lang string) error {
 		if jerr := json.Unmarshal(locales.EnglishLocale, &base); jerr != nil {
 			return fmt.Errorf("failed to parse embedded English fallback: %w", jerr)
 		}
-		currentLocale = &base
+		setActiveLocale(&base, lang)
 
 		localeCacheMu.Lock()
 		localeCache["en"] = &base
@@ -676,7 +688,7 @@ func LoadLocale(lang string) error {
 		return fmt.Errorf("failed to load locale %q, falling back to English: %w", lang, err)
 	}
 
-	currentLocale = loc
+	setActiveLocale(loc, lang)
 
 	localeCacheMu.Lock()
 	localeCache[lang] = loc

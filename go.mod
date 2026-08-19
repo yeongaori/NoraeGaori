@@ -3,6 +3,7 @@ module noraegaori
 go 1.25.0
 
 require (
+	github.com/ProtonMail/go-crypto v1.4.0
 	github.com/bwmarrin/discordgo v0.29.0
 	github.com/ebitengine/purego v0.10.0
 	github.com/fsnotify/fsnotify v1.9.0
@@ -16,7 +17,6 @@ require (
 )
 
 require (
-	github.com/ProtonMail/go-crypto v1.4.0 // indirect
 	github.com/cloudflare/circl v1.6.3 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect

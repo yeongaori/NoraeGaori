@@ -121,7 +121,9 @@ func preCacheSong(ctx context.Context, guildID string, song *queue.Song, sponsor
 			preCacheStoreMu.Unlock()
 
 			if !reused {
-				SaveTrackAnalysis(song.URL, AnalysisSegmentHead, analysis)
+				if saveErr := SaveTrackAnalysis(song.URL, AnalysisSegmentHead, analysis); saveErr != nil {
+					logger.Warnf("Failed to save head analysis for %s: %v", song.Title, saveErr)
+				}
 			}
 			logger.Debugf("Analyzed head for: %s (BPM %.1f, key %s / %s, confidence %.3f, reused %v)",
 				song.Title, analysis.BPM, keyName(analysis.Tonic, analysis.Minor),
@@ -201,10 +203,12 @@ func analyzeStreamHead(ctx context.Context, streamURL string) (*TrackAnalysis, e
 
 	data, err := io.ReadAll(io.LimitReader(stdout, analysisMaxBytes))
 	if err != nil {
-		ffmpeg.Process.Kill()
+		if killErr := ffmpeg.Process.Kill(); killErr != nil {
+			logger.Debugf("Failed to kill ffmpeg: %v", killErr)
+		}
 		return nil, fmt.Errorf("read error: %w", err)
 	}
-	io.Copy(io.Discard, stdout)
+	_, _ = io.Copy(io.Discard, stdout)
 	if err := ffmpeg.Wait(); err != nil {
 		return nil, fmt.Errorf("ffmpeg failed: %w", err)
 	}
