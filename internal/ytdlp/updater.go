@@ -31,8 +31,8 @@ var ytdlpSigningKey []byte
 var signingKeyArmor = ytdlpSigningKey
 
 const (
-	githubAPIURL         = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"
-	githubReleasesURL    = "https://api.github.com/repos/yt-dlp/yt-dlp/releases"
+	stableRepo           = "yt-dlp/yt-dlp"
+	nightlyRepo          = "yt-dlp/yt-dlp-nightly-builds"
 	updateCheckInterval  = 6 * time.Hour
 	minCheckInterval     = 1 * time.Hour
 	maxFallbackAttempts  = 5
@@ -93,9 +93,24 @@ func GetCurrentVersion() (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
-func GetLatestRelease() (*GitHubRelease, error) {
+func releaseRepo(channel string) string {
+	if channel == config.YtDlpChannelNightly {
+		return nightlyRepo
+	}
+	return stableRepo
+}
+
+func latestReleaseURL(channel string) string {
+	return fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", releaseRepo(channel))
+}
+
+func releasesURL(channel string) string {
+	return fmt.Sprintf("https://api.github.com/repos/%s/releases", releaseRepo(channel))
+}
+
+func GetLatestRelease(channel string) (*GitHubRelease, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
-	req, err := http.NewRequest("GET", githubAPIURL, nil)
+	req, err := http.NewRequest("GET", latestReleaseURL(channel), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -120,9 +135,9 @@ func GetLatestRelease() (*GitHubRelease, error) {
 	return &release, nil
 }
 
-func GetReleases(perPage int) ([]*GitHubRelease, error) {
+func GetReleases(channel string, perPage int) ([]*GitHubRelease, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
-	url := fmt.Sprintf("%s?per_page=%d", githubReleasesURL, perPage)
+	url := fmt.Sprintf("%s?per_page=%d", releasesURL(channel), perPage)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -507,13 +522,54 @@ func runCanaryAndActivate(versionmanager *VersionManager, version string) canary
 	return canaryRejected
 }
 
+func activeChannelIsHealthy(channel string) bool {
+	versionmanager := GetVersionManager()
+	if versionmanager == nil {
+		return false
+	}
+
+	active := versionmanager.GetActiveVersion()
+	if active == "" || ChannelOf(active) != channel {
+		return false
+	}
+
+	state, ok := versionmanager.GetVersionState(active)
+	if !ok || (state != StateActive && state != StateVerified) {
+		return false
+	}
+
+	if versionmanager.ActiveVersionIsFailing() {
+		logger.Warnf("Active %s version %s is failing playback; treating the channel as unhealthy", channel, active)
+		return false
+	}
+
+	return true
+}
+
+var updateChannelFn = updateFromChannel
+
 func UpdateYtDlp(force bool) (bool, error) {
-	logger.Debug("Checking for updates...")
+	channel := ConfiguredChannel()
+	if channel != config.YtDlpChannelAuto {
+		return updateChannelFn(channel, force)
+	}
+
+	updated, err := updateChannelFn(config.YtDlpChannelStable, force)
+	if activeChannelIsHealthy(config.YtDlpChannelStable) {
+		return updated, err
+	}
+
+	logger.Warnf("Stable yt-dlp is not usable; trying the nightly channel")
+	return updateChannelFn(config.YtDlpChannelNightly, force)
+}
+
+func updateFromChannel(channel string, force bool) (bool, error) {
+	logger.Debugf("Checking for updates on the %s channel...", channel)
 
 	versionmanager := GetVersionManager()
 	currentVersion := resolveCurrentVersion(versionmanager)
 
-	release, err := GetLatestRelease()
+	release, err := GetLatestRelease(channel)
 	if err != nil {
 		return false, fmt.Errorf("failed to fetch release info: %w", err)
 	}
@@ -533,7 +589,7 @@ func UpdateYtDlp(force bool) (bool, error) {
 					return false, nil
 				}
 				logger.Warnf("No usable binary on disk; trying previous releases")
-				return installFallbackVersion(versionmanager, latestVersion, release)
+				return installFallbackVersion(versionmanager, channel, latestVersion, release)
 			}
 			if state == StateVerified || state == StateActive || state == StateProvisional {
 				logger.Debugf("Version %s already registered as %s", latestVersion, state)
@@ -548,7 +604,7 @@ func UpdateYtDlp(force bool) (bool, error) {
 					return false, nil
 				default:
 					logger.Warnf("Trying previous releases after %s failed canary", latestVersion)
-					return installFallbackVersion(versionmanager, latestVersion, release)
+					return installFallbackVersion(versionmanager, channel, latestVersion, release)
 				}
 			}
 		}
@@ -583,12 +639,12 @@ func UpdateYtDlp(force bool) (bool, error) {
 		return false, nil
 	default:
 		logger.Warnf("Trying previous releases after %s failed canary", latestVersion)
-		return installFallbackVersion(versionmanager, latestVersion, release)
+		return installFallbackVersion(versionmanager, channel, latestVersion, release)
 	}
 }
 
-func installFallbackVersion(versionmanager *VersionManager, latestVersion string, latestRelease *GitHubRelease) (bool, error) {
-	releases, err := GetReleases(fallbackReleaseFetch)
+func installFallbackVersion(versionmanager *VersionManager, channel, latestVersion string, latestRelease *GitHubRelease) (bool, error) {
+	releases, err := GetReleases(channel, fallbackReleaseFetch)
 	if err != nil {
 		return false, fmt.Errorf("failed to fetch release list: %w", err)
 	}
@@ -649,6 +705,37 @@ func installFallbackVersion(versionmanager *VersionManager, latestVersion string
 	return true, nil
 }
 
+var updateCheckRequests = make(chan struct{}, 1)
+
+func runBackgroundUpdateCheck() {
+	versionmanager := GetVersionManager()
+	if versionmanager == nil {
+		return
+	}
+
+	if time.Since(versionmanager.GetLastGitHubCheck()) < minCheckInterval {
+		logger.Debugf("Skipping check, last check was %s ago", time.Since(versionmanager.GetLastGitHubCheck()).Round(time.Minute))
+		return
+	}
+
+	logger.Debug("Background update check starting...")
+	updated, err := UpdateYtDlp(false)
+	if err != nil {
+		logger.Errorf("Background update check failed: %v", err)
+	} else if updated {
+		logger.Info("Background update found new version")
+	}
+
+	versionmanager.SetLastGitHubCheck(time.Now())
+}
+
+func RequestUpdateCheck() {
+	select {
+	case updateCheckRequests <- struct{}{}:
+	default:
+	}
+}
+
 func StartBackgroundUpdater(ctx context.Context) {
 	go func() {
 		logger.Debug("Background updater started")
@@ -660,26 +747,10 @@ func StartBackgroundUpdater(ctx context.Context) {
 			case <-ctx.Done():
 				logger.Debug("Background updater stopped")
 				return
+			case <-updateCheckRequests:
+				runBackgroundUpdateCheck()
 			case <-ticker.C:
-				versionmanager := GetVersionManager()
-				if versionmanager == nil {
-					continue
-				}
-
-				if time.Since(versionmanager.GetLastGitHubCheck()) < minCheckInterval {
-					logger.Debugf("Skipping check, last check was %s ago", time.Since(versionmanager.GetLastGitHubCheck()).Round(time.Minute))
-					continue
-				}
-
-				logger.Debug("Background update check starting...")
-				updated, err := UpdateYtDlp(false)
-				if err != nil {
-					logger.Errorf("Background update check failed: %v", err)
-				} else if updated {
-					logger.Info("Background update found new version")
-				}
-
-				versionmanager.SetLastGitHubCheck(time.Now())
+				runBackgroundUpdateCheck()
 			}
 		}
 	}()

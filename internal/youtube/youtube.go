@@ -22,6 +22,11 @@ func applyJsRuntime(cmd *ytdlp.Command) *ytdlp.Command {
 	return cmd
 }
 
+func SaveStreamFailure(url string, err error) {
+	saveVersionResult(url, err)
+	ytdlpUpdater.RequestUpdateCheck()
+}
+
 func saveVersionResult(url string, err error) {
 	versionmanager := ytdlpUpdater.GetVersionManager()
 	if versionmanager == nil {

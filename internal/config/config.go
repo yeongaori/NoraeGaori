@@ -20,7 +20,14 @@ type Config struct {
 	DefaultVolume        float64 `json:"default_volume"`
 	MaxDownloadSpeedMbps float64 `json:"max_download_speed_mbps"`
 	LogFile              string  `json:"log_file"`
+	YtDlpChannel         string  `json:"ytdlp_channel"`
 }
+
+const (
+	YtDlpChannelAuto    = "auto"
+	YtDlpChannelStable  = "stable"
+	YtDlpChannelNightly = "nightly"
+)
 
 type AdminsConfig struct {
 	Admins []string `json:"admins"`
@@ -89,6 +96,7 @@ func loadConfig() error {
 			DefaultVolume:        100,
 			MaxDownloadSpeedMbps: 10.0,
 			LogFile:              "latest.log",
+			YtDlpChannel:         YtDlpChannelAuto,
 		}
 		if err := saveConfig(defaultConfig); err != nil {
 			return fmt.Errorf("failed to create default config: %w", err)
@@ -127,12 +135,21 @@ func loadConfig() error {
 		cfg.LogFile = "latest.log"
 	}
 
+	switch cfg.YtDlpChannel {
+	case YtDlpChannelAuto, YtDlpChannelStable, YtDlpChannelNightly:
+	case "":
+		cfg.YtDlpChannel = YtDlpChannelAuto
+	default:
+		logger.Warnf("Invalid ytdlp_channel=%q, falling back to %q", cfg.YtDlpChannel, YtDlpChannelAuto)
+		cfg.YtDlpChannel = YtDlpChannelAuto
+	}
+
 	configMux.Lock()
 	config = &cfg
 	configMux.Unlock()
 
-	logger.Infof("Loaded config: prefix=%s, language=%s, volume=%g, max_download_speed=%.1fMbps",
-		cfg.Prefix, cfg.Language, cfg.DefaultVolume, cfg.MaxDownloadSpeedMbps)
+	logger.Infof("Loaded config: prefix=%s, language=%s, volume=%g, max_download_speed=%.1fMbps, ytdlp_channel=%s",
+		cfg.Prefix, cfg.Language, cfg.DefaultVolume, cfg.MaxDownloadSpeedMbps, cfg.YtDlpChannel)
 	return nil
 }
 

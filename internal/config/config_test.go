@@ -227,3 +227,51 @@ func TestNilAdminsConfig(t *testing.T) {
 		t.Error("IsAdmin should return false when adminsConf is nil")
 	}
 }
+
+func TestLoadConfigDefaultsTheYtDlpChannel(t *testing.T) {
+	setupTestConfig(t)
+	defer teardownTestConfig(t)
+
+	if err := os.WriteFile(configPath, []byte(`{"prefix":"!","language":"en","default_volume":100}`), 0644); err != nil {
+		t.Fatalf("failed to seed the config: %v", err)
+	}
+	if err := loadConfig(); err != nil {
+		t.Fatalf("loadConfig returned %v, want nil", err)
+	}
+
+	if got := GetConfig().YtDlpChannel; got != YtDlpChannelAuto {
+		t.Errorf("got channel %q for a config without the key, want %q", got, YtDlpChannelAuto)
+	}
+}
+
+func TestLoadConfigRejectsAnUnknownYtDlpChannel(t *testing.T) {
+	setupTestConfig(t)
+	defer teardownTestConfig(t)
+
+	if err := os.WriteFile(configPath, []byte(`{"prefix":"!","ytdlp_channel":"bleeding-edge"}`), 0644); err != nil {
+		t.Fatalf("failed to seed the config: %v", err)
+	}
+	if err := loadConfig(); err != nil {
+		t.Fatalf("loadConfig returned %v, want nil", err)
+	}
+
+	if got := GetConfig().YtDlpChannel; got != YtDlpChannelAuto {
+		t.Errorf("got channel %q, want the fallback %q", got, YtDlpChannelAuto)
+	}
+}
+
+func TestLoadConfigKeepsAnExplicitStableChannel(t *testing.T) {
+	setupTestConfig(t)
+	defer teardownTestConfig(t)
+
+	if err := os.WriteFile(configPath, []byte(`{"prefix":"!","ytdlp_channel":"stable"}`), 0644); err != nil {
+		t.Fatalf("failed to seed the config: %v", err)
+	}
+	if err := loadConfig(); err != nil {
+		t.Fatalf("loadConfig returned %v, want nil", err)
+	}
+
+	if got := GetConfig().YtDlpChannel; got != YtDlpChannelStable {
+		t.Errorf("got channel %q, want %q to be honoured", got, YtDlpChannelStable)
+	}
+}

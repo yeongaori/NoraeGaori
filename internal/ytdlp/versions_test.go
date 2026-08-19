@@ -2,6 +2,8 @@ package ytdlp
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -363,9 +365,13 @@ func TestGetCanaryIDsAlwaysIncludesFixedVideos(t *testing.T) {
 	if len(ids) != len(fixedCanaryIDs)+canaryTestCount {
 		t.Errorf("got %d ids, want %d", len(ids), len(fixedCanaryIDs)+canaryTestCount)
 	}
-	for i, fixed := range fixedCanaryIDs {
-		if ids[i] != fixed {
-			t.Errorf("id %d is %q, want the fixed id %q", i, ids[i], fixed)
+	present := map[string]bool{}
+	for _, id := range ids {
+		present[id] = true
+	}
+	for _, fixed := range fixedCanaryIDs {
+		if !present[fixed] {
+			t.Errorf("fixed id %q is missing from %v", fixed, ids)
 		}
 	}
 }
@@ -501,7 +507,12 @@ func TestHasUsableBinaryIgnoresBlacklistedAndMissing(t *testing.T) {
 func TestRunCanaryPassesOnFirstSuccessfulExtraction(t *testing.T) {
 	versionmanager := newTestVersionManager(t)
 
-	path := writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.07.04"), `printf '{"id":"jNQXAC9IVRw","formats":[{"url":"https://example.invalid/a"}]}'`)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(make([]byte, 2048))
+	}))
+	defer server.Close()
+
+	path := writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.07.04"), `printf '{"id":"jNQXAC9IVRw","formats":[{"url":"`+server.URL+`"}]}'`)
 	addVersion(versionmanager, "2026.07.04", &VersionEntry{Path: path, State: StatePending})
 
 	passed, networkError := versionmanager.RunCanary("2026.07.04")

@@ -4,14 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/rand"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
+	"noraegaori/internal/config"
 	"noraegaori/pkg/logger"
 )
 
@@ -32,6 +36,8 @@ const (
 	canaryTestCount     = 3
 	versionDataFile     = "data/ytdlp_versions.json"
 )
+
+const canaryAudioFormat = "bestaudio/best"
 
 var fixedCanaryIDs = []string{
 	"jNQXAC9IVRw",
@@ -279,22 +285,20 @@ func (versionmanager *VersionManager) getCanaryIDs() []string {
 	defer versionmanager.mu.RUnlock()
 
 	ids := make([]string, 0, len(fixedCanaryIDs)+canaryTestCount)
-	ids = append(ids, fixedCanaryIDs...)
 
-	if len(versionmanager.state.CanaryRing) == 0 {
-		return ids
+	if len(versionmanager.state.CanaryRing) > 0 {
+		ring := make([]string, len(versionmanager.state.CanaryRing))
+		copy(ring, versionmanager.state.CanaryRing)
+		rand.Shuffle(len(ring), func(i, j int) { ring[i], ring[j] = ring[j], ring[i] })
+
+		count := canaryTestCount
+		if count > len(ring) {
+			count = len(ring)
+		}
+		ids = append(ids, ring[:count]...)
 	}
 
-	ring := make([]string, len(versionmanager.state.CanaryRing))
-	copy(ring, versionmanager.state.CanaryRing)
-	rand.Shuffle(len(ring), func(i, j int) { ring[i], ring[j] = ring[j], ring[i] })
-
-	count := canaryTestCount
-	if count > len(ring) {
-		count = len(ring)
-	}
-	ids = append(ids, ring[:count]...)
-	return ids
+	return append(ids, fixedCanaryIDs...)
 }
 
 func (versionmanager *VersionManager) SaveSuccess(version, videoID string) {
@@ -368,6 +372,13 @@ func (versionmanager *VersionManager) SaveError(version, videoID string, errMsg 
 	versionmanager.persist()
 }
 
+func (versionmanager *VersionManager) ActiveVersionIsFailing() bool {
+	versionmanager.mu.RLock()
+	defer versionmanager.mu.RUnlock()
+
+	return versionmanager.shouldRollback()
+}
+
 func (versionmanager *VersionManager) shouldRollback() bool {
 	entry, ok := versionmanager.state.Versions[versionmanager.state.ActiveVersion]
 	if !ok {
@@ -385,14 +396,46 @@ func (versionmanager *VersionManager) shouldRollback() bool {
 	return recentErrors >= rollbackThreshold
 }
 
+func ChannelOf(version string) string {
+	if strings.Count(version, ".") >= 3 {
+		return config.YtDlpChannelNightly
+	}
+	return config.YtDlpChannelStable
+}
+
+var configuredChannelFn = resolveConfiguredChannel
+
+func ConfiguredChannel() string {
+	return configuredChannelFn()
+}
+
+func resolveConfiguredChannel() string {
+	cfg := config.GetConfig()
+	if cfg == nil || cfg.YtDlpChannel == "" {
+		return config.YtDlpChannelAuto
+	}
+	return cfg.YtDlpChannel
+}
+
 func (versionmanager *VersionManager) selectBestVersion() string {
-	var candidates []string
+	channel := ConfiguredChannel()
+
+	var preferred, fallback []string
 	for ver, entry := range versionmanager.state.Versions {
-		if entry.State != StateBlacklisted && entry.Successes > 0 && ver != versionmanager.state.ActiveVersion {
-			candidates = append(candidates, ver)
+		if entry.State == StateBlacklisted || entry.Successes == 0 || ver == versionmanager.state.ActiveVersion {
+			continue
+		}
+		if channel == config.YtDlpChannelAuto || ChannelOf(ver) == channel {
+			preferred = append(preferred, ver)
+		} else {
+			fallback = append(fallback, ver)
 		}
 	}
 
+	candidates := preferred
+	if len(candidates) == 0 {
+		candidates = fallback
+	}
 	if len(candidates) == 0 {
 		return versionmanager.state.ActiveVersion
 	}
@@ -584,7 +627,7 @@ func (versionmanager *VersionManager) testExtraction(binaryPath, videoID string)
 	defer cancel()
 
 	url := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID)
-	args := []string{"--dump-json", "--no-playlist", "--no-warnings", url}
+	args := []string{"-f", canaryAudioFormat, "--dump-json", "--no-playlist", "--no-warnings", url}
 
 	if rt := GetJsRuntime(); rt != "" {
 		args = append([]string{"--js-runtimes", rt}, args...)
@@ -618,8 +661,43 @@ func (versionmanager *VersionManager) testExtraction(binaryPath, videoID string)
 	if err := json.Unmarshal(output, &info); err != nil {
 		return canaryResult{videoID: videoID, errMsg: "invalid JSON output"}
 	}
-	if info.ID == videoID || len(info.Formats) > 0 || info.URL != "" {
-		return canaryResult{videoID: videoID, success: true}
+	streamURL := info.URL
+	if streamURL == "" && len(info.Formats) > 0 {
+		streamURL = info.Formats[len(info.Formats)-1].URL
 	}
-	return canaryResult{videoID: videoID, errMsg: "extractor returned no id, formats, or url"}
+	if streamURL == "" {
+		return canaryResult{videoID: videoID, errMsg: "extractor returned no id, formats, or url"}
+	}
+
+	if probeErr := probeStreamReachable(ctx, streamURL); probeErr != nil {
+		if IsNetworkError(probeErr.Error()) || ctx.Err() != nil {
+			return canaryResult{videoID: videoID, network: true, errMsg: probeErr.Error()}
+		}
+		return canaryResult{videoID: videoID, errMsg: probeErr.Error()}
+	}
+
+	return canaryResult{videoID: videoID, success: true}
+}
+
+func probeStreamReachable(ctx context.Context, streamURL string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, streamURL, nil)
+	if err != nil {
+		return err
+	}
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		return fmt.Errorf("stream URL returned HTTP %d", resp.StatusCode)
+	}
+
+	buf := make([]byte, 512)
+	if _, err := io.ReadFull(resp.Body, buf); err != nil && err != io.ErrUnexpectedEOF && err != io.EOF {
+		return fmt.Errorf("stream URL produced no data: %w", err)
+	}
+	return nil
 }

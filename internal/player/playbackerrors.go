@@ -1,6 +1,7 @@
 package player
 
 import (
+	"errors"
 	"strings"
 
 	"noraegaori/internal/messages"
@@ -124,8 +125,25 @@ func clearRetryCountsForGuild(guildID string) {
 	playbackRetriesMu.Unlock()
 }
 
+func isStreamFetchFailure(errMsg string) bool {
+	errorLower := strings.ToLower(errMsg)
+	return strings.Contains(errorLower, "produced no audio") || strings.Contains(errorLower, "403")
+}
+
+func reportPlaybackFailure(song *queue.Song, errMsg string) {
+	if !isStreamFetchFailure(errMsg) {
+		return
+	}
+
+	reportStreamFailure(song.URL, errors.New(errMsg))
+}
+
+var reportStreamFailure = youtube.SaveStreamFailure
+
 func handlePlaybackError(session *discordgo.Session, guildID string, song *queue.Song, err error) bool {
 	errMsg := err.Error()
+
+	reportPlaybackFailure(song, errMsg)
 
 	if isDefinitivePlaybackError(errMsg) {
 		reason := cleanPlaybackErrorMessage(guildID, errMsg)

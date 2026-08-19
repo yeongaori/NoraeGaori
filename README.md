@@ -82,6 +82,7 @@ make build
 | `default_volume` | `100`        | Default volume (0-1000)                                                             |
 | `max_download_speed_mbps` | `10`         | Max download speed per server                                                       |
 | `log_file` | `latest.log` | Save all terminal output to this file; `off` disables                                 |
+| `ytdlp_channel` | `auto`       | yt-dlp release channel. `auto` runs stable and switches to nightly only while stable fails its canary, returning to stable once a working stable ships. `stable` or `nightly` pins one channel |
 
 ### `config/admins.json`
 
