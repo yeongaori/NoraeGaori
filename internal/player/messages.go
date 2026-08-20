@@ -11,6 +11,8 @@ import (
 )
 
 func SetLoadingMessage(guildID string, msg *discordgo.Message) {
+	clearAnnounced(guildID)
+
 	loadingMessagesMu.Lock()
 	defer loadingMessagesMu.Unlock()
 	loadingMessages[guildID] = msg
