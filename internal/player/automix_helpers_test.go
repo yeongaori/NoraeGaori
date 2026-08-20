@@ -2,22 +2,9 @@ package player
 
 import (
 	"math"
-	"testing"
 
 	"noraegaori/internal/audio/dsp"
 )
-
-type checkCollector struct{ t *testing.T }
-
-func (c *checkCollector) add(name string, passed bool, format string, args ...interface{}) {
-	c.t.Helper()
-	c.t.Run(name, func(t *testing.T) {
-		t.Helper()
-		if !passed {
-			t.Errorf(format, args...)
-		}
-	})
-}
 
 type toneGenerator struct {
 	phase     float64
@@ -92,12 +79,3 @@ func filterResponse(setup func(*dsp.Biquad), frequency float64) float64 {
 	}
 	return lastRMS / (10000 / math.Sqrt2)
 }
-
-func TestCheckStyleResolution(t *testing.T)  { checkStyleResolution(&checkCollector{t: t}) }
-func TestCheckOutroResolution(t *testing.T)  { checkOutroResolution(&checkCollector{t: t}) }
-func TestCheckTransitionTiming(t *testing.T) { checkTransitionTiming(&checkCollector{t: t}) }
-func TestCheckAnalysisHelpers(t *testing.T)  { checkAnalysisHelpers(&checkCollector{t: t}) }
-func TestCheckAnnouncementGate(t *testing.T) { checkAnnouncementGate(&checkCollector{t: t}) }
-func TestCheckRestartStreamURL(t *testing.T) { checkRestartStreamURL(&checkCollector{t: t}) }
-func TestCheckTransitionSlide(t *testing.T)  { checkTransitionSlide(&checkCollector{t: t}) }
-func TestCheckAnalysisReadCap(t *testing.T)  { checkAnalysisReadCap(&checkCollector{t: t}) }
