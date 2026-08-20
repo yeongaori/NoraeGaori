@@ -32,7 +32,16 @@ func DeleteLoadingMessage(guildID string) {
 	logger.Debugf("Deleted loading message for guild: %s", guildID)
 }
 
+type embedSender interface {
+	ChannelMessageSendEmbed(channelID string, embed *discordgo.MessageEmbed, options ...discordgo.RequestOption) (*discordgo.Message, error)
+	ChannelMessageEditEmbed(channelID, messageID string, embed *discordgo.MessageEmbed, options ...discordgo.RequestOption) (*discordgo.Message, error)
+}
+
 func sendNowPlayingMessage(session *discordgo.Session, guildID string, song *queue.Song, q *queue.Queue) {
+	deliverNowPlaying(session, guildID, song, q)
+}
+
+func deliverNowPlaying(sender embedSender, guildID string, song *queue.Song, q *queue.Queue) {
 	loadingMsg := GetLoadingMessage(guildID)
 	if loadingMsg != nil {
 		nowPlayingEmbed := messages.CreateSongEmbed(
@@ -48,11 +57,11 @@ func sendNowPlayingMessage(session *discordgo.Session, guildID string, song *que
 			song.Thumbnail,
 		)
 
-		_, err := session.ChannelMessageEditEmbed(loadingMsg.ChannelID, loadingMsg.ID, nowPlayingEmbed)
+		_, err := sender.ChannelMessageEditEmbed(loadingMsg.ChannelID, loadingMsg.ID, nowPlayingEmbed)
 		if err != nil {
 			logger.Warnf("Failed to update loading message: %v", err)
 			if q.ShowStartedTrack {
-				session.ChannelMessageSendEmbed(q.TextChannelID, nowPlayingEmbed)
+				sender.ChannelMessageSendEmbed(q.TextChannelID, nowPlayingEmbed)
 			}
 		}
 
@@ -70,7 +79,7 @@ func sendNowPlayingMessage(session *discordgo.Session, guildID string, song *que
 			song.RequestedByTag,
 			song.Thumbnail,
 		)
-		session.ChannelMessageSendEmbed(q.TextChannelID, embed)
+		sender.ChannelMessageSendEmbed(q.TextChannelID, embed)
 	}
 
 	if reconnectMsg := getReconnectMessage(guildID); reconnectMsg != nil {
@@ -86,7 +95,7 @@ func sendNowPlayingMessage(session *discordgo.Session, guildID string, song *que
 			song.RequestedByTag,
 			song.Thumbnail,
 		)
-		session.ChannelMessageEditEmbed(reconnectMsg.ChannelID, reconnectMsg.ID, reconnectedEmbed)
+		sender.ChannelMessageEditEmbed(reconnectMsg.ChannelID, reconnectMsg.ID, reconnectedEmbed)
 		deleteReconnectMessage(guildID)
 	}
 }
