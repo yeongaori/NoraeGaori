@@ -4,7 +4,6 @@ import (
 	"noraegaori/internal/discord"
 	"noraegaori/internal/logger"
 	"noraegaori/internal/messages"
-	"noraegaori/internal/player"
 	"noraegaori/internal/queue"
 	"noraegaori/internal/youtube"
 
@@ -37,29 +36,4 @@ func ensureQueueForVoice(s *discordgo.Session, i *discordgo.InteractionCreate, q
 		return err
 	}
 	return nil
-}
-
-func startPlaybackIfFirstSong(s *discordgo.Session, guildID string) {
-	q, err := queue.GetQueue(guildID, true)
-	if err != nil || q == nil || len(q.Songs) != 1 {
-		return
-	}
-
-	p := player.GetPlayer(guildID)
-	if !p.Playing && !p.Loading {
-		go player.Play(s, guildID)
-	}
-}
-
-func resumeOrStartPlayback(s *discordgo.Session, guildID string) {
-	p := player.GetPlayer(guildID)
-
-	switch {
-	case p.Paused:
-		logger.Debugf("Resuming playback for guild %s", guildID)
-		go player.Resume(s, guildID)
-	case !p.Playing && !p.Loading:
-		logger.Debugf("Starting playback for guild %s", guildID)
-		go player.Play(s, guildID)
-	}
 }

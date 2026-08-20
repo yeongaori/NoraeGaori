@@ -11,6 +11,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/logger"
 	"noraegaori/internal/messages"
+	"noraegaori/internal/player"
 	"noraegaori/internal/queue"
 	"noraegaori/internal/youtube"
 )
@@ -293,7 +294,7 @@ func (c *searchSelection) handle(s *discordgo.Session, i *discordgo.InteractionC
 
 	close(c.done)
 
-	startPlaybackIfFirstSong(s, c.original.GuildID)
+	player.ResumeOrStart(s, c.original.GuildID)
 }
 
 func handleSearchSelection(s *discordgo.Session, originalInteraction *discordgo.InteractionCreate, results []youtube.SearchResult, customID, voiceChannelID, searchMessageID string) {

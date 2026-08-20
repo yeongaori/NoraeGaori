@@ -125,7 +125,7 @@ func HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		}
 	}
 
-	resumeOrStartPlayback(s, i.GuildID)
+	player.ResumeOrStart(s, i.GuildID)
 
 	return nil
 }

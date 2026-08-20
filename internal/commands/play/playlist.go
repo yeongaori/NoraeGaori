@@ -183,7 +183,7 @@ func handleVideoWithPlaylist(s *discordgo.Session, i *discordgo.InteractionCreat
 	}
 
 	if !videoUnavailable && !isDuplicate {
-		startPlaybackIfFirstSong(s, i.GuildID)
+		player.ResumeOrStart(s, i.GuildID)
 	}
 
 	return nil
@@ -387,7 +387,7 @@ func addPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreate, play
 			initialTime.Milliseconds(), addedCount, skippedCount)
 
 		if addedCount > 0 {
-			go player.Play(s, i.GuildID)
+			player.ResumeOrStart(s, i.GuildID)
 		}
 
 		if len(playlistInfo.Videos) > 1 && addedCount > 0 {
@@ -638,5 +638,5 @@ func processAllPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreat
 	if q == nil || len(q.Songs) == 0 {
 		return
 	}
-	resumeOrStartPlayback(s, i.GuildID)
+	player.ResumeOrStart(s, i.GuildID)
 }

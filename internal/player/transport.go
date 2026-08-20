@@ -253,6 +253,30 @@ func Resume(session *discordgo.Session, guildID string) error {
 	}
 }
 
+func ResumeOrStart(session *discordgo.Session, guildID string) {
+	player := GetPlayer(guildID)
+
+	player.mu.Lock()
+	paused := player.Paused
+	active := player.Playing || player.Loading
+	player.mu.Unlock()
+
+	if active {
+		return
+	}
+
+	clearAnnounced(guildID)
+
+	if paused {
+		logger.Debugf("Resuming playback for guild: %s", guildID)
+		go Resume(session, guildID)
+		return
+	}
+
+	logger.Debugf("Starting playback for guild: %s", guildID)
+	go Play(session, guildID)
+}
+
 func resumeInternal(session *discordgo.Session, guildID string) error {
 
 	q, err := queue.GetQueue(guildID, false)

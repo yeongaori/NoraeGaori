@@ -59,8 +59,6 @@ func HandlePlayNext(s *discordgo.Session, i *discordgo.InteractionCreate) error 
 		return err
 	}
 
-	q, _ = queue.GetQueue(i.GuildID, true)
-
 	embed := messages.CreateSongEmbed(
 		i.GuildID,
 		messages.ColorSuccess,
@@ -71,10 +69,9 @@ func HandlePlayNext(s *discordgo.Session, i *discordgo.InteractionCreate) error 
 		song.Thumbnail,
 	)
 
-	if len(q.Songs) == 1 {
-		go player.Play(s, i.GuildID)
-	}
-
 	discord.UpdateResponseEmbed(s, i, embed)
+
+	player.ResumeOrStart(s, i.GuildID)
+
 	return nil
 }

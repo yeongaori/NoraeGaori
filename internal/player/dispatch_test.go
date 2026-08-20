@@ -238,3 +238,108 @@ func TestCommandChanBufferFull(t *testing.T) {
 	default:
 	}
 }
+
+func registerTestPlayer(t *testing.T, guildID string, handler func(PlayerCommand) error) *GuildPlayer {
+	t.Helper()
+
+	p := newTestPlayer(guildID, handler)
+	playersMu.Lock()
+	players[guildID] = p
+	playersMu.Unlock()
+
+	t.Cleanup(func() {
+		playersMu.Lock()
+		delete(players, guildID)
+		playersMu.Unlock()
+		p.stopTestProcessor()
+		clearAnnounced(guildID)
+	})
+
+	return p
+}
+
+func TestResumeOrStartAnnouncesResumedSong(t *testing.T) {
+	guildID := "resumeannounce"
+
+	dispatched := make(chan string, 4)
+	p := registerTestPlayer(t, guildID, func(cmd PlayerCommand) error {
+		dispatched <- cmd.Type
+		return nil
+	})
+
+	p.mu.Lock()
+	p.Paused = true
+	p.mu.Unlock()
+
+	markAnnounced(guildID, 7)
+
+	ResumeOrStart(nil, guildID)
+
+	select {
+	case cmdType := <-dispatched:
+		if cmdType != "resume" {
+			t.Errorf("want resume command, got %s", cmdType)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("paused player was never resumed")
+	}
+
+	if !markAnnounced(guildID, 7) {
+		t.Error("resumed song is still marked announced, so no now playing message would be sent")
+	}
+}
+
+func TestResumeOrStartLeavesActivePlaybackAlone(t *testing.T) {
+	guildID := "resumeactive"
+
+	dispatched := make(chan string, 4)
+	p := registerTestPlayer(t, guildID, func(cmd PlayerCommand) error {
+		dispatched <- cmd.Type
+		return nil
+	})
+
+	p.mu.Lock()
+	p.Playing = true
+	p.mu.Unlock()
+
+	markAnnounced(guildID, 7)
+
+	ResumeOrStart(nil, guildID)
+
+	select {
+	case cmdType := <-dispatched:
+		t.Errorf("playing player should not be restarted, got %s command", cmdType)
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	if markAnnounced(guildID, 7) {
+		t.Error("announcement state was cleared while the song was still playing")
+	}
+}
+
+func TestResumeOrStartAnnouncesFirstStartedSong(t *testing.T) {
+	guildID := "resumeidle"
+
+	dispatched := make(chan string, 4)
+	registerTestPlayer(t, guildID, func(cmd PlayerCommand) error {
+		dispatched <- cmd.Type
+		return nil
+	})
+
+	markAnnounced(guildID, 7)
+
+	ResumeOrStart(nil, guildID)
+
+	select {
+	case cmdType := <-dispatched:
+		if cmdType != "play" {
+			t.Errorf("want play command, got %s", cmdType)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("idle player never started playback")
+	}
+
+	if !markAnnounced(guildID, 7) {
+		t.Error("started song is still marked announced, so no now playing message would be sent")
+	}
+}
