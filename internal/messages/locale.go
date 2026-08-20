@@ -122,6 +122,7 @@ type TitleMessages struct {
 	PlaylistStart string `json:"playlist_start"`
 	SkipVote      string `json:"skip_vote"`
 	StopVote      string `json:"stop_vote"`
+	RemoveVote    string `json:"remove_vote"`
 	SystemInfo    string `json:"system_info"`
 	Warning       string `json:"warning"`
 	Duplicate     string `json:"duplicate"`
@@ -140,6 +141,7 @@ type FieldMessages struct {
 	NextSong       string `json:"next_song"`
 	TotalSongs     string `json:"total_songs"`
 	CurrentVote    string `json:"current_vote"`
+	AdderVote      string `json:"adder_vote"`
 	RequiredVote   string `json:"required_vote"`
 	VoteResult     string `json:"vote_result"`
 	RemovedSongs   string `json:"removed_songs"`
@@ -197,6 +199,9 @@ type VoteMessages struct {
 	StopAlreadyVoted string `json:"stop_already_voted"`
 	InProgress       string `json:"in_progress"`
 	Cancelled        string `json:"cancelled"`
+	Superseded       string `json:"superseded"`
+	AllAddersAgreed  string `json:"all_adders_agreed"`
+	QueueEnded       string `json:"queue_ended"`
 }
 
 type HelpMessages struct {
@@ -456,6 +461,9 @@ type QueueMessages struct {
 	RangeRemoved         string `json:"range_removed"`
 	EnterValidRange      string `json:"enter_valid_range"`
 	CannotRemoveCurrent  string `json:"cannot_remove_current"`
+	RemoveVoteDesc       string `json:"remove_vote_desc"`
+	RemoveRangeVoteDesc  string `json:"remove_range_vote_desc"`
+	RemoveTargetGone     string `json:"remove_target_gone"`
 	OnlyOwnSongs         string `json:"only_own_songs"`
 	SongRemoved          string `json:"song_removed"`
 	EnterSearchQuery     string `json:"enter_search_query"`

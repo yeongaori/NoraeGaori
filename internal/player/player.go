@@ -102,8 +102,9 @@ var (
 	announcedSongs   = make(map[string]int)
 	announcedSongsMu sync.Mutex
 
-	onSongStartCallback func(guildID string)
-	callbackMu          sync.RWMutex
+	onSongStartCallback     func(guildID string)
+	onPlaybackEndedCallback func(guildID string)
+	callbackMu              sync.RWMutex
 
 	resumePlayback = playInternal
 
@@ -246,6 +247,22 @@ func SetOnSongStartCallback(callback func(guildID string)) {
 func callOnSongStart(guildID string) {
 	callbackMu.RLock()
 	callback := onSongStartCallback
+	callbackMu.RUnlock()
+
+	if callback != nil {
+		callback(guildID)
+	}
+}
+
+func SetOnPlaybackEndedCallback(callback func(guildID string)) {
+	callbackMu.Lock()
+	defer callbackMu.Unlock()
+	onPlaybackEndedCallback = callback
+}
+
+func callOnPlaybackEnded(guildID string) {
+	callbackMu.RLock()
+	callback := onPlaybackEndedCallback
 	callbackMu.RUnlock()
 
 	if callback != nil {

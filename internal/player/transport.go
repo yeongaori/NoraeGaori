@@ -552,6 +552,8 @@ func skipInternal(session *discordgo.Session, guildID string) error {
 }
 
 func Stop(guildID string) error {
+	defer callOnPlaybackEnded(guildID)
+
 	logger.Debugf("Stop called for guild %s", guildID)
 	rampVolumeBeforeStop(guildID)
 	player := GetPlayer(guildID)
@@ -608,6 +610,8 @@ func Stop(guildID string) error {
 }
 
 func stopInternal(guildID string) error {
+	defer callOnPlaybackEnded(guildID)
+
 	player := GetPlayer(guildID)
 	player.mu.Lock()
 

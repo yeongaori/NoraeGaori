@@ -32,6 +32,7 @@
     "playlist_added": "플레이리스트 추가 완료",
     "playlist_start": "플레이리스트 재생 시작",
     "skip_vote": "스킵 투표",
+    "remove_vote": "삭제 투표",
     "stop_vote": "정지 투표",
     "system_info": "시스템 정보",
     "warning": "경고",
@@ -50,6 +51,7 @@
     "requester": "요청자",
     "next_song": "다음 곡",
     "total_songs": "전체 곡 수",
+    "adder_vote": "신청자 동의",
     "current_vote": "현재 투표",
     "required_vote": "필요한 투표",
     "vote_result": "투표 결과",
@@ -107,7 +109,10 @@
     "expired": "투표가 만료되었습니다.",
     "stop_already_voted": "이미 정지 투표를 하셨습니다.",
     "in_progress": "이미 진행 중인 투표가 있습니다. 해당 투표 메시지에 반응을 남겨 투표해 주세요.",
-    "cancelled": "투표가 취소되었습니다."
+    "cancelled": "투표가 취소되었습니다.",
+    "all_adders_agreed": "해당 곡을 신청한 모든 사람이 동의했습니다.",
+    "superseded": "정지 투표가 가결되어 이 투표가 종료되었습니다.",
+    "queue_ended": "대기열이 비어 이 투표가 종료되었습니다."
   },
 
   "help": {
@@ -628,6 +633,9 @@
     "range_removed": "범위 %d-%d에서 %d곡이 제거되었습니다.",
     "enter_valid_range": "1부터 %d 사이의 숫자를 입력해주세요.",
     "cannot_remove_current": "현재 재생 중인 노래는 제거할 수 없습니다. `skip` 명령어를 사용해주세요.",
+    "remove_vote_desc": "**%s**을(를) 대기열에서 삭제할까요?",
+    "remove_range_vote_desc": "%d-%d 구간의 %d곡을 삭제할까요?",
+    "remove_target_gone": "해당 곡은 이미 대기열에 없습니다.",
     "only_own_songs": "본인이 추가한 노래만 제거할 수 있습니다.",
     "song_removed": "**%s**이(가) 대기열에서 제거되었습니다.",
     "enter_search_query": "검색어를 입력해주세요.",

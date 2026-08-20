@@ -11,7 +11,13 @@ var removeUserReaction = func(s *discordgo.Session, channelID, messageID, emoji,
 	}
 }
 
-func clearPromptReactions(s *discordgo.Session, channelID, messageID string) {
+var addPromptReaction = func(s *discordgo.Session, channelID, messageID, emoji string) {
+	if err := s.MessageReactionAdd(channelID, messageID, emoji); err != nil {
+		logger.Errorf("Failed to add reaction %s to message %s: %v", emoji, messageID, err)
+	}
+}
+
+var clearPromptReactions = func(s *discordgo.Session, channelID, messageID string) {
 	if err := s.MessageReactionsRemoveAll(channelID, messageID); err != nil {
 		logger.Warnf("Failed to clear reactions on message %s: %v", messageID, err)
 	}

@@ -62,10 +62,10 @@ func onReady(s *discordgo.Session, r *discordgo.Ready) {
 
 	commands.InitializeCommands()
 
-	player.SetOnSongStartCallback(func(guildID string) {
-		commands.ClearSkipVotes(guildID)
-		commands.ClearStopVotes(guildID)
-	})
+	player.SetOnSongStartCallback(commands.CancelVotesForNewSong)
+	player.SetOnPlaybackEndedCallback(commands.CancelVotesForEndedPlayback)
+
+	commands.RegisterVoteDispatcher(s)
 
 	if err := commands.RegisterSlashCommands(s); err != nil {
 		logger.Errorf("Failed to register slash commands: %v", err)

@@ -72,6 +72,8 @@ func StopAll() {
 }
 
 func cleanupForShutdown(guildID string) error {
+	defer callOnPlaybackEnded(guildID)
+
 	logger.Debugf("Cleaning up guild %s", guildID)
 	player := GetPlayer(guildID)
 

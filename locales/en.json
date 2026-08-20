@@ -32,6 +32,7 @@
     "playlist_added": "Playlist Added",
     "playlist_start": "Playlist Playback Started",
     "skip_vote": "Skip Vote",
+    "remove_vote": "Remove Vote",
     "stop_vote": "Stop Vote",
     "system_info": "System Info",
     "warning": "Warning",
@@ -50,6 +51,7 @@
     "requester": "Requested by",
     "next_song": "Next Song",
     "total_songs": "Total Songs",
+    "adder_vote": "Requesters Agreed",
     "current_vote": "Current Votes",
     "required_vote": "Required Votes",
     "vote_result": "Vote Result",
@@ -107,7 +109,10 @@
     "expired": "The vote has expired.",
     "stop_already_voted": "You have already voted to stop.",
     "in_progress": "A vote is already in progress. React on the vote message to cast your vote.",
-    "cancelled": "The vote has been cancelled."
+    "cancelled": "The vote has been cancelled.",
+    "all_adders_agreed": "Every requester of the affected songs agreed.",
+    "superseded": "The stop vote passed, so this vote has ended.",
+    "queue_ended": "The queue is empty, so this vote has ended."
   },
 
   "help": {
@@ -628,6 +633,9 @@
     "range_removed": "%d songs removed from range %d-%d.",
     "enter_valid_range": "Please enter a number between 1 and %d.",
     "cannot_remove_current": "Cannot remove the currently playing song. Use the `skip` command.",
+    "remove_vote_desc": "Remove **%s** from the queue?",
+    "remove_range_vote_desc": "Remove %d songs from range %d-%d?",
+    "remove_target_gone": "Those songs are no longer in the queue.",
     "only_own_songs": "You can only remove songs that you added.",
     "song_removed": "**%s** has been removed from the queue.",
     "enter_search_query": "Please enter a search query.",

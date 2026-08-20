@@ -2,13 +2,11 @@ package commands
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/messages"
 	"noraegaori/internal/player"
 	"noraegaori/internal/queue"
-	"noraegaori/pkg/logger"
 )
 
 func HandleStop(s *discordgo.Session, i *discordgo.InteractionCreate) error {
@@ -26,72 +24,48 @@ func HandleStop(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return nil
 	}
 
-	requiredVotes, err := requiredVotesInChannel(s, i.GuildID, voiceState.ChannelID)
+	requiredVotes, err := requiredVotesInChannel(s, i.GuildID, voiceState.ChannelID, resolveWithFetch)
 	if err != nil {
 		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.ServerInfoFailed))
 		return err
 	}
 
-	if existing := activeVoteFor(stopVotes, &stopVotesMutex, i.GuildID); existing != nil {
-		replyVoteInProgress(s, i, messages.T(i.GuildID).Titles.StopVote, existing)
-		return nil
-	}
-
 	if requiredVotes == 1 {
-		if err := player.Stop(i.GuildID); err != nil {
-			UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Music.StopFailedTitle, fmt.Sprintf(messages.T(i.GuildID).Music.StopFailedDesc, err)))
-			return nil
-		}
-
-		ClearSkipVotes(i.GuildID)
-
-		UpdateResponseEmbed(s, i, messages.CreateSuccessEmbed(messages.T(i.GuildID).Music.StopSuccessTitle, messages.T(i.GuildID).Music.StopSuccessDesc))
-		return nil
+		return stopImmediately(s, i)
 	}
 
-	session := &voteSession{
-		votes:          make(map[string]bool),
-		requiredVotes:  requiredVotes,
-		startTime:      time.Now(),
-		cancelTimer:    make(chan bool, 1),
+	return startVote(s, i, voteRequest{
+		kind:           voteKindStop,
+		title:          messages.T(i.GuildID).Titles.StopVote,
+		emoji:          "⏹",
 		voiceChannelID: voiceState.ChannelID,
-	}
-	currentVotes, _ := session.castVote(i.Member.User.ID)
+		requiredVotes:  requiredVotes,
+		target:         voteTarget{scope: voteScopeWholeQueue},
+		onPassed:       applyStopVote(i.GuildID),
+	})
+}
 
-	if existing := claimVoteSession(stopVotes, &stopVotesMutex, i.GuildID, session); existing != nil {
-		replyVoteInProgress(s, i, messages.T(i.GuildID).Titles.StopVote, existing)
+func stopImmediately(s *discordgo.Session, i *discordgo.InteractionCreate) error {
+	cancelSupersededVotes(i.GuildID, voteKindStop, false)
+
+	if err := player.Stop(i.GuildID); err != nil {
+		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Music.StopFailedTitle, fmt.Sprintf(messages.T(i.GuildID).Music.StopFailedDesc, err)))
 		return nil
 	}
 
-	embed := messages.CreateWarningEmbed(messages.T(i.GuildID).Titles.StopVote, "")
-	messages.AddField(embed, messages.T(i.GuildID).Fields.CurrentVote, fmt.Sprintf("%d/%d", currentVotes, session.requiredVotes), true)
-	messages.SetFooter(embed, fmt.Sprintf(messages.T(i.GuildID).Footers.VoteReaction, "⏹", int(voteExpirationTime.Seconds())))
-	UpdateResponseEmbed(s, i, embed)
+	UpdateResponseEmbed(s, i, messages.CreateSuccessEmbed(messages.T(i.GuildID).Music.StopSuccessTitle, messages.T(i.GuildID).Music.StopSuccessDesc))
+	return nil
+}
 
-	msg, msgErr := GetResponseMessage(s, i)
-	if msgErr != nil || msg == nil {
-		logger.Errorf("Failed to get vote message: %v", msgErr)
-		releaseVoteSession(stopVotes, &stopVotesMutex, i.GuildID, session)
-		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.CommandExecutionError))
-		return nil
-	}
+func applyStopVote(guildID string) func(*discordgo.Session, *voteSession, voteTally) {
+	return func(s *discordgo.Session, session *voteSession, tally voteTally) {
+		cancelSupersededVotes(guildID, voteKindStop, false)
 
-	session.messageID = msg.ID
-	session.channelID = msg.ChannelID
-
-	go startVoteWithReaction(s, i.GuildID, messages.T(i.GuildID).Titles.StopVote, "⏹", session, stopVotes, &stopVotesMutex, func(votes int) {
-		if stopErr := player.Stop(i.GuildID); stopErr != nil {
-			errEmbed := messages.CreateErrorEmbed(messages.T(i.GuildID).Music.StopFailedTitle, fmt.Sprintf(messages.T(i.GuildID).Music.StopFailedDesc, stopErr))
-			s.ChannelMessageEditEmbed(session.channelID, session.messageID, errEmbed)
+		if err := player.Stop(guildID); err != nil {
+			renderVoteFailure(s, session, messages.T(guildID).Music.StopFailedTitle, fmt.Sprintf(messages.T(guildID).Music.StopFailedDesc, err))
 			return
 		}
 
-		ClearSkipVotes(i.GuildID)
-
-		stopEmbed := messages.CreateSuccessEmbed(messages.T(i.GuildID).Music.StopSuccessTitle, messages.T(i.GuildID).Music.StopSuccessDesc)
-		messages.AddField(stopEmbed, messages.T(i.GuildID).Fields.VoteResult, fmt.Sprintf("%d/%d", votes, session.requiredVotes), true)
-		s.ChannelMessageEditEmbed(session.channelID, session.messageID, stopEmbed)
-	})
-
-	return nil
+		renderVoteResult(s, session, messages.CreateSuccessEmbed(messages.T(guildID).Music.StopSuccessTitle, messages.T(guildID).Music.StopSuccessDesc), tally)
+	}
 }

@@ -2,7 +2,6 @@ package commands
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/messages"
@@ -24,23 +23,27 @@ func skipResultEmbed(guildID string, song *queue.Song, queueEnded bool) *discord
 	return embed
 }
 
-func applySkipVote(s *discordgo.Session, i *discordgo.InteractionCreate, session *voteSession, skipped *queue.Song) func(int) {
-	return func(votes int) {
-		skipErr := player.Skip(s, i.GuildID)
+func stopAfterEmptyQueue(guildID string) {
+	if err := player.Stop(guildID); err != nil {
+		logger.Errorf("Failed to cleanup after queue empty: %v", err)
+	}
+}
+
+func applySkipVote(guildID string, skipped *queue.Song) func(*discordgo.Session, *voteSession, voteTally) {
+	return func(s *discordgo.Session, session *voteSession, tally voteTally) {
+		skipErr := player.Skip(s, guildID)
 		if skipErr != nil && skipErr != player.ErrQueueEmpty {
-			errEmbed := messages.CreateErrorEmbed(messages.T(i.GuildID).Music.SkipFailedTitle, fmt.Sprintf(messages.T(i.GuildID).Music.SkipFailedDesc, skipErr))
-			s.ChannelMessageEditEmbed(session.channelID, session.messageID, errEmbed)
+			renderVoteFailure(s, session, messages.T(guildID).Music.SkipFailedTitle, fmt.Sprintf(messages.T(guildID).Music.SkipFailedDesc, skipErr))
 			return
 		}
 
-		ClearStopVotes(i.GuildID)
+		queueEnded := skipErr == player.ErrQueueEmpty
+		cancelSupersededVotes(guildID, voteKindSkip, queueEnded)
 
-		embed := skipResultEmbed(i.GuildID, skipped, skipErr == player.ErrQueueEmpty)
-		messages.AddField(embed, messages.T(i.GuildID).Fields.VoteResult, fmt.Sprintf("%d/%d", votes, session.requiredVotes), true)
-		s.ChannelMessageEditEmbed(session.channelID, session.messageID, embed)
+		renderVoteResult(s, session, skipResultEmbed(guildID, skipped, queueEnded), tally)
 
-		if skipErr == player.ErrQueueEmpty {
-			player.Stop(i.GuildID)
+		if queueEnded {
+			stopAfterEmptyQueue(guildID)
 		}
 	}
 }
@@ -60,71 +63,45 @@ func HandleSkip(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return nil
 	}
 
-	requiredVotes, err := requiredVotesInChannel(s, i.GuildID, voiceState.ChannelID)
+	requiredVotes, err := requiredVotesInChannel(s, i.GuildID, voiceState.ChannelID, resolveWithFetch)
 	if err != nil {
 		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.ServerInfoFailed))
 		return err
 	}
 
-	if existing := activeVoteFor(skipVotes, &skipVotesMutex, i.GuildID); existing != nil {
-		replyVoteInProgress(s, i, messages.T(i.GuildID).Titles.SkipVote, existing)
-		return nil
-	}
-
 	skipped := q.Songs[0]
 
 	if requiredVotes == 1 {
-		err := player.Skip(s, i.GuildID)
-		if err != nil && err != player.ErrQueueEmpty {
-			logger.Errorf("Failed to skip: %v", err)
-			UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Music.SkipFailedTitle,
-				fmt.Sprintf(messages.T(i.GuildID).Music.SkipFailedDesc, err)))
-			return nil
-		}
-
-		ClearStopVotes(i.GuildID)
-		UpdateResponseEmbed(s, i, skipResultEmbed(i.GuildID, skipped, err == player.ErrQueueEmpty))
-
-		if err == player.ErrQueueEmpty {
-			if stopErr := player.Stop(i.GuildID); stopErr != nil {
-				logger.Errorf("Failed to cleanup after queue empty: %v", stopErr)
-			}
-		}
-
-		return nil
+		return skipImmediately(s, i, skipped)
 	}
 
-	session := &voteSession{
-		votes:          make(map[string]bool),
-		requiredVotes:  requiredVotes,
-		startTime:      time.Now(),
-		cancelTimer:    make(chan bool, 1),
+	return startVote(s, i, voteRequest{
+		kind:           voteKindSkip,
+		title:          messages.T(i.GuildID).Titles.SkipVote,
+		emoji:          "⏭",
 		voiceChannelID: voiceState.ChannelID,
-	}
-	currentVotes, _ := session.castVote(i.Member.User.ID)
+		requiredVotes:  requiredVotes,
+		target:         voteTarget{scope: voteScopeCurrentSong},
+		onPassed:       applySkipVote(i.GuildID, skipped),
+	})
+}
 
-	if existing := claimVoteSession(skipVotes, &skipVotesMutex, i.GuildID, session); existing != nil {
-		replyVoteInProgress(s, i, messages.T(i.GuildID).Titles.SkipVote, existing)
+func skipImmediately(s *discordgo.Session, i *discordgo.InteractionCreate, skipped *queue.Song) error {
+	err := player.Skip(s, i.GuildID)
+	if err != nil && err != player.ErrQueueEmpty {
+		logger.Errorf("Failed to skip: %v", err)
+		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Music.SkipFailedTitle,
+			fmt.Sprintf(messages.T(i.GuildID).Music.SkipFailedDesc, err)))
 		return nil
 	}
 
-	embed := messages.CreateWarningEmbed(messages.T(i.GuildID).Titles.SkipVote, "")
-	messages.AddField(embed, messages.T(i.GuildID).Fields.CurrentVote, fmt.Sprintf("%d/%d", currentVotes, session.requiredVotes), true)
-	messages.SetFooter(embed, fmt.Sprintf(messages.T(i.GuildID).Footers.VoteReaction, "⏭", int(voteExpirationTime.Seconds())))
-	UpdateResponseEmbed(s, i, embed)
+	queueEnded := err == player.ErrQueueEmpty
+	cancelSupersededVotes(i.GuildID, voteKindSkip, queueEnded)
 
-	msg, msgErr := GetResponseMessage(s, i)
-	if msgErr != nil || msg == nil {
-		logger.Errorf("Failed to get vote message: %v", msgErr)
-		releaseVoteSession(skipVotes, &skipVotesMutex, i.GuildID, session)
-		UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.CommandExecutionError))
-		return nil
+	UpdateResponseEmbed(s, i, skipResultEmbed(i.GuildID, skipped, queueEnded))
+
+	if queueEnded {
+		stopAfterEmptyQueue(i.GuildID)
 	}
-
-	session.messageID = msg.ID
-	session.channelID = msg.ChannelID
-
-	go startVoteWithReaction(s, i.GuildID, messages.T(i.GuildID).Titles.SkipVote, "⏭", session, skipVotes, &skipVotesMutex, applySkipVote(s, i, session, skipped))
-
 	return nil
 }
