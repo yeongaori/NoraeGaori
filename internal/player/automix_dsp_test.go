@@ -1,51 +1,89 @@
 package player
 
 import (
+	"testing"
+
 	"noraegaori/internal/audio/dsp"
 	"noraegaori/internal/audio/transition"
 )
 
-func checkBiquads(c *checkCollector) {
-	lowPassLow := filterResponse(func(f *dsp.Biquad) { f.SetLowpass(500, 0.707) }, 100)
-	lowPassHigh := filterResponse(func(f *dsp.Biquad) { f.SetLowpass(500, 0.707) }, 8000)
-	c.add("biquad lowpass shape", lowPassLow > 0.85 && lowPassHigh < 0.05,
-		"100Hz gain %.3f (want >0.85), 8000Hz gain %.4f (want <0.05)", lowPassLow, lowPassHigh)
+func TestBiquadLowpassShape(t *testing.T) {
+	passband := filterResponse(func(f *dsp.Biquad) { f.SetLowpass(500, 0.707) }, 100)
+	stopband := filterResponse(func(f *dsp.Biquad) { f.SetLowpass(500, 0.707) }, 8000)
 
-	highPassLow := filterResponse(func(f *dsp.Biquad) { f.SetHighpass(2000, 0.707) }, 100)
-	highPassHigh := filterResponse(func(f *dsp.Biquad) { f.SetHighpass(2000, 0.707) }, 12000)
-	c.add("biquad highpass shape", highPassHigh > 0.85 && highPassLow < 0.05,
-		"12000Hz gain %.3f (want >0.85), 100Hz gain %.4f (want <0.05)", highPassHigh, highPassLow)
+	if passband <= 0.85 {
+		t.Errorf("100Hz gain = %.3f, want > 0.85", passband)
+	}
+	if stopband >= 0.05 {
+		t.Errorf("8000Hz gain = %.4f, want < 0.05", stopband)
+	}
+}
 
-	shelfLow := filterResponse(func(f *dsp.Biquad) { f.SetLowShelf(transition.EQLowFreq, transition.EQShelfQ, transition.EQKillDB) }, 60)
-	shelfHigh := filterResponse(func(f *dsp.Biquad) { f.SetLowShelf(transition.EQLowFreq, transition.EQShelfQ, transition.EQKillDB) }, 6000)
-	c.add("biquad low shelf bass kill", shelfLow < 0.05 && shelfHigh > 0.9,
-		"60Hz gain %.4f (want <0.05), 6000Hz gain %.3f (want >0.9)", shelfLow, shelfHigh)
+func TestBiquadHighpassShape(t *testing.T) {
+	passband := filterResponse(func(f *dsp.Biquad) { f.SetHighpass(2000, 0.707) }, 12000)
+	stopband := filterResponse(func(f *dsp.Biquad) { f.SetHighpass(2000, 0.707) }, 100)
 
-	highShelfHigh := filterResponse(func(f *dsp.Biquad) { f.SetHighShelf(transition.EQHighFreq, transition.EQShelfQ, transition.EQKillDB) }, 12000)
-	highShelfLow := filterResponse(func(f *dsp.Biquad) { f.SetHighShelf(transition.EQHighFreq, transition.EQShelfQ, transition.EQKillDB) }, 200)
-	c.add("biquad high shelf treble kill", highShelfHigh < 0.05 && highShelfLow > 0.9,
-		"12000Hz gain %.4f (want <0.05), 200Hz gain %.3f (want >0.9)", highShelfHigh, highShelfLow)
+	if passband <= 0.85 {
+		t.Errorf("12000Hz gain = %.3f, want > 0.85", passband)
+	}
+	if stopband >= 0.05 {
+		t.Errorf("100Hz gain = %.4f, want < 0.05", stopband)
+	}
+}
 
-	peakCut := filterResponse(func(f *dsp.Biquad) { f.SetPeaking(transition.EQMidFreq, transition.EQMidQ, transition.EQKillDB) }, transition.EQMidFreq)
-	c.add("biquad peaking mid cut", peakCut < 0.1, "1000Hz gain %.4f (want <0.1)", peakCut)
+func TestBiquadLowShelfKillsBass(t *testing.T) {
+	setup := func(f *dsp.Biquad) { f.SetLowShelf(transition.EQLowFreq, transition.EQShelfQ, transition.EQKillDB) }
+	bass := filterResponse(setup, 60)
+	rest := filterResponse(setup, 6000)
 
+	if bass >= 0.05 {
+		t.Errorf("60Hz gain = %.4f, want < 0.05", bass)
+	}
+	if rest <= 0.9 {
+		t.Errorf("6000Hz gain = %.3f, want > 0.9", rest)
+	}
+}
+
+func TestBiquadHighShelfKillsTreble(t *testing.T) {
+	setup := func(f *dsp.Biquad) { f.SetHighShelf(transition.EQHighFreq, transition.EQShelfQ, transition.EQKillDB) }
+	treble := filterResponse(setup, 12000)
+	rest := filterResponse(setup, 200)
+
+	if treble >= 0.05 {
+		t.Errorf("12000Hz gain = %.4f, want < 0.05", treble)
+	}
+	if rest <= 0.9 {
+		t.Errorf("200Hz gain = %.3f, want > 0.9", rest)
+	}
+}
+
+func TestBiquadPeakingCutsMids(t *testing.T) {
+	setup := func(f *dsp.Biquad) { f.SetPeaking(transition.EQMidFreq, transition.EQMidQ, transition.EQKillDB) }
+
+	if gain := filterResponse(setup, transition.EQMidFreq); gain >= 0.1 {
+		t.Errorf("%.0fHz gain = %.4f, want < 0.1", transition.EQMidFreq, gain)
+	}
+}
+
+func TestBiquadBypassIsTransparent(t *testing.T) {
 	var bypass dsp.Biquad
 	bypass.SetBypass()
+
 	phase := 0.0
 	original := sineFloatFrame(1000, 9000, &phase)
-	copied := make([]float64, len(original))
-	copy(copied, original)
-	bypass.ProcessStereo(copied)
-	identical := true
+	processed := make([]float64, len(original))
+	copy(processed, original)
+	bypass.ProcessStereo(processed)
+
 	for i := range original {
-		if original[i] != copied[i] {
-			identical = false
-			break
+		if original[i] != processed[i] {
+			t.Fatalf("sample %d changed from %g to %g", i, original[i], processed[i])
 		}
 	}
-	c.add("biquad bypass is transparent", identical, "sample-for-sample match: %v", identical)
+}
 
-	extremes := []struct {
+func TestBiquadExtremeParametersStayStable(t *testing.T) {
+	cases := []struct {
 		name  string
 		setup func(*dsp.Biquad)
 	}{
@@ -55,37 +93,29 @@ func checkBiquads(c *checkCollector) {
 		{"peaking negative Q", func(f *dsp.Biquad) { f.SetPeaking(1000, -5, -40) }},
 		{"lowshelf huge gain", func(f *dsp.Biquad) { f.SetLowShelf(250, 0.707, 120) }},
 	}
-	stable := true
-	details := ""
-	for _, extreme := range extremes {
-		var filter dsp.Biquad
-		extreme.setup(&filter)
-		localPhase := 0.0
-		for frame := 0; frame < 50; frame++ {
-			buf := sineFloatFrame(440, 10000, &localPhase)
-			filter.ProcessStereo(buf)
-			if !bufferFinite(buf) {
-				stable = false
-				details = extreme.name + " produced non-finite output"
-				break
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var filter dsp.Biquad
+			testCase.setup(&filter)
+
+			phase := 0.0
+			for frame := 0; frame < 50; frame++ {
+				buf := sineFloatFrame(440, 10000, &phase)
+				filter.ProcessStereo(buf)
+
+				if !bufferFinite(buf) {
+					t.Fatalf("frame %d produced non-finite output", frame)
+				}
+				if peak := bufferPeak(buf); peak > 1e9 {
+					t.Fatalf("frame %d diverged to peak %g", frame, peak)
+				}
 			}
-			if bufferPeak(buf) > 1e9 {
-				stable = false
-				details = extreme.name + " diverged"
-				break
-			}
-		}
-		if !stable {
-			break
-		}
+		})
 	}
-	if stable {
-		details = "all extreme coefficient cases stayed finite and bounded"
-	}
-	c.add("biquad extreme parameters stable", stable, "%s", details)
 }
 
-func checkDelayAndReverb(c *checkCollector) {
+func newEchoDelayLine() *dsp.DelayLine {
 	delay := dsp.NewDelayLine()
 	delay.SetDelaySeconds(0.1)
 	delay.Feedback = 0.5
@@ -97,97 +127,163 @@ func checkDelayAndReverb(c *checkCollector) {
 	impulse[1] = 10000
 	delay.ProcessStereo(impulse)
 
+	return delay
+}
+
+func TestDelayLineEchoTiming(t *testing.T) {
+	delay := newEchoDelayLine()
 	silent := make([]float64, frameSize*channels)
-	var firstEchoFrame int
-	var firstEchoPeak float64
+
+	firstEchoFrame := 0
+	firstEchoPeak := 0.0
 	for frame := 1; frame <= 10; frame++ {
 		dsp.SilenceFloat(silent)
 		delay.ProcessStereo(silent)
-		peak := bufferPeak(silent)
-		if peak > 100 && firstEchoFrame == 0 {
+		if peak := bufferPeak(silent); peak > 100 && firstEchoFrame == 0 {
 			firstEchoFrame = frame
 			firstEchoPeak = peak
 		}
 	}
-	c.add("delay line echo timing", firstEchoFrame == 5,
-		"first echo at frame %d (want 5 for 100ms), peak %.0f", firstEchoFrame, firstEchoPeak)
 
-	feedbackDecay := true
+	if firstEchoFrame != 5 {
+		t.Errorf("first echo at frame %d (peak %.0f), want frame 5 for 100ms", firstEchoFrame, firstEchoPeak)
+	}
+}
+
+func TestDelayLineFeedbackDecays(t *testing.T) {
+	delay := newEchoDelayLine()
+	silent := make([]float64, frameSize*channels)
+
+	for frame := 1; frame <= 10; frame++ {
+		dsp.SilenceFloat(silent)
+		delay.ProcessStereo(silent)
+	}
+
 	var peaks []float64
 	for frame := 0; frame < 20; frame++ {
 		dsp.SilenceFloat(silent)
 		delay.ProcessStereo(silent)
-		peak := bufferPeak(silent)
-		if peak > 1 {
+		if peak := bufferPeak(silent); peak > 1 {
 			peaks = append(peaks, peak)
 		}
 	}
+
+	if len(peaks) == 0 {
+		t.Fatal("no echo peaks observed")
+	}
 	for i := 1; i < len(peaks); i++ {
 		if peaks[i] > peaks[i-1]*1.05 {
-			feedbackDecay = false
+			t.Errorf("echo %d grew from %.1f to %.1f", i, peaks[i-1], peaks[i])
 		}
 	}
-	c.add("delay line feedback decays", feedbackDecay && len(peaks) > 0,
-		"%d decaying echo peaks observed", len(peaks))
+}
 
+func newImpulsedReverb() (*dsp.Reverb, []float64) {
 	unit := dsp.NewReverb()
-	wetImpulse := make([]float64, frameSize*channels)
-	wetImpulse[0] = 20000
-	wetImpulse[1] = 20000
-	unit.ProcessStereo(wetImpulse, 0, 1)
+
+	impulse := make([]float64, frameSize*channels)
+	impulse[0] = 20000
+	impulse[1] = 20000
+	unit.ProcessStereo(impulse, 0, 1)
+
+	return unit, make([]float64, frameSize*channels)
+}
+
+func TestReverbProducesBoundedTail(t *testing.T) {
+	unit, silent := newImpulsedReverb()
 
 	tailEnergy := 0.0
 	maxTailPeak := 0.0
-	finite := true
 	for frame := 0; frame < 60; frame++ {
 		dsp.SilenceFloat(silent)
 		unit.ProcessStereo(silent, 0, 1)
+
 		if !bufferFinite(silent) {
-			finite = false
-			break
+			t.Fatalf("frame %d produced non-finite output", frame)
 		}
 		tailEnergy += bufferRMS(silent)
-		if bufferPeak(silent) > maxTailPeak {
-			maxTailPeak = bufferPeak(silent)
+		if peak := bufferPeak(silent); peak > maxTailPeak {
+			maxTailPeak = peak
 		}
 	}
-	c.add("reverb produces bounded tail", finite && tailEnergy > 0 && maxTailPeak < 40000,
-		"tail energy %.1f, peak %.0f, finite %v", tailEnergy, maxTailPeak, finite)
+
+	if tailEnergy <= 0 {
+		t.Errorf("tail energy = %.1f, want > 0", tailEnergy)
+	}
+	if maxTailPeak >= 40000 {
+		t.Errorf("tail peak = %.0f, want < 40000", maxTailPeak)
+	}
+}
+
+func TestReverbTailDecaysToNearSilence(t *testing.T) {
+	unit, silent := newImpulsedReverb()
 
 	late := 0.0
-	for frame := 0; frame < 400; frame++ {
+	for frame := 0; frame < 460; frame++ {
 		dsp.SilenceFloat(silent)
 		unit.ProcessStereo(silent, 0, 1)
 		late = bufferRMS(silent)
 	}
-	c.add("reverb tail decays to near silence", late < 1, "rms after 460 frames: %.6f", late)
+
+	if late >= 1 {
+		t.Errorf("rms after 460 frames = %.6f, want < 1", late)
+	}
 }
 
-func checkConversions(c *checkCollector) {
+func TestFloatToFrameClamps(t *testing.T) {
 	src := []float64{40000, -40000, 100.4, -100.4, 0}
 	dst := make([]int16, len(src))
 	dsp.FloatToFrame(src, dst)
-	c.add("float to frame clamps", dst[0] == 32767 && dst[1] == -32768 && dst[2] == 100 && dst[4] == 0,
-		"got %v", dst)
 
-	frame := []int16{1000, -1000, 32767}
+	for _, want := range []struct {
+		index int
+		value int16
+	}{{0, 32767}, {1, -32768}, {2, 100}, {4, 0}} {
+		if dst[want.index] != want.value {
+			t.Errorf("dst[%d] = %d, want %d (full: %v)", want.index, dst[want.index], want.value, dst)
+		}
+	}
+}
+
+func TestFrameToFloatZeroPads(t *testing.T) {
 	out := make([]float64, 5)
-	dsp.FrameToFloat(frame, out)
-	c.add("frame to float zero pads", out[0] == 1000 && out[2] == 32767 && out[3] == 0 && out[4] == 0,
-		"got %v", out)
+	dsp.FrameToFloat([]int16{1000, -1000, 32767}, out)
 
+	for _, want := range []struct {
+		index int
+		value float64
+	}{{0, 1000}, {2, 32767}, {3, 0}, {4, 0}} {
+		if out[want.index] != want.value {
+			t.Errorf("out[%d] = %g, want %g (full: %v)", want.index, out[want.index], want.value, out)
+		}
+	}
+}
+
+func TestGainRampEndpoints(t *testing.T) {
 	ramp := make([]float64, frameSize*channels)
 	for i := range ramp {
 		ramp[i] = 1000
 	}
 	dsp.ApplyGainRamp(ramp, 0, 1)
-	c.add("gain ramp endpoints", ramp[0] == 0 && ramp[len(ramp)-1] > 900 && ramp[len(ramp)-1] <= 1000,
-		"first %.1f, last %.1f", ramp[0], ramp[len(ramp)-1])
 
+	if ramp[0] != 0 {
+		t.Errorf("first sample = %.1f, want 0", ramp[0])
+	}
+	if last := ramp[len(ramp)-1]; last <= 900 || last > 1000 {
+		t.Errorf("last sample = %.1f, want within (900, 1000]", last)
+	}
+}
+
+func TestGainRampConstantFactor(t *testing.T) {
 	flat := make([]float64, 8)
 	for i := range flat {
 		flat[i] = 500
 	}
 	dsp.ApplyGainRamp(flat, 0.5, 0.5)
-	c.add("gain ramp constant factor", flat[0] == 250 && flat[7] == 250, "got %v", flat[:2])
+
+	for i, value := range flat {
+		if value != 250 {
+			t.Errorf("flat[%d] = %g, want 250 (full: %v)", i, value, flat)
+		}
+	}
 }
