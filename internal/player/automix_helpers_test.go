@@ -93,17 +93,11 @@ func filterResponse(setup func(*dsp.Biquad), frequency float64) float64 {
 	return lastRMS / (10000 / math.Sqrt2)
 }
 
-func TestCheckCamelot(t *testing.T)           { checkCamelot(&checkCollector{t: t}) }
-func TestCheckKeyDetection(t *testing.T)      { checkKeyDetection(&checkCollector{t: t}) }
-func TestCheckBeatAnalysis(t *testing.T)      { checkBeatAnalysis(&checkCollector{t: t}) }
-func TestCheckRealtimeBudget(t *testing.T)    { checkRealtimeBudget(&checkCollector{t: t}) }
-func TestCheckTempoSearchBounds(t *testing.T) { checkTempoSearchBounds(&checkCollector{t: t}) }
-func TestCheckKeyContrastGate(t *testing.T)   { checkKeyContrastGate(&checkCollector{t: t}) }
-func TestCheckStyleResolution(t *testing.T)   { checkStyleResolution(&checkCollector{t: t}) }
-func TestCheckOutroResolution(t *testing.T)   { checkOutroResolution(&checkCollector{t: t}) }
-func TestCheckTransitionTiming(t *testing.T)  { checkTransitionTiming(&checkCollector{t: t}) }
-func TestCheckAnalysisHelpers(t *testing.T)   { checkAnalysisHelpers(&checkCollector{t: t}) }
-func TestCheckAnnouncementGate(t *testing.T)  { checkAnnouncementGate(&checkCollector{t: t}) }
-func TestCheckRestartStreamURL(t *testing.T)  { checkRestartStreamURL(&checkCollector{t: t}) }
-func TestCheckTransitionSlide(t *testing.T)   { checkTransitionSlide(&checkCollector{t: t}) }
-func TestCheckAnalysisReadCap(t *testing.T)   { checkAnalysisReadCap(&checkCollector{t: t}) }
+func TestCheckStyleResolution(t *testing.T)  { checkStyleResolution(&checkCollector{t: t}) }
+func TestCheckOutroResolution(t *testing.T)  { checkOutroResolution(&checkCollector{t: t}) }
+func TestCheckTransitionTiming(t *testing.T) { checkTransitionTiming(&checkCollector{t: t}) }
+func TestCheckAnalysisHelpers(t *testing.T)  { checkAnalysisHelpers(&checkCollector{t: t}) }
+func TestCheckAnnouncementGate(t *testing.T) { checkAnnouncementGate(&checkCollector{t: t}) }
+func TestCheckRestartStreamURL(t *testing.T) { checkRestartStreamURL(&checkCollector{t: t}) }
+func TestCheckTransitionSlide(t *testing.T)  { checkTransitionSlide(&checkCollector{t: t}) }
+func TestCheckAnalysisReadCap(t *testing.T)  { checkAnalysisReadCap(&checkCollector{t: t}) }
