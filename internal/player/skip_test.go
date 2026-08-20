@@ -11,10 +11,14 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"noraegaori/internal/database"
+	"noraegaori/internal/messages"
 	"noraegaori/internal/queue"
 )
 
 func TestMain(m *testing.M) {
+	if err := messages.LoadLocale("en"); err != nil {
+		panic(err)
+	}
 	resumePlayback = func(*discordgo.Session, string) error { return nil }
 	preCacheNext = func(string, int) {}
 	announceNowPlaying = func(*discordgo.Session, string, *queue.Song, *queue.Queue) {}

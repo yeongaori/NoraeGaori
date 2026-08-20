@@ -1,9 +1,5 @@
 version: "2"
 
-run:
-  build-tags:
-    - automixcheck
-
 linters:
   default: none
   enable:

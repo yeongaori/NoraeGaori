@@ -180,7 +180,6 @@ Admin commands are **text-only** (prefix commands, not slash commands). Invoke t
 ```
 NoraeGaori/
 ├── cmd/bot/            Entry point (env + token, then app.Run)
-├── cmd/automixcheck/   Self-check harness for AutoMix and the AutoMix panel
 ├── internal/
 │   ├── app/            Composition root: bootstrap, Discord session, shutdown
 │   ├── audio/

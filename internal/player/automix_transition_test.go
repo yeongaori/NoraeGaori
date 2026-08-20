@@ -1,5 +1,3 @@
-//go:build automixcheck
-
 package player
 
 import (

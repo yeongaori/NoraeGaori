@@ -1,26 +1,24 @@
-//go:build automixcheck
-
 package automix
 
 import (
 	"fmt"
 	"noraegaori/internal/audio/transition"
 	"strings"
+	"testing"
 
 	"github.com/bwmarrin/discordgo"
-	"noraegaori/internal/player"
 	"noraegaori/internal/queue"
 )
 
-type panelCheckCollector struct {
-	results []player.CheckResult
-}
+type panelCheckCollector struct{ t *testing.T }
 
 func (c *panelCheckCollector) add(name string, passed bool, format string, args ...interface{}) {
-	c.results = append(c.results, player.CheckResult{
-		Name:   name,
-		Passed: passed,
-		Detail: fmt.Sprintf(format, args...),
+	c.t.Helper()
+	c.t.Run(name, func(t *testing.T) {
+		t.Helper()
+		if !passed {
+			t.Errorf(format, args...)
+		}
 	})
 }
 
@@ -427,12 +425,6 @@ func checkPanelRows(c *panelCheckCollector) {
 		"effect=%s/%s", last.effective["effect"], last.source["effect"])
 }
 
-func RunAutoMixPanelChecks() []player.CheckResult {
-	c := &panelCheckCollector{}
-
-	checkPanelRows(c)
-	checkPanelLimits(c)
-	checkPanelIdentifiers(c)
-
-	return c.results
-}
+func TestCheckPanelRows(t *testing.T)        { checkPanelRows(&panelCheckCollector{t: t}) }
+func TestCheckPanelLimits(t *testing.T)      { checkPanelLimits(&panelCheckCollector{t: t}) }
+func TestCheckPanelIdentifiers(t *testing.T) { checkPanelIdentifiers(&panelCheckCollector{t: t}) }

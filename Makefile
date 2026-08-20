@@ -121,7 +121,7 @@ lint:
 ## automixcheck: Run the AutoMix check harness
 automixcheck:
 	@echo Running AutoMix checks...
-	@go run -tags automixcheck ./cmd/automixcheck
+	@go test -v ./internal/player/ ./internal/commands/automix/
 
 ## format: Format code
 format:
