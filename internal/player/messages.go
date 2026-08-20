@@ -3,9 +3,9 @@ package player
 import (
 	"time"
 
+	"noraegaori/internal/logger"
 	"noraegaori/internal/messages"
 	"noraegaori/internal/queue"
-	"noraegaori/pkg/logger"
 
 	"github.com/bwmarrin/discordgo"
 )

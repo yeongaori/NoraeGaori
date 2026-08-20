@@ -3,6 +3,7 @@ package player
 import (
 	"errors"
 	"fmt"
+	"noraegaori/internal/audio/ffmpeg"
 	"testing"
 	"time"
 
@@ -60,17 +61,13 @@ func cacheNextStreamURL(t *testing.T, guildID string, songID int, url string) {
 	})
 }
 
-func stubAudioStream(t *testing.T) *audioStream {
+func stubAudioStream(t *testing.T) audioStream {
 	t.Helper()
 
-	stream := &audioStream{
-		pcmChan:  make(chan []int16),
-		errChan:  make(chan error, 1),
-		stopChan: make(chan struct{}),
-	}
+	stream := newFakeStream(0)
 
 	previous := newAudioStream
-	newAudioStream = func([]string, bool) (*audioStream, error) { return stream, nil }
+	newAudioStream = func([]string, bool) (audioStream, error) { return stream, nil }
 	t.Cleanup(func() { newAudioStream = previous })
 
 	return stream
@@ -80,7 +77,7 @@ func failingAudioStream(t *testing.T) {
 	t.Helper()
 
 	previous := newAudioStream
-	newAudioStream = func([]string, bool) (*audioStream, error) { return nil, errFakeStream }
+	newAudioStream = func([]string, bool) (audioStream, error) { return nil, errFakeStream }
 	t.Cleanup(func() { newAudioStream = previous })
 }
 
@@ -88,8 +85,8 @@ func crossfadeFade() fadeSettings {
 	return fadeSettings{crossfade: true, crossfadeSec: 6, repeatMode: queue.RepeatOff}
 }
 
-func crossfadeEndState() *streamEndState {
-	return &streamEndState{totalFrames: 9000, tailStartFrame: 8000}
+func crossfadeEndState() *ffmpeg.EndState {
+	return &ffmpeg.EndState{TotalFrames: 9000, TailStartFrame: 8000}
 }
 
 func TestCrossfadePlanArmsWithTheExpectedFrameMath(t *testing.T) {
@@ -157,7 +154,7 @@ func TestCrossfadePlanTrimsTheSilentTailFromTheEffectiveEnd(t *testing.T) {
 	stubAudioStream(t)
 
 	es := crossfadeEndState()
-	es.silentTailFrames = 500
+	es.SilentTailFrames = 500
 
 	cs := newCrossfadeState()
 	if planned := cs.plan(GetPlayer(guildID), es, 100, crossfadeFade(), false, 128000); !planned {
@@ -196,7 +193,7 @@ func TestCrossfadePlanRefusesEveryGuard(t *testing.T) {
 	cases := []struct {
 		name       string
 		fade       fadeSettings
-		endState   *streamEndState
+		endState   *ffmpeg.EndState
 		sentFrames int
 		cacheURL   string
 		streamOK   bool

@@ -2,22 +2,19 @@ package player
 
 import (
 	"errors"
+	"noraegaori/internal/audio/ffmpeg"
 	"strings"
 	"testing"
 
 	"noraegaori/internal/queue"
 )
 
-func drainedStream(t *testing.T, streamErr error) *audioStream {
+func drainedStream(t *testing.T, streamErr error) *fakeStream {
 	t.Helper()
 
-	s := &audioStream{
-		pcmChan:  make(chan []int16),
-		errChan:  make(chan error, 1),
-		stopChan: make(chan struct{}),
-	}
+	s := newFakeStream(0)
 	if streamErr != nil {
-		s.errChan <- streamErr
+		s.errs <- streamErr
 	}
 	return s
 }
@@ -54,7 +51,7 @@ func TestClassifyDrainedStreamRejectsASilentStream(t *testing.T) {
 
 func TestClassifyDrainedStreamAcceptsAnEmptyHandoff(t *testing.T) {
 	stream := drainedStream(t, nil)
-	stream.endState.Store(&streamEndState{})
+	stream.setEndState(&ffmpeg.EndState{})
 
 	if err := classifyDrainedStream(stream, &queue.Song{}, 0, 10, true); err != nil {
 		t.Errorf("got %v, want nil when a handoff resumed past the end", err)

@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"noraegaori/pkg/logger"
+	"noraegaori/internal/logger"
 
 	"github.com/fsnotify/fsnotify"
 )

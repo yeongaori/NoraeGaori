@@ -2,11 +2,16 @@ package player
 
 import (
 	"fmt"
+	"noraegaori/internal/audio/analysis"
+	"noraegaori/internal/audio/dsp"
+	"noraegaori/internal/audio/ffmpeg"
+	"noraegaori/internal/audio/opus"
+	"noraegaori/internal/audio/transition"
 	"time"
 
+	"noraegaori/internal/logger"
 	"noraegaori/internal/queue"
 	"noraegaori/internal/youtube"
-	"noraegaori/pkg/logger"
 )
 
 func GetTrimRange(guildID string) (int, int) {
@@ -28,7 +33,7 @@ func fadeSettingsFromQueue(q *queue.Queue) fadeSettings {
 		crossfadeSec: q.CrossfadeDuration,
 		autoMixBeats: q.AutoMixBeats,
 		repeatMode:   q.RepeatMode,
-		styleOverrides: TransitionStyleOverrides{
+		styleOverrides: transition.StyleOverrides{
 			Volume: q.AutoMixStyleVolume,
 			EQ:     q.AutoMixStyleEQ,
 			Filter: q.AutoMixStyleFilter,
@@ -40,7 +45,7 @@ func fadeSettingsFromQueue(q *queue.Queue) fadeSettings {
 
 func planFadeOutWindow(totalFrames, sentFrames int, fadeOutSec float64) (int, int) {
 	remaining := totalFrames - sentFrames
-	frames := int(fadeOutSec * framesPerSecond)
+	frames := int(fadeOutSec * dsp.FramesPerSecond)
 	if frames > remaining {
 		frames = remaining
 	}
@@ -133,17 +138,17 @@ func fadeInGainAt(frame, startFrame, frames int) (float64, bool) {
 	if frames <= 0 || frame >= startFrame+frames {
 		return 1.0, false
 	}
-	return qsinIn(float64(frame-startFrame) / float64(frames)), true
+	return dsp.QSinIn(float64(frame-startFrame) / float64(frames)), true
 }
 
 func fadeOutGainAt(frame, startFrame, frames int) (float64, bool) {
 	if frames <= 0 || frame < startFrame {
 		return 1.0, false
 	}
-	return qsinOut(float64(frame-startFrame) / float64(frames)), true
+	return dsp.QSinOut(float64(frame-startFrame) / float64(frames)), true
 }
 
-func openPlaybackStream(song *queue.Song, streamURL string, seekTime, bitrate int, normalization, collectTail bool, guildID string) (*audioStream, error) {
+func openPlaybackStream(song *queue.Song, streamURL string, seekTime, bitrate int, normalization, collectTail bool, guildID string) (audioStream, error) {
 	if song.IsLive {
 		logger.Debugf("Opening live yt-dlp pipe for guild: %s", guildID)
 		sp, pipeErr := getLiveStreamPipe(song.URL, false, bitrate, 0)
@@ -151,7 +156,7 @@ func openPlaybackStream(song *queue.Song, streamURL string, seekTime, bitrate in
 			return nil, pipeErr
 		}
 
-		return newAudioStreamPipe(buildFFmpegArgsPipe(normalization), sp, collectTail)
+		return newAudioStreamPipe(ffmpeg.PipeArgs(normalization), sp, collectTail)
 	}
 
 	if streamURL == "" {
@@ -186,14 +191,14 @@ func openPlaybackStream(song *queue.Song, streamURL string, seekTime, bitrate in
 	return newAudioStream(args, collectTail)
 }
 
-func acquireOpusEncoder(resumeMode bool, pending *PendingStream, bitrate int, guildID string) (*OpusEncoder, error) {
+func acquireOpusEncoder(resumeMode bool, pending *PendingStream, bitrate int, guildID string) (*opus.Encoder, error) {
 	if resumeMode && pending != nil && pending.Encoder != nil {
 		logger.Debugf("Reusing Opus encoder from handoff for guild: %s", guildID)
 		return pending.Encoder, nil
 	}
 
-	logger.Debugf("Creating Opus encoder (%s) for guild: %s", GetEncoderType(), guildID)
-	encoder, err := NewOpusEncoder(frameRate, channels)
+	logger.Debugf("Creating Opus encoder (%s) for guild: %s", opus.GetEncoderType(), guildID)
+	encoder, err := opus.NewEncoder(frameRate, channels)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create opus encoder: %w", err)
 	}
@@ -208,15 +213,15 @@ func acquireOpusEncoder(resumeMode bool, pending *PendingStream, bitrate int, gu
 	return encoder, nil
 }
 
-func classifyDrainedStream(stream *audioStream, song *queue.Song, sentFrames, frameOffset int, resumeMode bool) error {
+func classifyDrainedStream(stream audioStream, song *queue.Song, sentFrames, frameOffset int, resumeMode bool) error {
 	select {
-	case err := <-stream.errChan:
+	case err := <-stream.Errs():
 		return err
 	default:
 	}
 
 	if sentFrames == 0 {
-		if resumeMode && frameOffset > 0 && stream.endState.Load() != nil {
+		if resumeMode && frameOffset > 0 && stream.EndState() != nil {
 			return nil
 		}
 		return fmt.Errorf("playback completed with no audio frames sent")
@@ -231,16 +236,16 @@ func classifyDrainedStream(stream *audioStream, song *queue.Song, sentFrames, fr
 	return nil
 }
 
-func adjustEndStateForOffset(es *streamEndState, frameOffset int) *streamEndState {
+func adjustEndStateForOffset(es *ffmpeg.EndState, frameOffset int) *ffmpeg.EndState {
 	if frameOffset <= 0 {
 		return es
 	}
 
-	return &streamEndState{
-		totalFrames:      es.totalFrames - frameOffset,
-		analysis:         es.analysis,
-		tailStartFrame:   es.tailStartFrame - frameOffset,
-		silentTailFrames: es.silentTailFrames,
+	return &ffmpeg.EndState{
+		TotalFrames:      es.TotalFrames - frameOffset,
+		Analysis:         es.Analysis,
+		TailStartFrame:   es.TailStartFrame - frameOffset,
+		SilentTailFrames: es.SilentTailFrames,
 	}
 }
 
@@ -307,7 +312,7 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 
 	collectTail := (fade.autoMix || fade.trimSilence) && !song.IsLive
 
-	var stream *audioStream
+	var stream audioStream
 	resumeMode := false
 	frameOffset := 0
 
@@ -331,7 +336,7 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 			player.mu.Unlock()
 			logger.Debugf("Resuming handed-off stream for guild: %s", guildID)
 		} else {
-			pending.Stream.stop()
+			pending.Stream.Stop()
 		}
 	}
 
@@ -356,7 +361,7 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 
 	logger.Debugf("About to call Speaking(true) for guild: %s", guildID)
 	if player.VoiceConn == nil {
-		stream.stop()
+		stream.Stop()
 		return fmt.Errorf("voice connection is nil")
 	}
 	player.VoiceConn.Speaking(true)
@@ -372,7 +377,7 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 
 	opusEncoder, encoderErr := acquireOpusEncoder(resumeMode, pending, bitrate, guildID)
 	if encoderErr != nil {
-		stream.stop()
+		stream.Stop()
 		return encoderErr
 	}
 
@@ -410,12 +415,12 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 	}
 
 	if fade.fadeIn && !resumeMode && (seekTime == 0 || fadeInNext) {
-		session.fadeInFrames = int(fade.fadeInSec * framesPerSecond)
+		session.fadeInFrames = int(fade.fadeInSec * dsp.FramesPerSecond)
 	}
 
 	for {
 		select {
-		case pcmData, ok := <-stream.pcmChan:
+		case pcmData, ok := <-stream.PCM():
 			if !ok {
 				if done, err := session.crossfade.finishOnDrain(player, stopCh, opusEncoder, &session.sentFrames); done {
 					return err
@@ -437,7 +442,7 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 			}
 
 			if session.reachedSilentTail() {
-				logger.Debugf("Trimming %d trailing silent frames for guild: %s", session.endStateAdj.silentTailFrames, guildID)
+				logger.Debugf("Trimming %d trailing silent frames for guild: %s", session.endStateAdj.SilentTailFrames, guildID)
 				session.outro.flush(player, stopCh, opusEncoder, &session.sentFrames)
 				return nil
 			}
@@ -467,12 +472,12 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 			}
 
 		case <-player.VoiceConn.DeadChan():
-			stream.stop()
+			stream.Stop()
 			session.crossfade.abort()
 			return fmt.Errorf("voice connection died: %v", player.VoiceConn.Err())
 
 		case <-stopCh:
-			stream.stop()
+			stream.Stop()
 			session.crossfade.abort()
 			return fmt.Errorf("playback stopped by user")
 		}
@@ -484,11 +489,11 @@ type playbackSession struct {
 	song        *queue.Song
 	guildID     string
 	stopCh      chan struct{}
-	stream      *audioStream
-	opusEncoder *OpusEncoder
+	stream      audioStream
+	opusEncoder *opus.Encoder
 	crossfade   *crossfadeState
 	outro       *outroState
-	activeTail  *transitionTail
+	activeTail  *transition.Tail
 
 	normalization bool
 	bitrate       int
@@ -513,11 +518,11 @@ type playbackSession struct {
 	fadingInSet          bool
 	heldFadeInGain       float64
 	replanAllowed        bool
-	endStateAdj          *streamEndState
+	endStateAdj          *ffmpeg.EndState
 }
 
 func (s *playbackSession) planEndOfStream() {
-	es := s.stream.endState.Load()
+	es := s.stream.EndState()
 	if es == nil {
 		return
 	}
@@ -532,14 +537,14 @@ func (s *playbackSession) planEndOfStream() {
 		return
 	}
 
-	if es.analysis != nil {
-		if saveErr := SaveTrackAnalysis(s.song.URL, AnalysisSegmentTail, es.analysis); saveErr != nil {
+	if es.Analysis != nil {
+		if saveErr := analysis.SaveTrackAnalysis(s.song.URL, analysis.SegmentTail, es.Analysis); saveErr != nil {
 			logger.Warnf("Failed to save tail analysis for %s: %v", s.song.Title, saveErr)
 		}
 	}
-	if s.fade.trimSilence && es.silentTailFrames > 0 {
+	if s.fade.trimSilence && es.SilentTailFrames > 0 {
 		s.player.mu.Lock()
-		s.player.TrimEndMs = s.baseOffsetMs + (es.totalFrames-es.silentTailFrames)*20
+		s.player.TrimEndMs = s.baseOffsetMs + (es.TotalFrames-es.SilentTailFrames)*20
 		s.player.mu.Unlock()
 	}
 
@@ -551,8 +556,8 @@ func (s *playbackSession) planEndOfStream() {
 		planned = s.outro.plan(s.player, es, s.sentFrames, s.fade)
 	}
 	if !planned && s.fade.fadeOut {
-		s.fadeOutStartFrame, s.fadeOutFrames = planFadeOutWindow(es.totalFrames-es.silentTailFrames, s.sentFrames, s.fade.fadeOutSec)
-		logger.Debugf("Fade-out window planned: start frame %d, %d frames (total %d, sent %d) for guild: %s", s.fadeOutStartFrame, s.fadeOutFrames, es.totalFrames, s.sentFrames, s.guildID)
+		s.fadeOutStartFrame, s.fadeOutFrames = planFadeOutWindow(es.TotalFrames-es.SilentTailFrames, s.sentFrames, s.fade.fadeOutSec)
+		logger.Debugf("Fade-out window planned: start frame %d, %d frames (total %d, sent %d) for guild: %s", s.fadeOutStartFrame, s.fadeOutFrames, es.TotalFrames, s.sentFrames, s.guildID)
 	}
 }
 
@@ -603,7 +608,7 @@ func (s *playbackSession) consumeLeadingSilence(pcmData []int16) bool {
 		return false
 	}
 
-	if frameSilent(pcmData) {
+	if dsp.FrameSilent(pcmData) {
 		s.sentFrames++
 		s.skippedLeadingFrames++
 		return true
@@ -616,14 +621,14 @@ func (s *playbackSession) consumeLeadingSilence(pcmData []int16) bool {
 		s.player.TrimStartMs = s.skippedLeadingFrames * 20
 		s.player.mu.Unlock()
 		s.fadeInStartFrame = s.sentFrames
-		logger.Debugf("Skipped %d leading silent frames (%.1fs) for guild: %s", s.skippedLeadingFrames, float64(s.skippedLeadingFrames)/framesPerSecond, s.guildID)
+		logger.Debugf("Skipped %d leading silent frames (%.1fs) for guild: %s", s.skippedLeadingFrames, float64(s.skippedLeadingFrames)/dsp.FramesPerSecond, s.guildID)
 	}
 	return false
 }
 
 func (s *playbackSession) reachedSilentTail() bool {
-	return s.fade.trimSilence && s.endStateAdj != nil && s.endStateAdj.silentTailFrames > 0 &&
-		!s.crossfade.armed && s.sentFrames >= s.endStateAdj.totalFrames-s.endStateAdj.silentTailFrames
+	return s.fade.trimSilence && s.endStateAdj != nil && s.endStateAdj.SilentTailFrames > 0 &&
+		!s.crossfade.armed && s.sentFrames >= s.endStateAdj.TotalFrames-s.endStateAdj.SilentTailFrames
 }
 
 func (s *playbackSession) frameGain(ramping bool) float64 {
@@ -668,8 +673,8 @@ func (s *playbackSession) replanFadeOutAfterCancel() {
 		return
 	}
 
-	if es := s.stream.endState.Load(); es != nil {
-		s.fadeOutStartFrame, s.fadeOutFrames = planFadeOutWindow(es.totalFrames-s.frameOffset-es.silentTailFrames, s.sentFrames, s.fade.fadeOutSec)
+	if es := s.stream.EndState(); es != nil {
+		s.fadeOutStartFrame, s.fadeOutFrames = planFadeOutWindow(es.TotalFrames-s.frameOffset-es.SilentTailFrames, s.sentFrames, s.fade.fadeOutSec)
 		logger.Debugf("Fade-out window planned after cancel: start frame %d, %d frames for guild: %s", s.fadeOutStartFrame, s.fadeOutFrames, s.guildID)
 	}
 }
@@ -680,10 +685,10 @@ func (s *playbackSession) shapeFrame(pcmData []int16, volumeFactor, gain float64
 	if s.outro.running(s.sentFrames) {
 		s.outro.process(s.volumeBuf, s.sentFrames, volumeFactor*gain)
 	} else {
-		applyGain(s.volumeBuf, volumeFactor*gain)
+		dsp.ApplyGain(s.volumeBuf, volumeFactor*gain)
 	}
 
-	if s.activeTail != nil && !s.activeTail.apply(s.volumeBuf) {
+	if s.activeTail != nil && !s.activeTail.Apply(s.volumeBuf) {
 		s.activeTail = nil
 	}
 }
@@ -701,11 +706,11 @@ func (s *playbackSession) encodeAndSend(firstFrameCh chan<- struct{}) error {
 	select {
 	case s.player.VoiceConn.OpusSendChan() <- opusBuffer[:opusLen]:
 	case <-s.player.VoiceConn.DeadChan():
-		s.stream.stop()
+		s.stream.Stop()
 		s.crossfade.abort()
 		return fmt.Errorf("voice connection died: %v", s.player.VoiceConn.Err())
 	case <-s.stopCh:
-		s.stream.stop()
+		s.stream.Stop()
 		s.crossfade.abort()
 		return fmt.Errorf("playback stopped by user")
 	}

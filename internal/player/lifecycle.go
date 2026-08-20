@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
+	"noraegaori/internal/logger"
 	"noraegaori/internal/queue"
-	"noraegaori/internal/worker"
-	"noraegaori/pkg/logger"
+	"noraegaori/internal/youtube"
 )
 
 func GetCurrentPosition(guildID string) int {
@@ -100,7 +100,7 @@ func cleanupForShutdown(guildID string) error {
 	player.mu.Unlock()
 
 	if pending != nil {
-		pending.Stream.stop()
+		pending.Stream.Stop()
 	}
 
 	if wasPlaying {
@@ -132,5 +132,5 @@ func cleanupForShutdown(guildID string) error {
 }
 
 func ShutdownWorkerPool() {
-	worker.CloseGlobalPool()
+	youtube.CloseAvailabilityPool()
 }

@@ -8,7 +8,8 @@ import (
 
 	"noraegaori/internal/config"
 	"noraegaori/internal/database"
-	"noraegaori/pkg/logger"
+	"noraegaori/internal/guild"
+	"noraegaori/internal/logger"
 )
 
 const (
@@ -56,31 +57,10 @@ var (
 	cache    = make(map[string]*queueCache)
 	cacheMux sync.RWMutex
 	cacheTTL = 30 * time.Second
-
-	locks    = make(map[string]*sync.Mutex)
-	locksMux sync.Mutex
-
-	prefixCache       = make(map[string]string)
-	prefixCacheLoaded = make(map[string]bool)
-	prefixCacheMux    sync.RWMutex
-
-	languageCache       = make(map[string]string)
-	languageCacheLoaded = make(map[string]bool)
-	languageCacheMux    sync.RWMutex
 )
 
-func acquireLock(guildID string) *sync.Mutex {
-	locksMux.Lock()
-	defer locksMux.Unlock()
-
-	if _, exists := locks[guildID]; !exists {
-		locks[guildID] = &sync.Mutex{}
-	}
-	return locks[guildID]
-}
-
 func GetQueue(guildID string, forceRefresh bool) (*Queue, error) {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 

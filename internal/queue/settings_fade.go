@@ -6,7 +6,8 @@ import (
 	"fmt"
 
 	"noraegaori/internal/database"
-	"noraegaori/pkg/logger"
+	"noraegaori/internal/guild"
+	"noraegaori/internal/logger"
 )
 
 func GetFadeIn(guildID string) (bool, error) {
@@ -27,7 +28,7 @@ func GetFadeIn(guildID string) (bool, error) {
 }
 
 func SetFadeIn(guildID string, enabled bool) error {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -64,7 +65,7 @@ func GetFadeInDuration(guildID string) (float64, error) {
 }
 
 func SetFadeInDuration(guildID string, seconds float64) error {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -100,7 +101,7 @@ func GetFadeOut(guildID string) (bool, error) {
 }
 
 func SetFadeOut(guildID string, enabled bool) error {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -137,7 +138,7 @@ func GetFadeOutDuration(guildID string) (float64, error) {
 }
 
 func SetFadeOutDuration(guildID string, seconds float64) error {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -173,7 +174,7 @@ func GetAutoMix(guildID string) (bool, error) {
 }
 
 func SetAutoMix(guildID string, enabled bool) error {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -210,7 +211,7 @@ func GetAutoMixBeats(guildID string) (int, error) {
 }
 
 func SetAutoMixBeats(guildID string, beats int) error {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -273,7 +274,7 @@ func SetAutoMixStyle(guildID, category, style string) error {
 		return fmt.Errorf("unknown automix style category: %s", category)
 	}
 
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -306,7 +307,7 @@ func SetSongAutoMixStyle(guildID string, songID int, category, style string) err
 		return fmt.Errorf("unknown automix style category: %s", category)
 	}
 
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -346,7 +347,7 @@ func GetCrossfade(guildID string) (bool, error) {
 }
 
 func SetCrossfade(guildID string, enabled bool) error {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -383,7 +384,7 @@ func GetCrossfadeDuration(guildID string) (float64, error) {
 }
 
 func SetCrossfadeDuration(guildID string, seconds float64) error {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -419,7 +420,7 @@ func GetFadeOnStop(guildID string) (bool, error) {
 }
 
 func SetFadeOnStop(guildID string, enabled bool) error {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -456,7 +457,7 @@ func GetTrimSilence(guildID string) (bool, error) {
 }
 
 func SetTrimSilence(guildID string, enabled bool) error {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 

@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"noraegaori/internal/config"
-	"noraegaori/pkg/logger"
+	"noraegaori/internal/logger"
 
 	"github.com/ProtonMail/go-crypto/openpgp"
 )

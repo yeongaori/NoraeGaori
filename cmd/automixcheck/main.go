@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"noraegaori/internal/commands"
+	"noraegaori/internal/commands/automix"
 	"noraegaori/internal/messages"
 	"noraegaori/internal/player"
 )
@@ -18,7 +18,7 @@ func main() {
 	}
 
 	results := player.RunAutoMixChecks()
-	results = append(results, commands.RunAutoMixPanelChecks()...)
+	results = append(results, automix.RunAutoMixPanelChecks()...)
 
 	passed := 0
 	failed := 0

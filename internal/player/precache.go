@@ -6,19 +6,21 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"noraegaori/internal/audio/analysis"
+	"noraegaori/internal/audio/dsp"
 	"os/exec"
 	"time"
 
+	"noraegaori/internal/logger"
 	"noraegaori/internal/queue"
 	"noraegaori/internal/youtube"
-	"noraegaori/pkg/logger"
 )
 
 const (
 	preCacheTTL        = time.Hour
 	analysisHeadSecs   = 75
 	analysisReadMargin = 5
-	analysisMaxBytes   = int64((analysisHeadSecs + analysisReadMargin) * tailSampleRate * 4)
+	analysisMaxBytes   = int64((analysisHeadSecs + analysisReadMargin) * analysis.SampleRate * 4)
 )
 
 var preCacheNext = PreCacheNext
@@ -99,33 +101,33 @@ func preCacheSong(ctx context.Context, guildID string, song *queue.Song, sponsor
 	logger.Debugf("Cached stream URL for: %s", song.Title)
 
 	if automix, err := queue.GetAutoMix(guildID); err == nil && automix {
-		analysis := LoadTrackAnalysis(song.URL, AnalysisSegmentHead)
-		reused := analysis != nil
+		head := analysis.LoadTrackAnalysis(song.URL, analysis.SegmentHead)
+		reused := head != nil
 
 		var analyzeErr error
-		if analysis == nil {
+		if head == nil {
 			analyzeErr = withAnalysisSlot(ctx, func() error {
 				var err error
-				analysis, err = analyzeStreamHead(ctx, streamURL)
+				head, err = analyzeStreamHead(ctx, streamURL)
 				return err
 			})
 		}
 
-		if analyzeErr == nil && analysis != nil {
+		if analyzeErr == nil && head != nil {
 			preCacheStoreMu.Lock()
 			if entry, exists := preCacheStore[cacheKey]; exists {
-				entry.Analysis = analysis
+				entry.Analysis = head
 			}
 			preCacheStoreMu.Unlock()
 
 			if !reused {
-				if saveErr := SaveTrackAnalysis(song.URL, AnalysisSegmentHead, analysis); saveErr != nil {
+				if saveErr := analysis.SaveTrackAnalysis(song.URL, analysis.SegmentHead, head); saveErr != nil {
 					logger.Warnf("Failed to save head analysis for %s: %v", song.Title, saveErr)
 				}
 			}
 			logger.Debugf("Analyzed head for: %s (BPM %.1f, key %s / %s, confidence %.3f, reused %v)",
-				song.Title, analysis.BPM, keyName(analysis.Tonic, analysis.Minor),
-				camelotCode(analysis.Tonic, analysis.Minor), analysis.KeyConfidence, reused)
+				song.Title, head.BPM, analysis.KeyName(head.Tonic, head.Minor),
+				analysis.CamelotCode(head.Tonic, head.Minor), head.KeyConfidence, reused)
 		} else {
 			logger.Debugf("Head analysis failed for %s: %v", song.Title, analyzeErr)
 		}
@@ -169,7 +171,7 @@ func GetCachedStreamURL(guildID string, songID int) string {
 	return cache.StreamURL
 }
 
-func GetCachedAnalysis(guildID string, songID int) *TrackAnalysis {
+func GetCachedAnalysis(guildID string, songID int) *analysis.TrackAnalysis {
 	cache := GetPreCache(guildID, songID)
 	if cache == nil {
 		return nil
@@ -177,7 +179,7 @@ func GetCachedAnalysis(guildID string, songID int) *TrackAnalysis {
 	return cache.Analysis
 }
 
-func analyzeStreamHead(ctx context.Context, streamURL string) (*TrackAnalysis, error) {
+func analyzeStreamHead(ctx context.Context, streamURL string) (*analysis.TrackAnalysis, error) {
 	args := []string{
 		"-reconnect", "1",
 		"-reconnect_streamed", "1",
@@ -218,16 +220,16 @@ func analyzeStreamHead(ctx context.Context, streamURL string) (*TrackAnalysis, e
 		samples[i] = math.Float32frombits(bits)
 	}
 
-	lead := leadingSilentSamples(samples)
+	lead := dsp.LeadingSilentSamples(samples)
 	if lead >= len(samples) {
 		return nil, fmt.Errorf("head is entirely silent")
 	}
-	analysis, err := analyzeTrackSamples(samples[lead:], tailSampleRate)
+	head, err := analysis.AnalyzeTrackSamples(samples[lead:], analysis.SampleRate)
 	if err != nil {
 		return nil, err
 	}
-	analysis.FirstBeat += float64(lead) / tailSampleRate
-	return analysis, nil
+	head.FirstBeat += float64(lead) / analysis.SampleRate
+	return head, nil
 }
 
 func ClearPreCache(guildID string) {

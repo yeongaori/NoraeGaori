@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"noraegaori/internal/logger"
 	"noraegaori/internal/messages"
 	ytdlpUpdater "noraegaori/internal/ytdlp"
-	"noraegaori/pkg/logger"
 
 	"github.com/lrstanley/go-ytdlp"
 )

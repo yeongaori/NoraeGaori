@@ -1,9 +1,11 @@
 package player
 
+import "noraegaori/internal/audio/ffmpeg"
+
 import "testing"
 
 func TestAdjustEndStateForOffsetLeavesUnshiftedStreams(t *testing.T) {
-	original := &streamEndState{totalFrames: 100, tailStartFrame: 80, silentTailFrames: 5}
+	original := &ffmpeg.EndState{TotalFrames: 100, TailStartFrame: 80, SilentTailFrames: 5}
 
 	for _, offset := range []int{0, -1} {
 		if got := adjustEndStateForOffset(original, offset); got != original {
@@ -13,23 +15,23 @@ func TestAdjustEndStateForOffsetLeavesUnshiftedStreams(t *testing.T) {
 }
 
 func TestAdjustEndStateForOffsetShiftsFrameCounts(t *testing.T) {
-	original := &streamEndState{totalFrames: 100, tailStartFrame: 80, silentTailFrames: 5}
+	original := &ffmpeg.EndState{TotalFrames: 100, TailStartFrame: 80, SilentTailFrames: 5}
 
 	got := adjustEndStateForOffset(original, 30)
 
 	if got == original {
 		t.Fatal("the original end state was mutated in place")
 	}
-	if got.totalFrames != 70 {
-		t.Errorf("totalFrames = %d, want 70", got.totalFrames)
+	if got.TotalFrames != 70 {
+		t.Errorf("totalFrames = %d, want 70", got.TotalFrames)
 	}
-	if got.tailStartFrame != 50 {
-		t.Errorf("tailStartFrame = %d, want 50", got.tailStartFrame)
+	if got.TailStartFrame != 50 {
+		t.Errorf("tailStartFrame = %d, want 50", got.TailStartFrame)
 	}
-	if got.silentTailFrames != 5 {
-		t.Errorf("silentTailFrames = %d, want it carried through unchanged", got.silentTailFrames)
+	if got.SilentTailFrames != 5 {
+		t.Errorf("silentTailFrames = %d, want it carried through unchanged", got.SilentTailFrames)
 	}
-	if original.totalFrames != 100 || original.tailStartFrame != 80 {
+	if original.TotalFrames != 100 || original.TailStartFrame != 80 {
 		t.Error("the original end state was modified")
 	}
 }

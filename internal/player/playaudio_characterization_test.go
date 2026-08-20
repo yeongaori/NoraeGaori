@@ -1,6 +1,7 @@
 package player
 
 import (
+	"noraegaori/internal/audio/ffmpeg"
 	"strings"
 	"testing"
 	"time"
@@ -8,26 +9,13 @@ import (
 	"noraegaori/internal/queue"
 )
 
-func boundedAudioStream(frames int) *audioStream {
-	s := &audioStream{
-		pcmChan:  make(chan []int16, audioStreamBufSize),
-		errChan:  make(chan error, 1),
-		stopChan: make(chan struct{}),
-	}
-	go func() {
-		defer close(s.pcmChan)
-		for i := 0; i < frames; i++ {
-			select {
-			case <-s.stopChan:
-				return
-			case s.pcmChan <- make([]int16, frameSize*channels):
-			}
-		}
-	}()
+func boundedAudioStream(frames int) audioStream {
+	s := newFakeStream(ffmpeg.BufSize)
+	s.sendFrames(frames)
 	return s
 }
 
-func newCharacterizationPlayer(t *testing.T, guildID string, stream func() *audioStream) (*GuildPlayer, *mockVoiceConn, *queue.Song) {
+func newCharacterizationPlayer(t *testing.T, guildID string, stream func() audioStream) (*GuildPlayer, *mockVoiceConn, *queue.Song) {
 	t.Helper()
 
 	setupPlayerDB(t, guildID, 1)
@@ -42,7 +30,7 @@ func newCharacterizationPlayer(t *testing.T, guildID string, stream func() *audi
 	player.mu.Unlock()
 
 	previous := newAudioStream
-	newAudioStream = func(args []string, collectTail bool) (*audioStream, error) {
+	newAudioStream = func(args []string, collectTail bool) (audioStream, error) {
 		return stream(), nil
 	}
 	t.Cleanup(func() { newAudioStream = previous })
@@ -73,7 +61,7 @@ func runPlayAudio(t *testing.T, player *GuildPlayer, song *queue.Song, firstFram
 }
 
 func TestPlayAudioReturnsNilOnNaturalEnd(t *testing.T) {
-	player, _, song := newCharacterizationPlayer(t, "charend", func() *audioStream { return boundedAudioStream(5) })
+	player, _, song := newCharacterizationPlayer(t, "charend", func() audioStream { return boundedAudioStream(5) })
 
 	if err := runPlayAudio(t, player, song, make(chan struct{}, 1)); err != nil {
 		t.Errorf("got %v, want nil when the stream ends after sending frames", err)
@@ -81,7 +69,7 @@ func TestPlayAudioReturnsNilOnNaturalEnd(t *testing.T) {
 }
 
 func TestPlayAudioReportsAStreamThatSentNothing(t *testing.T) {
-	player, _, song := newCharacterizationPlayer(t, "charempty", func() *audioStream { return boundedAudioStream(0) })
+	player, _, song := newCharacterizationPlayer(t, "charempty", func() audioStream { return boundedAudioStream(0) })
 
 	err := runPlayAudio(t, player, song, make(chan struct{}, 1))
 	if err == nil {
@@ -93,7 +81,7 @@ func TestPlayAudioReportsAStreamThatSentNothing(t *testing.T) {
 }
 
 func TestPlayAudioRequiresAVoiceConnection(t *testing.T) {
-	player, _, song := newCharacterizationPlayer(t, "charnovc", func() *audioStream { return boundedAudioStream(5) })
+	player, _, song := newCharacterizationPlayer(t, "charnovc", func() audioStream { return boundedAudioStream(5) })
 
 	player.mu.Lock()
 	player.VoiceConn = nil
@@ -106,7 +94,7 @@ func TestPlayAudioRequiresAVoiceConnection(t *testing.T) {
 }
 
 func TestPlayAudioBracketsPlaybackWithSpeaking(t *testing.T) {
-	player, mock, song := newCharacterizationPlayer(t, "charspeak", func() *audioStream { return boundedAudioStream(5) })
+	player, mock, song := newCharacterizationPlayer(t, "charspeak", func() audioStream { return boundedAudioStream(5) })
 
 	if err := runPlayAudio(t, player, song, make(chan struct{}, 1)); err != nil {
 		t.Fatalf("playAudio returned %v, want nil", err)
@@ -131,7 +119,7 @@ func TestPlayAudioBracketsPlaybackWithSpeaking(t *testing.T) {
 }
 
 func TestPlayAudioSignalsPlaybackDone(t *testing.T) {
-	player, _, song := newCharacterizationPlayer(t, "chardone", func() *audioStream { return boundedAudioStream(5) })
+	player, _, song := newCharacterizationPlayer(t, "chardone", func() audioStream { return boundedAudioStream(5) })
 
 	if err := runPlayAudio(t, player, song, make(chan struct{}, 1)); err != nil {
 		t.Fatalf("playAudio returned %v, want nil", err)
@@ -145,7 +133,7 @@ func TestPlayAudioSignalsPlaybackDone(t *testing.T) {
 }
 
 func TestPlayAudioClearsTransientStateOnReturn(t *testing.T) {
-	player, _, song := newCharacterizationPlayer(t, "charstate", func() *audioStream { return boundedAudioStream(5) })
+	player, _, song := newCharacterizationPlayer(t, "charstate", func() audioStream { return boundedAudioStream(5) })
 
 	player.mu.Lock()
 	player.FadingIn = true
@@ -173,7 +161,7 @@ func TestPlayAudioClearsTransientStateOnReturn(t *testing.T) {
 }
 
 func TestPlayAudioSignalsTheFirstFrameOnce(t *testing.T) {
-	player, _, song := newCharacterizationPlayer(t, "charfirst", func() *audioStream { return boundedAudioStream(10) })
+	player, _, song := newCharacterizationPlayer(t, "charfirst", func() audioStream { return boundedAudioStream(10) })
 
 	firstFrame := make(chan struct{}, 4)
 	if err := runPlayAudio(t, player, song, firstFrame); err != nil {
@@ -186,7 +174,7 @@ func TestPlayAudioSignalsTheFirstFrameOnce(t *testing.T) {
 }
 
 func TestPlayAudioMarksThePlayerPlaying(t *testing.T) {
-	player, _, song := newCharacterizationPlayer(t, "charplaying", func() *audioStream { return boundedAudioStream(30) })
+	player, _, song := newCharacterizationPlayer(t, "charplaying", func() audioStream { return boundedAudioStream(30) })
 
 	observed := make(chan bool, 1)
 	go func() {

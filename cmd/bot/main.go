@@ -1,21 +1,12 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"runtime/debug"
 
-	"noraegaori/internal/bot"
-	"noraegaori/internal/commands"
-	"noraegaori/internal/config"
-	"noraegaori/internal/database"
-	"noraegaori/internal/messages"
-	"noraegaori/internal/player"
-	"noraegaori/internal/queue"
-	"noraegaori/internal/youtube"
-	ytdlpUpdater "noraegaori/internal/ytdlp"
-	"noraegaori/pkg/logger"
+	"noraegaori/internal/app"
+	"noraegaori/internal/logger"
 
 	"github.com/joho/godotenv"
 )
@@ -27,85 +18,8 @@ func main() {
 		fmt.Printf("Warning: %v\n", err)
 	}
 
-	debugMode := os.Getenv("DEBUG_MODE") == "true"
-	logger.Initialize(debugMode)
+	logger.Initialize(os.Getenv("DEBUG_MODE") == "true")
 	defer logger.Close()
-
-	logger.Debug("Initializing database...")
-	if err := database.Initialize(); err != nil {
-		logger.Errorf("Failed to initialize database: %v", err)
-		os.Exit(1)
-	}
-	defer func() {
-		if err := database.Close(); err != nil {
-			logger.Errorf("Failed to close database: %v", err)
-		}
-	}()
-
-	logger.Debug("Clearing stale playback states...")
-	if err := clearStalePlaybackStates(); err != nil {
-		logger.Warnf("Failed to clear stale states: %v", err)
-	}
-
-	if err := player.PruneTrackAnalysis(); err != nil {
-		logger.Warnf("Failed to prune stored track analysis: %v", err)
-	}
-
-	logger.Debug("Loading configuration...")
-	if err := config.Initialize(); err != nil {
-		logger.Errorf("Failed to initialize config: %v", err)
-		os.Exit(1)
-	}
-	defer func() {
-		if err := config.Close(); err != nil {
-			logger.Errorf("Failed to close config watcher: %v", err)
-		}
-	}()
-
-	logger.SetLogFile(config.GetConfig().LogFile)
-	config.OnReload(func() {
-		logger.SetLogFile(config.GetConfig().LogFile)
-	})
-
-	messages.SetGuildLangResolver(queue.GetGuildLanguage)
-
-	lang := config.GetConfig().Language
-	logger.Infof("Loading locale: %s", lang)
-	if err := messages.LoadLocale(lang); err != nil {
-		logger.Warnf("Locale loading issue: %v", err)
-	}
-
-	lastLang := lang
-	config.OnReload(func() {
-		newLang := config.GetConfig().Language
-		if newLang == lastLang {
-			return
-		}
-		lastLang = newLang
-		logger.Infof("Language changed to %q, reloading locale...", newLang)
-		if err := messages.LoadLocale(newLang); err != nil {
-			logger.Warnf("Locale reload issue: %v", err)
-		}
-		commands.ReloadAliases()
-	})
-
-	logger.Debug("Initializing yt-dlp version manager...")
-	if err := ytdlpUpdater.InitVersionManager(); err != nil {
-		logger.Warnf("Failed to initialize yt-dlp version manager: %v", err)
-	}
-
-	logger.Debug("Initializing YouTube integration...")
-	if err := youtube.Initialize(); err != nil {
-		logger.Errorf("Failed to initialize YouTube: %v", err)
-		os.Exit(1)
-	}
-
-	ytdlpUpdater.AutoUpdate()
-	ytdlpUpdater.DetectJsRuntime()
-
-	updaterCtx, updaterCancel := context.WithCancel(context.Background())
-	defer updaterCancel()
-	ytdlpUpdater.StartBackgroundUpdater(updaterCtx)
 
 	token := os.Getenv("DISCORD_BOT_TOKEN")
 	if token == "" {
@@ -113,24 +27,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	logger.Debugf("Opus encoder: %s", player.GetEncoderType())
-	logger.Info("Starting Discord bot...")
-	if err := bot.Start(token); err != nil {
-		logger.Errorf("Failed to start bot: %v", err)
+	if err := app.Run(token); err != nil {
+		logger.Errorf("%v", err)
 		os.Exit(1)
 	}
-
-	logger.Debug("Bot stopped successfully")
-}
-
-func clearStalePlaybackStates() error {
-
-	_, err := database.DB.Exec(`UPDATE queues SET playing = 0, loading = 0 WHERE playing = 1 OR loading = 1`)
-	if err != nil {
-		return fmt.Errorf("failed to clear stale states: %w", err)
-	}
-	logger.Debug("Cleared stale playback states from database")
-	return nil
 }
 
 func loadEnv() error {

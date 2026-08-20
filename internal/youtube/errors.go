@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"noraegaori/internal/logger"
 	"noraegaori/internal/messages"
-	"noraegaori/pkg/logger"
 )
 
 type VideoError struct {

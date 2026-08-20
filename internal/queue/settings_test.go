@@ -150,27 +150,6 @@ func TestAutoMixBeatsRoundTrip(t *testing.T) {
 	}
 }
 
-func TestStringSettingsRoundTrip(t *testing.T) {
-	setupTestDB(t)
-	defer teardownTestDB(t)
-
-	guildID := "guild1"
-
-	if err := SetGuildLanguage(guildID, "ko"); err != nil {
-		t.Fatalf("SetGuildLanguage: %v", err)
-	}
-	if lang, err := GetGuildLanguage(guildID); err != nil || lang != "ko" {
-		t.Errorf("GetGuildLanguage: want ko got %q (err %v)", lang, err)
-	}
-
-	if err := SetGuildPrefix(guildID, "?"); err != nil {
-		t.Fatalf("SetGuildPrefix: %v", err)
-	}
-	if p, err := GetGuildPrefix(guildID); err != nil || p != "?" {
-		t.Errorf("GetGuildPrefix: want ? got %q (err %v)", p, err)
-	}
-}
-
 func TestStateFlagsRoundTrip(t *testing.T) {
 	setupTestDB(t)
 	defer teardownTestDB(t)

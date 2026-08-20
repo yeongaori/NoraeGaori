@@ -1,39 +1,23 @@
 package player
 
 import (
+	"noraegaori/internal/audio/ffmpeg"
 	"testing"
 	"time"
 
 	"noraegaori/internal/queue"
 )
 
-func silentAudioStream(frames int) *audioStream {
-	s := &audioStream{
-		pcmChan:  make(chan []int16, audioStreamBufSize),
-		errChan:  make(chan error, 1),
-		stopChan: make(chan struct{}),
-	}
-	go func() {
-		defer close(s.pcmChan)
-		for i := 0; i < frames; i++ {
-			select {
-			case <-s.stopChan:
-				return
-			case s.pcmChan <- make([]int16, frameSize*channels):
-			}
-		}
-	}()
+func silentAudioStream(frames int) audioStream {
+	s := newFakeStream(ffmpeg.BufSize)
+	s.sendFrames(frames)
 	return s
 }
 
-func loudAudioStream(frames int) *audioStream {
-	s := &audioStream{
-		pcmChan:  make(chan []int16, audioStreamBufSize),
-		errChan:  make(chan error, 1),
-		stopChan: make(chan struct{}),
-	}
+func loudAudioStream(frames int) audioStream {
+	s := newFakeStream(ffmpeg.BufSize)
 	go func() {
-		defer close(s.pcmChan)
+		defer close(s.pcm)
 		for i := 0; i < frames; i++ {
 			frame := make([]int16, frameSize*channels)
 			for j := range frame {
@@ -42,7 +26,7 @@ func loudAudioStream(frames int) *audioStream {
 			select {
 			case <-s.stopChan:
 				return
-			case s.pcmChan <- frame:
+			case s.pcm <- frame:
 			}
 		}
 	}()
@@ -68,7 +52,7 @@ func runPlayAudioWithFade(t *testing.T, player *GuildPlayer, song *queue.Song, f
 
 func TestPlayAudioSkipsLeadingSilenceWithoutSendingIt(t *testing.T) {
 	guildID := "loopskip"
-	player, mock, song := newCharacterizationPlayer(t, guildID, func() *audioStream { return silentAudioStream(20) })
+	player, mock, song := newCharacterizationPlayer(t, guildID, func() audioStream { return silentAudioStream(20) })
 
 	fade := fadeSettings{trimSilence: true}
 	if err := runPlayAudioWithFade(t, player, song, fade); err != nil {
@@ -82,7 +66,7 @@ func TestPlayAudioSkipsLeadingSilenceWithoutSendingIt(t *testing.T) {
 
 func TestPlayAudioSendsEveryFrameOfALoudStream(t *testing.T) {
 	guildID := "looploud"
-	player, mock, song := newCharacterizationPlayer(t, guildID, func() *audioStream { return loudAudioStream(12) })
+	player, mock, song := newCharacterizationPlayer(t, guildID, func() audioStream { return loudAudioStream(12) })
 
 	if err := runPlayAudioWithFade(t, player, song, fadeSettings{trimSilence: true}); err != nil {
 		t.Fatalf("playAudio returned %v, want nil", err)
@@ -95,7 +79,7 @@ func TestPlayAudioSendsEveryFrameOfALoudStream(t *testing.T) {
 
 func TestPlayAudioPublishesFadeInWhileFadingAndClearsItAfter(t *testing.T) {
 	guildID := "loopfadein"
-	player, _, song := newCharacterizationPlayer(t, guildID, func() *audioStream { return loudAudioStream(30) })
+	player, _, song := newCharacterizationPlayer(t, guildID, func() audioStream { return loudAudioStream(30) })
 
 	fade := fadeSettings{fadeIn: true, fadeInSec: 10}
 
@@ -135,7 +119,7 @@ func TestPlayAudioPublishesFadeInWhileFadingAndClearsItAfter(t *testing.T) {
 
 func TestPlayAudioLeavesTransitionArmedClearedOnReturn(t *testing.T) {
 	guildID := "looparmed"
-	player, _, song := newCharacterizationPlayer(t, guildID, func() *audioStream { return loudAudioStream(6) })
+	player, _, song := newCharacterizationPlayer(t, guildID, func() audioStream { return loudAudioStream(6) })
 
 	player.transitionArmed.Store(true)
 
@@ -150,7 +134,7 @@ func TestPlayAudioLeavesTransitionArmedClearedOnReturn(t *testing.T) {
 
 func TestPlayAudioConsumesTheFadeInNextFlag(t *testing.T) {
 	guildID := "loopfadenext"
-	player, _, song := newCharacterizationPlayer(t, guildID, func() *audioStream { return loudAudioStream(6) })
+	player, _, song := newCharacterizationPlayer(t, guildID, func() audioStream { return loudAudioStream(6) })
 
 	player.mu.Lock()
 	player.FadeInNext = true

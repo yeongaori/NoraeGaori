@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"noraegaori/internal/config"
+	"noraegaori/internal/logger"
 	ytdlpUpdater "noraegaori/internal/ytdlp"
-	"noraegaori/pkg/logger"
 )
 
 type StreamPipe struct {

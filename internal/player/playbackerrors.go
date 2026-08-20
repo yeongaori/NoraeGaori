@@ -4,10 +4,10 @@ import (
 	"errors"
 	"strings"
 
+	"noraegaori/internal/logger"
 	"noraegaori/internal/messages"
 	"noraegaori/internal/queue"
 	"noraegaori/internal/youtube"
-	"noraegaori/pkg/logger"
 
 	"github.com/bwmarrin/discordgo"
 )

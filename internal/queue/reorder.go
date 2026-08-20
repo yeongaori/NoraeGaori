@@ -4,11 +4,12 @@ import (
 	"fmt"
 
 	"noraegaori/internal/database"
-	"noraegaori/pkg/logger"
+	"noraegaori/internal/guild"
+	"noraegaori/internal/logger"
 )
 
 func SwapSongs(guildID string, pos1, pos2 int) error {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -81,7 +82,7 @@ func SwapSongs(guildID string, pos1, pos2 int) error {
 }
 
 func MoveSong(guildID string, fromPos, toPos int) error {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 

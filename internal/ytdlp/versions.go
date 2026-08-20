@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"noraegaori/internal/config"
-	"noraegaori/pkg/logger"
+	"noraegaori/internal/logger"
 )
 
 type VersionState string

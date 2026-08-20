@@ -4,11 +4,12 @@ import (
 	"fmt"
 
 	"noraegaori/internal/database"
-	"noraegaori/pkg/logger"
+	"noraegaori/internal/guild"
+	"noraegaori/internal/logger"
 )
 
 func SaveSeekTime(guildID string, songID int, seekTime int) (int, error) {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -26,7 +27,7 @@ func SaveSeekTime(guildID string, songID int, seekTime int) (int, error) {
 }
 
 func UpdateVoiceChannel(guildID, channelID string) error {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -43,7 +44,7 @@ func UpdateVoiceChannel(guildID, channelID string) error {
 }
 
 func SetPaused(guildID string, paused bool) error {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -65,7 +66,7 @@ func SetPaused(guildID string, paused bool) error {
 }
 
 func SetPlaying(guildID string, playing bool) error {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -87,7 +88,7 @@ func SetPlaying(guildID string, playing bool) error {
 }
 
 func SetLoading(guildID string, loading bool) error {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 

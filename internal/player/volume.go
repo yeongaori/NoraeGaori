@@ -3,10 +3,11 @@ package player
 import (
 	"fmt"
 	"math"
+	"noraegaori/internal/audio/dsp"
 	"time"
 
+	"noraegaori/internal/logger"
 	"noraegaori/internal/queue"
-	"noraegaori/pkg/logger"
 )
 
 func SetVolume(guildID string, volume float64) error {
@@ -76,14 +77,14 @@ func rampVolumeDown(guildID string, seconds float64) {
 	player.Ramping = true
 	player.mu.Unlock()
 
-	steps := int(seconds * framesPerSecond)
+	steps := int(seconds * dsp.FramesPerSecond)
 	if steps < 1 {
 		steps = 1
 	}
 	for i := 1; i <= steps; i++ {
 		p := float64(i) / float64(steps)
 		player.mu.Lock()
-		player.Volume = start * qsinOut(p)
+		player.Volume = start * dsp.QSinOut(p)
 		player.mu.Unlock()
 		time.Sleep(20 * time.Millisecond)
 	}

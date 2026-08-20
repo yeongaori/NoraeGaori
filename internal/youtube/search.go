@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"noraegaori/pkg/logger"
+	"noraegaori/internal/logger"
 
 	"github.com/ppalone/ytsearch"
 )

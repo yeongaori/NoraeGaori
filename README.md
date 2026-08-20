@@ -179,24 +179,41 @@ Admin commands are **text-only** (prefix commands, not slash commands). Invoke t
 
 ```
 NoraeGaori/
-├── cmd/bot/            Entry point
+├── cmd/bot/            Entry point (env + token, then app.Run)
 ├── cmd/automixcheck/   Self-check harness for AutoMix and the AutoMix panel
 ├── internal/
-│   ├── bot/            Discord session and event handlers
-│   ├── commands/       All command handlers
+│   ├── app/            Composition root: bootstrap, Discord session, shutdown
+│   ├── audio/
+│   │   ├── analysis/   Tempo, beat grid, key/Camelot detection and storage
+│   │   ├── dsp/        Filters, delay, reverb, frame conversion, easing
+│   │   ├── ffmpeg/     ffmpeg subprocess to PCM stream
+│   │   ├── opus/       Opus encoding (libopus via dlopen, WASM fallback)
+│   │   └── transition/ AutoMix styles, recipes, and the transition processor
+│   ├── commands/       Command registration, grouped by feature
+│   │   ├── admin/      forceskip, forcestop, forceremove, status
+│   │   ├── automix/    Fade/crossfade settings and the AutoMix panel
+│   │   ├── help/       Help pages
+│   │   ├── play/       play, playnext, search, autocomplete, playlists
+│   │   ├── playback/   pause, resume, seek, skip, stop, volume, repeat
+│   │   ├── queue/      Queue view, remove, swap, movetrack, skipto
+│   │   ├── settings/   Language, prefix, sponsorblock, normalization
+│   │   └── voice/      join, leave, switchvc
 │   ├── config/         Config loading with hot-reload
 │   ├── database/       SQLite
+│   ├── discord/        Discord plumbing: replies, reactions, permissions
+│   │   └── command/    Command registry, slash sync, interaction dispatch
+│   ├── guild/          Per-guild language and prefix
+│   ├── logger/         Logging
 │   ├── messages/       Locale system and embed helpers
-│   ├── player/         Audio streaming, transitions, and track analysis (libopus via dlopen, WASM fallback)
+│   ├── player/         Playback runtime: loop, transport, voice, precache
 │   ├── queue/          Queue management with caching
 │   ├── rpc/            Discord Rich Presence
 │   ├── shutdown/       Graceful shutdown coordination
-│   ├── worker/         Background worker pools
-│   ├── youtube/        InnerTube integration and search suggestions
+│   ├── vote/           Reaction-vote engine (skip, stop, remove)
+│   ├── youtube/        InnerTube integration, search, availability pool
 │   └── ytdlp/          yt-dlp version management and updater
 ├── locales/            Language files (ko.json, en.json)
 ├── config/             Runtime config (gitignored, see *.example.json)
-├── pkg/logger/         Logging
 ├── Makefile
 ├── Dockerfile
 └── docker-compose.yml

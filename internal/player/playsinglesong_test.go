@@ -33,7 +33,7 @@ func stubPlayAudioResult(t *testing.T, err error) {
 	t.Helper()
 
 	previous := newAudioStream
-	newAudioStream = func([]string, bool) (*audioStream, error) { return boundedAudioStream(3), nil }
+	newAudioStream = func([]string, bool) (audioStream, error) { return boundedAudioStream(3), nil }
 	t.Cleanup(func() { newAudioStream = previous })
 }
 

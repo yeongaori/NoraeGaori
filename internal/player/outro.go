@@ -2,9 +2,14 @@ package player
 
 import (
 	"fmt"
+	"noraegaori/internal/audio/analysis"
+	"noraegaori/internal/audio/dsp"
+	"noraegaori/internal/audio/ffmpeg"
+	"noraegaori/internal/audio/opus"
+	"noraegaori/internal/audio/transition"
 
+	"noraegaori/internal/logger"
 	"noraegaori/internal/queue"
-	"noraegaori/pkg/logger"
 )
 
 const outroMaxTailFrames = 200
@@ -15,23 +20,23 @@ type outroState struct {
 	startFrame  int
 	outroFrames int
 	appliedNext int
-	recipe      TransitionRecipe
-	processor   *transitionProcessor
-	tail        *transitionTail
+	recipe      transition.Recipe
+	processor   *transition.Processor
+	tail        *transition.Tail
 	tailBuf     []int16
 }
 
 func newOutroState() *outroState {
-	return &outroState{recipe: defaultTransitionRecipe()}
+	return &outroState{recipe: transition.DefaultRecipe()}
 }
 
-func planOutroWindow(es *streamEndState, sentFrames int, fade fadeSettings) (int, int, bool) {
-	outroFrames, _ := TransitionCrossfadeFrames(fade.autoMix, fade.autoMixBeats, fade.crossfadeSec, es.analysis)
+func planOutroWindow(es *ffmpeg.EndState, sentFrames int, fade fadeSettings) (int, int, bool) {
+	outroFrames, _ := transition.CrossfadeFrames(fade.autoMix, fade.autoMixBeats, fade.crossfadeSec, es.Analysis)
 	if outroFrames < minUsableCrossfadeFrames {
 		return 0, 0, false
 	}
 
-	effectiveEnd := es.totalFrames - es.silentTailFrames
+	effectiveEnd := es.TotalFrames - es.SilentTailFrames
 	startFrame := effectiveEnd - outroFrames
 	if startFrame < sentFrames+1 {
 		return 0, 0, false
@@ -39,7 +44,7 @@ func planOutroWindow(es *streamEndState, sentFrames int, fade fadeSettings) (int
 	return startFrame, outroFrames, true
 }
 
-func (os *outroState) plan(player *GuildPlayer, es *streamEndState, sentFrames int, fade fadeSettings) bool {
+func (os *outroState) plan(player *GuildPlayer, es *ffmpeg.EndState, sentFrames int, fade fadeSettings) bool {
 	if os.armed || os.committed {
 		return false
 	}
@@ -59,29 +64,29 @@ func (os *outroState) plan(player *GuildPlayer, es *streamEndState, sentFrames i
 		return false
 	}
 
-	analysis := es.analysis
+	trackAnalysis := es.Analysis
 	startFrame, outroFrames, ok := planOutroWindow(es, sentFrames, fade)
 	if !ok {
 		return false
 	}
-	effectiveEnd := es.totalFrames - es.silentTailFrames
+	effectiveEnd := es.TotalFrames - es.SilentTailFrames
 
 	songOverrides := songTransitionOverrides(q.Songs[0])
-	recipe, _, styleSource := ResolveOutroStyles(analysis, fade.autoMix, fade.styleOverrides, songOverrides)
+	recipe, _, styleSource := transition.ResolveOutroStyles(trackAnalysis, fade.autoMix, fade.styleOverrides, songOverrides)
 
 	periodSec := 0.0
-	if analysis != nil {
-		periodSec = analysis.PeriodSec
+	if trackAnalysis != nil {
+		periodSec = trackAnalysis.PeriodSec
 	}
 
-	loopStyle, _ := ClampLoopStyle(recipe.Loop, periodSec, outroFrames)
+	loopStyle, _ := transition.ClampLoopStyle(recipe.Loop, periodSec, outroFrames)
 	recipe.Loop = loopStyle
 
-	if analysis != nil {
-		if loopBeatCount(recipe.Loop) >= keyBarBeats {
-			startFrame = snapTransitionToBar(startFrame, es.tailStartFrame, analysis)
+	if trackAnalysis != nil {
+		if transition.LoopBeatCount(recipe.Loop) >= analysis.BarBeats {
+			startFrame = snapTransitionToBar(startFrame, es.TailStartFrame, trackAnalysis)
 		} else {
-			startFrame = snapTransitionToGrid(startFrame, es.tailStartFrame, analysis)
+			startFrame = snapTransitionToGrid(startFrame, es.TailStartFrame, trackAnalysis)
 		}
 	}
 	if startFrame < sentFrames+1 {
@@ -95,20 +100,20 @@ func (os *outroState) plan(player *GuildPlayer, es *streamEndState, sentFrames i
 	os.startFrame = startFrame
 	os.outroFrames = effectiveEnd - startFrame
 	os.recipe = recipe
-	os.processor = newTransitionProcessor(recipe, os.outroFrames, periodSec)
+	os.processor = transition.NewProcessor(recipe, os.outroFrames, periodSec)
 	os.appliedNext = 0
 
 	logger.Debugf("planned at frame %d (%d frames) for guild: %s", startFrame, os.outroFrames, guildID)
 	logger.Debugf("recipe %s (%s) [%s] for guild: %s", recipe,
-		describeOutroInput(analysis), describeStyleSources(styleSource), guildID)
+		describeOutroInput(trackAnalysis), describeStyleSources(styleSource), guildID)
 	return true
 }
 
-func describeOutroInput(a *TrackAnalysis) string {
+func describeOutroInput(a *analysis.TrackAnalysis) string {
 	if a == nil {
 		return "analysis unavailable"
 	}
-	return fmt.Sprintf("bpm=%.1f key=%s period=%.4f", a.BPM, camelotCode(a.Tonic, a.Minor), a.PeriodSec)
+	return fmt.Sprintf("bpm=%.1f key=%s period=%.4f", a.BPM, analysis.CamelotCode(a.Tonic, a.Minor), a.PeriodSec)
 }
 
 func (os *outroState) cancel() {
@@ -143,27 +148,18 @@ func (os *outroState) process(frame []int16, sentFrames int, volume float64) {
 		progress = 1
 	}
 
-	buf := os.processor.processA(frame, progress)
-	gain, _ := os.processor.gains(progress)
-	gain *= volume
-
-	if !os.processor.gainInitialized {
-		os.processor.previousAGain = gain
-		os.processor.gainInitialized = true
-	}
-	applyGainRamp(buf, os.processor.previousAGain, gain)
-	os.processor.previousAGain = gain
-
-	floatToFrame(buf, frame)
+	buf := os.processor.ProcessA(frame, progress)
+	os.processor.ApplyGainA(buf, progress, volume)
+	dsp.FloatToFrame(buf, frame)
 	os.appliedNext++
 }
 
-func (os *outroState) flush(player *GuildPlayer, stopCh chan struct{}, enc *OpusEncoder, sentFrames *int) {
+func (os *outroState) flush(player *GuildPlayer, stopCh chan struct{}, enc *opus.Encoder, sentFrames *int) {
 	if !os.committed || os.processor == nil {
 		return
 	}
 	if os.tail == nil {
-		os.tail = os.processor.makeTail(os.processor.previousAGain)
+		os.tail = os.processor.MakeTail(os.processor.LastGain())
 	}
 	if os.tail == nil {
 		return
@@ -177,7 +173,7 @@ func (os *outroState) flush(player *GuildPlayer, stopCh chan struct{}, enc *Opus
 		for i := range os.tailBuf {
 			os.tailBuf[i] = 0
 		}
-		more := os.tail.apply(os.tailBuf)
+		more := os.tail.Apply(os.tailBuf)
 
 		opusBuffer := make([]byte, 1500)
 		opusLen, err := enc.Encode(os.tailBuf, opusBuffer)

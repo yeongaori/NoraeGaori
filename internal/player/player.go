@@ -4,13 +4,16 @@ import (
 	"context"
 	"errors"
 	"io"
+	"noraegaori/internal/audio/analysis"
+	"noraegaori/internal/audio/dsp"
+	"noraegaori/internal/audio/transition"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"noraegaori/internal/logger"
 	"noraegaori/internal/queue"
 	"noraegaori/internal/youtube"
-	"noraegaori/pkg/logger"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -18,12 +21,11 @@ import (
 var ErrQueueEmpty = errors.New("queue is empty after skip")
 
 const (
-	channels     = 2
-	frameRate    = 48000
-	frameSize    = 960
-	maxRetries   = 3
-	lockTimeout  = 30 * time.Second
-	stallTimeout = 30 * time.Second
+	channels    = dsp.Channels
+	frameRate   = dsp.SampleRate
+	frameSize   = dsp.FrameSize
+	maxRetries  = 3
+	lockTimeout = 30 * time.Second
 
 	healthyPlaybackFrames = 500
 	framePacingWarnDelay  = 100 * time.Millisecond
@@ -77,7 +79,7 @@ type fadeSettings struct {
 	crossfadeSec   float64
 	autoMixBeats   int
 	repeatMode     int
-	styleOverrides TransitionStyleOverrides
+	styleOverrides transition.StyleOverrides
 }
 
 var (
@@ -164,7 +166,7 @@ type PreCache struct {
 	SongID     int
 	Timestamp  time.Time
 	CancelFunc context.CancelFunc
-	Analysis   *TrackAnalysis
+	Analysis   *analysis.TrackAnalysis
 }
 
 func acquirePlayLock(guildID string) *sync.Mutex {

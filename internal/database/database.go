@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"noraegaori/pkg/logger"
+	"noraegaori/internal/logger"
 
 	_ "github.com/mattn/go-sqlite3"
 )

@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"noraegaori/internal/logger"
 	ytdlpUpdater "noraegaori/internal/ytdlp"
-	"noraegaori/pkg/logger"
 
 	"github.com/lrstanley/go-ytdlp"
 	"github.com/ppalone/ytsearch"

@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"noraegaori/internal/discord/command"
 	"sort"
 	"testing"
 
@@ -131,7 +132,7 @@ func registeredCommandFingerprint(t *testing.T) ([]string, []string) {
 
 	InitializeCommands()
 
-	snapshot := snapshotCommands()
+	snapshot := command.Snapshot()
 	fingerprints := make([]string, 0, len(snapshot))
 	for name, cmd := range snapshot {
 		fingerprints = append(fingerprints, fmt.Sprintf("%s|admin=%v|textonly=%v|opts=%d|handler=%v|autocomplete=%v",
@@ -139,12 +140,11 @@ func registeredCommandFingerprint(t *testing.T) ([]string, []string) {
 	}
 	sort.Strings(fingerprints)
 
-	commandsMu.RLock()
+	aliases := command.SnapshotAliases()
 	pairs := make([]string, 0, len(aliases))
 	for alias, target := range aliases {
 		pairs = append(pairs, alias+"="+target)
 	}
-	commandsMu.RUnlock()
 	sort.Strings(pairs)
 
 	return fingerprints, pairs

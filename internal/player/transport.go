@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"noraegaori/internal/logger"
 	"noraegaori/internal/queue"
 	"noraegaori/internal/youtube"
-	"noraegaori/pkg/logger"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -342,7 +342,7 @@ func Skip(session *discordgo.Session, guildID string) error {
 		player.mu.Unlock()
 
 		if pending != nil {
-			pending.Stream.stop()
+			pending.Stream.Stop()
 		}
 	}
 
@@ -504,7 +504,7 @@ func skipInternal(session *discordgo.Session, guildID string) error {
 		player.mu.Unlock()
 
 		if pending != nil {
-			pending.Stream.stop()
+			pending.Stream.Stop()
 		}
 	}
 
@@ -634,7 +634,7 @@ func stopInternal(guildID string) error {
 	player.mu.Unlock()
 
 	if pending != nil {
-		pending.Stream.stop()
+		pending.Stream.Stop()
 	}
 
 	if err := LeaveVoice(guildID); err != nil {

@@ -2,12 +2,13 @@ package player
 
 import (
 	"context"
+	"noraegaori/internal/audio/analysis"
 	"sync"
 	"time"
 
+	"noraegaori/internal/logger"
 	"noraegaori/internal/queue"
 	"noraegaori/internal/youtube"
-	"noraegaori/pkg/logger"
 )
 
 const (
@@ -184,7 +185,7 @@ func runAnalysisBackfillPass(ctx context.Context, guildID string, bitrate int) (
 		if AnalysisFailed(song.URL) {
 			continue
 		}
-		if LoadTrackAnalysis(song.URL, AnalysisSegmentHead) != nil {
+		if analysis.LoadTrackAnalysis(song.URL, analysis.SegmentHead) != nil {
 			continue
 		}
 		if GetPreCache(guildID, song.ID) != nil {
@@ -215,7 +216,7 @@ func analyzeBackfillSong(ctx context.Context, guildID string, song *queue.Song, 
 		if ctx.Err() != nil {
 			return nil
 		}
-		if LoadTrackAnalysis(song.URL, AnalysisSegmentHead) != nil {
+		if analysis.LoadTrackAnalysis(song.URL, analysis.SegmentHead) != nil {
 			return nil
 		}
 
@@ -236,7 +237,7 @@ func analyzeBackfillSong(ctx context.Context, guildID string, song *queue.Song, 
 			return nil
 		}
 
-		analysis, err := analyzeStreamHead(songCtx, streamURL)
+		head, err := analyzeStreamHead(songCtx, streamURL)
 		if err != nil {
 			if ctx.Err() == nil {
 				markAnalysisFailed(song.URL)
@@ -245,12 +246,12 @@ func analyzeBackfillSong(ctx context.Context, guildID string, song *queue.Song, 
 			return nil
 		}
 
-		if saveErr := SaveTrackAnalysis(song.URL, AnalysisSegmentHead, analysis); saveErr != nil {
+		if saveErr := analysis.SaveTrackAnalysis(song.URL, analysis.SegmentHead, head); saveErr != nil {
 			logger.Warnf("Failed to save head analysis for %s: %v", song.Title, saveErr)
 		}
 		logger.Debugf("Analyzed head for: %s (BPM %.1f, key %s / %s, confidence %.3f)",
-			song.Title, analysis.BPM, keyName(analysis.Tonic, analysis.Minor),
-			camelotCode(analysis.Tonic, analysis.Minor), analysis.KeyConfidence)
+			song.Title, head.BPM, analysis.KeyName(head.Tonic, head.Minor),
+			analysis.CamelotCode(head.Tonic, head.Minor), head.KeyConfidence)
 		analyzed = true
 		return nil
 	}); slotErr != nil {

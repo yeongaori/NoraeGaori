@@ -7,7 +7,8 @@ import (
 
 	"noraegaori/internal/config"
 	"noraegaori/internal/database"
-	"noraegaori/pkg/logger"
+	"noraegaori/internal/guild"
+	"noraegaori/internal/logger"
 )
 
 func SetRepeatMode(guildID string, mode int) error {
@@ -15,7 +16,7 @@ func SetRepeatMode(guildID string, mode int) error {
 		return fmt.Errorf("invalid repeat mode: %d", mode)
 	}
 
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -43,7 +44,7 @@ func SetVolume(guildID string, volume float64) error {
 		return fmt.Errorf("volume must be between 0 and 1000, got: %g", volume)
 	}
 
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -159,7 +160,7 @@ func GetNormalization(guildID string) (bool, error) {
 }
 
 func SetSponsorBlock(guildID string, enabled bool) error {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -183,7 +184,7 @@ func SetSponsorBlock(guildID string, enabled bool) error {
 }
 
 func SetShowStartedTrack(guildID string, enabled bool) error {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -207,7 +208,7 @@ func SetShowStartedTrack(guildID string, enabled bool) error {
 }
 
 func SetNormalization(guildID string, enabled bool) error {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 

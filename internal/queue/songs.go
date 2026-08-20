@@ -6,11 +6,12 @@ import (
 	"strings"
 
 	"noraegaori/internal/database"
-	"noraegaori/pkg/logger"
+	"noraegaori/internal/guild"
+	"noraegaori/internal/logger"
 )
 
 func CreateQueue(guildID, textChannelID, voiceChannelID string) error {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -38,7 +39,7 @@ func CreateQueue(guildID, textChannelID, voiceChannelID string) error {
 }
 
 func DeleteQueue(guildID string) error {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -58,7 +59,7 @@ func DeleteQueue(guildID string) error {
 }
 
 func DeleteGuildData(guildID string) error {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -78,8 +79,7 @@ func DeleteGuildData(guildID string) error {
 	}
 
 	InvalidateCache(guildID)
-	invalidatePrefixCache(guildID)
-	invalidateLanguageCache(guildID)
+	guild.InvalidateCaches(guildID)
 	logger.Infof("All data deleted for guild: %s", guildID)
 	return nil
 }
@@ -89,7 +89,7 @@ func AddSongsBatch(guildID string, songs []*Song, position int) error {
 		return nil
 	}
 
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -169,7 +169,7 @@ func AddSongsBatch(guildID string, songs []*Song, position int) error {
 }
 
 func AddSong(guildID string, song *Song, position int) error {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -238,7 +238,7 @@ func AddSong(guildID string, song *Song, position int) error {
 }
 
 func UpdateSongSeekTime(guildID string, songID int, seekTime int) error {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -256,7 +256,7 @@ func UpdateSongSeekTime(guildID string, songID int, seekTime int) error {
 }
 
 func RemoveFirstSong(guildID string) error {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -302,7 +302,7 @@ func RemoveFirstSong(guildID string) error {
 }
 
 func RemoveSong(guildID string, position int) error {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -346,7 +346,7 @@ func RemoveSong(guildID string, position int) error {
 }
 
 func SkipToPosition(guildID string, targetIndex int) error {
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -410,7 +410,7 @@ func RemoveSongsByIDs(guildID string, songIDs []int) error {
 		return nil
 	}
 
-	lock := acquireLock(guildID)
+	lock := guild.AcquireLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 

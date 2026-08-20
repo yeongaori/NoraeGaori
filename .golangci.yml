@@ -63,7 +63,7 @@ linters:
         source: UpdateResponseEmbed\(
       - linters:
           - unused
-        path: internal/player/dsp\.go
+        path: internal/audio/dsp/dsp\.go
         source: func \(.*\) reset\(\)
 
 formatters:

@@ -3,31 +3,33 @@ package player
 import (
 	"fmt"
 	"math"
+	"noraegaori/internal/audio/analysis"
+	"noraegaori/internal/audio/dsp"
+	"noraegaori/internal/audio/ffmpeg"
+	"noraegaori/internal/audio/opus"
+	"noraegaori/internal/audio/transition"
 	"strings"
 	"sync/atomic"
 
+	"noraegaori/internal/logger"
 	"noraegaori/internal/queue"
 	"noraegaori/internal/youtube"
-	"noraegaori/pkg/logger"
 )
 
 const (
 	tailMarginSec            = 4.0
-	crossfadeMinSec          = 3.0
-	crossfadeMaxSec          = 20.0
-	fallbackCrossfadeSec     = 8.0
 	minUsableCrossfadeFrames = 100
 	fallbackSlideFrames      = 25
 )
 
 type PendingStream struct {
 	SongID            int
-	Stream            *audioStream
-	Encoder           *OpusEncoder
+	Stream            audioStream
+	Encoder           *opus.Encoder
 	FramesConsumed    int
 	LeadingSkipFrames int
 	StartOffsetSec    float64
-	Tail              *transitionTail
+	Tail              *transition.Tail
 }
 
 type crossfadeState struct {
@@ -40,7 +42,7 @@ type crossfadeState struct {
 	fadeGains       bool
 	autoMix         bool
 	scope           *logger.Scoped
-	bStream         *audioStream
+	bStream         audioStream
 	nextSongID      int
 	startOffsetSec  float64
 	transitionFrame int
@@ -52,8 +54,8 @@ type crossfadeState struct {
 	bFramesConsumed int
 	bLeadSkipFrames int
 	mixBuf          []int16
-	recipe          TransitionRecipe
-	processor       *transitionProcessor
+	recipe          transition.Recipe
+	processor       *transition.Processor
 	loopFrames      int
 	loopBuffer      [][]int16
 	loopIndex       int
@@ -61,7 +63,7 @@ type crossfadeState struct {
 	normalization   bool
 	bitrate         int
 	bRetried        bool
-	bRefetch        atomic.Pointer[audioStream]
+	bRefetch        atomic.Pointer[streamRef]
 	bRefetching     atomic.Bool
 	bAborted        atomic.Bool
 }
@@ -71,30 +73,30 @@ func newCrossfadeState() *crossfadeState {
 		autoMix: true,
 		scope:   logger.Scope("AutoMix"),
 		mixBuf:  make([]int16, frameSize*channels),
-		recipe:  defaultTransitionRecipe(),
+		recipe:  transition.DefaultRecipe(),
 	}
 }
 
-func snapTransitionToGrid(target, tailStartFrame int, a *TrackAnalysis) int {
+func snapTransitionToGrid(target, tailStartFrame int, a *analysis.TrackAnalysis) int {
 	if a.PeriodSec <= 0 {
 		return target
 	}
-	periodFrames := a.PeriodSec * framesPerSecond
-	firstBeatFrame := float64(tailStartFrame) + a.FirstBeat*framesPerSecond
+	periodFrames := a.PeriodSec * dsp.FramesPerSecond
+	firstBeatFrame := float64(tailStartFrame) + a.FirstBeat*dsp.FramesPerSecond
 	k := math.Round((float64(target) - firstBeatFrame) / periodFrames)
 	return int(math.Round(firstBeatFrame + k*periodFrames))
 }
 
-func snapTransitionToBar(target, tailStartFrame int, a *TrackAnalysis) int {
+func snapTransitionToBar(target, tailStartFrame int, a *analysis.TrackAnalysis) int {
 	if a.PeriodSec <= 0 {
 		return target
 	}
-	periodFrames := a.PeriodSec * framesPerSecond
-	firstBeatFrame := float64(tailStartFrame) + a.FirstBeat*framesPerSecond
+	periodFrames := a.PeriodSec * dsp.FramesPerSecond
+	firstBeatFrame := float64(tailStartFrame) + a.FirstBeat*dsp.FramesPerSecond
 	beat := math.Round((float64(target) - firstBeatFrame) / periodFrames)
 	phase := float64(a.DownbeatPhase)
-	bars := math.Round((beat - phase) / keyBarBeats)
-	beat = phase + bars*keyBarBeats
+	bars := math.Round((beat - phase) / analysis.BarBeats)
+	beat = phase + bars*analysis.BarBeats
 	return int(math.Round(firstBeatFrame + beat*periodFrames))
 }
 
@@ -115,35 +117,35 @@ func nextCrossfadeCandidate(guildID string) (*queue.Song, *queue.Song, string) {
 	return q.Songs[0], q.Songs[1], nextURL
 }
 
-func analysisPeriodSec(a *TrackAnalysis) float64 {
+func analysisPeriodSec(a *analysis.TrackAnalysis) float64 {
 	if a == nil {
 		return 0
 	}
 	return a.PeriodSec
 }
 
-func analysisFirstBeat(a *TrackAnalysis) float64 {
+func analysisFirstBeat(a *analysis.TrackAnalysis) float64 {
 	if a == nil {
 		return 0
 	}
 	return a.FirstBeat
 }
 
-func resolveSlideFrames(a *TrackAnalysis) int {
+func resolveSlideFrames(a *analysis.TrackAnalysis) int {
 	if a == nil {
 		return fallbackSlideFrames
 	}
 
-	slideFrames := int(math.Round(a.PeriodSec * framesPerSecond))
+	slideFrames := int(math.Round(a.PeriodSec * dsp.FramesPerSecond))
 	if slideFrames < 1 {
 		return fallbackSlideFrames
 	}
 	return slideFrames
 }
 
-func resolveTransitionFrame(transitionFrame, maxStart, sentFrames, tailStartFrame int, beatAligned bool, loopBeats int, a *TrackAnalysis) int {
+func resolveTransitionFrame(transitionFrame, maxStart, sentFrames, tailStartFrame int, beatAligned bool, loopBeats int, a *analysis.TrackAnalysis) int {
 	if beatAligned {
-		transitionFrame -= int(tailMarginSec * framesPerSecond)
+		transitionFrame -= int(tailMarginSec * dsp.FramesPerSecond)
 		transitionFrame = snapTransitionToBeats(transitionFrame, tailStartFrame, loopBeats, a)
 	}
 	if transitionFrame > maxStart {
@@ -155,11 +157,11 @@ func resolveTransitionFrame(transitionFrame, maxStart, sentFrames, tailStartFram
 	return transitionFrame
 }
 
-func snapTransitionToBeats(transitionFrame, tailStartFrame, loopBeats int, a *TrackAnalysis) int {
+func snapTransitionToBeats(transitionFrame, tailStartFrame, loopBeats int, a *analysis.TrackAnalysis) int {
 	if a == nil {
 		return transitionFrame
 	}
-	if loopBeats >= keyBarBeats {
+	if loopBeats >= analysis.BarBeats {
 		return snapTransitionToBar(transitionFrame, tailStartFrame, a)
 	}
 	return snapTransitionToGrid(transitionFrame, tailStartFrame, a)
@@ -173,7 +175,7 @@ type crossfadePlan struct {
 	bitrate         int
 	trimSilence     bool
 	fadeGains       bool
-	bStream         *audioStream
+	bStream         audioStream
 	nextSongID      int
 	startOffsetSec  float64
 	transitionFrame int
@@ -181,14 +183,14 @@ type crossfadePlan struct {
 	minUsableFrames int
 	totalFrames     int
 	slideFrames     int
-	recipe          TransitionRecipe
+	recipe          transition.Recipe
 	loopFrames      int
 	periodSec       float64
 	flatGains       bool
 	description     string
 }
 
-func (cs *crossfadeState) buildPlan(player *GuildPlayer, es *streamEndState, sentFrames int, fade fadeSettings, normalization bool, bitrate int) *crossfadePlan {
+func (cs *crossfadeState) buildPlan(player *GuildPlayer, es *ffmpeg.EndState, sentFrames int, fade fadeSettings, normalization bool, bitrate int) *crossfadePlan {
 	if (!fade.autoMix && !fade.crossfade) || cs.armed {
 		return nil
 	}
@@ -202,31 +204,31 @@ func (cs *crossfadeState) buildPlan(player *GuildPlayer, es *streamEndState, sen
 		return nil
 	}
 
-	var aAnal *TrackAnalysis
-	var bAnal *TrackAnalysis
+	var aAnal *analysis.TrackAnalysis
+	var bAnal *analysis.TrackAnalysis
 	beatAligned := fade.autoMix
 	if fade.autoMix {
-		aAnal = es.analysis
-		bAnal = LookupAnalysis(guildID, next, AnalysisSegmentHead)
+		aAnal = es.Analysis
+		bAnal = LookupAnalysis(guildID, next, analysis.SegmentHead)
 	}
 	scope := logger.Scope("Crossfade")
 	if beatAligned {
 		scope = logger.Scope("AutoMix")
 	}
 
-	crossfadeFrames, crossfadeSec := TransitionCrossfadeFrames(fade.autoMix, fade.autoMixBeats, fade.crossfadeSec, aAnal)
+	crossfadeFrames, crossfadeSec := transition.CrossfadeFrames(fade.autoMix, fade.autoMixBeats, fade.crossfadeSec, aAnal)
 	if crossfadeFrames < 1 {
 		return nil
 	}
 
 	songOverrides := songTransitionOverrides(current)
-	recipe, _, styleSource := ResolveTransitionStyles(aAnal, bAnal, fade.autoMix, fade.styleOverrides, songOverrides)
+	recipe, _, styleSource := transition.ResolveStyles(aAnal, bAnal, fade.autoMix, fade.styleOverrides, songOverrides)
 
 	periodSec := analysisPeriodSec(aAnal)
 
-	loopStyle, loopFrames := ClampLoopStyle(recipe.Loop, periodSec, crossfadeFrames)
+	loopStyle, loopFrames := transition.ClampLoopStyle(recipe.Loop, periodSec, crossfadeFrames)
 	recipe.Loop = loopStyle
-	loopBeats := loopBeatCount(recipe.Loop)
+	loopBeats := transition.LoopBeatCount(recipe.Loop)
 
 	bDuration := youtube.ParseDurationToSeconds(next.Duration)
 	if bDuration > 0 && float64(bDuration) < crossfadeSec+5 {
@@ -234,9 +236,9 @@ func (cs *crossfadeState) buildPlan(player *GuildPlayer, es *streamEndState, sen
 		return nil
 	}
 
-	effectiveEnd := es.totalFrames - es.silentTailFrames
-	if es.silentTailFrames > 0 {
-		scope.Debugf("trimming %d silent tail frames, effective end %d of %d for guild: %s", es.silentTailFrames, effectiveEnd, es.totalFrames, guildID)
+	effectiveEnd := es.TotalFrames - es.SilentTailFrames
+	if es.SilentTailFrames > 0 {
+		scope.Debugf("trimming %d silent tail frames, effective end %d of %d for guild: %s", es.SilentTailFrames, effectiveEnd, es.TotalFrames, guildID)
 	}
 
 	maxStart := effectiveEnd - crossfadeFrames
@@ -244,10 +246,10 @@ func (cs *crossfadeState) buildPlan(player *GuildPlayer, es *streamEndState, sen
 		return nil
 	}
 
-	transitionFrame := resolveTransitionFrame(effectiveEnd-crossfadeFrames, maxStart, sentFrames, es.tailStartFrame, beatAligned, loopBeats, aAnal)
+	transitionFrame := resolveTransitionFrame(effectiveEnd-crossfadeFrames, maxStart, sentFrames, es.TailStartFrame, beatAligned, loopBeats, aAnal)
 	startOffsetSec := analysisFirstBeat(bAnal)
 
-	bArgs := buildFFmpegArgs(nextURL, startOffsetSec, normalization)
+	bArgs := ffmpeg.Args(nextURL, startOffsetSec, normalization)
 	bStream, err := newAudioStream(bArgs, fade.autoMix || fade.trimSilence)
 	if err != nil {
 		scope.Debugf("failed to start next stream for guild %s: %v", guildID, err)
@@ -302,11 +304,11 @@ func (cs *crossfadeState) commit(p *crossfadePlan) {
 	cs.loopFrames = p.loopFrames
 	cs.loopBuffer = nil
 	cs.loopIndex = 0
-	cs.processor = newTransitionProcessor(p.recipe, p.crossfadeFrames, p.periodSec)
-	cs.processor.flatGains = p.flatGains
+	cs.processor = transition.NewProcessor(p.recipe, p.crossfadeFrames, p.periodSec)
+	cs.processor.SetFlatGains(p.flatGains)
 }
 
-func (cs *crossfadeState) plan(player *GuildPlayer, es *streamEndState, sentFrames int, fade fadeSettings, normalization bool, bitrate int) bool {
+func (cs *crossfadeState) plan(player *GuildPlayer, es *ffmpeg.EndState, sentFrames int, fade fadeSettings, normalization bool, bitrate int) bool {
 	p := cs.buildPlan(player, es, sentFrames, fade, normalization, bitrate)
 	if p == nil {
 		return false
@@ -319,11 +321,11 @@ func (cs *crossfadeState) plan(player *GuildPlayer, es *streamEndState, sentFram
 	return true
 }
 
-func songTransitionOverrides(song *queue.Song) TransitionStyleOverrides {
+func songTransitionOverrides(song *queue.Song) transition.StyleOverrides {
 	if song == nil {
-		return TransitionStyleOverrides{}
+		return transition.StyleOverrides{}
 	}
-	return TransitionStyleOverrides{
+	return transition.StyleOverrides{
 		Volume: song.AutoMixStyleVolume,
 		EQ:     song.AutoMixStyleEQ,
 		Filter: song.AutoMixStyleFilter,
@@ -340,25 +342,25 @@ func describeStyleSources(source map[string]string) string {
 	return strings.Join(parts, " ")
 }
 
-func describeTransitionInputs(a, b *TrackAnalysis) string {
+func describeTransitionInputs(a, b *analysis.TrackAnalysis) string {
 	if a == nil || b == nil {
 		return "analysis unavailable"
 	}
 	raw := math.Abs(b.BPM-a.BPM) / a.BPM
-	folded, factor := tempoDeltaFactor(a.BPM, b.BPM)
+	folded, factor := analysis.TempoDeltaFactor(a.BPM, b.BPM)
 	return fmt.Sprintf("bpmA=%.1f bpmB=%.1f delta=%.4f raw=%.4f factorB=%.1fx keyA=%s keyB=%s confA=%.4f confB=%.4f distance=%d",
 		a.BPM, b.BPM, folded, raw, factor,
-		camelotCode(a.Tonic, a.Minor), camelotCode(b.Tonic, b.Minor),
-		a.KeyConfidence, b.KeyConfidence, camelotDistance(a, b))
+		analysis.CamelotCode(a.Tonic, a.Minor), analysis.CamelotCode(b.Tonic, b.Minor),
+		a.KeyConfidence, b.KeyConfidence, analysis.CamelotDistance(a, b))
 }
 
 func (cs *crossfadeState) bReady() bool {
-	return len(cs.bStream.pcmChan) > 0 || cs.bStream.endState.Load() != nil
+	return len(cs.bStream.PCM()) > 0 || cs.bStream.EndState() != nil
 }
 
 func (cs *crossfadeState) bFailed() bool {
 	select {
-	case <-cs.bStream.errChan:
+	case <-cs.bStream.Errs():
 		return true
 	default:
 		return false
@@ -413,21 +415,21 @@ func (cs *crossfadeState) startNextStreamRefetch(player *GuildPlayer) {
 			return
 		}
 
-		stream, err := newAudioStream(buildFFmpegArgs(freshURL, startOffsetSec, normalization), collectTail)
+		stream, err := newAudioStream(ffmpeg.Args(freshURL, startOffsetSec, normalization), collectTail)
 		if err != nil {
 			cs.scope.Debugf("refetched stream failed to start for guild %s: %v", guildID, err)
 			return
 		}
 		if cs.bAborted.Load() {
-			stream.stop()
+			stream.Stop()
 			return
 		}
-		if previous := cs.bRefetch.Swap(stream); previous != nil {
-			previous.stop()
+		if previous := cs.bRefetch.Swap(&streamRef{stream: stream}); previous != nil {
+			previous.stream.Stop()
 		}
 		if cs.bAborted.Load() {
 			if orphan := cs.bRefetch.Swap(nil); orphan != nil {
-				orphan.stop()
+				orphan.stream.Stop()
 			}
 		}
 	}()
@@ -443,13 +445,13 @@ func (cs *crossfadeState) cancel(reason string) {
 func (cs *crossfadeState) pullBFrame() []int16 {
 	for {
 		select {
-		case bf, ok := <-cs.bStream.pcmChan:
+		case bf, ok := <-cs.bStream.PCM():
 			if !ok {
 				return nil
 			}
 			cs.bFramesConsumed++
 			if cs.trimSilence && !cs.bLoudSeen {
-				if frameSilent(bf) {
+				if dsp.FrameSilent(bf) {
 					cs.bLeadSkipFrames++
 					continue
 				}
@@ -462,16 +464,16 @@ func (cs *crossfadeState) pullBFrame() []int16 {
 	}
 }
 
-func (cs *crossfadeState) mixAndSend(player *GuildPlayer, stopCh chan struct{}, aFrame, bFrame []int16, volume float64, enc *OpusEncoder) error {
+func (cs *crossfadeState) mixAndSend(player *GuildPlayer, stopCh chan struct{}, aFrame, bFrame []int16, volume float64, enc *opus.Encoder) error {
 	progress := 0.0
 	if cs.crossfadeFrames > 0 {
 		progress = float64(cs.mixedFrames) / float64(cs.crossfadeFrames)
 	}
 
 	if cs.processor != nil {
-		aBuf := cs.processor.processA(aFrame, progress)
-		bBuf := cs.processor.processB(bFrame, progress)
-		cs.processor.applyGains(aBuf, bBuf, progress, volume)
+		aBuf := cs.processor.ProcessA(aFrame, progress)
+		bBuf := cs.processor.ProcessB(bFrame, progress)
+		cs.processor.ApplyGains(aBuf, bBuf, progress, volume)
 
 		for i := 0; i < len(cs.mixBuf); i++ {
 			sample := aBuf[i] + bBuf[i]
@@ -487,8 +489,8 @@ func (cs *crossfadeState) mixAndSend(player *GuildPlayer, stopCh chan struct{}, 
 		aGain := volume
 		bGain := volume
 		if cs.fadeGains {
-			aGain = volume * qsinOut(progress)
-			bGain = volume * qsinIn(progress)
+			aGain = volume * dsp.QSinOut(progress)
+			bGain = volume * dsp.QSinIn(progress)
 		}
 
 		for i := 0; i < len(cs.mixBuf); i++ {
@@ -527,10 +529,10 @@ func (cs *crossfadeState) mixAndSend(player *GuildPlayer, stopCh chan struct{}, 
 	}
 }
 
-func (cs *crossfadeState) handoff(player *GuildPlayer, enc *OpusEncoder) {
-	var tail *transitionTail
+func (cs *crossfadeState) handoff(player *GuildPlayer, enc *opus.Encoder) {
+	var tail *transition.Tail
 	if cs.processor != nil {
-		tail = cs.processor.makeTail(cs.processor.previousAGain)
+		tail = cs.processor.MakeTail(cs.processor.LastGain())
 	}
 
 	player.mu.Lock()
@@ -549,7 +551,7 @@ func (cs *crossfadeState) handoff(player *GuildPlayer, enc *OpusEncoder) {
 	cs.scope.Debugf("handed off to song ID %d after %d crossfade frames for guild: %s", cs.nextSongID, cs.mixedFrames, player.GuildID)
 }
 
-func (cs *crossfadeState) consume(player *GuildPlayer, stopCh chan struct{}, pcmData []int16, volume float64, enc *OpusEncoder, sentFrames *int) (bool, error) {
+func (cs *crossfadeState) consume(player *GuildPlayer, stopCh chan struct{}, pcmData []int16, volume float64, enc *opus.Encoder, sentFrames *int) (bool, error) {
 	if !cs.armed || cs.handedOff {
 		return false, nil
 	}
@@ -563,7 +565,7 @@ func (cs *crossfadeState) consume(player *GuildPlayer, stopCh chan struct{}, pcm
 				cs.startNextStreamRefetch(player)
 			}
 			if refetched := cs.bRefetch.Swap(nil); refetched != nil {
-				cs.bStream = refetched
+				cs.bStream = refetched.stream
 				cs.scope.Debugf("next stream reopened with a fresh URL for guild: %s", cs.guildID)
 			} else if cs.bRefetching.Load() {
 				cs.slideTransition("next stream refetching")
@@ -600,7 +602,7 @@ func (cs *crossfadeState) consume(player *GuildPlayer, stopCh chan struct{}, pcm
 	return false, nil
 }
 
-func (cs *crossfadeState) finishOnDrain(player *GuildPlayer, stopCh chan struct{}, enc *OpusEncoder, sentFrames *int) (bool, error) {
+func (cs *crossfadeState) finishOnDrain(player *GuildPlayer, stopCh chan struct{}, enc *opus.Encoder, sentFrames *int) (bool, error) {
 	if !cs.armed || cs.handedOff {
 		return false, nil
 	}
@@ -654,9 +656,9 @@ func (cs *crossfadeState) loopFrame(pcmData []int16) []int16 {
 func (cs *crossfadeState) abort() {
 	cs.bAborted.Store(true)
 	if cs.bStream != nil && !cs.handedOff {
-		cs.bStream.stop()
+		cs.bStream.Stop()
 	}
 	if pending := cs.bRefetch.Swap(nil); pending != nil {
-		pending.stop()
+		pending.stream.Stop()
 	}
 }

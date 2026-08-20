@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"noraegaori/internal/logger"
 	"noraegaori/internal/messages"
-	"noraegaori/pkg/logger"
 )
 
 type InnertubeClient struct {
