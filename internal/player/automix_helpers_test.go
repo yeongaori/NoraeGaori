@@ -93,14 +93,6 @@ func filterResponse(setup func(*dsp.Biquad), frequency float64) float64 {
 	return lastRMS / (10000 / math.Sqrt2)
 }
 
-func TestCheckVolumeStyles(t *testing.T)      { checkVolumeStyles(&checkCollector{t: t}) }
-func TestCheckRecipeMatrix(t *testing.T)      { checkRecipeMatrix(&checkCollector{t: t}) }
-func TestCheckLongWindows(t *testing.T)       { checkLongWindows(&checkCollector{t: t}) }
-func TestCheckEdgeWindows(t *testing.T)       { checkEdgeWindows(&checkCollector{t: t}) }
-func TestCheckTails(t *testing.T)             { checkTails(&checkCollector{t: t}) }
-func TestCheckLoopBuffer(t *testing.T)        { checkLoopBuffer(&checkCollector{t: t}) }
-func TestCheckStyleNames(t *testing.T)        { checkStyleNames(&checkCollector{t: t}) }
-func TestCheckSelector(t *testing.T)          { checkSelector(&checkCollector{t: t}) }
 func TestCheckCamelot(t *testing.T)           { checkCamelot(&checkCollector{t: t}) }
 func TestCheckKeyDetection(t *testing.T)      { checkKeyDetection(&checkCollector{t: t}) }
 func TestCheckBeatAnalysis(t *testing.T)      { checkBeatAnalysis(&checkCollector{t: t}) }

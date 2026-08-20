@@ -1,95 +1,104 @@
 package player
 
 import (
-	"fmt"
 	"math"
+	"testing"
 
 	"noraegaori/internal/audio/analysis"
 	"noraegaori/internal/audio/transition"
 )
 
-func checkVolumeStyles(c *checkCollector) {
-	styles := []transition.VolumeStyle{
-		transition.VolumeSmoothCrossfade, transition.VolumeOverlap, transition.VolumeFadeInFadeOut,
-		transition.VolumeCutInFadeOut, transition.VolumeFadeInCutOut,
-	}
+var allVolumeStyles = []transition.VolumeStyle{
+	transition.VolumeSmoothCrossfade, transition.VolumeOverlap, transition.VolumeFadeInFadeOut,
+	transition.VolumeCutInFadeOut, transition.VolumeFadeInCutOut,
+}
 
-	allBounded := true
-	detail := ""
-	for _, style := range styles {
-		recipe := transition.DefaultRecipe()
-		recipe.Volume = style
-		processor := transition.NewProcessor(recipe, 200, 0.5)
-		for step := 0; step <= 100; step++ {
-			progress := float64(step) / 100
-			aGain, bGain := processor.Gains(progress)
-			if math.IsNaN(aGain) || math.IsNaN(bGain) || aGain < 0 || bGain < 0 || aGain > 1.01 || bGain > 1.01 {
-				allBounded = false
-				detail = fmt.Sprintf("%s at p=%.2f gave a=%.3f b=%.3f", style, progress, aGain, bGain)
-				break
+func TestVolumeStyleGainsStayBounded(t *testing.T) {
+	for _, style := range allVolumeStyles {
+		t.Run(style.String(), func(t *testing.T) {
+			recipe := transition.DefaultRecipe()
+			recipe.Volume = style
+			processor := transition.NewProcessor(recipe, 200, 0.5)
+
+			for step := 0; step <= 100; step++ {
+				progress := float64(step) / 100
+				aGain, bGain := processor.Gains(progress)
+
+				if math.IsNaN(aGain) || math.IsNaN(bGain) {
+					t.Fatalf("p=%.2f gave a=%v b=%v, want finite gains", progress, aGain, bGain)
+				}
+				if aGain < 0 || aGain > 1.01 {
+					t.Errorf("p=%.2f outgoing gain %.3f, want within [0, 1.01]", progress, aGain)
+				}
+				if bGain < 0 || bGain > 1.01 {
+					t.Errorf("p=%.2f incoming gain %.3f, want within [0, 1.01]", progress, bGain)
+				}
 			}
-		}
-		if !allBounded {
-			break
-		}
+		})
 	}
-	if allBounded {
-		detail = "all five volume styles stayed within [0,1] across the window"
-	}
-	c.add("volume style gains bounded", allBounded, "%s", detail)
+}
 
-	smooth := transition.NewProcessor(transition.DefaultRecipe(), 200, 0.5)
-	equalPower := true
+func TestSmoothCrossfadeIsEqualPower(t *testing.T) {
+	processor := transition.NewProcessor(transition.DefaultRecipe(), 200, 0.5)
+
 	worst := 0.0
 	for step := 0; step <= 100; step++ {
 		progress := float64(step) / 100
-		aGain, bGain := smooth.Gains(progress)
-		sum := aGain*aGain + bGain*bGain
-		if math.Abs(sum-1) > worst {
-			worst = math.Abs(sum - 1)
+		aGain, bGain := processor.Gains(progress)
+
+		deviation := math.Abs(aGain*aGain + bGain*bGain - 1)
+		if deviation > worst {
+			worst = deviation
 		}
-		if math.Abs(sum-1) > 0.001 {
-			equalPower = false
+		if deviation > 0.001 {
+			t.Errorf("p=%.2f power sum deviates by %.6f, want at most 0.001", progress, deviation)
 		}
 	}
-	c.add("smooth crossfade is equal power", equalPower, "worst deviation %.6f", worst)
+	t.Logf("worst deviation %.6f", worst)
+}
 
-	directions := map[transition.VolumeStyle][2]bool{
+func TestVolumeStyleMonotonicity(t *testing.T) {
+	directions := map[transition.VolumeStyle]struct{ outgoingFalls, incomingRises bool }{
 		transition.VolumeSmoothCrossfade: {true, true},
 		transition.VolumeFadeInFadeOut:   {true, true},
 		transition.VolumeCutInFadeOut:    {true, false},
 		transition.VolumeFadeInCutOut:    {false, true},
 	}
-	monotonic := true
-	detail = ""
-	for style, want := range directions {
-		recipe := transition.DefaultRecipe()
-		recipe.Volume = style
-		processor := transition.NewProcessor(recipe, 200, 0.5)
-		previousA, previousB := processor.Gains(0)
-		for step := 1; step <= 100; step++ {
-			aGain, bGain := processor.Gains(float64(step) / 100)
-			if want[0] && aGain > previousA+1e-9 {
-				monotonic = false
-				detail = fmt.Sprintf("%s A gain rose at p=%.2f", style, float64(step)/100)
-			}
-			if want[1] && bGain < previousB-1e-9 {
-				monotonic = false
-				detail = fmt.Sprintf("%s B gain fell at p=%.2f", style, float64(step)/100)
-			}
-			previousA, previousB = aGain, bGain
-		}
-	}
-	if monotonic {
-		detail = "outgoing gains never rise, incoming gains never fall"
-	}
-	c.add("volume style monotonicity", monotonic, "%s", detail)
 
-	flat := transition.NewProcessor(transition.DefaultRecipe(), 200, 0.5)
-	flat.SetFlatGains(true)
-	aGain, bGain := flat.Gains(0.5)
-	c.add("automix without crossfade keeps flat gains", aGain == 1 && bGain == 1,
-		"a=%.2f b=%.2f", aGain, bGain)
+	for style, want := range directions {
+		t.Run(style.String(), func(t *testing.T) {
+			recipe := transition.DefaultRecipe()
+			recipe.Volume = style
+			processor := transition.NewProcessor(recipe, 200, 0.5)
+
+			previousA, previousB := processor.Gains(0)
+			for step := 1; step <= 100; step++ {
+				progress := float64(step) / 100
+				aGain, bGain := processor.Gains(progress)
+
+				if want.outgoingFalls && aGain > previousA+1e-9 {
+					t.Errorf("p=%.2f outgoing gain rose from %.4f to %.4f", progress, previousA, aGain)
+				}
+				if want.incomingRises && bGain < previousB-1e-9 {
+					t.Errorf("p=%.2f incoming gain fell from %.4f to %.4f", progress, previousB, bGain)
+				}
+				previousA, previousB = aGain, bGain
+			}
+		})
+	}
+}
+
+func TestAutoMixWithoutCrossfadeKeepsFlatGains(t *testing.T) {
+	processor := transition.NewProcessor(transition.DefaultRecipe(), 200, 0.5)
+	processor.SetFlatGains(true)
+
+	aGain, bGain := processor.Gains(0.5)
+	if aGain != 1 {
+		t.Errorf("outgoing gain = %.2f, want 1", aGain)
+	}
+	if bGain != 1 {
+		t.Errorf("incoming gain = %.2f, want 1", bGain)
+	}
 }
 
 func runTransitionWindow(recipe transition.Recipe, crossfadeFrames int, periodSec float64) (bool, float64, float64, int) {
@@ -148,20 +157,17 @@ func runTransitionWindow(recipe transition.Recipe, crossfadeFrames int, periodSe
 	return finite, maxJump, maxPeak, clipped
 }
 
-func checkRecipeMatrix(c *checkCollector) {
-	volumes := []transition.VolumeStyle{transition.VolumeSmoothCrossfade, transition.VolumeOverlap, transition.VolumeFadeInFadeOut, transition.VolumeCutInFadeOut, transition.VolumeFadeInCutOut}
+func TestEveryRecipeCombinationStaysFiniteAndClickFree(t *testing.T) {
 	eqs := []transition.EQStyle{transition.EQNone, transition.EQCenterBassSwap, transition.EQEndBassSwap, transition.EQStartBassSwap, transition.EQThreeBandFade, transition.EQQuickBass}
 	filters := []transition.FilterStyle{transition.FilterNone, transition.FilterLowPassOut, transition.FilterLowPassIn, transition.FilterLowPassInOut, transition.FilterLowPassInHighPassOut}
 	effects := []transition.EffectStyle{transition.EffectNone, transition.EffectReverbOutCenter, transition.EffectReverbCutEnd, transition.EffectReverbOutEnd, transition.EffectEchoHalfCutEnd}
 	loops := []transition.LoopStyle{transition.LoopNone, transition.LoopOneBeat, transition.LoopTwoBeats, transition.LoopFourBeats, transition.LoopEightBeats}
 
 	combinations := 0
-	failures := 0
 	worstJump := 0.0
 	worstPeak := 0.0
-	firstFailure := ""
 
-	for _, volume := range volumes {
+	for _, volume := range allVolumeStyles {
 		for _, eq := range eqs {
 			for _, filter := range filters {
 				for _, effect := range effects {
@@ -169,17 +175,18 @@ func checkRecipeMatrix(c *checkCollector) {
 						recipe := transition.Recipe{Volume: volume, EQ: eq, Filter: filter, Effect: effect, Loop: loop}
 						finite, jump, peak, _ := runTransitionWindow(recipe, 12, 0.5)
 						combinations++
+
 						if jump > worstJump {
 							worstJump = jump
 						}
 						if peak > worstPeak {
 							worstPeak = peak
 						}
-						if !finite || jump > 8000 {
-							failures++
-							if firstFailure == "" {
-								firstFailure = fmt.Sprintf("%s (finite=%v jump=%.0f)", recipe, finite, jump)
-							}
+						if !finite {
+							t.Errorf("%s produced non-finite audio", recipe)
+						}
+						if jump > 8000 {
+							t.Errorf("%s jumped %.0f between samples, want at most 8000", recipe, jump)
 						}
 					}
 				}
@@ -187,62 +194,59 @@ func checkRecipeMatrix(c *checkCollector) {
 		}
 	}
 
-	detail := fmt.Sprintf("%d recipe combinations, worst sample jump %.0f, worst peak %.0f", combinations, worstJump, worstPeak)
-	if failures > 0 {
-		detail = fmt.Sprintf("%d/%d failed, first: %s", failures, combinations, firstFailure)
-	}
-	c.add("every recipe combination stays finite and click free", failures == 0, "%s", detail)
+	t.Logf("%d recipe combinations, worst sample jump %.0f, worst peak %.0f", combinations, worstJump, worstPeak)
 }
 
-func checkLongWindows(c *checkCollector) {
-	singles := []transition.Recipe{}
-	for _, volume := range []transition.VolumeStyle{transition.VolumeSmoothCrossfade, transition.VolumeOverlap, transition.VolumeFadeInFadeOut, transition.VolumeCutInFadeOut, transition.VolumeFadeInCutOut} {
+func singleStyleRecipes() []transition.Recipe {
+	recipes := []transition.Recipe{}
+
+	for _, volume := range allVolumeStyles {
 		recipe := transition.DefaultRecipe()
 		recipe.Volume = volume
-		singles = append(singles, recipe)
+		recipes = append(recipes, recipe)
 	}
 	for _, eq := range []transition.EQStyle{transition.EQCenterBassSwap, transition.EQEndBassSwap, transition.EQStartBassSwap, transition.EQThreeBandFade, transition.EQQuickBass} {
 		recipe := transition.DefaultRecipe()
 		recipe.EQ = eq
-		singles = append(singles, recipe)
+		recipes = append(recipes, recipe)
 	}
 	for _, filter := range []transition.FilterStyle{transition.FilterLowPassOut, transition.FilterLowPassIn, transition.FilterLowPassInOut, transition.FilterLowPassInHighPassOut} {
 		recipe := transition.DefaultRecipe()
 		recipe.Filter = filter
-		singles = append(singles, recipe)
+		recipes = append(recipes, recipe)
 	}
 	for _, effect := range []transition.EffectStyle{transition.EffectReverbOutCenter, transition.EffectReverbCutEnd, transition.EffectReverbOutEnd, transition.EffectEchoHalfCutEnd} {
 		recipe := transition.DefaultRecipe()
 		recipe.Effect = effect
-		singles = append(singles, recipe)
+		recipes = append(recipes, recipe)
 	}
 
-	failures := 0
+	return recipes
+}
+
+func TestFullLengthWindowsPerStyle(t *testing.T) {
 	worstJump := 0.0
 	totalClipped := 0
-	firstFailure := ""
-	for _, recipe := range singles {
+
+	for _, recipe := range singleStyleRecipes() {
 		finite, jump, _, clipped := runTransitionWindow(recipe, 400, 0.5)
 		totalClipped += clipped
 		if jump > worstJump {
 			worstJump = jump
 		}
-		if !finite || jump > 8000 {
-			failures++
-			if firstFailure == "" {
-				firstFailure = fmt.Sprintf("%s (finite=%v jump=%.0f)", recipe, finite, jump)
-			}
+
+		if !finite {
+			t.Errorf("%s produced non-finite audio", recipe)
+		}
+		if jump > 8000 {
+			t.Errorf("%s jumped %.0f between samples, want at most 8000", recipe, jump)
 		}
 	}
 
-	detail := fmt.Sprintf("%d single-style 8s windows, worst jump %.0f, clipped samples %d", len(singles), worstJump, totalClipped)
-	if failures > 0 {
-		detail = fmt.Sprintf("%d failed, first: %s", failures, firstFailure)
-	}
-	c.add("full length windows per style", failures == 0, "%s", detail)
+	t.Logf("worst jump %.0f, clipped samples %d", worstJump, totalClipped)
 }
 
-func checkEdgeWindows(c *checkCollector) {
+func TestDegenerateTransitionWindows(t *testing.T) {
 	cases := []struct {
 		name            string
 		crossfadeFrames int
@@ -256,28 +260,31 @@ func checkEdgeWindows(c *checkCollector) {
 		{"very fast beat", 200, 0.01},
 	}
 
-	failures := 0
-	detail := ""
-	for _, testCase := range cases {
-		recipe := transition.Recipe{
-			Volume: transition.VolumeCutInFadeOut,
-			EQ:     transition.EQQuickBass,
-			Filter: transition.FilterLowPassInHighPassOut,
-			Effect: transition.EffectEchoHalfCutEnd,
-			Loop:   transition.LoopFourBeats,
-		}
-		finite, jump, _, _ := runTransitionWindow(recipe, testCase.crossfadeFrames, testCase.periodSec)
-		if !finite || math.IsNaN(jump) {
-			failures++
-			detail = testCase.name + " produced non-finite audio"
-		}
+	recipe := transition.Recipe{
+		Volume: transition.VolumeCutInFadeOut,
+		EQ:     transition.EQQuickBass,
+		Filter: transition.FilterLowPassInHighPassOut,
+		Effect: transition.EffectEchoHalfCutEnd,
+		Loop:   transition.LoopFourBeats,
 	}
-	if failures == 0 {
-		detail = fmt.Sprintf("%d degenerate window configurations handled", len(cases))
-	}
-	c.add("degenerate transition windows", failures == 0, "%s", detail)
 
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			finite, jump, _, _ := runTransitionWindow(recipe, testCase.crossfadeFrames, testCase.periodSec)
+
+			if !finite {
+				t.Error("produced non-finite audio")
+			}
+			if math.IsNaN(jump) {
+				t.Error("produced a NaN sample jump")
+			}
+		})
+	}
+}
+
+func TestFullScaleInputStaysFinite(t *testing.T) {
 	processor := transition.NewProcessor(transition.DefaultRecipe(), 100, 0.5)
+
 	loud := make([]int16, frameSize*channels)
 	for i := range loud {
 		if i%2 == 0 {
@@ -286,86 +293,98 @@ func checkEdgeWindows(c *checkCollector) {
 			loud[i] = -32768
 		}
 	}
-	aBuf := processor.ProcessA(loud, 0.5)
-	bBuf := processor.ProcessB(loud, 0.5)
-	c.add("full scale input stays finite", bufferFinite(aBuf) && bufferFinite(bBuf),
-		"peak a %.0f, peak b %.0f", bufferPeak(aBuf), bufferPeak(bBuf))
 
-	empty := processor.ProcessA(nil, 0.5)
-	c.add("nil frame is treated as silence", bufferPeak(empty) == 0, "peak %.1f", bufferPeak(empty))
+	if aBuf := processor.ProcessA(loud, 0.5); !bufferFinite(aBuf) {
+		t.Errorf("outgoing buffer is not finite (peak %.0f)", bufferPeak(aBuf))
+	}
+	if bBuf := processor.ProcessB(loud, 0.5); !bufferFinite(bBuf) {
+		t.Errorf("incoming buffer is not finite (peak %.0f)", bufferPeak(bBuf))
+	}
 }
 
-func checkTails(c *checkCollector) {
-	effects := []transition.EffectStyle{transition.EffectReverbOutCenter, transition.EffectReverbCutEnd, transition.EffectReverbOutEnd, transition.EffectEchoHalfCutEnd}
+func TestNilFrameIsTreatedAsSilence(t *testing.T) {
+	processor := transition.NewProcessor(transition.DefaultRecipe(), 100, 0.5)
 
-	failures := 0
-	detail := ""
+	if peak := bufferPeak(processor.ProcessA(nil, 0.5)); peak != 0 {
+		t.Errorf("peak = %.1f, want 0", peak)
+	}
+}
+
+func TestEffectTailsDecayAfterHandoff(t *testing.T) {
+	effects := []transition.EffectStyle{
+		transition.EffectReverbOutCenter, transition.EffectReverbCutEnd,
+		transition.EffectReverbOutEnd, transition.EffectEchoHalfCutEnd,
+	}
+
 	for _, effect := range effects {
-		recipe := transition.DefaultRecipe()
-		recipe.Effect = effect
-		processor := transition.NewProcessor(recipe, 100, 0.5)
+		t.Run(effect.String(), func(t *testing.T) {
+			recipe := transition.DefaultRecipe()
+			recipe.Effect = effect
+			processor := transition.NewProcessor(recipe, 100, 0.5)
 
-		tone := &toneGenerator{frequency: 220, amplitude: 9000}
-		frame := make([]int16, frameSize*channels)
-		for i := 0; i < 100; i++ {
-			tone.fill(frame)
-			progress := float64(i) / 100
-			aBuf := processor.ProcessA(frame, progress)
-			bBuf := processor.ProcessB(frame, progress)
-			processor.ApplyGains(aBuf, bBuf, progress, 1.0)
-		}
+			tone := &toneGenerator{frequency: 220, amplitude: 9000}
+			frame := make([]int16, frameSize*channels)
+			for i := 0; i < 100; i++ {
+				tone.fill(frame)
+				progress := float64(i) / 100
+				aBuf := processor.ProcessA(frame, progress)
+				bBuf := processor.ProcessB(frame, progress)
+				processor.ApplyGains(aBuf, bBuf, progress, 1.0)
+			}
 
-		tail := processor.MakeTail(1.0)
-		if tail == nil {
-			failures++
-			detail = fmt.Sprintf("%s produced no tail", effect)
-			continue
-		}
+			tail := processor.MakeTail(1.0)
+			if tail == nil {
+				t.Fatal("produced no tail")
+			}
 
-		frames := 0
-		silent := make([]int16, frameSize*channels)
-		for {
-			for i := range silent {
-				silent[i] = 0
-			}
-			more := tail.Apply(silent)
-			frames++
-			if frames > transition.EchoTailFrames+transition.ReverbTailFrames+10 {
-				failures++
-				detail = fmt.Sprintf("%s tail never finished", effect)
-				break
-			}
-			if !more {
-				break
-			}
-		}
+			budget := transition.EchoTailFrames + transition.ReverbTailFrames + 10
+			silent := make([]int16, frameSize*channels)
+			frames := 0
+			for {
+				for i := range silent {
+					silent[i] = 0
+				}
+				more := tail.Apply(silent)
+				frames++
 
-		lastPeak := 0
-		for _, sample := range silent {
-			if int(sample) > lastPeak {
-				lastPeak = int(sample)
+				if frames > budget {
+					t.Fatalf("tail never finished within %d frames", budget)
+				}
+				if !more {
+					break
+				}
 			}
-		}
-		if lastPeak > 1500 {
-			failures++
-			detail = fmt.Sprintf("%s tail ended at peak %d", effect, lastPeak)
-		}
+
+			lastPeak := 0
+			for _, sample := range silent {
+				if int(sample) > lastPeak {
+					lastPeak = int(sample)
+				}
+			}
+			if lastPeak > 1500 {
+				t.Errorf("tail ended at peak %d, want at most 1500", lastPeak)
+			}
+		})
 	}
-	if failures == 0 {
-		detail = "all effect tails decayed and terminated within budget"
-	}
-	c.add("effect tails decay after handoff", failures == 0, "%s", detail)
-
-	dry := transition.DefaultRecipe()
-	processor := transition.NewProcessor(dry, 100, 0.5)
-	c.add("no tail for effect free recipes", processor.MakeTail(1.0) == nil, "tail is nil as expected")
-
-	var nilTail *transition.Tail
-	frame := make([]int16, frameSize*channels)
-	c.add("nil tail apply is safe", !nilTail.Apply(frame), "returned false without panic")
 }
 
-func checkLoopBuffer(c *checkCollector) {
+func TestNoTailForEffectFreeRecipes(t *testing.T) {
+	processor := transition.NewProcessor(transition.DefaultRecipe(), 100, 0.5)
+
+	if tail := processor.MakeTail(1.0); tail != nil {
+		t.Errorf("got a tail %v, want nil", tail)
+	}
+}
+
+func TestNilTailApplyIsSafe(t *testing.T) {
+	var tail *transition.Tail
+
+	if tail.Apply(make([]int16, frameSize*channels)) {
+		t.Error("a nil tail reported more audio to come")
+	}
+}
+
+func TestLoopBufferRepeatsCapturedFrames(t *testing.T) {
 	state := newCrossfadeState()
 	state.loopFrames = 3
 
@@ -377,147 +396,228 @@ func checkLoopBuffer(c *checkCollector) {
 		}
 	}
 
-	captured := []int16{}
 	for i := 0; i < 3; i++ {
-		out := state.loopFrame(frames[i])
-		captured = append(captured, out[0])
-	}
-	repeated := []int16{}
-	for i := 0; i < 7; i++ {
-		out := state.loopFrame(frames[4])
-		repeated = append(repeated, out[0])
+		state.loopFrame(frames[i])
 	}
 
-	expected := []int16{0, 10, 20, 0, 10, 20, 0}
-	matches := len(repeated) == len(expected)
-	for i := range expected {
-		if !matches || repeated[i] != expected[i] {
-			matches = false
-			break
+	want := []int16{0, 10, 20, 0, 10, 20, 0}
+	for i, expected := range want {
+		out := state.loopFrame(frames[4])
+		if out[0] != expected {
+			t.Errorf("replay %d = %d, want %d", i, out[0], expected)
 		}
 	}
-	c.add("loop buffer repeats captured frames", matches, "captured %v, replayed %v", captured, repeated)
-
-	independent := true
-	frames[0][0] = 999
-	if state.loopBuffer[0][0] == 999 {
-		independent = false
-	}
-	c.add("loop buffer copies source frames", independent, "source mutation did not leak into loop")
-
-	empty := newCrossfadeState()
-	empty.loopFrames = 2
-	c.add("loop buffer tolerates nil input before fill", empty.loopFrame(nil) == nil, "returned nil")
 }
 
-func checkStyleNames(c *checkCollector) {
-	categories := []string{"volume", "eq", "filter", "effect", "loop"}
-	roundTrip := true
-	detail := ""
+func TestLoopBufferCopiesSourceFrames(t *testing.T) {
+	state := newCrossfadeState()
+	state.loopFrames = 3
 
-	for _, category := range categories {
-		for _, value := range transition.StyleValues(category) {
-			if !transition.ValidStyle(category, value) {
-				roundTrip = false
-				detail = fmt.Sprintf("%s/%s rejected by validator", category, value)
+	source := []int16{1, 2, 3, 4}
+	state.loopFrame(source)
+	source[0] = 999
+
+	if state.loopBuffer[0][0] == 999 {
+		t.Error("mutating the source frame leaked into the loop buffer")
+	}
+}
+
+func TestLoopBufferToleratesNilInputBeforeFill(t *testing.T) {
+	state := newCrossfadeState()
+	state.loopFrames = 2
+
+	if out := state.loopFrame(nil); out != nil {
+		t.Errorf("got %v, want nil", out)
+	}
+}
+
+func TestStyleCatalogueValidates(t *testing.T) {
+	for _, category := range []string{"volume", "eq", "filter", "effect", "loop"} {
+		t.Run(category, func(t *testing.T) {
+			values := transition.StyleValues(category)
+			if len(values) == 0 {
+				t.Fatal("category advertises no style values")
 			}
+			for _, value := range values {
+				if !transition.ValidStyle(category, value) {
+					t.Errorf("advertised value %q is rejected by the validator", value)
+				}
+			}
+		})
+	}
+}
+
+func TestUnknownCategoryRejected(t *testing.T) {
+	if values := transition.StyleValues("bogus"); values != nil {
+		t.Errorf("got %v, want nil", values)
+	}
+	if transition.ValidStyle("bogus", "smooth") {
+		t.Error("an unknown category accepted a style")
+	}
+}
+
+func TestUnknownStyleRejected(t *testing.T) {
+	if transition.ValidStyle("eq", "super_bass") {
+		t.Error("eq accepted the unknown style super_bass")
+	}
+}
+
+func TestStyleNamesRoundTrip(t *testing.T) {
+	names := []struct {
+		got  string
+		want string
+	}{
+		{transition.VolumeOverlap.String(), "overlap"},
+		{transition.EQThreeBandFade.String(), "three_band_fade"},
+		{transition.FilterLowPassInHighPassOut.String(), "lowpass_in_highpass_out"},
+		{transition.EffectEchoHalfCutEnd.String(), "echo_half_cut_end"},
+		{transition.LoopEightBeats.String(), "eight_beats"},
+	}
+
+	for _, name := range names {
+		if name.got != name.want {
+			t.Errorf("got %q, want %q", name.got, name.want)
 		}
 	}
-	if roundTrip {
-		detail = "all advertised style values validate"
-	}
-	c.add("style catalogue validates", roundTrip, "%s", detail)
+}
 
-	c.add("unknown category rejected", transition.StyleValues("bogus") == nil &&
-		!transition.ValidStyle("bogus", "smooth"), "bogus category returns nil and false")
-	c.add("unknown style rejected", !transition.ValidStyle("eq", "super_bass"), "eq/super_bass rejected")
-
-	names := map[string]string{
-		transition.VolumeOverlap.String():              "overlap",
-		transition.EQThreeBandFade.String():            "three_band_fade",
-		transition.FilterLowPassInHighPassOut.String(): "lowpass_in_highpass_out",
-		transition.EffectEchoHalfCutEnd.String():       "echo_half_cut_end",
-		transition.LoopEightBeats.String():             "eight_beats",
-	}
-	namesOK := true
-	for got, want := range names {
-		if got != want {
-			namesOK = false
-		}
-	}
-	c.add("style names round trip", namesOK, "%v", names)
-
-	base := transition.DefaultRecipe()
-	overridden := transition.ApplyStyleOverrides(base, transition.StyleOverrides{
+func TestOverridesApplyOnlyForKnownValues(t *testing.T) {
+	overridden := transition.ApplyStyleOverrides(transition.DefaultRecipe(), transition.StyleOverrides{
 		Volume: "overlap",
 		EQ:     transition.StyleAuto,
 		Filter: "garbage",
 		Effect: "reverb_cut_end",
 		Loop:   "",
 	})
-	c.add("overrides apply only for known values",
-		overridden.Volume == transition.VolumeOverlap &&
-			overridden.EQ == transition.EQNone &&
-			overridden.Filter == transition.FilterNone &&
-			overridden.Effect == transition.EffectReverbCutEnd &&
-			overridden.Loop == transition.LoopNone,
-		"result %s", overridden)
 
-	beats := transition.LoopBeatCount(transition.LoopOneBeat) == 1 && transition.LoopBeatCount(transition.LoopTwoBeats) == 2 &&
-		transition.LoopBeatCount(transition.LoopFourBeats) == 4 && transition.LoopBeatCount(transition.LoopEightBeats) == 8 &&
-		transition.LoopBeatCount(transition.LoopNone) == 0
-	c.add("loop beat counts", beats, "1/2/4/8 beat mapping correct")
+	if overridden.Volume != transition.VolumeOverlap {
+		t.Errorf("volume = %s, want the known override overlap", overridden.Volume)
+	}
+	if overridden.EQ != transition.EQNone {
+		t.Errorf("eq = %s, want none for an auto override", overridden.EQ)
+	}
+	if overridden.Filter != transition.FilterNone {
+		t.Errorf("filter = %s, want none for an unknown override", overridden.Filter)
+	}
+	if overridden.Effect != transition.EffectReverbCutEnd {
+		t.Errorf("effect = %s, want the known override reverb_cut_end", overridden.Effect)
+	}
+	if overridden.Loop != transition.LoopNone {
+		t.Errorf("loop = %s, want none for an empty override", overridden.Loop)
+	}
 }
 
-func checkSelector(c *checkCollector) {
-	makeAnalysis := func(bpm float64, tonic int, minor bool, confidence float64) *analysis.TrackAnalysis {
-		return &analysis.TrackAnalysis{
-			BPM:           bpm,
-			PeriodSec:     60 / bpm,
-			Tonic:         tonic,
-			Minor:         minor,
-			KeyConfidence: confidence,
-		}
+func TestLoopBeatCounts(t *testing.T) {
+	counts := []struct {
+		style transition.LoopStyle
+		want  int
+	}{
+		{transition.LoopOneBeat, 1},
+		{transition.LoopTwoBeats, 2},
+		{transition.LoopFourBeats, 4},
+		{transition.LoopEightBeats, 8},
+		{transition.LoopNone, 0},
 	}
 
-	c.add("nil analysis falls back to default",
-		transition.SelectRecipe(nil, nil) == transition.DefaultRecipe() &&
-			transition.SelectRecipe(makeAnalysis(128, 0, false, 0.5), nil) == transition.DefaultRecipe(),
-		"missing analysis keeps the plain smooth crossfade")
+	for _, count := range counts {
+		if got := transition.LoopBeatCount(count.style); got != count.want {
+			t.Errorf("%s = %d beats, want %d", count.style, got, count.want)
+		}
+	}
+}
 
-	matchedHarmonic := transition.SelectRecipe(makeAnalysis(128, 0, false, 0.5), makeAnalysis(128, 7, false, 0.5))
-	c.add("matched tempo and harmonic key blends",
-		matchedHarmonic.Volume == transition.VolumeOverlap && matchedHarmonic.EQ == transition.EQThreeBandFade,
-		"got %s", matchedHarmonic)
+func analysisAt(bpm float64, tonic int, minor bool, confidence float64) *analysis.TrackAnalysis {
+	return &analysis.TrackAnalysis{
+		BPM:           bpm,
+		PeriodSec:     60 / bpm,
+		Tonic:         tonic,
+		Minor:         minor,
+		KeyConfidence: confidence,
+	}
+}
 
-	matchedClashing := transition.SelectRecipe(makeAnalysis(128, 0, false, 0.5), makeAnalysis(128, 6, false, 0.5))
-	c.add("matched tempo with clashing key uses filters",
-		matchedClashing.Filter == transition.FilterLowPassInHighPassOut && matchedClashing.EQ == transition.EQCenterBassSwap,
-		"got %s", matchedClashing)
+func TestNilAnalysisFallsBackToDefault(t *testing.T) {
+	if got := transition.SelectRecipe(nil, nil); got != transition.DefaultRecipe() {
+		t.Errorf("two nil analyses gave %s, want the default recipe", got)
+	}
+	if got := transition.SelectRecipe(analysisAt(128, 0, false, 0.5), nil); got != transition.DefaultRecipe() {
+		t.Errorf("a nil incoming analysis gave %s, want the default recipe", got)
+	}
+}
 
-	wideGap := transition.SelectRecipe(makeAnalysis(90, 0, false, 0.5), makeAnalysis(130, 6, false, 0.5))
-	c.add("wide tempo gap uses loop and echo",
-		wideGap.Loop == transition.LoopFourBeats && wideGap.Effect == transition.EffectEchoHalfCutEnd && wideGap.Volume == transition.VolumeFadeInCutOut,
-		"got %s", wideGap)
+func TestMatchedTempoAndHarmonicKeyBlends(t *testing.T) {
+	got := transition.SelectRecipe(analysisAt(128, 0, false, 0.5), analysisAt(128, 7, false, 0.5))
 
-	noGrid := transition.SelectRecipe(
+	if got.Volume != transition.VolumeOverlap {
+		t.Errorf("volume = %s, want overlap (got %s)", got.Volume, got)
+	}
+	if got.EQ != transition.EQThreeBandFade {
+		t.Errorf("eq = %s, want three_band_fade (got %s)", got.EQ, got)
+	}
+}
+
+func TestMatchedTempoWithClashingKeyUsesFilters(t *testing.T) {
+	got := transition.SelectRecipe(analysisAt(128, 0, false, 0.5), analysisAt(128, 6, false, 0.5))
+
+	if got.Filter != transition.FilterLowPassInHighPassOut {
+		t.Errorf("filter = %s, want lowpass_in_highpass_out (got %s)", got.Filter, got)
+	}
+	if got.EQ != transition.EQCenterBassSwap {
+		t.Errorf("eq = %s, want center_bass_swap (got %s)", got.EQ, got)
+	}
+}
+
+func TestWideTempoGapUsesLoopAndEcho(t *testing.T) {
+	got := transition.SelectRecipe(analysisAt(90, 0, false, 0.5), analysisAt(130, 6, false, 0.5))
+
+	if got.Loop != transition.LoopFourBeats {
+		t.Errorf("loop = %s, want four_beats (got %s)", got.Loop, got)
+	}
+	if got.Effect != transition.EffectEchoHalfCutEnd {
+		t.Errorf("effect = %s, want echo_half_cut_end (got %s)", got.Effect, got)
+	}
+	if got.Volume != transition.VolumeFadeInCutOut {
+		t.Errorf("volume = %s, want fade_in_cut_out (got %s)", got.Volume, got)
+	}
+}
+
+func TestWideGapWithoutBeatGridAvoidsLoops(t *testing.T) {
+	got := transition.SelectRecipe(
 		&analysis.TrackAnalysis{BPM: 90, KeyConfidence: 0.5},
 		&analysis.TrackAnalysis{BPM: 130, KeyConfidence: 0.5},
 	)
-	c.add("wide gap without beat grid avoids loops",
-		noGrid.Loop == transition.LoopNone && noGrid.Effect == transition.EffectReverbCutEnd,
-		"got %s", noGrid)
 
-	halfTime := transition.SelectRecipe(makeAnalysis(90, 0, false, 0.5), makeAnalysis(174, 7, false, 0.5))
-	c.add("half-time pair is treated as tempo compatible",
-		halfTime.Volume != transition.VolumeFadeInCutOut && halfTime.Effect != transition.EffectEchoHalfCutEnd,
-		"got %s (delta %.4f)", halfTime, analysis.TempoDelta(90, 174))
+	if got.Loop != transition.LoopNone {
+		t.Errorf("loop = %s, want none without a beat grid (got %s)", got.Loop, got)
+	}
+	if got.Effect != transition.EffectReverbCutEnd {
+		t.Errorf("effect = %s, want reverb_cut_end (got %s)", got.Effect, got)
+	}
+}
 
-	lowConfidence := transition.SelectRecipe(makeAnalysis(128, 0, false, 0.001), makeAnalysis(128, 7, false, 0.001))
-	c.add("low key confidence is treated as unknown key",
-		lowConfidence.Volume != transition.VolumeOverlap,
-		"got %s", lowConfidence)
+func TestHalfTimePairIsTreatedAsTempoCompatible(t *testing.T) {
+	got := transition.SelectRecipe(analysisAt(90, 0, false, 0.5), analysisAt(174, 7, false, 0.5))
 
-	zeroBPM := transition.SelectRecipe(&analysis.TrackAnalysis{BPM: 0}, &analysis.TrackAnalysis{BPM: 0})
-	c.add("zero bpm falls back to default", zeroBPM == transition.DefaultRecipe(), "got %s", zeroBPM)
+	if got.Volume == transition.VolumeFadeInCutOut {
+		t.Errorf("volume = %s, want anything but the wide-gap fade_in_cut_out (delta %.4f)", got.Volume, analysis.TempoDelta(90, 174))
+	}
+	if got.Effect == transition.EffectEchoHalfCutEnd {
+		t.Errorf("effect = %s, want anything but the wide-gap echo_half_cut_end (delta %.4f)", got.Effect, analysis.TempoDelta(90, 174))
+	}
+}
+
+func TestLowKeyConfidenceIsTreatedAsUnknownKey(t *testing.T) {
+	got := transition.SelectRecipe(analysisAt(128, 0, false, 0.001), analysisAt(128, 7, false, 0.001))
+
+	if got.Volume == transition.VolumeOverlap {
+		t.Errorf("volume = %s, want the harmonic blend to be withheld (got %s)", got.Volume, got)
+	}
+}
+
+func TestZeroBPMFallsBackToDefault(t *testing.T) {
+	got := transition.SelectRecipe(&analysis.TrackAnalysis{BPM: 0}, &analysis.TrackAnalysis{BPM: 0})
+
+	if got != transition.DefaultRecipe() {
+		t.Errorf("got %s, want the default recipe", got)
+	}
 }
