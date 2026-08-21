@@ -10,6 +10,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"noraegaori/internal/config"
 )
 
 var platformAssetNames = []string{"yt-dlp", "yt-dlp.exe", "yt-dlp_macos", "yt-dlp_linux_aarch64"}
@@ -180,6 +182,39 @@ func stubCanary(t *testing.T, passed, networkError bool) {
 	previous := runCanary
 	runCanary = func(*VersionManager, string) (bool, bool) { return passed, networkError }
 	t.Cleanup(func() { runCanary = previous })
+}
+
+func TestExhaustedFallbackKeepsTheInstalledVersion(t *testing.T) {
+	versionmanager := useVersionManager(t)
+	stubCanary(t, false, false)
+
+	path := writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.08.18.122307"), "echo 2026.08.18.122307")
+	addVersion(versionmanager, "2026.08.18.122307", &VersionEntry{Path: path, State: StateActive, Successes: 40})
+	versionmanager.state.ActiveVersion = "2026.08.18.122307"
+
+	previous := getReleasesFn
+	getReleasesFn = func(channel string, perPage int) ([]*GitHubRelease, error) {
+		return nil, nil
+	}
+	t.Cleanup(func() { getReleasesFn = previous })
+
+	outcome, err := installFallbackVersion(versionmanager, config.YtDlpChannelNightly, "2026.08.20.234504", &GitHubRelease{TagName: "2026.08.20.234504"})
+	if err != nil {
+		t.Fatalf("installFallbackVersion returned %v, want nil", err)
+	}
+	if !outcome.canaryFailed {
+		t.Error("got canaryFailed=false, want the exhausted chain reported so the other channel is tried")
+	}
+	if outcome.updated {
+		t.Error("got updated=true, want false: nothing was installed")
+	}
+
+	if got := versionmanager.GetActiveVersion(); got != "2026.08.18.122307" {
+		t.Errorf("got active %q, want the installed version kept", got)
+	}
+	if state, _ := versionmanager.GetVersionState("2026.08.20.234504"); state == StateProvisional {
+		t.Error("a version that failed its canary was provisionally activated over a working installed binary")
+	}
 }
 
 func TestRunCanaryAndActivateActivatesOnSuccess(t *testing.T) {

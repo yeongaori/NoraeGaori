@@ -98,12 +98,12 @@ func recordChannelAttempts(t *testing.T, onAttempt func(channel string)) *[]stri
 
 	attempts := []string{}
 	previous := updateChannelFn
-	updateChannelFn = func(channel string, force bool) (bool, error) {
+	updateChannelFn = func(channel string, force bool) (channelOutcome, error) {
 		attempts = append(attempts, channel)
 		if onAttempt != nil {
 			onAttempt(channel)
 		}
-		return false, nil
+		return channelOutcome{}, nil
 	}
 	t.Cleanup(func() { updateChannelFn = previous })
 
@@ -301,12 +301,12 @@ func TestCanaryFallsBackToFixedVideosOnAFreshInstall(t *testing.T) {
 	}
 }
 
-func TestActiveChannelGoesUnhealthyOnRepeatedPlaybackFailures(t *testing.T) {
+func TestActiveVersionGoesUnhealthyOnRepeatedPlaybackFailures(t *testing.T) {
 	versionmanager := useVersionManager(t)
 	addVersion(versionmanager, "2026.07.04", &VersionEntry{Path: "lib/s/yt-dlp", State: StateActive, Successes: 400})
 	versionmanager.state.ActiveVersion = "2026.07.04"
 
-	if !activeChannelIsHealthy(config.YtDlpChannelStable) {
+	if !activeVersionIsHealthy() {
 		t.Fatal("a canary-verified active version should start healthy")
 	}
 
@@ -314,8 +314,48 @@ func TestActiveChannelGoesUnhealthyOnRepeatedPlaybackFailures(t *testing.T) {
 		versionmanager.SaveError("2026.07.04", video, "ffmpeg produced no audio: exit status 8: 403 Forbidden")
 	}
 
-	if activeChannelIsHealthy(config.YtDlpChannelStable) {
+	if activeVersionIsHealthy() {
 		t.Error("still healthy after repeated playback failures: the auto policy would never leave the broken version")
+	}
+}
+
+func TestActiveNightlyStaysHealthyWithoutReprobingNightly(t *testing.T) {
+	useChannel(t, config.YtDlpChannelAuto)
+	versionmanager := useVersionManager(t)
+	addVersion(versionmanager, "2026.08.18.122307", &VersionEntry{Path: "lib/n/yt-dlp", State: StateActive, Successes: 40})
+	versionmanager.state.ActiveVersion = "2026.08.18.122307"
+
+	attempts := recordChannelAttempts(t, nil)
+
+	if _, err := UpdateYtDlp(false); err != nil {
+		t.Fatalf("UpdateYtDlp returned %v, want nil", err)
+	}
+
+	if len(*attempts) != 1 || (*attempts)[0] != config.YtDlpChannelStable {
+		t.Errorf("got attempts %v, want stable only: a healthy nightly must not re-probe nightly on every check", *attempts)
+	}
+}
+
+func TestAutoTriesNightlyWhenStableFailsItsCanary(t *testing.T) {
+	useChannel(t, config.YtDlpChannelAuto)
+	versionmanager := useVersionManager(t)
+	addVersion(versionmanager, "2026.08.18.122307", &VersionEntry{Path: "lib/n/yt-dlp", State: StateActive, Successes: 40})
+	versionmanager.state.ActiveVersion = "2026.08.18.122307"
+
+	attempts := []string{}
+	previous := updateChannelFn
+	updateChannelFn = func(channel string, force bool) (channelOutcome, error) {
+		attempts = append(attempts, channel)
+		return channelOutcome{canaryFailed: channel == config.YtDlpChannelStable}, nil
+	}
+	t.Cleanup(func() { updateChannelFn = previous })
+
+	if _, err := UpdateYtDlp(false); err != nil {
+		t.Fatalf("UpdateYtDlp returned %v, want nil", err)
+	}
+
+	if len(attempts) != 2 || attempts[1] != config.YtDlpChannelNightly {
+		t.Errorf("got attempts %v, want nightly tried after stable failed its canary even though the active version is healthy", attempts)
 	}
 }
 

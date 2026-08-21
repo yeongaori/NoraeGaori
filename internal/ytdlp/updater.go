@@ -522,14 +522,14 @@ func runCanaryAndActivate(versionmanager *VersionManager, version string) canary
 	return canaryRejected
 }
 
-func activeChannelIsHealthy(channel string) bool {
+func activeVersionIsHealthy() bool {
 	versionmanager := GetVersionManager()
 	if versionmanager == nil {
 		return false
 	}
 
 	active := versionmanager.GetActiveVersion()
-	if active == "" || ChannelOf(active) != channel {
+	if active == "" {
 		return false
 	}
 
@@ -539,31 +539,40 @@ func activeChannelIsHealthy(channel string) bool {
 	}
 
 	if versionmanager.ActiveVersionIsFailing() {
-		logger.Warnf("Active %s version %s is failing playback; treating the channel as unhealthy", channel, active)
+		logger.Warnf("Active version %s is failing playback", active)
 		return false
 	}
 
 	return true
 }
 
+type channelOutcome struct {
+	updated      bool
+	canaryFailed bool
+}
+
 var updateChannelFn = updateFromChannel
+
+var getReleasesFn = GetReleases
 
 func UpdateYtDlp(force bool) (bool, error) {
 	channel := ConfiguredChannel()
 	if channel != config.YtDlpChannelAuto {
-		return updateChannelFn(channel, force)
+		outcome, err := updateChannelFn(channel, force)
+		return outcome.updated, err
 	}
 
-	updated, err := updateChannelFn(config.YtDlpChannelStable, force)
-	if activeChannelIsHealthy(config.YtDlpChannelStable) {
-		return updated, err
+	outcome, err := updateChannelFn(config.YtDlpChannelStable, force)
+	if !outcome.canaryFailed && activeVersionIsHealthy() {
+		return outcome.updated, err
 	}
 
-	logger.Warnf("Stable yt-dlp is not usable; trying the nightly channel")
-	return updateChannelFn(config.YtDlpChannelNightly, force)
+	logger.Infof("Stable yt-dlp is not usable; trying the nightly channel")
+	nightly, err := updateChannelFn(config.YtDlpChannelNightly, force)
+	return nightly.updated, err
 }
 
-func updateFromChannel(channel string, force bool) (bool, error) {
+func updateFromChannel(channel string, force bool) (channelOutcome, error) {
 	logger.Debugf("Checking for updates on the %s channel...", channel)
 
 	versionmanager := GetVersionManager()
@@ -571,14 +580,14 @@ func updateFromChannel(channel string, force bool) (bool, error) {
 
 	release, err := GetLatestRelease(channel)
 	if err != nil {
-		return false, fmt.Errorf("failed to fetch release info: %w", err)
+		return channelOutcome{}, fmt.Errorf("failed to fetch release info: %w", err)
 	}
 
 	latestVersion := release.TagName
 
 	if !force && currentVersion == latestVersion {
 		logger.Debugf("Already up to date (%s)", currentVersion)
-		return false, nil
+		return channelOutcome{}, nil
 	}
 
 	if versionmanager != nil {
@@ -586,26 +595,33 @@ func updateFromChannel(channel string, force bool) (bool, error) {
 			if state == StateBlacklisted {
 				logger.Infof("Version %s is blacklisted", latestVersion)
 				if versionmanager.HasUsableBinary() {
-					return false, nil
+					return channelOutcome{canaryFailed: true}, nil
 				}
 				logger.Warnf("No usable binary on disk; trying previous releases")
 				return installFallbackVersion(versionmanager, channel, latestVersion, release)
 			}
-			if state == StateVerified || state == StateActive || state == StateProvisional {
+			if state == StateActive || state == StateProvisional {
 				logger.Debugf("Version %s already registered as %s", latestVersion, state)
-				return false, nil
+				return channelOutcome{}, nil
 			}
 
 			if _, statErr := os.Stat(VersionedBinaryPath(latestVersion)); statErr == nil {
+				if state == StateVerified {
+					logger.Infof("Re-verifying %s before returning to it", latestVersion)
+				}
 				switch runCanaryAndActivate(versionmanager, latestVersion) {
 				case canaryActivated:
-					return true, nil
+					return channelOutcome{updated: true}, nil
 				case canaryPending:
-					return false, nil
+					return channelOutcome{}, nil
 				default:
 					logger.Warnf("Trying previous releases after %s failed canary", latestVersion)
 					return installFallbackVersion(versionmanager, channel, latestVersion, release)
 				}
+			}
+
+			if state == StateVerified {
+				logger.Debugf("Version %s is verified but its binary is gone; reinstalling", latestVersion)
 			}
 		}
 	}
@@ -621,32 +637,32 @@ func updateFromChannel(channel string, force bool) (bool, error) {
 	logger.Debug("Downloading new version...")
 	binaryPath, actualVersion, err := installVersionBinary(release, latestVersion)
 	if err != nil {
-		return false, err
+		return channelOutcome{}, err
 	}
 	logger.Infof("Downloaded version: %s", actualVersion)
 
 	if versionmanager == nil {
 		logger.Infof("Update complete! Version: %s", actualVersion)
-		return true, nil
+		return channelOutcome{updated: true}, nil
 	}
 
 	versionmanager.RegisterVersion(latestVersion, binaryPath)
 
 	switch runCanaryAndActivate(versionmanager, latestVersion) {
 	case canaryActivated:
-		return true, nil
+		return channelOutcome{updated: true}, nil
 	case canaryPending:
-		return false, nil
+		return channelOutcome{}, nil
 	default:
 		logger.Warnf("Trying previous releases after %s failed canary", latestVersion)
 		return installFallbackVersion(versionmanager, channel, latestVersion, release)
 	}
 }
 
-func installFallbackVersion(versionmanager *VersionManager, channel, latestVersion string, latestRelease *GitHubRelease) (bool, error) {
-	releases, err := GetReleases(channel, fallbackReleaseFetch)
+func installFallbackVersion(versionmanager *VersionManager, channel, latestVersion string, latestRelease *GitHubRelease) (channelOutcome, error) {
+	releases, err := getReleasesFn(channel, fallbackReleaseFetch)
 	if err != nil {
-		return false, fmt.Errorf("failed to fetch release list: %w", err)
+		return channelOutcome{canaryFailed: true}, fmt.Errorf("failed to fetch release list: %w", err)
 	}
 
 	considered := 0
@@ -668,7 +684,7 @@ func installFallbackVersion(versionmanager *VersionManager, channel, latestVersi
 			if state == StateVerified || state == StateActive {
 				if _, statErr := os.Stat(VersionedBinaryPath(ver)); statErr == nil {
 					logger.Debugf("Reusing existing %s version %s", state, ver)
-					return true, nil
+					return channelOutcome{updated: true}, nil
 				}
 			}
 		}
@@ -685,24 +701,29 @@ func installFallbackVersion(versionmanager *VersionManager, channel, latestVersi
 
 		switch runCanaryAndActivate(versionmanager, ver) {
 		case canaryActivated:
-			return true, nil
+			return channelOutcome{updated: true}, nil
 		case canaryPending:
 			logger.Warnf("Aborting the fallback chain after a canary network error on %s", ver)
-			return false, nil
+			return channelOutcome{}, nil
 		default:
 			continue
 		}
 	}
 
-	logger.Warnf("All fallback attempts failed canary; provisionally activating latest %s as last resort", latestVersion)
+	if versionmanager.HasUsableBinary() {
+		logger.Warnf("All fallback attempts failed canary; keeping the installed version")
+		return channelOutcome{canaryFailed: true}, nil
+	}
+
+	logger.Warnf("No usable binary on disk; provisionally activating latest %s as last resort", latestVersion)
 
 	binaryPath, err := ensureVersionBinary(latestRelease, latestVersion)
 	if err != nil {
-		return false, fmt.Errorf("last-resort: %w", err)
+		return channelOutcome{canaryFailed: true}, fmt.Errorf("last-resort: %w", err)
 	}
 
 	versionmanager.ProvisionallyActivate(latestVersion, binaryPath)
-	return true, nil
+	return channelOutcome{updated: true, canaryFailed: true}, nil
 }
 
 var updateCheckRequests = make(chan struct{}, 1)
