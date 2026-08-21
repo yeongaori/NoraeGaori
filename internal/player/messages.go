@@ -61,7 +61,9 @@ func deliverNowPlaying(sender embedSender, guildID string, song *queue.Song, q *
 		if err != nil {
 			logger.Warnf("Failed to update loading message: %v", err)
 			if q.ShowStartedTrack {
-				sender.ChannelMessageSendEmbed(q.TextChannelID, nowPlayingEmbed)
+				if _, sendErr := sender.ChannelMessageSendEmbed(q.TextChannelID, nowPlayingEmbed); sendErr != nil {
+					logger.Warnf("Failed to send the now playing message: %v", sendErr)
+				}
 			}
 		}
 
@@ -79,7 +81,9 @@ func deliverNowPlaying(sender embedSender, guildID string, song *queue.Song, q *
 			song.RequestedByTag,
 			song.Thumbnail,
 		)
-		sender.ChannelMessageSendEmbed(q.TextChannelID, embed)
+		if _, err := sender.ChannelMessageSendEmbed(q.TextChannelID, embed); err != nil {
+			logger.Warnf("Failed to send the now playing message: %v", err)
+		}
 	}
 
 	if reconnectMsg := getReconnectMessage(guildID); reconnectMsg != nil {
@@ -95,7 +99,9 @@ func deliverNowPlaying(sender embedSender, guildID string, song *queue.Song, q *
 			song.RequestedByTag,
 			song.Thumbnail,
 		)
-		sender.ChannelMessageEditEmbed(reconnectMsg.ChannelID, reconnectMsg.ID, reconnectedEmbed)
+		if _, err := sender.ChannelMessageEditEmbed(reconnectMsg.ChannelID, reconnectMsg.ID, reconnectedEmbed); err != nil {
+			logger.Warnf("Failed to update the stream reconnected message: %v", err)
+		}
 		deleteReconnectMessage(guildID)
 	}
 }

@@ -193,7 +193,6 @@ func TestPanelAndEditorStayInsideDiscordLimits(t *testing.T) {
 						t.Errorf("editor field %q is empty", field.Name)
 					}
 				}
-				break
 			}
 		})
 	}

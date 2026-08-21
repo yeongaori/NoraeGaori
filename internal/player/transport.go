@@ -269,12 +269,20 @@ func ResumeOrStart(session *discordgo.Session, guildID string) {
 
 	if paused {
 		logger.Debugf("Resuming playback for guild: %s", guildID)
-		go Resume(session, guildID)
+		go func() {
+			if err := Resume(session, guildID); err != nil {
+				logger.Warnf("Failed to resume playback for guild %s: %v", guildID, err)
+			}
+		}()
 		return
 	}
 
 	logger.Debugf("Starting playback for guild: %s", guildID)
-	go Play(session, guildID)
+	go func() {
+		if err := Play(session, guildID); err != nil {
+			logger.Warnf("Failed to start playback for guild %s: %v", guildID, err)
+		}
+	}()
 }
 
 func resumeInternal(session *discordgo.Session, guildID string) error {
