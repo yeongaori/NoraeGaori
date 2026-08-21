@@ -59,6 +59,15 @@ func useTestSigningKey(t *testing.T) *openpgp.Entity {
 	return entity
 }
 
+func useTestSigner(t *testing.T) func([]byte) []byte {
+	t.Helper()
+
+	entity := useTestSigningKey(t)
+	return func(checksums []byte) []byte {
+		return signChecksums(t, entity, checksums)
+	}
+}
+
 func signChecksums(t *testing.T, entity *openpgp.Entity, checksums []byte) []byte {
 	t.Helper()
 

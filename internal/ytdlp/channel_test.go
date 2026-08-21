@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -397,19 +398,25 @@ func TestRequestUpdateCheckNeverBlocks(t *testing.T) {
 	}
 }
 
-func stubLatestRelease(t *testing.T, version string) {
+func stubLatestRelease(t *testing.T, release *GitHubRelease) {
 	t.Helper()
 
 	previous := getLatestReleaseFn
 	getLatestReleaseFn = func(channel string) (*GitHubRelease, error) {
-		return &GitHubRelease{TagName: version}, nil
+		return release, nil
 	}
 	t.Cleanup(func() { getLatestReleaseFn = previous })
 }
 
+func stubLatestVersion(t *testing.T, version string) {
+	t.Helper()
+
+	stubLatestRelease(t, &GitHubRelease{TagName: version})
+}
+
 func TestUpdateFromChannelStaysPutWhenTheActiveVersionIsHealthy(t *testing.T) {
 	versionmanager := useVersionManager(t)
-	stubLatestRelease(t, "2026.07.04")
+	stubLatestVersion(t, "2026.07.04")
 	stubCanary(t, true, false)
 
 	addVersion(versionmanager, "2026.07.04", &VersionEntry{Path: writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.07.04"), "echo 2026.07.04"), State: StateVerified})
@@ -430,7 +437,7 @@ func TestUpdateFromChannelStaysPutWhenTheActiveVersionIsHealthy(t *testing.T) {
 
 func TestUpdateFromChannelReturnsToStableWhenTheActiveVersionIsFailing(t *testing.T) {
 	versionmanager := useVersionManager(t)
-	stubLatestRelease(t, "2026.07.04")
+	stubLatestVersion(t, "2026.07.04")
 	stubCanary(t, true, false)
 
 	addVersion(versionmanager, "2026.07.04", &VersionEntry{Path: writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.07.04"), "echo 2026.07.04"), State: StateVerified})
@@ -455,7 +462,7 @@ func TestUpdateFromChannelReturnsToStableWhenTheActiveVersionIsFailing(t *testin
 
 func TestUpdateFromChannelCanariesAPendingReleaseAlreadyOnDisk(t *testing.T) {
 	versionmanager := useVersionManager(t)
-	stubLatestRelease(t, "2026.08.19")
+	stubLatestVersion(t, "2026.08.19")
 	stubCanary(t, true, false)
 
 	addVersion(versionmanager, "2026.08.19", &VersionEntry{Path: writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.08.19"), "echo 2026.08.19"), State: StatePending})
@@ -476,7 +483,7 @@ func TestUpdateFromChannelCanariesAPendingReleaseAlreadyOnDisk(t *testing.T) {
 
 func TestUpdateFromChannelReportsABlacklistedLatestWithoutAFallbackChain(t *testing.T) {
 	versionmanager := useVersionManager(t)
-	stubLatestRelease(t, "2026.08.19")
+	stubLatestVersion(t, "2026.08.19")
 
 	addVersion(versionmanager, "2026.08.19", &VersionEntry{Path: "lib/b/yt-dlp", State: StateBlacklisted})
 	addVersion(versionmanager, "2026.08.18.122307", &VersionEntry{Path: writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.08.18.122307"), "echo 2026.08.18.122307"), State: StateActive, Successes: 40})
@@ -498,5 +505,49 @@ func TestUpdateFromChannelReportsABlacklistedLatestWithoutAFallbackChain(t *test
 	}
 	if outcome.updated {
 		t.Error("got updated=true, want false")
+	}
+}
+
+func TestUpdateFromChannelInstallsAndActivatesANewRelease(t *testing.T) {
+	versionmanager := useVersionManager(t)
+	stubCanary(t, true, false)
+	stubLatestRelease(t, serveInstallableReleases(t, "2026.09.01")[0])
+
+	addVersion(versionmanager, "2026.08.19", &VersionEntry{Path: "lib/o/yt-dlp", State: StateActive, Successes: 40})
+	versionmanager.state.ActiveVersion = "2026.08.19"
+
+	outcome, err := updateFromChannel(config.YtDlpChannelStable, false)
+	if err != nil {
+		t.Fatalf("updateFromChannel returned %v, want nil", err)
+	}
+	if !outcome.updated {
+		t.Error("got updated=false, want a brand new release downloaded and activated")
+	}
+
+	if got := versionmanager.GetActiveVersion(); got != "2026.09.01" {
+		t.Errorf("got active %q, want the newly installed release", got)
+	}
+	if _, statErr := os.Stat(VersionedBinaryPath("2026.09.01")); statErr != nil {
+		t.Errorf("the release was activated but no binary reached disk: %v", statErr)
+	}
+}
+
+func TestUpdateFromChannelReportsAFailedDownload(t *testing.T) {
+	versionmanager := useVersionManager(t)
+	stubCanary(t, true, false)
+	stubLatestRelease(t, serveInstallableRelease(t, "2026.09.01", []byte("#!/bin/sh\necho 2026.09.01\n"), true))
+
+	addVersion(versionmanager, "2026.08.19", &VersionEntry{Path: "lib/o/yt-dlp", State: StateActive, Successes: 40})
+	versionmanager.state.ActiveVersion = "2026.08.19"
+
+	if _, err := updateFromChannel(config.YtDlpChannelStable, false); err == nil {
+		t.Fatal("updateFromChannel returned nil, want an error when the download fails")
+	}
+
+	if _, ok := versionmanager.GetVersionState("2026.09.01"); ok {
+		t.Error("a release that never downloaded was registered anyway")
+	}
+	if got := versionmanager.GetActiveVersion(); got != "2026.08.19" {
+		t.Errorf("got active %q, want the installed version untouched by a failed download", got)
 	}
 }

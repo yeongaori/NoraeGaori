@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"noraegaori/internal/config"
 )
@@ -25,14 +26,35 @@ func serveInstallableRelease(t *testing.T, version string, payload []byte, break
 		t.Skip("fake executables are not portable to windows")
 	}
 
-	entity := useTestSigningKey(t)
+	return installableRelease(t, useTestSigner(t), version, payload, breakDownload)
+}
+
+func serveInstallableReleases(t *testing.T, versions ...string) []*GitHubRelease {
+	t.Helper()
+
+	if runtime.GOOS == "windows" {
+		t.Skip("fake executables are not portable to windows")
+	}
+
+	sign := useTestSigner(t)
+
+	releases := make([]*GitHubRelease, 0, len(versions))
+	for _, version := range versions {
+		payload := []byte("#!/bin/sh\necho " + version + "\n")
+		releases = append(releases, installableRelease(t, sign, version, payload, false))
+	}
+	return releases
+}
+
+func installableRelease(t *testing.T, sign func([]byte) []byte, version string, payload []byte, breakDownload bool) *GitHubRelease {
+	t.Helper()
 
 	var sums bytes.Buffer
 	for _, name := range platformAssetNames {
 		fmt.Fprintf(&sums, "%s  %s\n", sha256Hex(payload), name)
 	}
 	checksums := sums.Bytes()
-	signature := signChecksums(t, entity, checksums)
+	signature := sign(checksums)
 
 	mux := http.NewServeMux()
 	for _, name := range platformAssetNames {
@@ -184,6 +206,16 @@ func stubCanary(t *testing.T, passed, networkError bool) {
 	t.Cleanup(func() { runCanary = previous })
 }
 
+func stubCanaryPerVersion(t *testing.T, verdicts map[string]bool) {
+	t.Helper()
+
+	previous := runCanary
+	runCanary = func(_ *VersionManager, version string) (bool, bool) {
+		return verdicts[version], false
+	}
+	t.Cleanup(func() { runCanary = previous })
+}
+
 func TestExhaustedFallbackKeepsTheInstalledVersion(t *testing.T) {
 	versionmanager := useVersionManager(t)
 	stubCanary(t, false, false)
@@ -277,5 +309,91 @@ func TestResolveCurrentVersionReportsNothingWhenNoBinaryExists(t *testing.T) {
 
 	if got := resolveCurrentVersion(nil); got != "" {
 		t.Errorf("got %q, want an empty version when nothing is installed", got)
+	}
+}
+
+func stubReleaseList(t *testing.T, releases []*GitHubRelease) {
+	t.Helper()
+
+	previous := getReleasesFn
+	getReleasesFn = func(channel string, perPage int) ([]*GitHubRelease, error) {
+		return releases, nil
+	}
+	t.Cleanup(func() { getReleasesFn = previous })
+}
+
+func TestFallbackChainActivatesTheFirstCandidateThatPasses(t *testing.T) {
+	versionmanager := useVersionManager(t)
+
+	releases := serveInstallableReleases(t, "2026.09.03", "2026.09.02", "2026.09.01")
+	stubReleaseList(t, releases)
+	stubCanaryPerVersion(t, map[string]bool{"2026.09.01": true})
+
+	outcome, err := installFallbackVersion(versionmanager, config.YtDlpChannelStable, "2026.09.03", releases[0])
+	if err != nil {
+		t.Fatalf("installFallbackVersion returned %v, want nil", err)
+	}
+	if !outcome.updated {
+		t.Error("got updated=false, want the passing candidate activated")
+	}
+
+	if got := versionmanager.GetActiveVersion(); got != "2026.09.01" {
+		t.Errorf("got active %q, want the first candidate whose canary passed", got)
+	}
+	if state, _ := versionmanager.GetVersionState("2026.09.02"); state != StateBlacklisted {
+		t.Errorf("got %q for the rejected candidate, want it blacklisted", state)
+	}
+}
+
+func TestFallbackChainStopsOnACanaryNetworkError(t *testing.T) {
+	versionmanager := useVersionManager(t)
+
+	releases := serveInstallableReleases(t, "2026.09.03", "2026.09.02", "2026.09.01")
+	stubReleaseList(t, releases)
+
+	previous := runCanary
+	runCanary = func(_ *VersionManager, version string) (bool, bool) { return false, true }
+	t.Cleanup(func() { runCanary = previous })
+
+	outcome, err := installFallbackVersion(versionmanager, config.YtDlpChannelStable, "2026.09.03", releases[0])
+	if err != nil {
+		t.Fatalf("installFallbackVersion returned %v, want nil", err)
+	}
+	if outcome.updated || outcome.canaryFailed {
+		t.Errorf("got %+v, want a zero outcome: a network blip must not condemn the channel", outcome)
+	}
+
+	if _, ok := versionmanager.GetVersionState("2026.09.01"); ok {
+		t.Error("the chain kept trying candidates after a canary network error")
+	}
+}
+
+func TestFallbackChainProvisionallyActivatesWhenNothingUsableRemains(t *testing.T) {
+	versionmanager := useVersionManager(t)
+
+	releases := serveInstallableReleases(t, "2026.09.03", "2026.09.02")
+	stubReleaseList(t, releases)
+	stubCanary(t, false, false)
+
+	addVersion(versionmanager, "2026.08.19", &VersionEntry{Path: "lib/gone/yt-dlp", State: StateVerified, Successes: 40, BlacklistedAt: time.Now()})
+	versionmanager.state.ActiveVersion = "2026.08.19"
+
+	outcome, err := installFallbackVersion(versionmanager, config.YtDlpChannelStable, "2026.09.03", releases[0])
+	if err != nil {
+		t.Fatalf("installFallbackVersion returned %v, want nil", err)
+	}
+	if !outcome.updated || !outcome.canaryFailed {
+		t.Errorf("got %+v, want {updated:true canaryFailed:true} for the last resort", outcome)
+	}
+
+	if got := versionmanager.GetActiveVersion(); got != "2026.09.03" {
+		t.Errorf("got active %q, want the latest provisionally activated as a last resort", got)
+	}
+	state, _ := versionmanager.GetVersionState("2026.09.03")
+	if state != StateProvisional {
+		t.Errorf("got state %q, want %q: the binary never passed a canary", state, StateProvisional)
+	}
+	if !versionmanager.state.Versions["2026.09.03"].BlacklistedAt.IsZero() {
+		t.Error("the provisional activation left a blacklist timestamp behind")
 	}
 }
