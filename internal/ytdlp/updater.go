@@ -555,6 +555,8 @@ var updateChannelFn = updateFromChannel
 
 var getReleasesFn = GetReleases
 
+var getLatestReleaseFn = GetLatestRelease
+
 func UpdateYtDlp(force bool) (bool, error) {
 	channel := ConfiguredChannel()
 	if channel != config.YtDlpChannelAuto {
@@ -578,7 +580,7 @@ func updateFromChannel(channel string, force bool) (channelOutcome, error) {
 	versionmanager := GetVersionManager()
 	currentVersion := resolveCurrentVersion(versionmanager)
 
-	release, err := GetLatestRelease(channel)
+	release, err := getLatestReleaseFn(channel)
 	if err != nil {
 		return channelOutcome{}, fmt.Errorf("failed to fetch release info: %w", err)
 	}
@@ -602,6 +604,11 @@ func updateFromChannel(channel string, force bool) (channelOutcome, error) {
 			}
 			if state == StateActive || state == StateProvisional {
 				logger.Debugf("Version %s already registered as %s", latestVersion, state)
+				return channelOutcome{}, nil
+			}
+
+			if state == StateVerified && activeVersionIsHealthy() {
+				logger.Debugf("Version %s is verified but the active version is healthy; staying put", latestVersion)
 				return channelOutcome{}, nil
 			}
 

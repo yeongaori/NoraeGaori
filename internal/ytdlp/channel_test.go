@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -393,5 +394,109 @@ func TestRequestUpdateCheckNeverBlocks(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("RequestUpdateCheck blocked with no reader draining the channel")
+	}
+}
+
+func stubLatestRelease(t *testing.T, version string) {
+	t.Helper()
+
+	previous := getLatestReleaseFn
+	getLatestReleaseFn = func(channel string) (*GitHubRelease, error) {
+		return &GitHubRelease{TagName: version}, nil
+	}
+	t.Cleanup(func() { getLatestReleaseFn = previous })
+}
+
+func TestUpdateFromChannelStaysPutWhenTheActiveVersionIsHealthy(t *testing.T) {
+	versionmanager := useVersionManager(t)
+	stubLatestRelease(t, "2026.07.04")
+	stubCanary(t, true, false)
+
+	addVersion(versionmanager, "2026.07.04", &VersionEntry{Path: writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.07.04"), "echo 2026.07.04"), State: StateVerified})
+	addVersion(versionmanager, "2026.08.18.122307", &VersionEntry{Path: "lib/n/yt-dlp", State: StateActive, Successes: 40})
+	versionmanager.state.ActiveVersion = "2026.08.18.122307"
+
+	outcome, err := updateFromChannel(config.YtDlpChannelStable, false)
+	if err != nil {
+		t.Fatalf("updateFromChannel returned %v, want nil", err)
+	}
+	if outcome.updated || outcome.canaryFailed {
+		t.Errorf("got %+v, want a zero outcome: nothing should happen while the active version is healthy", outcome)
+	}
+	if got := versionmanager.GetActiveVersion(); got != "2026.08.18.122307" {
+		t.Errorf("got active %q, want the healthy version kept rather than an older verified release re-adopted", got)
+	}
+}
+
+func TestUpdateFromChannelReturnsToStableWhenTheActiveVersionIsFailing(t *testing.T) {
+	versionmanager := useVersionManager(t)
+	stubLatestRelease(t, "2026.07.04")
+	stubCanary(t, true, false)
+
+	addVersion(versionmanager, "2026.07.04", &VersionEntry{Path: writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.07.04"), "echo 2026.07.04"), State: StateVerified})
+	addVersion(versionmanager, "2026.08.18.122307", &VersionEntry{Path: "lib/n/yt-dlp", State: StateActive, Successes: 40})
+	versionmanager.state.ActiveVersion = "2026.08.18.122307"
+
+	for _, video := range []string{"vidA", "vidB", "vidC"} {
+		versionmanager.SaveError("2026.08.18.122307", video, "ffmpeg produced no audio: exit status 8: 403 Forbidden")
+	}
+
+	outcome, err := updateFromChannel(config.YtDlpChannelStable, false)
+	if err != nil {
+		t.Fatalf("updateFromChannel returned %v, want nil", err)
+	}
+	if !outcome.updated {
+		t.Error("got updated=false, want the verified stable re-adopted once the active version is failing playback")
+	}
+	if got := versionmanager.GetActiveVersion(); got != "2026.07.04" {
+		t.Errorf("got active %q, want the bot moved back onto the verified stable", got)
+	}
+}
+
+func TestUpdateFromChannelCanariesAPendingReleaseAlreadyOnDisk(t *testing.T) {
+	versionmanager := useVersionManager(t)
+	stubLatestRelease(t, "2026.08.19")
+	stubCanary(t, true, false)
+
+	addVersion(versionmanager, "2026.08.19", &VersionEntry{Path: writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.08.19"), "echo 2026.08.19"), State: StatePending})
+	addVersion(versionmanager, "2026.08.18.122307", &VersionEntry{Path: "lib/n/yt-dlp", State: StateActive, Successes: 40})
+	versionmanager.state.ActiveVersion = "2026.08.18.122307"
+
+	outcome, err := updateFromChannel(config.YtDlpChannelStable, false)
+	if err != nil {
+		t.Fatalf("updateFromChannel returned %v, want nil", err)
+	}
+	if !outcome.updated {
+		t.Error("got updated=false, want a pending release whose binary is on disk to be canaried and activated")
+	}
+	if got := versionmanager.GetActiveVersion(); got != "2026.08.19" {
+		t.Errorf("got active %q, want the freshly verified release", got)
+	}
+}
+
+func TestUpdateFromChannelReportsABlacklistedLatestWithoutAFallbackChain(t *testing.T) {
+	versionmanager := useVersionManager(t)
+	stubLatestRelease(t, "2026.08.19")
+
+	addVersion(versionmanager, "2026.08.19", &VersionEntry{Path: "lib/b/yt-dlp", State: StateBlacklisted})
+	addVersion(versionmanager, "2026.08.18.122307", &VersionEntry{Path: writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.08.18.122307"), "echo 2026.08.18.122307"), State: StateActive, Successes: 40})
+	versionmanager.state.ActiveVersion = "2026.08.18.122307"
+
+	previous := getReleasesFn
+	getReleasesFn = func(channel string, perPage int) ([]*GitHubRelease, error) {
+		t.Error("the fallback chain ran even though a usable binary is installed")
+		return nil, nil
+	}
+	t.Cleanup(func() { getReleasesFn = previous })
+
+	outcome, err := updateFromChannel(config.YtDlpChannelStable, false)
+	if err != nil {
+		t.Fatalf("updateFromChannel returned %v, want nil", err)
+	}
+	if !outcome.canaryFailed {
+		t.Error("got canaryFailed=false, want a blacklisted latest reported so the other channel is tried")
+	}
+	if outcome.updated {
+		t.Error("got updated=true, want false")
 	}
 }
