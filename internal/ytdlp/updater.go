@@ -754,6 +754,7 @@ func runBackgroundUpdateCheck() {
 		logger.Info("Background update found new version")
 	}
 
+	versionmanager.Cleanup()
 	versionmanager.SetLastGitHubCheck(time.Now())
 }
 

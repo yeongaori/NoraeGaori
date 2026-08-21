@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -438,6 +439,53 @@ func TestCleanupOldVersionsRemovesStalePending(t *testing.T) {
 	if _, ok := versionmanager.state.Versions["2026.07.03"]; !ok {
 		t.Error("a freshly pending version was removed")
 	}
+}
+
+func TestCleanupTakesTheLockItself(t *testing.T) {
+	versionmanager := newTestVersionManager(t)
+
+	stale := writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.01.01"), "exit 0")
+	active := writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.07.04"), "exit 0")
+
+	addVersion(versionmanager, "2026.01.01", &VersionEntry{
+		Path:         stale,
+		State:        StatePending,
+		RegisteredAt: time.Now().Add(-2 * stalePendingTimeout),
+	})
+	addVersion(versionmanager, "2026.07.04", &VersionEntry{Path: active, State: StateActive, Successes: 400})
+	versionmanager.state.ActiveVersion = "2026.07.04"
+
+	versionmanager.Cleanup()
+
+	if _, ok := versionmanager.state.Versions["2026.01.01"]; ok {
+		t.Error("the stale pending version survived a scheduled cleanup on a version far past its success trigger")
+	}
+}
+
+func TestCleanupIsSafeAlongsidePlaybackResults(t *testing.T) {
+	versionmanager := newTestVersionManager(t)
+
+	active := writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.07.04"), "exit 0")
+	addVersion(versionmanager, "2026.07.04", &VersionEntry{Path: active, State: StateActive})
+	versionmanager.state.ActiveVersion = "2026.07.04"
+
+	var waiter sync.WaitGroup
+	waiter.Add(2)
+
+	go func() {
+		defer waiter.Done()
+		for i := 0; i < 50; i++ {
+			versionmanager.Cleanup()
+		}
+	}()
+	go func() {
+		defer waiter.Done()
+		for i := 0; i < 50; i++ {
+			versionmanager.SaveSuccess("2026.07.04", "jNQXAC9IVRw")
+		}
+	}()
+
+	waiter.Wait()
 }
 
 func TestActiveBinaryPathRollsBackAfterRepeatedErrors(t *testing.T) {

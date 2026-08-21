@@ -530,6 +530,12 @@ func (versionmanager *VersionManager) tryPromoteVerified() {
 	versionmanager.persist()
 }
 
+func (versionmanager *VersionManager) Cleanup() {
+	versionmanager.mu.Lock()
+	defer versionmanager.mu.Unlock()
+	versionmanager.cleanupOldVersions()
+}
+
 func (versionmanager *VersionManager) cleanupOldVersions() {
 	active := versionmanager.state.ActiveVersion
 	fallback := versionmanager.selectBestVersion()
