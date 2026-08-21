@@ -34,6 +34,7 @@ const (
 	stalePendingTimeout = 48 * time.Hour
 	canaryRingSize      = 10
 	canaryTestCount     = 3
+	ringFailureQuorum   = 2
 	videoIDLength       = 11
 	versionDataFile     = "data/ytdlp_versions.json"
 )
@@ -43,6 +44,15 @@ const canaryAudioFormat = "bestaudio/best"
 var fixedCanaryIDs = []string{
 	"jNQXAC9IVRw",
 	"BaW_jenozKc",
+}
+
+func isFixedCanaryID(candidate string) bool {
+	for _, fixed := range fixedCanaryIDs {
+		if fixed == candidate {
+			return true
+		}
+	}
+	return false
 }
 
 func isVideoID(candidate string) bool {
@@ -608,6 +618,7 @@ func (versionmanager *VersionManager) RunCanary(version string) (passed bool, ne
 		networkCount      int
 		inconclusiveCount int
 		hardFailCount     int
+		ringFailCount     int
 		lastFailure       string
 	)
 
@@ -627,6 +638,13 @@ func (versionmanager *VersionManager) RunCanary(version string) (passed bool, ne
 			logger.Debugf("Canary video %s failed for %s: %s", id, version, result.errMsg)
 			hardFailCount++
 			lastFailure = result.errMsg
+			if !isFixedCanaryID(id) {
+				ringFailCount++
+				if ringFailCount >= ringFailureQuorum {
+					logger.Warnf("Canary FAILED for %s: %d recently played videos failed: %s", version, ringFailCount, lastFailure)
+					return false, false
+				}
+			}
 		}
 	}
 
