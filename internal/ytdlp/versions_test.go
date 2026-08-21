@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -566,6 +567,82 @@ func TestRunCanaryTreatsUnavailableVideosAsInconclusive(t *testing.T) {
 	}
 	if networkError {
 		t.Error("got networkError=true, want false")
+	}
+}
+
+func TestCanaryRequestsAWellFormedWatchURL(t *testing.T) {
+	versionmanager := newTestVersionManager(t)
+	versionmanager.state.CanaryRing = []string{"https://www.youtube.com/watch?v=ezXluhqaqfI", "tXHXkDqn_Ic"}
+
+	argsFile := filepath.Join(t.TempDir(), "args")
+	path := writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.07.04"), `echo "$@" >> `+argsFile+`; exit 1`)
+	addVersion(versionmanager, "2026.07.04", &VersionEntry{Path: path, State: StatePending})
+
+	versionmanager.RunCanary("2026.07.04")
+
+	recorded, err := os.ReadFile(argsFile)
+	if err != nil {
+		t.Fatalf("the fake binary recorded no arguments: %v", err)
+	}
+
+	for _, line := range strings.Split(strings.TrimSpace(string(recorded)), "\n") {
+		if count := strings.Count(line, "watch?v="); count != 1 {
+			t.Errorf("got %d occurrences of watch?v= in %q, want exactly 1: a full URL was pasted into the URL template", count, line)
+		}
+	}
+}
+
+func TestCanaryTreatsAnUnusableTargetAsInconclusive(t *testing.T) {
+	versionmanager := newTestVersionManager(t)
+	versionmanager.state.CanaryRing = []string{"https://youtu.be/xjbleyEIFyA"}
+
+	path := writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.07.04"), `echo "ERROR: Unsupported URL: $*" >&2; exit 1`)
+	addVersion(versionmanager, "2026.07.04", &VersionEntry{Path: path, State: StatePending})
+
+	result := versionmanager.testExtraction(path, "https://youtu.be/xjbleyEIFyA")
+	if !result.inconclusive {
+		t.Errorf("got %+v, want inconclusive: a target that is not a video ID says nothing about the binary", result)
+	}
+}
+
+func TestRunCanaryClearsABinaryWhenOnlyOneVideoIsBroken(t *testing.T) {
+	versionmanager := newTestVersionManager(t)
+	versionmanager.state.CanaryRing = []string{"ezXluhqaqfI"}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(make([]byte, 2048))
+	}))
+	defer server.Close()
+
+	script := `case "$*" in
+*ezXluhqaqfI*) echo "ERROR: unable to extract player response" >&2; exit 1 ;;
+*) printf '{"id":"ok","formats":[{"url":"` + server.URL + `"}]}' ;;
+esac`
+	path := writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.07.04"), script)
+	addVersion(versionmanager, "2026.07.04", &VersionEntry{Path: path, State: StatePending})
+
+	passed, networkError := versionmanager.RunCanary("2026.07.04")
+	if !passed {
+		t.Error("got passed=false, want the fixed videos to clear a binary that only one played video breaks")
+	}
+	if networkError {
+		t.Error("got networkError=true, want false")
+	}
+}
+
+func TestRunCanaryStillFailsWhenTheFixedVideosBreakToo(t *testing.T) {
+	versionmanager := newTestVersionManager(t)
+	versionmanager.state.CanaryRing = []string{"ezXluhqaqfI"}
+
+	path := writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.07.04"), `echo "ERROR: unable to extract player response" >&2; exit 1`)
+	addVersion(versionmanager, "2026.07.04", &VersionEntry{Path: path, State: StatePending})
+
+	passed, networkError := versionmanager.RunCanary("2026.07.04")
+	if passed {
+		t.Error("got passed=true, want a binary that breaks every video to still be condemned")
+	}
+	if networkError {
+		t.Error("got networkError=true, want the failure attributed to the binary")
 	}
 }
 

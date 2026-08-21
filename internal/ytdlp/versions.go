@@ -34,6 +34,7 @@ const (
 	stalePendingTimeout = 48 * time.Hour
 	canaryRingSize      = 10
 	canaryTestCount     = 3
+	videoIDLength       = 11
 	versionDataFile     = "data/ytdlp_versions.json"
 )
 
@@ -42,6 +43,20 @@ const canaryAudioFormat = "bestaudio/best"
 var fixedCanaryIDs = []string{
 	"jNQXAC9IVRw",
 	"BaW_jenozKc",
+}
+
+func isVideoID(candidate string) bool {
+	if len(candidate) != videoIDLength {
+		return false
+	}
+	for _, r := range candidate {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_', r == '-':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 type ErrorRecord struct {
@@ -592,6 +607,8 @@ func (versionmanager *VersionManager) RunCanary(version string) (passed bool, ne
 	var (
 		networkCount      int
 		inconclusiveCount int
+		hardFailCount     int
+		lastFailure       string
 	)
 
 	for _, id := range ids {
@@ -607,9 +624,15 @@ func (versionmanager *VersionManager) RunCanary(version string) (passed bool, ne
 			logger.Debugf("Canary inconclusive for %s (not a binary problem): %s", version, result.errMsg)
 			inconclusiveCount++
 		default:
-			logger.Warnf("Canary FAILED for %s: %s", version, result.errMsg)
-			return false, false
+			logger.Debugf("Canary video %s failed for %s: %s", id, version, result.errMsg)
+			hardFailCount++
+			lastFailure = result.errMsg
 		}
+	}
+
+	if hardFailCount > 0 {
+		logger.Warnf("Canary FAILED for %s (%d/%d videos): %s", version, hardFailCount, len(ids), lastFailure)
+		return false, false
 	}
 
 	if networkCount > 0 && inconclusiveCount == 0 {
@@ -623,6 +646,10 @@ func (versionmanager *VersionManager) RunCanary(version string) (passed bool, ne
 }
 
 func (versionmanager *VersionManager) testExtraction(binaryPath, videoID string) canaryResult {
+	if !isVideoID(videoID) {
+		return canaryResult{videoID: videoID, inconclusive: true, errMsg: "not a video ID"}
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 

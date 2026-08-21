@@ -51,3 +51,27 @@ func TestGetInnertubeClientInitializesExactlyOnce(t *testing.T) {
 		}
 	}
 }
+
+func TestExtractVideoIDHandlesEveryURLShapeTheBotStores(t *testing.T) {
+	tests := []struct {
+		name string
+		url  string
+		want string
+	}{
+		{"watch", "https://www.youtube.com/watch?v=ezXluhqaqfI", "ezXluhqaqfI"},
+		{"music", "https://music.youtube.com/watch?v=SGmfjVIGUcY", "SGmfjVIGUcY"},
+		{"short", "https://youtu.be/3pot1k7jNMk", "3pot1k7jNMk"},
+		{"short with tracking", "https://youtu.be/r2ko422xW0w?si=FbAFmfYCH0ccc1EW", "r2ko422xW0w"},
+		{"watch in a playlist", "https://www.youtube.com/watch?v=D3boQlSnHCg&list=PLabc", "D3boQlSnHCg"},
+		{"embed", "https://www.youtube.com/embed/tXHXkDqn_Ic", "tXHXkDqn_Ic"},
+		{"not a video URL", "https://example.com/song.mp3", ""},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := extractVideoID(test.url); got != test.want {
+				t.Errorf("got %q, want %q", got, test.want)
+			}
+		})
+	}
+}

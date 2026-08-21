@@ -36,10 +36,11 @@ func saveVersionResult(url string, err error) {
 	if version == "" {
 		return
 	}
+	videoID := extractVideoID(url)
 	if err == nil {
-		versionmanager.SaveSuccess(version, url)
+		versionmanager.SaveSuccess(version, videoID)
 	} else {
-		versionmanager.SaveError(version, url, err.Error())
+		versionmanager.SaveError(version, videoID, err.Error())
 	}
 }
 
