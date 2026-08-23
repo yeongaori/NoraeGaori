@@ -4,26 +4,18 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	"noraegaori/internal/testutil"
 )
 
 func TestGetInnertubeClientInitializesExactlyOnce(t *testing.T) {
-	previousInit := innertubeInit
-	previousClient := innertubeClient
-	previousOnce := innertubeOnce
-
-	t.Cleanup(func() {
-		innertubeInit = previousInit
-		innertubeClient = previousClient
-		innertubeOnce = previousOnce
-	})
-
 	var calls int64
-	innertubeClient = nil
-	innertubeOnce = &sync.Once{}
-	innertubeInit = func() {
+	testutil.Swap(t, &innertubeClient, nil)
+	testutil.Swap(t, &innertubeOnce, &sync.Once{})
+	testutil.Swap(t, &innertubeInit, func() {
 		atomic.AddInt64(&calls, 1)
 		innertubeClient = &InnertubeClient{clientName: "TEST"}
-	}
+	})
 
 	const goroutines = 32
 	seen := make([]*InnertubeClient, goroutines)

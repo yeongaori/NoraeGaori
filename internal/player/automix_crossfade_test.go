@@ -3,11 +3,12 @@ package player
 import (
 	"errors"
 	"fmt"
-	"noraegaori/internal/audio/ffmpeg"
 	"testing"
 	"time"
 
+	"noraegaori/internal/audio/ffmpeg"
 	"noraegaori/internal/queue"
+	"noraegaori/internal/testutil"
 )
 
 var errFakeStream = errors.New("fake stream failure")
@@ -66,9 +67,7 @@ func stubAudioStream(t *testing.T) audioStream {
 
 	stream := newFakeStream(0)
 
-	previous := newAudioStream
-	newAudioStream = func([]string, bool) (audioStream, error) { return stream, nil }
-	t.Cleanup(func() { newAudioStream = previous })
+	testutil.Swap(t, &newAudioStream, func([]string, bool) (audioStream, error) { return stream, nil })
 
 	return stream
 }
@@ -76,9 +75,7 @@ func stubAudioStream(t *testing.T) audioStream {
 func failingAudioStream(t *testing.T) {
 	t.Helper()
 
-	previous := newAudioStream
-	newAudioStream = func([]string, bool) (audioStream, error) { return nil, errFakeStream }
-	t.Cleanup(func() { newAudioStream = previous })
+	testutil.Swap(t, &newAudioStream, func([]string, bool) (audioStream, error) { return nil, errFakeStream })
 }
 
 func crossfadeFade() fadeSettings {

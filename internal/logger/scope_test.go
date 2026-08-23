@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"noraegaori/internal/testutil"
 )
 
 func captureOutput(t *testing.T) *bytes.Buffer {
@@ -153,10 +155,7 @@ func TestCallerTagNamesTheCallingFunction(t *testing.T) {
 func TestScopedDebugRespectsDebugMode(t *testing.T) {
 	buffer := captureOutput(t)
 
-	previous := debugMode
-	t.Cleanup(func() { debugMode = previous })
-
-	debugMode = false
+	testutil.Swap(t, &debugMode, false)
 	Scope("x").Debug("hidden")
 	Debugf("also hidden")
 	if buffer.Len() != 0 {

@@ -4,15 +4,8 @@ import (
 	"testing"
 
 	"noraegaori/internal/queue"
+	"noraegaori/internal/testutil/queuetest"
 )
-
-func queueOf(requesters ...string) *queue.Queue {
-	songs := make([]*queue.Song, 0, len(requesters))
-	for index, requester := range requesters {
-		songs = append(songs, &queue.Song{ID: index + 1, RequestedByID: requester})
-	}
-	return &queue.Queue{Songs: songs}
-}
 
 func requestersOf(songs []*queue.Song) []string {
 	ids := make([]string, 0, len(songs))
@@ -23,7 +16,7 @@ func requestersOf(songs []*queue.Song) []string {
 }
 
 func TestAffectedSongsFollowsTheScope(t *testing.T) {
-	q := queueOf("a", "b", "c", "b")
+	q := queuetest.QueueOf("a", "b", "c", "b")
 
 	current := AffectedSongs(q, Target{Scope: ScopeCurrentSong})
 	if len(current) != 1 || current[0].RequestedByID != "a" {
@@ -46,11 +39,11 @@ func TestAffectedSongsIgnoresUnknownIDsAndEmptyQueues(t *testing.T) {
 		t.Errorf("a nil queue produced %v, want nothing", songs)
 	}
 
-	if songs := AffectedSongs(queueOf(), Target{Scope: ScopeCurrentSong}); songs != nil {
+	if songs := AffectedSongs(queuetest.QueueOf(), Target{Scope: ScopeCurrentSong}); songs != nil {
 		t.Errorf("an empty queue produced %v, want nothing", songs)
 	}
 
-	songs := AffectedSongs(queueOf("a", "b"), Target{Scope: ScopeSongs, SongIDs: []int{99}})
+	songs := AffectedSongs(queuetest.QueueOf("a", "b"), Target{Scope: ScopeSongs, SongIDs: []int{99}})
 	if len(songs) != 0 {
 		t.Errorf("an unknown song id matched %v, want nothing", requestersOf(songs))
 	}

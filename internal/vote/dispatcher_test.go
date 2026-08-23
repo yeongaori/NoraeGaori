@@ -4,18 +4,12 @@ import (
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
+
+	"noraegaori/internal/testutil/discordtest"
 )
 
-func dispatcherSession(t *testing.T) *discordgo.Session {
-	t.Helper()
-
-	session := &discordgo.Session{State: discordgo.NewState()}
-	session.State.User = &discordgo.User{ID: "bot"}
-	return session
-}
-
 func TestVoteForReactionRoutesOnlyItsOwnMessage(t *testing.T) {
-	session := dispatcherSession(t)
+	session := discordtest.Session(t, "bot")
 
 	vote := newVoteSession("guild1", KindSkip, "Skip", "⏭", "voice1", 2)
 	if _, claimed := activeVotes.claim(vote); !claimed {
@@ -58,7 +52,7 @@ func TestVoteForReactionSurvivesAnEmptyState(t *testing.T) {
 
 func TestCurrentThresholdFallsBackToTheSeedValue(t *testing.T) {
 	stubVoteEffects(t)
-	session := dispatcherSession(t)
+	session := discordtest.Session(t, "bot")
 
 	vote := newVoteSession("missing-guild", KindSkip, "Skip", "⏭", "voice1", 4)
 
@@ -69,7 +63,7 @@ func TestCurrentThresholdFallsBackToTheSeedValue(t *testing.T) {
 
 func TestCurrentThresholdRecomputesFromTheChannel(t *testing.T) {
 	stubVoteEffects(t)
-	session := dispatcherSession(t)
+	session := discordtest.Session(t, "bot")
 
 	states := []*discordgo.VoiceState{
 		voiceStateWithMember("u1", "voice1", false),

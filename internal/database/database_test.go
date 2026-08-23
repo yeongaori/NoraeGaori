@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"noraegaori/internal/testutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,9 +13,7 @@ import (
 func useTestDB(t *testing.T, db *sql.DB) {
 	t.Helper()
 
-	previous := DB
-	DB = db
-	t.Cleanup(func() { DB = previous })
+	testutil.Swap(t, &DB, db)
 }
 
 func openTestDB(t *testing.T, dsn string) *sql.DB {

@@ -1,27 +1,13 @@
 package guild
 
 import (
-	"os"
 	"testing"
 
-	"noraegaori/internal/database"
+	"noraegaori/internal/testutil/dbtest"
 )
 
-func setupTestDB(t *testing.T) {
-	os.RemoveAll("data")
-	if err := database.Initialize(); err != nil {
-		t.Fatalf("Failed to initialize test database: %v", err)
-	}
-}
-
-func teardownTestDB(t *testing.T) {
-	database.Close()
-	os.RemoveAll("data")
-}
-
 func TestLanguageRoundTrip(t *testing.T) {
-	setupTestDB(t)
-	defer teardownTestDB(t)
+	dbtest.Setup(t)
 
 	guildID := "guild1"
 
@@ -34,8 +20,7 @@ func TestLanguageRoundTrip(t *testing.T) {
 }
 
 func TestPrefixRoundTrip(t *testing.T) {
-	setupTestDB(t)
-	defer teardownTestDB(t)
+	dbtest.Setup(t)
 
 	guildID := "guild1"
 
@@ -48,8 +33,7 @@ func TestPrefixRoundTrip(t *testing.T) {
 }
 
 func TestInvalidateCachesForgetsBothValues(t *testing.T) {
-	setupTestDB(t)
-	defer teardownTestDB(t)
+	dbtest.Setup(t)
 
 	guildID := "guild1"
 

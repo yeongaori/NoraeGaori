@@ -3,19 +3,11 @@ package queue
 import (
 	"testing"
 
-	"noraegaori/internal/queue"
+	"noraegaori/internal/testutil/queuetest"
 )
 
-func queueOf(requesters ...string) *queue.Queue {
-	songs := make([]*queue.Song, 0, len(requesters))
-	for index, requester := range requesters {
-		songs = append(songs, &queue.Song{ID: index + 1, RequestedByID: requester})
-	}
-	return &queue.Queue{Songs: songs}
-}
-
 func TestSongIDsAndOwnership(t *testing.T) {
-	q := queueOf("a", "b", "a")
+	q := queuetest.QueueOf("a", "b", "a")
 
 	if ids := songIDsOf(q.Songs); len(ids) != 3 || ids[0] != 1 || ids[2] != 3 {
 		t.Errorf("songIDsOf = %v, want 1, 2, 3", ids)
@@ -33,7 +25,7 @@ func TestSongIDsAndOwnership(t *testing.T) {
 }
 
 func TestRemovableFromDropsVanishedAndPlayingSongs(t *testing.T) {
-	q := queueOf("a", "b", "c")
+	q := queuetest.QueueOf("a", "b", "c")
 	q.Playing = true
 
 	songs := removableFrom(q, []int{1, 2, 99})
@@ -45,7 +37,7 @@ func TestRemovableFromDropsVanishedAndPlayingSongs(t *testing.T) {
 		t.Errorf("removable = %v, want nothing when every target is gone", songs)
 	}
 
-	idle := queueOf("a", "b")
+	idle := queuetest.QueueOf("a", "b")
 	if songs := removableFrom(idle, []int{1}); len(songs) != 1 {
 		t.Errorf("removable = %v, want the head removable while nothing is playing", songs)
 	}

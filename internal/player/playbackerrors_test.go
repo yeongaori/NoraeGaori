@@ -4,17 +4,16 @@ import (
 	"testing"
 
 	"noraegaori/internal/queue"
+	"noraegaori/internal/testutil"
 )
 
 func captureStreamFailures(t *testing.T) *[]string {
 	t.Helper()
 
 	reported := []string{}
-	previous := reportStreamFailure
-	reportStreamFailure = func(url string, err error) {
+	testutil.Swap(t, &reportStreamFailure, func(url string, err error) {
 		reported = append(reported, err.Error())
-	}
-	t.Cleanup(func() { reportStreamFailure = previous })
+	})
 
 	return &reported
 }

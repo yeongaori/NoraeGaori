@@ -1,6 +1,7 @@
-package player
+package dsp_test
 
 import (
+	"noraegaori/internal/testutil/audiotest"
 	"testing"
 
 	"noraegaori/internal/audio/dsp"
@@ -8,8 +9,8 @@ import (
 )
 
 func TestBiquadLowpassShape(t *testing.T) {
-	passband := filterResponse(func(f *dsp.Biquad) { f.SetLowpass(500, 0.707) }, 100)
-	stopband := filterResponse(func(f *dsp.Biquad) { f.SetLowpass(500, 0.707) }, 8000)
+	passband := audiotest.FilterResponse(func(f *dsp.Biquad) { f.SetLowpass(500, 0.707) }, 100)
+	stopband := audiotest.FilterResponse(func(f *dsp.Biquad) { f.SetLowpass(500, 0.707) }, 8000)
 
 	if passband <= 0.85 {
 		t.Errorf("100Hz gain = %.3f, want > 0.85", passband)
@@ -20,8 +21,8 @@ func TestBiquadLowpassShape(t *testing.T) {
 }
 
 func TestBiquadHighpassShape(t *testing.T) {
-	passband := filterResponse(func(f *dsp.Biquad) { f.SetHighpass(2000, 0.707) }, 12000)
-	stopband := filterResponse(func(f *dsp.Biquad) { f.SetHighpass(2000, 0.707) }, 100)
+	passband := audiotest.FilterResponse(func(f *dsp.Biquad) { f.SetHighpass(2000, 0.707) }, 12000)
+	stopband := audiotest.FilterResponse(func(f *dsp.Biquad) { f.SetHighpass(2000, 0.707) }, 100)
 
 	if passband <= 0.85 {
 		t.Errorf("12000Hz gain = %.3f, want > 0.85", passband)
@@ -33,8 +34,8 @@ func TestBiquadHighpassShape(t *testing.T) {
 
 func TestBiquadLowShelfKillsBass(t *testing.T) {
 	setup := func(f *dsp.Biquad) { f.SetLowShelf(transition.EQLowFreq, transition.EQShelfQ, transition.EQKillDB) }
-	bass := filterResponse(setup, 60)
-	rest := filterResponse(setup, 6000)
+	bass := audiotest.FilterResponse(setup, 60)
+	rest := audiotest.FilterResponse(setup, 6000)
 
 	if bass >= 0.05 {
 		t.Errorf("60Hz gain = %.4f, want < 0.05", bass)
@@ -46,8 +47,8 @@ func TestBiquadLowShelfKillsBass(t *testing.T) {
 
 func TestBiquadHighShelfKillsTreble(t *testing.T) {
 	setup := func(f *dsp.Biquad) { f.SetHighShelf(transition.EQHighFreq, transition.EQShelfQ, transition.EQKillDB) }
-	treble := filterResponse(setup, 12000)
-	rest := filterResponse(setup, 200)
+	treble := audiotest.FilterResponse(setup, 12000)
+	rest := audiotest.FilterResponse(setup, 200)
 
 	if treble >= 0.05 {
 		t.Errorf("12000Hz gain = %.4f, want < 0.05", treble)
@@ -60,7 +61,7 @@ func TestBiquadHighShelfKillsTreble(t *testing.T) {
 func TestBiquadPeakingCutsMids(t *testing.T) {
 	setup := func(f *dsp.Biquad) { f.SetPeaking(transition.EQMidFreq, transition.EQMidQ, transition.EQKillDB) }
 
-	if gain := filterResponse(setup, transition.EQMidFreq); gain >= 0.1 {
+	if gain := audiotest.FilterResponse(setup, transition.EQMidFreq); gain >= 0.1 {
 		t.Errorf("%.0fHz gain = %.4f, want < 0.1", transition.EQMidFreq, gain)
 	}
 }
@@ -70,7 +71,7 @@ func TestBiquadBypassIsTransparent(t *testing.T) {
 	bypass.SetBypass()
 
 	phase := 0.0
-	original := sineFloatFrame(1000, 9000, &phase)
+	original := audiotest.SineFloatFrame(1000, 9000, &phase)
 	processed := make([]float64, len(original))
 	copy(processed, original)
 	bypass.ProcessStereo(processed)
@@ -101,13 +102,13 @@ func TestBiquadExtremeParametersStayStable(t *testing.T) {
 
 			phase := 0.0
 			for frame := 0; frame < 50; frame++ {
-				buf := sineFloatFrame(440, 10000, &phase)
+				buf := audiotest.SineFloatFrame(440, 10000, &phase)
 				filter.ProcessStereo(buf)
 
-				if !bufferFinite(buf) {
+				if !audiotest.IsBufferFinite(buf) {
 					t.Fatalf("frame %d produced non-finite output", frame)
 				}
-				if peak := bufferPeak(buf); peak > 1e9 {
+				if peak := audiotest.BufferPeak(buf); peak > 1e9 {
 					t.Fatalf("frame %d diverged to peak %g", frame, peak)
 				}
 			}
@@ -122,7 +123,7 @@ func newEchoDelayLine() *dsp.DelayLine {
 	delay.Wet = 1
 	delay.Dry = 1
 
-	impulse := make([]float64, frameSize*channels)
+	impulse := make([]float64, dsp.FrameSize*dsp.Channels)
 	impulse[0] = 10000
 	impulse[1] = 10000
 	delay.ProcessStereo(impulse)
@@ -132,14 +133,14 @@ func newEchoDelayLine() *dsp.DelayLine {
 
 func TestDelayLineEchoTiming(t *testing.T) {
 	delay := newEchoDelayLine()
-	silent := make([]float64, frameSize*channels)
+	silent := make([]float64, dsp.FrameSize*dsp.Channels)
 
 	firstEchoFrame := 0
 	firstEchoPeak := 0.0
 	for frame := 1; frame <= 10; frame++ {
 		dsp.SilenceFloat(silent)
 		delay.ProcessStereo(silent)
-		if peak := bufferPeak(silent); peak > 100 && firstEchoFrame == 0 {
+		if peak := audiotest.BufferPeak(silent); peak > 100 && firstEchoFrame == 0 {
 			firstEchoFrame = frame
 			firstEchoPeak = peak
 		}
@@ -152,7 +153,7 @@ func TestDelayLineEchoTiming(t *testing.T) {
 
 func TestDelayLineFeedbackDecays(t *testing.T) {
 	delay := newEchoDelayLine()
-	silent := make([]float64, frameSize*channels)
+	silent := make([]float64, dsp.FrameSize*dsp.Channels)
 
 	for frame := 1; frame <= 10; frame++ {
 		dsp.SilenceFloat(silent)
@@ -163,7 +164,7 @@ func TestDelayLineFeedbackDecays(t *testing.T) {
 	for frame := 0; frame < 20; frame++ {
 		dsp.SilenceFloat(silent)
 		delay.ProcessStereo(silent)
-		if peak := bufferPeak(silent); peak > 1 {
+		if peak := audiotest.BufferPeak(silent); peak > 1 {
 			peaks = append(peaks, peak)
 		}
 	}
@@ -181,12 +182,12 @@ func TestDelayLineFeedbackDecays(t *testing.T) {
 func newImpulsedReverb() (*dsp.Reverb, []float64) {
 	unit := dsp.NewReverb()
 
-	impulse := make([]float64, frameSize*channels)
+	impulse := make([]float64, dsp.FrameSize*dsp.Channels)
 	impulse[0] = 20000
 	impulse[1] = 20000
 	unit.ProcessStereo(impulse, 0, 1)
 
-	return unit, make([]float64, frameSize*channels)
+	return unit, make([]float64, dsp.FrameSize*dsp.Channels)
 }
 
 func TestReverbProducesBoundedTail(t *testing.T) {
@@ -198,11 +199,11 @@ func TestReverbProducesBoundedTail(t *testing.T) {
 		dsp.SilenceFloat(silent)
 		unit.ProcessStereo(silent, 0, 1)
 
-		if !bufferFinite(silent) {
+		if !audiotest.IsBufferFinite(silent) {
 			t.Fatalf("frame %d produced non-finite output", frame)
 		}
-		tailEnergy += bufferRMS(silent)
-		if peak := bufferPeak(silent); peak > maxTailPeak {
+		tailEnergy += audiotest.BufferRMS(silent)
+		if peak := audiotest.BufferPeak(silent); peak > maxTailPeak {
 			maxTailPeak = peak
 		}
 	}
@@ -222,7 +223,7 @@ func TestReverbTailDecaysToNearSilence(t *testing.T) {
 	for frame := 0; frame < 460; frame++ {
 		dsp.SilenceFloat(silent)
 		unit.ProcessStereo(silent, 0, 1)
-		late = bufferRMS(silent)
+		late = audiotest.BufferRMS(silent)
 	}
 
 	if late >= 1 {
@@ -260,7 +261,7 @@ func TestFrameToFloatZeroPads(t *testing.T) {
 }
 
 func TestGainRampEndpoints(t *testing.T) {
-	ramp := make([]float64, frameSize*channels)
+	ramp := make([]float64, dsp.FrameSize*dsp.Channels)
 	for i := range ramp {
 		ramp[i] = 1000
 	}

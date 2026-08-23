@@ -2,6 +2,7 @@ package vote
 
 import (
 	"noraegaori/internal/discord"
+	"noraegaori/internal/testutil"
 	"sync"
 	"testing"
 	"time"
@@ -16,12 +17,11 @@ type recordedEdit struct {
 }
 
 type voteStubs struct {
-	mu       sync.Mutex
-	edits    []recordedEdit
-	added    []string
-	cleared  []string
-	removed  []string
-	restores []func()
+	mu      sync.Mutex
+	edits   []recordedEdit
+	added   []string
+	cleared []string
+	removed []string
 }
 
 func stubVoteEffects(t *testing.T) *voteStubs {
@@ -29,45 +29,28 @@ func stubVoteEffects(t *testing.T) *voteStubs {
 
 	stubs := &voteStubs{}
 
-	realEdit := editVoteMessage
-	realAdd := discord.AddPromptReaction
-	realClear := discord.ClearPromptReactions
-	realRemove := discord.RemoveUserReaction
-
-	editVoteMessage = func(s *discordgo.Session, channelID, messageID string, embed *discordgo.MessageEmbed) {
+	testutil.Swap(t, &editVoteMessage, func(s *discordgo.Session, channelID, messageID string, embed *discordgo.MessageEmbed) {
 		stubs.mu.Lock()
 		defer stubs.mu.Unlock()
 		stubs.edits = append(stubs.edits, recordedEdit{channelID: channelID, messageID: messageID, embed: embed})
-	}
-	discord.AddPromptReaction = func(s *discordgo.Session, channelID, messageID, emoji string) {
+	})
+	testutil.Swap(t, &discord.AddPromptReaction, func(s *discordgo.Session, channelID, messageID, emoji string) {
 		stubs.mu.Lock()
 		defer stubs.mu.Unlock()
 		stubs.added = append(stubs.added, messageID)
-	}
-	discord.ClearPromptReactions = func(s *discordgo.Session, channelID, messageID string) {
+	})
+	testutil.Swap(t, &discord.ClearPromptReactions, func(s *discordgo.Session, channelID, messageID string) {
 		stubs.mu.Lock()
 		defer stubs.mu.Unlock()
 		stubs.cleared = append(stubs.cleared, messageID)
-	}
-	discord.RemoveUserReaction = func(s *discordgo.Session, channelID, messageID, emoji, userID string) {
+	})
+	testutil.Swap(t, &discord.RemoveUserReaction, func(s *discordgo.Session, channelID, messageID, emoji, userID string) {
 		stubs.mu.Lock()
 		defer stubs.mu.Unlock()
 		stubs.removed = append(stubs.removed, userID)
-	}
-
-	realAdders := addersFor
-	addersFor = func(string, Target) []string { return nil }
-
-	t.Cleanup(func() {
-		addersFor = realAdders
-		editVoteMessage = realEdit
-		discord.AddPromptReaction = realAdd
-		discord.ClearPromptReactions = realClear
-		discord.RemoveUserReaction = realRemove
-		for _, restore := range stubs.restores {
-			restore()
-		}
 	})
+
+	testutil.Swap(t, &addersFor, func(string, Target) []string { return nil })
 
 	return stubs
 }
@@ -79,9 +62,7 @@ func (v *voteStubs) useAdders(adders []string) {
 func (v *voteStubs) shortenExpiry(t *testing.T, d time.Duration) {
 	t.Helper()
 
-	real := voteExpirationTime
-	voteExpirationTime = d
-	v.restores = append(v.restores, func() { voteExpirationTime = real })
+	testutil.Swap(t, &voteExpirationTime, d)
 }
 
 func (v *voteStubs) snapshotEdits() []recordedEdit {

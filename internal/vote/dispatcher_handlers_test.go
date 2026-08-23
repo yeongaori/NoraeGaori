@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
+
+	"noraegaori/internal/testutil/discordtest"
 )
 
 func votingSession(t *testing.T, guildID string, listeners ...string) *discordgo.Session {
@@ -13,42 +15,10 @@ func votingSession(t *testing.T, guildID string, listeners ...string) *discordgo
 
 	states := make([]*discordgo.VoiceState, 0, len(listeners))
 	for _, userID := range listeners {
-		states = append(states, &discordgo.VoiceState{
-			GuildID:   guildID,
-			UserID:    userID,
-			ChannelID: "voice1",
-			Member:    &discordgo.Member{GuildID: guildID, User: &discordgo.User{ID: userID}},
-		})
+		states = append(states, discordtest.VoiceState(guildID, userID, "voice1", false))
 	}
 
-	session := &discordgo.Session{State: discordgo.NewState()}
-	session.State.User = &discordgo.User{ID: "bot"}
-	if err := session.State.GuildAdd(&discordgo.Guild{ID: guildID, VoiceStates: states}); err != nil {
-		t.Fatalf("failed to seed the guild: %v", err)
-	}
-	return session
-}
-
-func reactionAdd(guildID, userID, messageID, emoji string) *discordgo.MessageReactionAdd {
-	return &discordgo.MessageReactionAdd{
-		MessageReaction: &discordgo.MessageReaction{
-			GuildID:   guildID,
-			UserID:    userID,
-			MessageID: messageID,
-			Emoji:     discordgo.Emoji{Name: emoji},
-		},
-	}
-}
-
-func reactionRemove(guildID, userID, messageID, emoji string) *discordgo.MessageReactionRemove {
-	return &discordgo.MessageReactionRemove{
-		MessageReaction: &discordgo.MessageReaction{
-			GuildID:   guildID,
-			UserID:    userID,
-			MessageID: messageID,
-			Emoji:     discordgo.Emoji{Name: emoji},
-		},
-	}
+	return discordtest.SessionWithGuild(t, "bot", guildID, states, nil)
 }
 
 func votingVote(t *testing.T, guildID string, requiredVotes int, onPassed func(*discordgo.Session, *Session, Tally)) *Session {
@@ -71,7 +41,7 @@ func TestReactionAddRejectsAnIneligibleVoter(t *testing.T) {
 	discord := votingSession(t, "dispatch-ineligible", "u1", "u2", "u3")
 	vote := votingVote(t, "dispatch-ineligible", 2, nil)
 
-	onVoteReactionAdd(discord, reactionAdd("dispatch-ineligible", "outsider", vote.messageID, "⏭"))
+	onVoteReactionAdd(discord, discordtest.ReactionAdd("dispatch-ineligible", "outsider", vote.messageID, "⏭"))
 
 	stubs.mu.Lock()
 	defer stubs.mu.Unlock()
@@ -93,7 +63,7 @@ func TestReactionAddBelowQuorumRendersProgress(t *testing.T) {
 	passed := false
 	vote := votingVote(t, "dispatch-progress", 2, func(*discordgo.Session, *Session, Tally) { passed = true })
 
-	onVoteReactionAdd(discord, reactionAdd("dispatch-progress", "u1", vote.messageID, "⏭"))
+	onVoteReactionAdd(discord, discordtest.ReactionAdd("dispatch-progress", "u1", vote.messageID, "⏭"))
 
 	if passed {
 		t.Error("onPassed ran before the quorum was reached")
@@ -119,8 +89,8 @@ func TestReactionAddReachingQuorumRunsThePassPath(t *testing.T) {
 		seen = tally
 	})
 
-	onVoteReactionAdd(discord, reactionAdd("dispatch-pass", "u1", vote.messageID, "⏭"))
-	onVoteReactionAdd(discord, reactionAdd("dispatch-pass", "u2", vote.messageID, "⏭"))
+	onVoteReactionAdd(discord, discordtest.ReactionAdd("dispatch-pass", "u1", vote.messageID, "⏭"))
+	onVoteReactionAdd(discord, discordtest.ReactionAdd("dispatch-pass", "u2", vote.messageID, "⏭"))
 
 	if passes.Load() != 1 {
 		t.Fatalf("onPassed ran %d times, want exactly 1", passes.Load())
@@ -151,7 +121,7 @@ func TestConcurrentReactionsPassTheVoteOnce(t *testing.T) {
 		wg.Add(1)
 		go func(userID string) {
 			defer wg.Done()
-			onVoteReactionAdd(discord, reactionAdd("dispatch-race", userID, vote.messageID, "⏭"))
+			onVoteReactionAdd(discord, discordtest.ReactionAdd("dispatch-race", userID, vote.messageID, "⏭"))
 		}(userID)
 	}
 	wg.Wait()
@@ -166,8 +136,8 @@ func TestReactionAddIgnoresARepeatVoter(t *testing.T) {
 	discord := votingSession(t, "dispatch-repeat", "u1", "u2", "u3")
 	vote := votingVote(t, "dispatch-repeat", 3, nil)
 
-	onVoteReactionAdd(discord, reactionAdd("dispatch-repeat", "u1", vote.messageID, "⏭"))
-	onVoteReactionAdd(discord, reactionAdd("dispatch-repeat", "u1", vote.messageID, "⏭"))
+	onVoteReactionAdd(discord, discordtest.ReactionAdd("dispatch-repeat", "u1", vote.messageID, "⏭"))
+	onVoteReactionAdd(discord, discordtest.ReactionAdd("dispatch-repeat", "u1", vote.messageID, "⏭"))
 
 	if edits := stubs.snapshotEdits(); len(edits) != 1 {
 		t.Errorf("got %d edits, want one because the repeat vote changes nothing", len(edits))
@@ -179,9 +149,9 @@ func TestReactionRemoveWithdrawsAndRenders(t *testing.T) {
 	discord := votingSession(t, "dispatch-withdraw", "u1", "u2", "u3", "u4", "u5")
 	vote := votingVote(t, "dispatch-withdraw", 3, nil)
 
-	onVoteReactionAdd(discord, reactionAdd("dispatch-withdraw", "u1", vote.messageID, "⏭"))
-	onVoteReactionAdd(discord, reactionAdd("dispatch-withdraw", "u2", vote.messageID, "⏭"))
-	onVoteReactionRemove(discord, reactionRemove("dispatch-withdraw", "u2", vote.messageID, "⏭"))
+	onVoteReactionAdd(discord, discordtest.ReactionAdd("dispatch-withdraw", "u1", vote.messageID, "⏭"))
+	onVoteReactionAdd(discord, discordtest.ReactionAdd("dispatch-withdraw", "u2", vote.messageID, "⏭"))
+	onVoteReactionRemove(discord, discordtest.ReactionRemove("dispatch-withdraw", "u2", vote.messageID, "⏭"))
 
 	edits := stubs.snapshotEdits()
 	if len(edits) != 3 {
@@ -197,7 +167,7 @@ func TestReactionRemoveIgnoresANonVoter(t *testing.T) {
 	discord := votingSession(t, "dispatch-nonvoter", "u1", "u2", "u3")
 	vote := votingVote(t, "dispatch-nonvoter", 2, nil)
 
-	onVoteReactionRemove(discord, reactionRemove("dispatch-nonvoter", "u1", vote.messageID, "⏭"))
+	onVoteReactionRemove(discord, discordtest.ReactionRemove("dispatch-nonvoter", "u1", vote.messageID, "⏭"))
 
 	if edits := stubs.snapshotEdits(); len(edits) != 0 {
 		t.Errorf("got %d edits, want none for a withdrawal that changes nothing", len(edits))
@@ -215,7 +185,7 @@ func TestReactionAddPassesWhenTheChannelEmpties(t *testing.T) {
 		seen = tally
 	})
 
-	onVoteReactionAdd(discord, reactionAdd("dispatch-shrink", "u1", vote.messageID, "⏭"))
+	onVoteReactionAdd(discord, discordtest.ReactionAdd("dispatch-shrink", "u1", vote.messageID, "⏭"))
 
 	if passes.Load() != 1 {
 		t.Fatalf("onPassed ran %d times, want 1 once the recomputed quorum dropped to 1", passes.Load())
@@ -238,7 +208,7 @@ func TestAbsentRequesterCanConsentWithoutMovingTheQuorum(t *testing.T) {
 		seen = tally
 	})
 
-	onVoteReactionAdd(discord, reactionAdd("dispatch-consent", "absentOwner", vote.messageID, "⏭"))
+	onVoteReactionAdd(discord, discordtest.ReactionAdd("dispatch-consent", "absentOwner", vote.messageID, "⏭"))
 
 	if passes.Load() != 1 {
 		t.Fatalf("onPassed ran %d times, want 1 once the only requester consented", passes.Load())
@@ -261,7 +231,7 @@ func TestAbsentNonRequesterIsStillRejected(t *testing.T) {
 	discord := votingSession(t, "dispatch-outsider", "u1", "u2")
 	vote := votingVote(t, "dispatch-outsider", 2, nil)
 
-	onVoteReactionAdd(discord, reactionAdd("dispatch-outsider", "randomAbsentee", vote.messageID, "⏭"))
+	onVoteReactionAdd(discord, discordtest.ReactionAdd("dispatch-outsider", "randomAbsentee", vote.messageID, "⏭"))
 
 	stubs.mu.Lock()
 	defer stubs.mu.Unlock()
@@ -279,12 +249,12 @@ func TestConsentNeedsEveryRequester(t *testing.T) {
 	var passes atomic.Int32
 	vote := votingVote(t, "dispatch-two-owners", 3, func(*discordgo.Session, *Session, Tally) { passes.Add(1) })
 
-	onVoteReactionAdd(discord, reactionAdd("dispatch-two-owners", "ownerA", vote.messageID, "⏭"))
+	onVoteReactionAdd(discord, discordtest.ReactionAdd("dispatch-two-owners", "ownerA", vote.messageID, "⏭"))
 	if passes.Load() != 0 {
 		t.Fatal("the vote passed with only one of two requesters consenting")
 	}
 
-	onVoteReactionAdd(discord, reactionAdd("dispatch-two-owners", "ownerB", vote.messageID, "⏭"))
+	onVoteReactionAdd(discord, discordtest.ReactionAdd("dispatch-two-owners", "ownerB", vote.messageID, "⏭"))
 	if passes.Load() != 1 {
 		t.Errorf("onPassed ran %d times after both requesters consented, want 1", passes.Load())
 	}
@@ -299,9 +269,9 @@ func TestRequesterWithdrawalDropsConsent(t *testing.T) {
 	var passes atomic.Int32
 	vote := votingVote(t, "dispatch-withdraw-consent", 3, func(*discordgo.Session, *Session, Tally) { passes.Add(1) })
 
-	onVoteReactionAdd(discord, reactionAdd("dispatch-withdraw-consent", "ownerA", vote.messageID, "⏭"))
-	onVoteReactionRemove(discord, reactionRemove("dispatch-withdraw-consent", "ownerA", vote.messageID, "⏭"))
-	onVoteReactionAdd(discord, reactionAdd("dispatch-withdraw-consent", "ownerB", vote.messageID, "⏭"))
+	onVoteReactionAdd(discord, discordtest.ReactionAdd("dispatch-withdraw-consent", "ownerA", vote.messageID, "⏭"))
+	onVoteReactionRemove(discord, discordtest.ReactionRemove("dispatch-withdraw-consent", "ownerA", vote.messageID, "⏭"))
+	onVoteReactionAdd(discord, discordtest.ReactionAdd("dispatch-withdraw-consent", "ownerB", vote.messageID, "⏭"))
 
 	if passes.Load() != 0 {
 		t.Error("the vote passed even though a requester withdrew their consent")
@@ -322,7 +292,7 @@ func TestPresentRequesterCountsForBothPaths(t *testing.T) {
 		seen = tally
 	})
 
-	onVoteReactionAdd(discord, reactionAdd("dispatch-present-owner", "u2", vote.messageID, "⏭"))
+	onVoteReactionAdd(discord, discordtest.ReactionAdd("dispatch-present-owner", "u2", vote.messageID, "⏭"))
 
 	if seen.current != 1 {
 		t.Errorf("quorum count = %d, want 1 because the requester is in the channel", seen.current)

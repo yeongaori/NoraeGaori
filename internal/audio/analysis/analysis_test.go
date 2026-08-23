@@ -1,8 +1,9 @@
-package player
+package analysis_test
 
 import (
 	"math"
 	"math/rand"
+	"noraegaori/internal/testutil/audiotest"
 	"testing"
 	"time"
 
@@ -41,29 +42,6 @@ func synthesizeChordProgression(chords [][]int, seconds, sampleRate float64) []f
 				}
 			}
 		}
-	}
-	return samples
-}
-
-func synthesizeClickTrack(bpm, seconds, sampleRate float64, accentEvery, accentPhase int) []float32 {
-	total := int(seconds * sampleRate)
-	samples := make([]float32, total)
-	interval := 60 / bpm * sampleRate
-	burst := int(0.02 * sampleRate)
-	source := rand.New(rand.NewSource(11))
-
-	beat := 0
-	for position := 0.0; position < float64(total); position += interval {
-		amplitude := 0.5
-		if accentEvery > 0 && beat%accentEvery == accentPhase {
-			amplitude = 1.0
-		}
-		start := int(position)
-		for i := 0; i < burst && start+i < total; i++ {
-			decay := 1 - float64(i)/float64(burst)
-			samples[start+i] += float32(amplitude * decay * source.NormFloat64() * 0.5)
-		}
-		beat++
 	}
 	return samples
 }
@@ -274,7 +252,7 @@ func TestATempoJustUnderTheCeilingIsRefinedNotClamped(t *testing.T) {
 	minLag, _, frameRate := tempoLagBounds()
 	clampBPM := (60 * frameRate) / float64(minLag)
 
-	track, err := analysis.AnalyzeTrackSamples(synthesizeClickTrack(205, 30, analysis.SampleRate, 4, 0), analysis.SampleRate)
+	track, err := analysis.AnalyzeTrackSamples(audiotest.SynthesizeClickTrack(205, 30, analysis.SampleRate, 4, 0), analysis.SampleRate)
 	if err != nil {
 		t.Fatalf("205 BPM click track failed: %v", err)
 	}
@@ -288,7 +266,7 @@ func TestANearCeilingEstimateIsNotTheRawLagQuantum(t *testing.T) {
 	minLag, _, frameRate := tempoLagBounds()
 	clampBPM := (60 * frameRate) / float64(minLag)
 
-	track, err := analysis.AnalyzeTrackSamples(synthesizeClickTrack(205, 30, analysis.SampleRate, 4, 0), analysis.SampleRate)
+	track, err := analysis.AnalyzeTrackSamples(audiotest.SynthesizeClickTrack(205, 30, analysis.SampleRate, 4, 0), analysis.SampleRate)
 	if err != nil {
 		t.Fatalf("205 BPM click track failed: %v", err)
 	}
@@ -303,7 +281,7 @@ func TestATempoBeyondTheCeilingResolvesToAnOctaveNeverTheClamp(t *testing.T) {
 	clampBPM := (60 * frameRate) / float64(minLag)
 
 	for _, trueBPM := range []float64{215, 225, 250} {
-		track, err := analysis.AnalyzeTrackSamples(synthesizeClickTrack(trueBPM, 30, analysis.SampleRate, 4, 0), analysis.SampleRate)
+		track, err := analysis.AnalyzeTrackSamples(audiotest.SynthesizeClickTrack(trueBPM, 30, analysis.SampleRate, 4, 0), analysis.SampleRate)
 		if err != nil {
 			continue
 		}
@@ -386,7 +364,7 @@ func TestSignedTempoDeltaKeepsDirectionAndFolds(t *testing.T) {
 
 func TestBPMDetectionOnSyntheticClickTracks(t *testing.T) {
 	for _, bpm := range []float64{70, 72, 90, 120, 140, 174, 185, 200, 205} {
-		track, err := analysis.AnalyzeTrackSamples(synthesizeClickTrack(bpm, 30, analysis.SampleRate, 0, 0), analysis.SampleRate)
+		track, err := analysis.AnalyzeTrackSamples(audiotest.SynthesizeClickTrack(bpm, 30, analysis.SampleRate, 0, 0), analysis.SampleRate)
 		if err != nil {
 			t.Errorf("%.0f BPM click track failed: %v", bpm, err)
 			continue
@@ -420,65 +398,16 @@ func TestInvalidSampleRateIsRejected(t *testing.T) {
 	}
 }
 
-func analyzeAccentedClickTrack(t *testing.T) *analysis.TrackAnalysis {
-	t.Helper()
-
-	track, err := analysis.AnalyzeTrackSamples(synthesizeClickTrack(120, 40, analysis.SampleRate, 4, 0), analysis.SampleRate)
-	if err != nil {
-		t.Fatalf("accented click track failed: %v", err)
-	}
-	return track
-}
-
 func TestDownbeatPhaseIsInRange(t *testing.T) {
-	track := analyzeAccentedClickTrack(t)
+	track := audiotest.AnalyzeAccentedClickTrack(t)
 
 	if track.DownbeatPhase < 0 || track.DownbeatPhase >= 4 {
 		t.Errorf("phase = %d, want within [0, 4) for a %d beat bar", track.DownbeatPhase, analysis.BarBeats)
 	}
 }
 
-func TestTransitionSnappingLandsOnTheGrid(t *testing.T) {
-	track := analyzeAccentedClickTrack(t)
-
-	grid := snapTransitionToGrid(1000, 0, track)
-	bar := snapTransitionToBar(1000, 0, track)
-	periodFrames := track.PeriodSec * dsp.FramesPerSecond
-	firstBeatFrame := track.FirstBeat * dsp.FramesPerSecond
-
-	gridBeat := (float64(grid) - firstBeatFrame) / periodFrames
-	if math.Abs(gridBeat-math.Round(gridBeat)) >= 0.02 {
-		t.Errorf("beat snap %d lands on beat %.3f, want a whole beat", grid, gridBeat)
-	}
-
-	barBeat := (float64(bar) - firstBeatFrame) / periodFrames
-	if math.Abs(barBeat-math.Round(barBeat)) >= 0.02 {
-		t.Errorf("bar snap %d lands on beat %.3f, want a whole beat", bar, barBeat)
-	}
-
-	barPhase := math.Mod(math.Round(barBeat)-float64(track.DownbeatPhase), analysis.BarBeats)
-	if barPhase < 0 {
-		barPhase += analysis.BarBeats
-	}
-	if barPhase != 0 {
-		t.Errorf("bar snap %d sits at bar phase %.0f, want 0", bar, barPhase)
-	}
-}
-
-func TestBarSnapIsWithinOneBarOfBeatSnap(t *testing.T) {
-	track := analyzeAccentedClickTrack(t)
-
-	grid := snapTransitionToGrid(1000, 0, track)
-	bar := snapTransitionToBar(1000, 0, track)
-	barFrames := track.PeriodSec * dsp.FramesPerSecond * analysis.BarBeats
-
-	if distance := math.Abs(float64(bar - grid)); distance > barFrames {
-		t.Errorf("bar snap %d is %.1f frames from beat snap %d, want at most one bar (%.1f frames)", bar, distance, grid, barFrames)
-	}
-}
-
 func TestAnalysisCarriesKeyData(t *testing.T) {
-	track := analyzeAccentedClickTrack(t)
+	track := audiotest.AnalyzeAccentedClickTrack(t)
 
 	if track.BPM <= 0 {
 		t.Errorf("BPM = %.1f, want > 0", track.BPM)
@@ -490,15 +419,15 @@ func TestAnalysisCarriesKeyData(t *testing.T) {
 
 func measureProcessorFrameCost(recipe transition.Recipe, bothSides bool) time.Duration {
 	processor := transition.NewProcessor(recipe, 500, 0.5)
-	aTone := &toneGenerator{frequency: 220, amplitude: 8000}
-	bTone := &toneGenerator{frequency: 660, amplitude: 8000}
-	aFrame := make([]int16, frameSize*channels)
-	bFrame := make([]int16, frameSize*channels)
+	aTone := &audiotest.ToneGenerator{Frequency: 220, Amplitude: 8000}
+	bTone := &audiotest.ToneGenerator{Frequency: 660, Amplitude: 8000}
+	aFrame := make([]int16, dsp.FrameSize*dsp.Channels)
+	bFrame := make([]int16, dsp.FrameSize*dsp.Channels)
 
 	frames := 500
 	start := time.Now()
 	for i := 0; i < frames; i++ {
-		aTone.fill(aFrame)
+		aTone.Fill(aFrame)
 		progress := float64(i) / float64(frames)
 
 		if !bothSides {
@@ -506,7 +435,7 @@ func measureProcessorFrameCost(recipe transition.Recipe, bothSides bool) time.Du
 			continue
 		}
 
-		bTone.fill(bFrame)
+		bTone.Fill(bFrame)
 		aBuf := processor.ProcessA(aFrame, progress)
 		bBuf := processor.ProcessB(bFrame, progress)
 		processor.ApplyGains(aBuf, bBuf, progress, 1.0)

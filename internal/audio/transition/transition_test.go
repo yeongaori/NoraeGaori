@@ -1,10 +1,12 @@
-package player
+package transition_test
 
 import (
 	"math"
+	"noraegaori/internal/testutil/audiotest"
 	"testing"
 
 	"noraegaori/internal/audio/analysis"
+	"noraegaori/internal/audio/dsp"
 	"noraegaori/internal/audio/transition"
 )
 
@@ -103,12 +105,12 @@ func TestAutoMixWithoutCrossfadeKeepsFlatGains(t *testing.T) {
 
 func runTransitionWindow(recipe transition.Recipe, crossfadeFrames int, periodSec float64) (bool, float64, float64, int) {
 	processor := transition.NewProcessor(recipe, crossfadeFrames, periodSec)
-	aTone := &toneGenerator{frequency: 220, amplitude: 8000}
-	bTone := &toneGenerator{frequency: 660, amplitude: 8000}
+	aTone := &audiotest.ToneGenerator{Frequency: 220, Amplitude: 8000}
+	bTone := &audiotest.ToneGenerator{Frequency: 660, Amplitude: 8000}
 
-	aFrame := make([]int16, frameSize*channels)
-	bFrame := make([]int16, frameSize*channels)
-	mixed := make([]int16, frameSize*channels)
+	aFrame := make([]int16, dsp.FrameSize*dsp.Channels)
+	bFrame := make([]int16, dsp.FrameSize*dsp.Channels)
+	mixed := make([]int16, dsp.FrameSize*dsp.Channels)
 
 	finite := true
 	maxJump := 0.0
@@ -117,13 +119,13 @@ func runTransitionWindow(recipe transition.Recipe, crossfadeFrames int, periodSe
 	previousSample := 0.0
 
 	for frame := 0; frame < crossfadeFrames; frame++ {
-		aTone.fill(aFrame)
-		bTone.fill(bFrame)
+		aTone.Fill(aFrame)
+		bTone.Fill(bFrame)
 		progress := float64(frame) / float64(crossfadeFrames)
 
 		aBuf := processor.ProcessA(aFrame, progress)
 		bBuf := processor.ProcessB(bFrame, progress)
-		if !bufferFinite(aBuf) || !bufferFinite(bBuf) {
+		if !audiotest.IsBufferFinite(aBuf) || !audiotest.IsBufferFinite(bBuf) {
 			finite = false
 			break
 		}
@@ -144,7 +146,7 @@ func runTransitionWindow(recipe transition.Recipe, crossfadeFrames int, periodSe
 			}
 			mixed[i] = int16(sample)
 
-			if i%channels == 0 {
+			if i%dsp.Channels == 0 {
 				jump := math.Abs(sample - previousSample)
 				if jump > maxJump {
 					maxJump = jump
@@ -285,7 +287,7 @@ func TestDegenerateTransitionWindows(t *testing.T) {
 func TestFullScaleInputStaysFinite(t *testing.T) {
 	processor := transition.NewProcessor(transition.DefaultRecipe(), 100, 0.5)
 
-	loud := make([]int16, frameSize*channels)
+	loud := make([]int16, dsp.FrameSize*dsp.Channels)
 	for i := range loud {
 		if i%2 == 0 {
 			loud[i] = 32767
@@ -294,18 +296,18 @@ func TestFullScaleInputStaysFinite(t *testing.T) {
 		}
 	}
 
-	if aBuf := processor.ProcessA(loud, 0.5); !bufferFinite(aBuf) {
-		t.Errorf("outgoing buffer is not finite (peak %.0f)", bufferPeak(aBuf))
+	if aBuf := processor.ProcessA(loud, 0.5); !audiotest.IsBufferFinite(aBuf) {
+		t.Errorf("outgoing buffer is not finite (peak %.0f)", audiotest.BufferPeak(aBuf))
 	}
-	if bBuf := processor.ProcessB(loud, 0.5); !bufferFinite(bBuf) {
-		t.Errorf("incoming buffer is not finite (peak %.0f)", bufferPeak(bBuf))
+	if bBuf := processor.ProcessB(loud, 0.5); !audiotest.IsBufferFinite(bBuf) {
+		t.Errorf("incoming buffer is not finite (peak %.0f)", audiotest.BufferPeak(bBuf))
 	}
 }
 
 func TestNilFrameIsTreatedAsSilence(t *testing.T) {
 	processor := transition.NewProcessor(transition.DefaultRecipe(), 100, 0.5)
 
-	if peak := bufferPeak(processor.ProcessA(nil, 0.5)); peak != 0 {
+	if peak := audiotest.BufferPeak(processor.ProcessA(nil, 0.5)); peak != 0 {
 		t.Errorf("peak = %.1f, want 0", peak)
 	}
 }
@@ -322,10 +324,10 @@ func TestEffectTailsDecayAfterHandoff(t *testing.T) {
 			recipe.Effect = effect
 			processor := transition.NewProcessor(recipe, 100, 0.5)
 
-			tone := &toneGenerator{frequency: 220, amplitude: 9000}
-			frame := make([]int16, frameSize*channels)
+			tone := &audiotest.ToneGenerator{Frequency: 220, Amplitude: 9000}
+			frame := make([]int16, dsp.FrameSize*dsp.Channels)
 			for i := 0; i < 100; i++ {
-				tone.fill(frame)
+				tone.Fill(frame)
 				progress := float64(i) / 100
 				aBuf := processor.ProcessA(frame, progress)
 				bBuf := processor.ProcessB(frame, progress)
@@ -338,7 +340,7 @@ func TestEffectTailsDecayAfterHandoff(t *testing.T) {
 			}
 
 			budget := transition.EchoTailFrames + transition.ReverbTailFrames + 10
-			silent := make([]int16, frameSize*channels)
+			silent := make([]int16, dsp.FrameSize*dsp.Channels)
 			frames := 0
 			for {
 				for i := range silent {
@@ -379,55 +381,8 @@ func TestNoTailForEffectFreeRecipes(t *testing.T) {
 func TestNilTailApplyIsSafe(t *testing.T) {
 	var tail *transition.Tail
 
-	if tail.Apply(make([]int16, frameSize*channels)) {
+	if tail.Apply(make([]int16, dsp.FrameSize*dsp.Channels)) {
 		t.Error("a nil tail reported more audio to come")
-	}
-}
-
-func TestLoopBufferRepeatsCapturedFrames(t *testing.T) {
-	state := newCrossfadeState()
-	state.loopFrames = 3
-
-	frames := make([][]int16, 5)
-	for i := range frames {
-		frames[i] = make([]int16, 4)
-		for j := range frames[i] {
-			frames[i][j] = int16(i*10 + j)
-		}
-	}
-
-	for i := 0; i < 3; i++ {
-		state.loopFrame(frames[i])
-	}
-
-	want := []int16{0, 10, 20, 0, 10, 20, 0}
-	for i, expected := range want {
-		out := state.loopFrame(frames[4])
-		if out[0] != expected {
-			t.Errorf("replay %d = %d, want %d", i, out[0], expected)
-		}
-	}
-}
-
-func TestLoopBufferCopiesSourceFrames(t *testing.T) {
-	state := newCrossfadeState()
-	state.loopFrames = 3
-
-	source := []int16{1, 2, 3, 4}
-	state.loopFrame(source)
-	source[0] = 999
-
-	if state.loopBuffer[0][0] == 999 {
-		t.Error("mutating the source frame leaked into the loop buffer")
-	}
-}
-
-func TestLoopBufferToleratesNilInputBeforeFill(t *testing.T) {
-	state := newCrossfadeState()
-	state.loopFrames = 2
-
-	if out := state.loopFrame(nil); out != nil {
-		t.Errorf("got %v, want nil", out)
 	}
 }
 

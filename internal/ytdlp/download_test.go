@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"noraegaori/internal/testutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,9 +53,7 @@ func useTestSigningKey(t *testing.T) *openpgp.Entity {
 		t.Fatalf("failed to close the armor encoder: %v", err)
 	}
 
-	previous := signingKeyArmor
-	signingKeyArmor = publicKey.Bytes()
-	t.Cleanup(func() { signingKeyArmor = previous })
+	testutil.Swap(t, &signingKeyArmor, publicKey.Bytes())
 
 	return entity
 }

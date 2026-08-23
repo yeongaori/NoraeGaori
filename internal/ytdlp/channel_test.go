@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"noraegaori/internal/testutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,9 +17,7 @@ import (
 func useChannel(t *testing.T, channel string) {
 	t.Helper()
 
-	previous := configuredChannelFn
-	configuredChannelFn = func() string { return channel }
-	t.Cleanup(func() { configuredChannelFn = previous })
+	testutil.Swap(t, &configuredChannelFn, func() string { return channel })
 }
 
 func TestChannelOfClassifiesByTagShape(t *testing.T) {
@@ -99,15 +98,13 @@ func recordChannelAttempts(t *testing.T, onAttempt func(channel string)) *[]stri
 	t.Helper()
 
 	attempts := []string{}
-	previous := updateChannelFn
-	updateChannelFn = func(channel string, force bool) (channelOutcome, error) {
+	testutil.Swap(t, &updateChannelFn, func(channel string, force bool) (channelOutcome, error) {
 		attempts = append(attempts, channel)
 		if onAttempt != nil {
 			onAttempt(channel)
 		}
 		return channelOutcome{}, nil
-	}
-	t.Cleanup(func() { updateChannelFn = previous })
+	})
 
 	return &attempts
 }
@@ -116,9 +113,7 @@ func useVersionManager(t *testing.T) *VersionManager {
 	t.Helper()
 
 	versionmanager := newTestVersionManager(t)
-	previous := versionMgr
-	versionMgr = versionmanager
-	t.Cleanup(func() { versionMgr = previous })
+	testutil.Swap(t, &versionMgr, versionmanager)
 
 	return versionmanager
 }
@@ -345,12 +340,10 @@ func TestAutoTriesNightlyWhenStableFailsItsCanary(t *testing.T) {
 	versionmanager.state.ActiveVersion = "2026.08.18.122307"
 
 	attempts := []string{}
-	previous := updateChannelFn
-	updateChannelFn = func(channel string, force bool) (channelOutcome, error) {
+	testutil.Swap(t, &updateChannelFn, func(channel string, force bool) (channelOutcome, error) {
 		attempts = append(attempts, channel)
 		return channelOutcome{canaryFailed: channel == config.YtDlpChannelStable}, nil
-	}
-	t.Cleanup(func() { updateChannelFn = previous })
+	})
 
 	if _, err := UpdateYtDlp(false); err != nil {
 		t.Fatalf("UpdateYtDlp returned %v, want nil", err)
@@ -401,11 +394,9 @@ func TestRequestUpdateCheckNeverBlocks(t *testing.T) {
 func stubLatestRelease(t *testing.T, release *GitHubRelease) {
 	t.Helper()
 
-	previous := getLatestReleaseFn
-	getLatestReleaseFn = func(channel string) (*GitHubRelease, error) {
+	testutil.Swap(t, &getLatestReleaseFn, func(channel string) (*GitHubRelease, error) {
 		return release, nil
-	}
-	t.Cleanup(func() { getLatestReleaseFn = previous })
+	})
 }
 
 func stubLatestVersion(t *testing.T, version string) {
@@ -489,12 +480,10 @@ func TestUpdateFromChannelReportsABlacklistedLatestWithoutAFallbackChain(t *test
 	addVersion(versionmanager, "2026.08.18.122307", &VersionEntry{Path: writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.08.18.122307"), "echo 2026.08.18.122307"), State: StateActive, Successes: 40})
 	versionmanager.state.ActiveVersion = "2026.08.18.122307"
 
-	previous := getReleasesFn
-	getReleasesFn = func(channel string, perPage int) ([]*GitHubRelease, error) {
+	testutil.Swap(t, &getReleasesFn, func(channel string, perPage int) ([]*GitHubRelease, error) {
 		t.Error("the fallback chain ran even though a usable binary is installed")
 		return nil, nil
-	}
-	t.Cleanup(func() { getReleasesFn = previous })
+	})
 
 	outcome, err := updateFromChannel(config.YtDlpChannelStable, false)
 	if err != nil {

@@ -2,11 +2,14 @@ package player
 
 import (
 	"errors"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 
 	"noraegaori/internal/queue"
+	"noraegaori/internal/testutil"
 )
 
 var errNoStreamURL = errors.New("stream url unavailable")
@@ -14,27 +17,21 @@ var errNoStreamURL = errors.New("stream url unavailable")
 func stubStreamURL(t *testing.T, url string, err error) {
 	t.Helper()
 
-	previous := fetchStreamURL
-	fetchStreamURL = func(string, bool, int) (string, error) { return url, err }
-	t.Cleanup(func() { fetchStreamURL = previous })
+	testutil.Swap(t, &fetchStreamURL, func(string, bool, int) (string, error) { return url, err })
 }
 
 func stubJoinVoice(t *testing.T, conn voiceConnection, err error) {
 	t.Helper()
 
-	previous := joinVoiceChannel
-	joinVoiceChannel = func(*discordgo.Session, string, string) (voiceConnection, error) {
+	testutil.Swap(t, &joinVoiceChannel, func(*discordgo.Session, string, string) (voiceConnection, error) {
 		return conn, err
-	}
-	t.Cleanup(func() { joinVoiceChannel = previous })
+	})
 }
 
 func stubPlayAudioResult(t *testing.T, err error) {
 	t.Helper()
 
-	previous := newAudioStream
-	newAudioStream = func([]string, bool) (audioStream, error) { return boundedAudioStream(3), nil }
-	t.Cleanup(func() { newAudioStream = previous })
+	testutil.Swap(t, &newAudioStream, func([]string, bool) (audioStream, error) { return boundedAudioStream(3), nil })
 }
 
 func preparedPlayer(t *testing.T, guildID string, songs int) *GuildPlayer {
@@ -212,5 +209,48 @@ func TestPlaySingleSongDropsTheSongWhenRepeatIsOff(t *testing.T) {
 	}
 	if q.Songs[0].Title != "Song 1" {
 		t.Errorf("got %q, want the next song at the front", q.Songs[0].Title)
+	}
+}
+
+func TestAbortPlaybackIsIdempotent(t *testing.T) {
+	abortCh := make(chan struct{})
+	var abortOnce sync.Once
+	abortPlayback := func() { abortOnce.Do(func() { close(abortCh) }) }
+
+	abortPlayback()
+	abortPlayback()
+	abortPlayback()
+
+	select {
+	case <-abortCh:
+	case <-time.After(time.Second):
+		t.Fatal("the abort channel was never closed")
+	}
+}
+
+func TestAnnounceGoroutineStopsWhenAborted(t *testing.T) {
+	abortCh := make(chan struct{})
+	var abortOnce sync.Once
+	abortPlayback := func() { abortOnce.Do(func() { close(abortCh) }) }
+
+	firstFrameCh := make(chan struct{})
+	stopChan := make(chan struct{})
+	finished := make(chan struct{})
+
+	go func() {
+		defer close(finished)
+		select {
+		case <-firstFrameCh:
+		case <-abortCh:
+		case <-stopChan:
+		}
+	}()
+
+	abortPlayback()
+
+	select {
+	case <-finished:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the announce goroutine outlived the abort signal")
 	}
 }

@@ -4,31 +4,18 @@ import (
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
+
+	"noraegaori/internal/testutil/discordtest"
 )
 
 func voiceStateWithMember(userID, channelID string, isBot bool) *discordgo.VoiceState {
-	return &discordgo.VoiceState{
-		GuildID:   "g",
-		UserID:    userID,
-		ChannelID: channelID,
-		Member:    &discordgo.Member{GuildID: "g", User: &discordgo.User{ID: userID, Bot: isBot}},
-	}
+	return discordtest.VoiceState("g", userID, channelID, isBot)
 }
 
 func sessionWithGuild(t *testing.T, states []*discordgo.VoiceState, members []*discordgo.Member) *discordgo.Session {
 	t.Helper()
 
-	session := &discordgo.Session{State: discordgo.NewState()}
-	session.State.User = &discordgo.User{ID: "self"}
-	if err := session.State.GuildAdd(&discordgo.Guild{ID: "g", VoiceStates: states}); err != nil {
-		t.Fatalf("failed to seed the guild: %v", err)
-	}
-	for _, member := range members {
-		if err := session.State.MemberAdd(member); err != nil {
-			t.Fatalf("failed to seed member %s: %v", member.User.ID, err)
-		}
-	}
-	return session
+	return discordtest.SessionWithGuild(t, "self", "g", states, members)
 }
 
 func TestRequiredVotesInChannelIgnoresBotsAndOtherChannels(t *testing.T) {
@@ -178,8 +165,7 @@ func TestRequiredVotesInChannelReportsAnUnknownGuild(t *testing.T) {
 }
 
 func TestClassifyVoterSortsPresentAbsentAndUnknown(t *testing.T) {
-	session := &discordgo.Session{State: discordgo.NewState()}
-	session.State.User = &discordgo.User{ID: "self"}
+	session := discordtest.Session(t, "self")
 
 	if _, ok := classifyVoter(session, "guild1", "voice1", "stranger", nil); ok {
 		t.Error("a user with no voice state was accepted")
@@ -234,8 +220,7 @@ func TestClassifyVoterSortsPresentAbsentAndUnknown(t *testing.T) {
 }
 
 func TestClassifyVoterLetsAbsentAddersConsent(t *testing.T) {
-	session := &discordgo.Session{State: discordgo.NewState()}
-	session.State.User = &discordgo.User{ID: "self"}
+	session := discordtest.Session(t, "self")
 
 	if err := session.State.GuildAdd(&discordgo.Guild{ID: "guild1"}); err != nil {
 		t.Fatalf("failed to seed the guild: %v", err)

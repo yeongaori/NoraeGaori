@@ -11,6 +11,7 @@ import (
 	"noraegaori/internal/audio/ffmpeg"
 	"noraegaori/internal/audio/transition"
 	"noraegaori/internal/queue"
+	"noraegaori/internal/testutil/audiotest"
 )
 
 var styleCategories = []string{"volume", "eq", "filter", "effect", "loop"}
@@ -786,5 +787,91 @@ func TestCompatibilityReportsSignedBPMDelta(t *testing.T) {
 	}
 	if distance != 0 {
 		t.Errorf("distance = %d, want 0", distance)
+	}
+}
+
+func TestTransitionSnappingLandsOnTheGrid(t *testing.T) {
+	track := audiotest.AnalyzeAccentedClickTrack(t)
+
+	grid := snapTransitionToGrid(1000, 0, track)
+	bar := snapTransitionToBar(1000, 0, track)
+	periodFrames := track.PeriodSec * dsp.FramesPerSecond
+	firstBeatFrame := track.FirstBeat * dsp.FramesPerSecond
+
+	gridBeat := (float64(grid) - firstBeatFrame) / periodFrames
+	if math.Abs(gridBeat-math.Round(gridBeat)) >= 0.02 {
+		t.Errorf("beat snap %d lands on beat %.3f, want a whole beat", grid, gridBeat)
+	}
+
+	barBeat := (float64(bar) - firstBeatFrame) / periodFrames
+	if math.Abs(barBeat-math.Round(barBeat)) >= 0.02 {
+		t.Errorf("bar snap %d lands on beat %.3f, want a whole beat", bar, barBeat)
+	}
+
+	barPhase := math.Mod(math.Round(barBeat)-float64(track.DownbeatPhase), analysis.BarBeats)
+	if barPhase < 0 {
+		barPhase += analysis.BarBeats
+	}
+	if barPhase != 0 {
+		t.Errorf("bar snap %d sits at bar phase %.0f, want 0", bar, barPhase)
+	}
+}
+
+func TestBarSnapIsWithinOneBarOfBeatSnap(t *testing.T) {
+	track := audiotest.AnalyzeAccentedClickTrack(t)
+
+	grid := snapTransitionToGrid(1000, 0, track)
+	bar := snapTransitionToBar(1000, 0, track)
+	barFrames := track.PeriodSec * dsp.FramesPerSecond * analysis.BarBeats
+
+	if distance := math.Abs(float64(bar - grid)); distance > barFrames {
+		t.Errorf("bar snap %d is %.1f frames from beat snap %d, want at most one bar (%.1f frames)", bar, distance, grid, barFrames)
+	}
+}
+
+func TestLoopBufferRepeatsCapturedFrames(t *testing.T) {
+	state := newCrossfadeState()
+	state.loopFrames = 3
+
+	frames := make([][]int16, 5)
+	for i := range frames {
+		frames[i] = make([]int16, 4)
+		for j := range frames[i] {
+			frames[i][j] = int16(i*10 + j)
+		}
+	}
+
+	for i := 0; i < 3; i++ {
+		state.loopFrame(frames[i])
+	}
+
+	want := []int16{0, 10, 20, 0, 10, 20, 0}
+	for i, expected := range want {
+		out := state.loopFrame(frames[4])
+		if out[0] != expected {
+			t.Errorf("replay %d = %d, want %d", i, out[0], expected)
+		}
+	}
+}
+
+func TestLoopBufferCopiesSourceFrames(t *testing.T) {
+	state := newCrossfadeState()
+	state.loopFrames = 3
+
+	source := []int16{1, 2, 3, 4}
+	state.loopFrame(source)
+	source[0] = 999
+
+	if state.loopBuffer[0][0] == 999 {
+		t.Error("mutating the source frame leaked into the loop buffer")
+	}
+}
+
+func TestLoopBufferToleratesNilInputBeforeFill(t *testing.T) {
+	state := newCrossfadeState()
+	state.loopFrames = 2
+
+	if out := state.loopFrame(nil); out != nil {
+		t.Errorf("got %v, want nil", out)
 	}
 }

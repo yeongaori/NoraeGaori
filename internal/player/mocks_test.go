@@ -2,9 +2,13 @@ package player
 
 import (
 	"context"
+	"fmt"
 	"noraegaori/internal/audio/ffmpeg"
+	"noraegaori/internal/queue"
 	"sync"
 	"sync/atomic"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 type mockVoiceConn struct {
@@ -105,4 +109,51 @@ func fakeAudioStream() audioStream {
 	s := newFakeStream(ffmpeg.BufSize)
 	s.sendFrames(-1)
 	return s
+}
+
+type sentEmbed struct {
+	channelID string
+	messageID string
+	embed     *discordgo.MessageEmbed
+}
+
+type fakeEmbedSender struct {
+	mu       sync.Mutex
+	sends    []sentEmbed
+	edits    []sentEmbed
+	editFail bool
+}
+
+func (f *fakeEmbedSender) ChannelMessageSendEmbed(channelID string, embed *discordgo.MessageEmbed, options ...discordgo.RequestOption) (*discordgo.Message, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sends = append(f.sends, sentEmbed{channelID: channelID, embed: embed})
+	return &discordgo.Message{ID: "sent", ChannelID: channelID}, nil
+}
+
+func (f *fakeEmbedSender) ChannelMessageEditEmbed(channelID, messageID string, embed *discordgo.MessageEmbed, options ...discordgo.RequestOption) (*discordgo.Message, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.editFail {
+		return nil, fmt.Errorf("edit rejected")
+	}
+	f.edits = append(f.edits, sentEmbed{channelID: channelID, messageID: messageID, embed: embed})
+	return &discordgo.Message{ID: messageID, ChannelID: channelID}, nil
+}
+
+func nowPlayingFixture(guildID string, showStartedTrack bool) (*queue.Song, *queue.Queue) {
+	song := &queue.Song{
+		ID:             7,
+		URL:            "https://youtube.com/watch?v=announce",
+		Title:          "Announced Song",
+		Duration:       "3:00",
+		Uploader:       "Uploader",
+		RequestedByTag: "User#1234",
+	}
+	q := &queue.Queue{
+		GuildID:          guildID,
+		TextChannelID:    "text",
+		ShowStartedTrack: showStartedTrack,
+	}
+	return song, q
 }

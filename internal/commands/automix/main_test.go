@@ -1,15 +1,11 @@
 package automix
 
 import (
-	"os"
 	"testing"
 
-	"noraegaori/internal/messages"
+	"noraegaori/internal/testutil/localetest"
 )
 
 func TestMain(m *testing.M) {
-	if err := messages.LoadLocale("en"); err != nil {
-		panic(err)
-	}
-	os.Exit(m.Run())
+	localetest.Run(m)
 }

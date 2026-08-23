@@ -2,15 +2,17 @@ package play
 
 import (
 	"noraegaori/internal/discord"
+	"noraegaori/internal/testutil"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
+
+	"noraegaori/internal/testutil/discordtest"
 	"noraegaori/internal/youtube"
 )
 
-func newConfirmationFixture() (*discordgo.Session, *discordgo.Message, *discordgo.InteractionCreate) {
-	session := &discordgo.Session{State: discordgo.NewState()}
-	session.State.User = &discordgo.User{ID: "bot"}
+func newConfirmationFixture(t *testing.T) (*discordgo.Session, *discordgo.Message, *discordgo.InteractionCreate) {
+	session := discordtest.Session(t, "bot")
 
 	msg := &discordgo.Message{ID: "msg1", ChannelID: "chan1"}
 
@@ -24,36 +26,24 @@ func newConfirmationFixture() (*discordgo.Session, *discordgo.Message, *discordg
 	return session, msg, interaction
 }
 
-func reactionFrom(userID, messageID, emoji string) *discordgo.MessageReactionAdd {
-	return &discordgo.MessageReactionAdd{
-		MessageReaction: &discordgo.MessageReaction{
-			UserID:    userID,
-			MessageID: messageID,
-			Emoji:     discordgo.Emoji{Name: emoji},
-		},
-	}
-}
-
 func TestConfirmedByRequesterAcceptsOnlyTheRequester(t *testing.T) {
-	session, msg, interaction := newConfirmationFixture()
+	session, msg, interaction := newConfirmationFixture(t)
 
 	removed := []string{}
-	previous := discord.RemoveUserReaction
-	discord.RemoveUserReaction = func(_ *discordgo.Session, _, _, _, userID string) {
+	testutil.Swap(t, &discord.RemoveUserReaction, func(_ *discordgo.Session, _, _, _, userID string) {
 		removed = append(removed, userID)
-	}
-	t.Cleanup(func() { discord.RemoveUserReaction = previous })
+	})
 
 	cases := []struct {
 		name     string
 		reaction *discordgo.MessageReactionAdd
 		want     bool
 	}{
-		{"the requester on the prompt", reactionFrom("requester", "msg1", "⬇️"), true},
-		{"the bot's own reaction", reactionFrom("bot", "msg1", "⬇️"), false},
-		{"another message", reactionFrom("requester", "msg2", "⬇️"), false},
-		{"another emoji", reactionFrom("requester", "msg1", "❤"), false},
-		{"a bystander", reactionFrom("bystander", "msg1", "⬇️"), false},
+		{"the requester on the prompt", discordtest.ReactionAdd("", "requester", "msg1", "⬇️"), true},
+		{"the bot's own reaction", discordtest.ReactionAdd("", "bot", "msg1", "⬇️"), false},
+		{"another message", discordtest.ReactionAdd("", "requester", "msg2", "⬇️"), false},
+		{"another emoji", discordtest.ReactionAdd("", "requester", "msg1", "❤"), false},
+		{"a bystander", discordtest.ReactionAdd("", "bystander", "msg1", "⬇️"), false},
 	}
 
 	for _, testCase := range cases {

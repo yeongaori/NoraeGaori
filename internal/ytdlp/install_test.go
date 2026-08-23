@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"noraegaori/internal/testutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -201,19 +202,15 @@ func TestEnsureVersionBinaryInstallsWhenNothingIsPresent(t *testing.T) {
 func stubCanary(t *testing.T, passed, networkError bool) {
 	t.Helper()
 
-	previous := runCanary
-	runCanary = func(*VersionManager, string) (bool, bool) { return passed, networkError }
-	t.Cleanup(func() { runCanary = previous })
+	testutil.Swap(t, &runCanary, func(*VersionManager, string) (bool, bool) { return passed, networkError })
 }
 
 func stubCanaryPerVersion(t *testing.T, verdicts map[string]bool) {
 	t.Helper()
 
-	previous := runCanary
-	runCanary = func(_ *VersionManager, version string) (bool, bool) {
+	testutil.Swap(t, &runCanary, func(_ *VersionManager, version string) (bool, bool) {
 		return verdicts[version], false
-	}
-	t.Cleanup(func() { runCanary = previous })
+	})
 }
 
 func TestExhaustedFallbackKeepsTheInstalledVersion(t *testing.T) {
@@ -224,11 +221,9 @@ func TestExhaustedFallbackKeepsTheInstalledVersion(t *testing.T) {
 	addVersion(versionmanager, "2026.08.18.122307", &VersionEntry{Path: path, State: StateActive, Successes: 40})
 	versionmanager.state.ActiveVersion = "2026.08.18.122307"
 
-	previous := getReleasesFn
-	getReleasesFn = func(channel string, perPage int) ([]*GitHubRelease, error) {
+	testutil.Swap(t, &getReleasesFn, func(channel string, perPage int) ([]*GitHubRelease, error) {
 		return nil, nil
-	}
-	t.Cleanup(func() { getReleasesFn = previous })
+	})
 
 	outcome, err := installFallbackVersion(versionmanager, config.YtDlpChannelNightly, "2026.08.20.234504", &GitHubRelease{TagName: "2026.08.20.234504"})
 	if err != nil {
@@ -315,11 +310,9 @@ func TestResolveCurrentVersionReportsNothingWhenNoBinaryExists(t *testing.T) {
 func stubReleaseList(t *testing.T, releases []*GitHubRelease) {
 	t.Helper()
 
-	previous := getReleasesFn
-	getReleasesFn = func(channel string, perPage int) ([]*GitHubRelease, error) {
+	testutil.Swap(t, &getReleasesFn, func(channel string, perPage int) ([]*GitHubRelease, error) {
 		return releases, nil
-	}
-	t.Cleanup(func() { getReleasesFn = previous })
+	})
 }
 
 func TestFallbackChainActivatesTheFirstCandidateThatPasses(t *testing.T) {
@@ -351,9 +344,7 @@ func TestFallbackChainStopsOnACanaryNetworkError(t *testing.T) {
 	releases := serveInstallableReleases(t, "2026.09.03", "2026.09.02", "2026.09.01")
 	stubReleaseList(t, releases)
 
-	previous := runCanary
-	runCanary = func(_ *VersionManager, version string) (bool, bool) { return false, true }
-	t.Cleanup(func() { runCanary = previous })
+	testutil.Swap(t, &runCanary, func(_ *VersionManager, version string) (bool, bool) { return false, true })
 
 	outcome, err := installFallbackVersion(versionmanager, config.YtDlpChannelStable, "2026.09.03", releases[0])
 	if err != nil {
