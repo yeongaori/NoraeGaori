@@ -179,7 +179,7 @@ Admin commands are **text-only** (prefix commands, not slash commands). Invoke t
 
 ```
 NoraeGaori/
-├── cmd/bot/            Entry point (env + token, then app.Run)
+├── main.go             Entry point (env + token, then app.Run)
 ├── internal/
 │   ├── app/            Composition root: bootstrap, Discord session, shutdown
 │   ├── audio/
@@ -195,7 +195,7 @@ NoraeGaori/
 │   │   ├── play/       play, playnext, search, autocomplete, playlists
 │   │   ├── playback/   pause, resume, seek, skip, stop, volume, repeat
 │   │   ├── queue/      Queue view, remove, swap, movetrack, skipto
-│   │   ├── settings/   Language, prefix, sponsorblock, normalization
+│   │   ├── settings/   Language, prefix, sponsorblock, normalization, showstartedtrack
 │   │   └── voice/      join, leave, switchvc
 │   ├── config/         Config loading with hot-reload
 │   ├── database/       SQLite
@@ -208,10 +208,11 @@ NoraeGaori/
 │   ├── queue/          Queue management with caching
 │   ├── rpc/            Discord Rich Presence
 │   ├── shutdown/       Graceful shutdown coordination
+│   ├── testutil/       Test helpers: fakes, fixtures, DB and locale setup
 │   ├── vote/           Reaction-vote engine (skip, stop, remove)
 │   ├── youtube/        InnerTube integration, search, availability pool
 │   └── ytdlp/          yt-dlp version management and updater
-├── locales/            Language files (ko.json, en.json)
+├── locales/            Language files (ko.json, en.json) and their embed
 ├── config/             Runtime config (gitignored, see *.example.json)
 ├── Makefile
 ├── Dockerfile

@@ -15,7 +15,7 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=1 go build -ldflags="-s -w" -o noraegaori ./cmd/bot
+RUN CGO_ENABLED=1 go build -ldflags="-s -w" -o noraegaori .
 
 # Runtime stage
 FROM alpine:latest

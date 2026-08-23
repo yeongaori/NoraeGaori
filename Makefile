@@ -34,7 +34,7 @@ all: build
 build: export CGO_ENABLED := $(CGO)
 build: deps
 	@echo Building $(BINARY_NAME)...
-	@go build $(BUILD_FLAGS) -o $(BINARY_NAME) ./cmd/bot
+	@go build $(BUILD_FLAGS) -o $(BINARY_NAME) .
 	@echo Build complete: $(BINARY_PATH)
 
 ## run: Build and run the application
@@ -45,7 +45,7 @@ run: build
 ## dev: Run in development mode with debug logging
 dev:
 	@echo Running in development mode...
-	@DEBUG_MODE=true go run ./cmd/bot
+	@DEBUG_MODE=true go run .
 
 ## clean: Remove build artifacts
 clean:
@@ -93,7 +93,7 @@ local:
 	@echo Building $(BINARY_NAME) with local discordgo-fork...
 	@cp go.mod go.mod.bak; cp go.sum go.sum.bak; \
 		go mod edit -replace github.com/bwmarrin/discordgo=/home/yeongaori/discordgo-fork; \
-		CGO_ENABLED=1 go build $(BUILD_FLAGS) -o $(BINARY_NAME) ./cmd/bot; \
+		CGO_ENABLED=1 go build $(BUILD_FLAGS) -o $(BINARY_NAME) .; \
 		RC=$$?; mv go.mod.bak go.mod; mv go.sum.bak go.sum; exit $$RC
 	@echo "Build complete (local fork): $(BINARY_PATH)"
 
