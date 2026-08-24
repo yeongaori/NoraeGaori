@@ -13,6 +13,11 @@ import (
 	"noraegaori/internal/queue"
 )
 
+var (
+	digitsRegex      = regexp.MustCompile(`^\d+$`)
+	userMentionRegex = regexp.MustCompile(`^<@!?(\d+)>$`)
+)
+
 func HandleForceRemove(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	options := i.ApplicationCommandData().Options
 	if len(options) == 0 {
@@ -27,7 +32,7 @@ func HandleForceRemove(s *discordgo.Session, i *discordgo.InteractionCreate) err
 		return nil
 	}
 
-	if regexp.MustCompile(`^\d+$`).MatchString(target) {
+	if digitsRegex.MatchString(target) {
 		if len(target) >= 17 {
 			return forceRemoveByUser(s, i, q, target)
 		}
@@ -35,7 +40,6 @@ func HandleForceRemove(s *discordgo.Session, i *discordgo.InteractionCreate) err
 		return forceRemoveByPosition(s, i, q, position)
 	}
 
-	userMentionRegex := regexp.MustCompile(`^<@!?(\d+)>$`)
 	matches := userMentionRegex.FindStringSubmatch(target)
 	if len(matches) < 2 {
 		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,

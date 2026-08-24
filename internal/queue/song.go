@@ -1,13 +1,10 @@
 package queue
 
 import (
-	"context"
 	"sync"
 	"time"
 
 	"noraegaori/internal/logger"
-
-	"github.com/bwmarrin/discordgo"
 )
 
 type SongState int
@@ -43,10 +40,6 @@ type Song struct {
 
 	State           SongState
 	RetryCount      int
-	LastError       error
-	LoadingMessage  *discordgo.Message
-	PreCacheData    []byte
-	PreCacheCancel  context.CancelFunc
 	PlaybackStarted time.Time
 	AddedAt         time.Time
 	StateChangedAt  time.Time
@@ -84,64 +77,6 @@ func (s *Song) ResetRetry() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.RetryCount = 0
-}
-
-func (s *Song) SetError(err error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.LastError = err
-	if err != nil {
-		logger.Errorf("%s encountered error: %v", s.Title, err)
-	}
-}
-
-func (s *Song) GetError() error {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.LastError
-}
-
-func (s *Song) SetLoadingMessage(msg *discordgo.Message) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.LoadingMessage = msg
-}
-
-func (s *Song) GetLoadingMessage() *discordgo.Message {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.LoadingMessage
-}
-
-func (s *Song) ClearLoadingMessage() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.LoadingMessage = nil
-}
-
-func (s *Song) SetPreCache(data []byte, cancel context.CancelFunc) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.PreCacheData = data
-	s.PreCacheCancel = cancel
-	logger.Debugf("Pre-cache set for %s (%d bytes)", s.Title, len(data))
-}
-
-func (s *Song) GetPreCache() ([]byte, context.CancelFunc) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.PreCacheData, s.PreCacheCancel
-}
-
-func (s *Song) ClearPreCache() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.PreCacheCancel != nil {
-		s.PreCacheCancel()
-		s.PreCacheCancel = nil
-	}
-	s.PreCacheData = nil
-	logger.Debugf("Pre-cache cleared for %s", s.Title)
 }
 
 func (s *Song) UpdatePlaybackPosition() int {

@@ -44,7 +44,7 @@ func HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	commandList := getAllCommands(i.GuildID)
 
 	isAdmin := config.IsAdmin(i.Member.User.ID)
-	filteredCommands := make([]CommandInfo, 0)
+	filteredCommands := make([]CommandInfo, 0, len(commandList))
 	for _, cmd := range commandList {
 		if !cmd.AdminOnly || isAdmin {
 			filteredCommands = append(filteredCommands, cmd)
@@ -255,11 +255,12 @@ func handleHelpButtons(s *discordgo.Session, i *discordgo.InteractionCreate, ori
 }
 
 func getAllCommands(guildID string) []CommandInfo {
-	commandList := make([]CommandInfo, 0)
+	snapshot := command.Snapshot()
+	commandList := make([]CommandInfo, 0, len(snapshot))
 
 	t := messages.T(guildID)
 
-	for name, cmd := range command.Snapshot() {
+	for name, cmd := range snapshot {
 		var cs messages.CommandStrings
 		if t != nil {
 			cs = t.Commands[name]

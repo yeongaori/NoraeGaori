@@ -37,13 +37,21 @@ type URLAnalysis struct {
 	PlaylistID string
 }
 
+var (
+	schemePrefixRegex  = regexp.MustCompile(`^https?://`)
+	playlistRegex      = regexp.MustCompile(`youtube\.com/playlist\?list=([a-zA-Z0-9_-]+)`)
+	videoWithListRegex = regexp.MustCompile(`[?&]v=([a-zA-Z0-9_-]+).*[?&]list=([a-zA-Z0-9_-]+)`)
+	youtuBeRegex       = regexp.MustCompile(`youtu\.be/([a-zA-Z0-9_-]+).*[?&]list=([a-zA-Z0-9_-]+)`)
+	watchRegex         = regexp.MustCompile(`[?&]v=([a-zA-Z0-9_-]+)`)
+	youtuBeShortRegex  = regexp.MustCompile(`youtu\.be/([a-zA-Z0-9_-]+)`)
+)
+
 func AnalyzeYouTubeURL(urlStr string) *URLAnalysis {
 
-	if !regexp.MustCompile(`^https?://`).MatchString(urlStr) {
+	if !schemePrefixRegex.MatchString(urlStr) {
 		urlStr = "https://" + urlStr
 	}
 
-	playlistRegex := regexp.MustCompile(`youtube\.com/playlist\?list=([a-zA-Z0-9_-]+)`)
 	if matches := playlistRegex.FindStringSubmatch(urlStr); len(matches) > 1 {
 		return &URLAnalysis{
 			Type:       URLTypePurePlaylist,
@@ -51,7 +59,6 @@ func AnalyzeYouTubeURL(urlStr string) *URLAnalysis {
 		}
 	}
 
-	videoWithListRegex := regexp.MustCompile(`[?&]v=([a-zA-Z0-9_-]+).*[?&]list=([a-zA-Z0-9_-]+)`)
 	if matches := videoWithListRegex.FindStringSubmatch(urlStr); len(matches) > 2 {
 		return &URLAnalysis{
 			Type:       URLTypeVideoWithPlaylist,
@@ -60,7 +67,6 @@ func AnalyzeYouTubeURL(urlStr string) *URLAnalysis {
 		}
 	}
 
-	youtuBeRegex := regexp.MustCompile(`youtu\.be/([a-zA-Z0-9_-]+).*[?&]list=([a-zA-Z0-9_-]+)`)
 	if matches := youtuBeRegex.FindStringSubmatch(urlStr); len(matches) > 2 {
 		return &URLAnalysis{
 			Type:       URLTypeVideoWithPlaylist,
@@ -69,7 +75,6 @@ func AnalyzeYouTubeURL(urlStr string) *URLAnalysis {
 		}
 	}
 
-	watchRegex := regexp.MustCompile(`[?&]v=([a-zA-Z0-9_-]+)`)
 	if matches := watchRegex.FindStringSubmatch(urlStr); len(matches) > 1 {
 		return &URLAnalysis{
 			Type:    URLTypeVideoOnly,
@@ -77,7 +82,6 @@ func AnalyzeYouTubeURL(urlStr string) *URLAnalysis {
 		}
 	}
 
-	youtuBeShortRegex := regexp.MustCompile(`youtu\.be/([a-zA-Z0-9_-]+)`)
 	if matches := youtuBeShortRegex.FindStringSubmatch(urlStr); len(matches) > 1 {
 		return &URLAnalysis{
 			Type:    URLTypeVideoOnly,
@@ -148,7 +152,7 @@ func GetPlaylistInfo(url, requesterName, requesterID string) (*PlaylistInfo, err
 		ID:     info.ID,
 		Title:  playlistTitle,
 		URL:    url,
-		Videos: make([]*Song, 0),
+		Videos: make([]*Song, 0, len(videoInfos)),
 	}
 
 	if info.PlaylistCount != nil {

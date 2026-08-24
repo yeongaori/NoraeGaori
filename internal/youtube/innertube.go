@@ -72,6 +72,16 @@ type innertubeResponse struct {
 }
 
 var (
+	apiKeyPatterns = []*regexp.Regexp{
+		regexp.MustCompile(`"INNERTUBE_API_KEY":"([^"]+)"`),
+		regexp.MustCompile(`"innertubeApiKey":"([^"]+)"`),
+	}
+
+	videoIDPatterns = []*regexp.Regexp{
+		regexp.MustCompile(`(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})`),
+		regexp.MustCompile(`youtube\.com/embed/([a-zA-Z0-9_-]{11})`),
+	}
+
 	innertubeClient *InnertubeClient
 	innertubeOnce   = &sync.Once{}
 	innertubeInit   = initInnertubeClient
@@ -98,12 +108,7 @@ func fetchAPIKey() (string, error) {
 		return "", err
 	}
 
-	patterns := []string{
-		`"INNERTUBE_API_KEY":"([^"]+)"`,
-		`"innertubeApiKey":"([^"]+)"`,
-	}
-	for _, pattern := range patterns {
-		re := regexp.MustCompile(pattern)
+	for _, re := range apiKeyPatterns {
 		if matches := re.FindSubmatch(body); len(matches) > 1 {
 			return string(matches[1]), nil
 		}
@@ -138,13 +143,7 @@ func getInnertubeClient() *InnertubeClient {
 }
 
 func extractVideoID(url string) string {
-	patterns := []string{
-		`(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})`,
-		`youtube\.com/embed/([a-zA-Z0-9_-]{11})`,
-	}
-
-	for _, pattern := range patterns {
-		re := regexp.MustCompile(pattern)
+	for _, re := range videoIDPatterns {
 		if matches := re.FindStringSubmatch(url); len(matches) > 1 {
 			return matches[1]
 		}
@@ -184,13 +183,8 @@ func (c *InnertubeClient) callPlayerEndpoint(ctx context.Context, videoID string
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
 	var innertubeResp innertubeResponse
-	if err := json.Unmarshal(body, &innertubeResp); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&innertubeResp); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
