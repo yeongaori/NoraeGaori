@@ -28,6 +28,7 @@ const (
 	lockTimeout = 30 * time.Second
 
 	healthyPlaybackFrames = 500
+	maxOpusFrameBytes     = 1500
 	framePacingWarnDelay  = 100 * time.Millisecond
 )
 

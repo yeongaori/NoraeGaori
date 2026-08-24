@@ -24,6 +24,7 @@ type outroState struct {
 	processor   *transition.Processor
 	tail        *transition.Tail
 	tailBuf     []int16
+	opusScratch []byte
 }
 
 func newOutroState() *outroState {
@@ -52,6 +53,12 @@ func (os *outroState) plan(player *GuildPlayer, es *ffmpeg.EndState, sentFrames 
 		return false
 	}
 
+	trackAnalysis := es.Analysis
+	startFrame, outroFrames, ok := planOutroWindow(es, sentFrames, fade)
+	if !ok {
+		return false
+	}
+
 	guildID := player.GuildID
 	q, err := queue.GetQueue(guildID, true)
 	if err != nil || q == nil || len(q.Songs) == 0 {
@@ -64,11 +71,6 @@ func (os *outroState) plan(player *GuildPlayer, es *ffmpeg.EndState, sentFrames 
 		return false
 	}
 
-	trackAnalysis := es.Analysis
-	startFrame, outroFrames, ok := planOutroWindow(es, sentFrames, fade)
-	if !ok {
-		return false
-	}
 	effectiveEnd := es.TotalFrames - es.SilentTailFrames
 
 	songOverrides := songTransitionOverrides(q.Songs[0])
@@ -167,6 +169,9 @@ func (os *outroState) flush(player *GuildPlayer, stopCh chan struct{}, enc *opus
 	if os.tailBuf == nil {
 		os.tailBuf = make([]int16, frameSize*channels)
 	}
+	if os.opusScratch == nil {
+		os.opusScratch = make([]byte, maxOpusFrameBytes)
+	}
 
 	emitted := 0
 	for emitted < outroMaxTailFrames {
@@ -175,15 +180,17 @@ func (os *outroState) flush(player *GuildPlayer, stopCh chan struct{}, enc *opus
 		}
 		more := os.tail.Apply(os.tailBuf)
 
-		opusBuffer := make([]byte, 1500)
-		opusLen, err := enc.Encode(os.tailBuf, opusBuffer)
+		opusLen, err := enc.Encode(os.tailBuf, os.opusScratch)
 		if err != nil {
 			logger.Errorf("opus encoding error: %v", err)
 			return
 		}
 
+		packet := make([]byte, opusLen)
+		copy(packet, os.opusScratch[:opusLen])
+
 		select {
-		case player.VoiceConn.OpusSendChan() <- opusBuffer[:opusLen]:
+		case player.VoiceConn.OpusSendChan() <- packet:
 		case <-player.VoiceConn.DeadChan():
 			return
 		case <-stopCh:

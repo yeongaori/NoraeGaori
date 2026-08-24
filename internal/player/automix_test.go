@@ -875,3 +875,55 @@ func TestLoopBufferToleratesNilInputBeforeFill(t *testing.T) {
 		t.Errorf("got %v, want nil", out)
 	}
 }
+
+func TestLoopBufferFramesDoNotAlias(t *testing.T) {
+	state := newCrossfadeState()
+	state.loopFrames = 3
+
+	width := frameSize * channels
+	for i := 0; i < 3; i++ {
+		frame := make([]int16, width)
+		for j := range frame {
+			frame[j] = int16(i + 1)
+		}
+		state.loopFrame(frame)
+	}
+
+	for i := range state.loopBuffer[1] {
+		state.loopBuffer[1][i] = 999
+	}
+
+	for index, want := range []int16{1, 999, 3} {
+		for _, value := range state.loopBuffer[index] {
+			if value != want {
+				t.Fatalf("frame %d holds %d, want %d", index, value, want)
+			}
+		}
+	}
+}
+
+func TestLoopBufferFrameCannotGrowIntoItsNeighbour(t *testing.T) {
+	state := newCrossfadeState()
+	state.loopFrames = 2
+
+	width := frameSize * channels
+	for i := 0; i < 2; i++ {
+		frame := make([]int16, width)
+		for j := range frame {
+			frame[j] = int16(i + 1)
+		}
+		state.loopFrame(frame)
+	}
+
+	if capacity := cap(state.loopBuffer[0]); capacity != width {
+		t.Fatalf("frame 0 cap = %d, want %d", capacity, width)
+	}
+
+	state.loopBuffer[0] = append(state.loopBuffer[0], 42)
+
+	for _, value := range state.loopBuffer[1] {
+		if value != 2 {
+			t.Fatal("appending past frame 0 wrote into frame 1")
+		}
+	}
+}

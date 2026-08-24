@@ -54,10 +54,12 @@ type crossfadeState struct {
 	bFramesConsumed int
 	bLeadSkipFrames int
 	mixBuf          []int16
+	opusScratch     []byte
 	recipe          transition.Recipe
 	processor       *transition.Processor
 	loopFrames      int
 	loopBuffer      [][]int16
+	loopBacking     []int16
 	loopIndex       int
 	guildID         string
 	normalization   bool
@@ -70,10 +72,11 @@ type crossfadeState struct {
 
 func newCrossfadeState() *crossfadeState {
 	return &crossfadeState{
-		autoMix: true,
-		scope:   logger.Scope("AutoMix"),
-		mixBuf:  make([]int16, frameSize*channels),
-		recipe:  transition.DefaultRecipe(),
+		autoMix:     true,
+		scope:       logger.Scope("AutoMix"),
+		mixBuf:      make([]int16, frameSize*channels),
+		opusScratch: make([]byte, maxOpusFrameBytes),
+		recipe:      transition.DefaultRecipe(),
 	}
 }
 
@@ -198,27 +201,36 @@ func (cs *crossfadeState) buildPlan(player *GuildPlayer, es *ffmpeg.EndState, se
 		return nil
 	}
 
+	var aAnal *analysis.TrackAnalysis
+	beatAligned := fade.autoMix
+	if fade.autoMix {
+		aAnal = es.Analysis
+	}
+
+	crossfadeFrames, crossfadeSec := transition.CrossfadeFrames(fade.autoMix, fade.autoMixBeats, fade.crossfadeSec, aAnal)
+	if crossfadeFrames < 1 {
+		return nil
+	}
+
+	effectiveEnd := es.TotalFrames - es.SilentTailFrames
+	maxStart := effectiveEnd - crossfadeFrames
+	if maxStart < sentFrames+1 {
+		return nil
+	}
+
 	guildID := player.GuildID
 	current, next, nextURL := nextCrossfadeCandidate(guildID)
 	if next == nil {
 		return nil
 	}
 
-	var aAnal *analysis.TrackAnalysis
 	var bAnal *analysis.TrackAnalysis
-	beatAligned := fade.autoMix
 	if fade.autoMix {
-		aAnal = es.Analysis
 		bAnal = LookupAnalysis(guildID, next, analysis.SegmentHead)
 	}
 	scope := logger.Scope("Crossfade")
 	if beatAligned {
 		scope = logger.Scope("AutoMix")
-	}
-
-	crossfadeFrames, crossfadeSec := transition.CrossfadeFrames(fade.autoMix, fade.autoMixBeats, fade.crossfadeSec, aAnal)
-	if crossfadeFrames < 1 {
-		return nil
 	}
 
 	songOverrides := songTransitionOverrides(current)
@@ -236,14 +248,8 @@ func (cs *crossfadeState) buildPlan(player *GuildPlayer, es *ffmpeg.EndState, se
 		return nil
 	}
 
-	effectiveEnd := es.TotalFrames - es.SilentTailFrames
 	if es.SilentTailFrames > 0 {
 		scope.Debugf("trimming %d silent tail frames, effective end %d of %d for guild: %s", es.SilentTailFrames, effectiveEnd, es.TotalFrames, guildID)
-	}
-
-	maxStart := effectiveEnd - crossfadeFrames
-	if maxStart < sentFrames+1 {
-		return nil
 	}
 
 	transitionFrame := resolveTransitionFrame(effectiveEnd-crossfadeFrames, maxStart, sentFrames, es.TailStartFrame, beatAligned, loopBeats, aAnal)
@@ -303,6 +309,7 @@ func (cs *crossfadeState) commit(p *crossfadePlan) {
 	cs.recipe = p.recipe
 	cs.loopFrames = p.loopFrames
 	cs.loopBuffer = nil
+	cs.loopBacking = nil
 	cs.loopIndex = 0
 	cs.processor = transition.NewProcessor(p.recipe, p.crossfadeFrames, p.periodSec)
 	cs.processor.SetFlatGains(p.flatGains)
@@ -511,13 +518,13 @@ func (cs *crossfadeState) mixAndSend(player *GuildPlayer, stopCh chan struct{}, 
 		}
 	}
 
-	opusBuffer := make([]byte, 1500)
-	opusLen, err := enc.Encode(cs.mixBuf, opusBuffer)
+	opusLen, err := enc.Encode(cs.mixBuf, cs.opusScratch)
 	if err != nil {
 		cs.scope.Errorf("opus encoding error: %v", err)
 		return nil
 	}
-	opusData := opusBuffer[:opusLen]
+	opusData := make([]byte, opusLen)
+	copy(opusData, cs.opusScratch[:opusLen])
 
 	select {
 	case player.VoiceConn.OpusSendChan() <- opusData:
@@ -639,7 +646,13 @@ func (cs *crossfadeState) loopFrame(pcmData []int16) []int16 {
 		if pcmData == nil {
 			return nil
 		}
-		stored := make([]int16, len(pcmData))
+		if cs.loopBacking == nil {
+			cs.loopBacking = make([]int16, cs.loopFrames*frameSize*channels)
+			cs.loopBuffer = make([][]int16, 0, cs.loopFrames)
+		}
+		start := len(cs.loopBuffer) * frameSize * channels
+		end := start + frameSize*channels
+		stored := cs.loopBacking[start:end:end]
 		copy(stored, pcmData)
 		cs.loopBuffer = append(cs.loopBuffer, stored)
 		return stored

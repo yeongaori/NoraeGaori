@@ -404,6 +404,7 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 		resumeMode:     resumeMode,
 		fade:           fade,
 		volumeBuf:      make([]int16, frameSize*channels),
+		opusScratch:    make([]byte, maxOpusFrameBytes),
 		skipLeading:    fade.trimSilence && !resumeMode && seekTime == 0,
 		heldFadeInGain: 1.0,
 		replanAllowed:  true,
@@ -507,6 +508,7 @@ type playbackSession struct {
 	retryCreditCleared   bool
 	transitionArmedLast  bool
 	volumeBuf            []int16
+	opusScratch          []byte
 	fadeInFrames         int
 	fadeInStartFrame     int
 	skipLeading          bool
@@ -694,17 +696,19 @@ func (s *playbackSession) shapeFrame(pcmData []int16, volumeFactor, gain float64
 }
 
 func (s *playbackSession) encodeAndSend(firstFrameCh chan<- struct{}) error {
-	opusBuffer := make([]byte, 1500)
-	opusLen, err := s.opusEncoder.Encode(s.volumeBuf, opusBuffer)
+	opusLen, err := s.opusEncoder.Encode(s.volumeBuf, s.opusScratch)
 	if err != nil {
 		logger.Errorf("Opus encoding error: %v", err)
 		s.sentFrames++
 		return nil
 	}
 
+	packet := make([]byte, opusLen)
+	copy(packet, s.opusScratch[:opusLen])
+
 	sendStart := time.Now()
 	select {
-	case s.player.VoiceConn.OpusSendChan() <- opusBuffer[:opusLen]:
+	case s.player.VoiceConn.OpusSendChan() <- packet:
 	case <-s.player.VoiceConn.DeadChan():
 		s.stream.Stop()
 		s.crossfade.abort()

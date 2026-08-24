@@ -28,19 +28,16 @@ func decimateMono(samples []float32) []float32 {
 	if len(samples) < keyDecimation {
 		return nil
 	}
-	smoothed := make([]float32, len(samples))
+	out := make([]float32, len(samples)/keyDecimation)
 	var accumulator float64
 	for i := range samples {
 		accumulator += float64(samples[i])
 		if i >= keyDecimation {
 			accumulator -= float64(samples[i-keyDecimation])
 		}
-		smoothed[i] = float32(accumulator / float64(keyDecimation))
-	}
-
-	out := make([]float32, len(samples)/keyDecimation)
-	for i := range out {
-		out[i] = smoothed[i*keyDecimation]
+		if i%keyDecimation == 0 && i/keyDecimation < len(out) {
+			out[i/keyDecimation] = float32(accumulator / float64(keyDecimation))
+		}
 	}
 	return out
 }

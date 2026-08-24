@@ -21,6 +21,7 @@ const (
 	analysisHeadSecs   = 75
 	analysisReadMargin = 5
 	analysisMaxBytes   = int64((analysisHeadSecs + analysisReadMargin) * analysis.SampleRate * 4)
+	analysisReadChunk  = 32 * 1024
 )
 
 var preCacheNext = PreCacheNext
@@ -133,15 +134,14 @@ func preCacheSong(ctx context.Context, guildID string, song *queue.Song, sponsor
 		}
 	}
 
-	go func() {
-		time.Sleep(preCacheTTL)
+	time.AfterFunc(preCacheTTL, func() {
 		preCacheStoreMu.Lock()
 		if cached, exists := preCacheStore[cacheKey]; exists && cached.Timestamp.Equal(cache.Timestamp) {
 			delete(preCacheStore, cacheKey)
 			logger.Debugf("Expired cache for: %s", song.Title)
 		}
 		preCacheStoreMu.Unlock()
-	}()
+	})
 
 	return nil
 }
@@ -179,6 +179,30 @@ func GetCachedAnalysis(guildID string, songID int) *analysis.TrackAnalysis {
 	return cache.Analysis
 }
 
+func readFloat32Samples(reader io.Reader, maxBytes int64) ([]float32, error) {
+	samples := make([]float32, 0, maxBytes/4)
+	chunk := make([]byte, analysisReadChunk)
+	limited := io.LimitReader(reader, maxBytes)
+
+	carry := 0
+	for {
+		read, err := limited.Read(chunk[carry:])
+		total := carry + read
+		usable := total - total%4
+		for i := 0; i < usable; i += 4 {
+			samples = append(samples, math.Float32frombits(binary.LittleEndian.Uint32(chunk[i:])))
+		}
+		carry = total - usable
+		copy(chunk, chunk[usable:total])
+		if err != nil {
+			if err == io.EOF {
+				return samples, nil
+			}
+			return nil, err
+		}
+	}
+}
+
 func analyzeStreamHead(ctx context.Context, streamURL string) (*analysis.TrackAnalysis, error) {
 	args := []string{
 		"-reconnect", "1",
@@ -201,23 +225,17 @@ func analyzeStreamHead(ctx context.Context, streamURL string) (*analysis.TrackAn
 		return nil, fmt.Errorf("failed to start ffmpeg: %w", err)
 	}
 
-	data, err := io.ReadAll(io.LimitReader(stdout, analysisMaxBytes))
+	samples, err := readFloat32Samples(stdout, analysisMaxBytes)
 	if err != nil {
 		if killErr := ffmpeg.Process.Kill(); killErr != nil {
 			logger.Debugf("Failed to kill ffmpeg: %v", killErr)
 		}
 		return nil, fmt.Errorf("read error: %w", err)
 	}
+
 	_, _ = io.Copy(io.Discard, stdout)
 	if err := ffmpeg.Wait(); err != nil {
 		return nil, fmt.Errorf("ffmpeg failed: %w", err)
-	}
-
-	n := len(data) / 4
-	samples := make([]float32, n)
-	for i := 0; i < n; i++ {
-		bits := binary.LittleEndian.Uint32(data[i*4:])
-		samples[i] = math.Float32frombits(bits)
 	}
 
 	lead := dsp.LeadingSilentSamples(samples)

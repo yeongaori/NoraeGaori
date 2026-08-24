@@ -7,6 +7,7 @@ import (
 	"noraegaori/internal/audio/analysis"
 	"noraegaori/internal/audio/dsp"
 	"os/exec"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -91,11 +92,13 @@ func (m *monoTail) append(s float32) {
 }
 
 func (m *monoTail) snapshot() ([]float32, int64) {
-	out := make([]float32, m.count)
-	for i := 0; i < m.count; i++ {
-		out[i] = m.buf[(m.start+i)%m.capacity]
+	if m.start != 0 {
+		slices.Reverse(m.buf[:m.start])
+		slices.Reverse(m.buf[m.start:])
+		slices.Reverse(m.buf)
+		m.start = 0
 	}
-	return out, m.produced - int64(m.count)
+	return m.buf[:m.count], m.produced - int64(m.count)
 }
 
 func Args(streamURL string, seekSeconds float64, normalization bool) []string {
@@ -259,26 +262,36 @@ func (s *Stream) produce(stdout io.Reader, collectTail bool) {
 		tail = newMonoTail(tailCapacitySamples)
 	}
 
+	readBuf := make([]byte, dsp.FrameSize*dsp.Channels*2)
+	readErr := make(chan error, 1)
+	stallTimer := time.NewTimer(StallTimeout)
+	defer stallTimer.Stop()
+
 	frameCount := 0
 	for {
 		pcmBuf := make([]int16, dsp.FrameSize*dsp.Channels)
 
-		readErr := make(chan error, 1)
 		go func() {
-			readErr <- binary.Read(stdout, binary.LittleEndian, &pcmBuf)
+			_, err := io.ReadFull(stdout, readBuf)
+			readErr <- err
 		}()
 
-		stallTimer := time.NewTimer(StallTimeout)
+		if !stallTimer.Stop() {
+			select {
+			case <-stallTimer.C:
+			default:
+			}
+		}
+		stallTimer.Reset(StallTimeout)
+
 		var err error
 		select {
 		case err = <-readErr:
-			stallTimer.Stop()
 		case <-stallTimer.C:
 			s.killFFmpeg()
 			s.errChan <- fmt.Errorf("stream stalled: no data received for %v (after %d frames)", StallTimeout, frameCount)
 			return
 		case <-s.stopChan:
-			stallTimer.Stop()
 			s.killFFmpeg()
 			s.errChan <- fmt.Errorf("playback stopped by user")
 			return
@@ -297,6 +310,10 @@ func (s *Stream) produce(stdout io.Reader, collectTail bool) {
 			s.killFFmpeg()
 			s.errChan <- fmt.Errorf("pcm read error: %w", err)
 			return
+		}
+
+		for i := range pcmBuf {
+			pcmBuf[i] = int16(binary.LittleEndian.Uint16(readBuf[i*2:]))
 		}
 
 		if tail != nil {
