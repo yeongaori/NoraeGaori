@@ -340,6 +340,13 @@
       "example": "setlanguage ko, setlanguage en, setlanguage",
       "aliases": ["setlanguage", "setlang", "language", "lang", "언어"]
     },
+    "settings": {
+      "description": "서버 설정 패널을 엽니다",
+      "options": { "category": "먼저 열 분류" },
+      "usage": "settings [general|playback|mixing]",
+      "example": "settings, settings playback",
+      "aliases": ["settings", "config", "settingspanel", "설정"]
+    },
     "forceskip": {
       "description": "현재 재생 중인 노래를 강제로 건너뜁니다 (관리자 전용)",
       "options": {},
@@ -798,6 +805,59 @@
       "loop.two_beats": "2비트 루프",
       "loop.four_beats": "4비트 루프",
       "loop.eight_beats": "8비트 루프"
+    }
+  },
+  "settings_panel": {
+    "title": "서버 설정",
+    "description": "아래에서 분류를 고르고, 버튼으로 설정을 켜고 끄거나, …가 붙은 버튼을 눌러 값을 입력하세요.",
+    "category_placeholder": "분류를 선택하세요",
+    "setting_placeholder": "변경할 설정을 선택하세요",
+    "choice_placeholder": "%s의 값을 선택하세요",
+    "back_option": "설정 목록으로 돌아가기",
+    "default_value": "기본값 (%s)",
+    "default_option": "기본값 사용",
+    "edit_button": "%s …",
+    "modal_title": "%s 수정",
+    "not_admin": "이 설정은 관리자만 변경할 수 있습니다.",
+    "not_number": "%s은(는) 숫자여야 합니다.",
+    "out_of_range": "%s은(는) %s에서 %s 사이여야 합니다.",
+    "too_long": "%s은(는) 최대 %d자까지 가능합니다.",
+    "save_failed": "%s을(를) 저장하지 못했습니다: %v",
+    "read_failed": "불러올 수 없음",
+    "repeat_off": "끔",
+    "repeat_all": "전체",
+    "repeat_single": "한 곡",
+    "categories": {
+      "general": "일반",
+      "playback": "재생",
+      "mixing": "믹싱"
+    },
+    "labels": {
+      "prefix": "Prefix",
+      "language": "언어",
+      "volume": "볼륨",
+      "repeat": "반복",
+      "sponsorblock": "SponsorBlock",
+      "normalization": "음량 평준화",
+      "showstartedtrack": "재생 알림",
+      "fadein": "페이드 인",
+      "fadein_duration": "페이드 인 시간",
+      "fadeout": "페이드 아웃",
+      "fadeout_duration": "페이드 아웃 시간",
+      "crossfade": "크로스페이드",
+      "crossfade_duration": "크로스페이드 시간",
+      "automix": "오토믹스",
+      "automix_beats": "오토믹스 비트",
+      "fadeonstop": "정지 시 페이드",
+      "trimsilence": "무음 제거"
+    },
+    "hints": {
+      "prefix": "최대 5자, 비우면 초기화",
+      "volume": "0에서 1000까지",
+      "fadein_duration": "1에서 30초",
+      "fadeout_duration": "1에서 30초",
+      "crossfade_duration": "1에서 30초",
+      "automix_beats": "4에서 64비트"
     }
   }
 }

@@ -111,4 +111,22 @@ func Register(cmd func(string) messages.CommandStrings) {
 		Example:  cmd("normalization").Example,
 	})
 	command.RegisterAliases("normalization", cmd("normalization"))
+	command.RegisterCommand(&command.Command{
+		Name:        "settings",
+		Description: cmd("settings").Description,
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "category",
+				Description: cmd("settings").Options["category"],
+				Required:    false,
+				Choices:     BuildCategoryChoices(),
+			},
+		},
+		Handler:  HandleSettingsPanel,
+		TextOnly: false,
+		Usage:    cmd("settings").Usage,
+		Example:  cmd("settings").Example,
+	})
+	command.RegisterAliases("settings", cmd("settings"))
 }

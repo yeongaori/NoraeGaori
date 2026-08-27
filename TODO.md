@@ -1,2 +1,2 @@
 - [x] Memory Optimization
-- [ ] Add Settings Panel using Modal components
+- [x] Add Settings Panel using Modal components

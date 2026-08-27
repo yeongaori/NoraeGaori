@@ -26,27 +26,28 @@ var (
 )
 
 type Locale struct {
-	Errors       ErrorMessages             `json:"errors"`
-	Titles       TitleMessages             `json:"titles"`
-	Fields       FieldMessages             `json:"fields"`
-	Descriptions DescriptionMessages       `json:"descriptions"`
-	Footers      FooterMessages            `json:"footers"`
-	Buttons      ButtonMessages            `json:"buttons"`
-	SelectMenus  SelectMenuMessages        `json:"select_menus"`
-	Votes        VoteMessages              `json:"votes"`
-	Help         HelpMessages              `json:"help"`
-	Commands     map[string]CommandStrings `json:"commands"`
-	Voice        VoiceMessages             `json:"voice"`
-	Admin        AdminMessages             `json:"admin"`
-	Settings     SettingsMessages          `json:"settings"`
-	Status       StatusMessages            `json:"status"`
-	Music        MusicMessages             `json:"music"`
-	Queue        QueueMessages             `json:"queue"`
-	Player       PlayerMessages            `json:"player"`
-	YouTube      YouTubeMessages           `json:"youtube"`
-	VoiceHandler VoiceHandlerMessages      `json:"voice_handler"`
-	RPC          RPCMessages               `json:"rpc"`
-	AutoMixPanel AutoMixPanelMessages      `json:"automix_panel"`
+	Errors        ErrorMessages             `json:"errors"`
+	Titles        TitleMessages             `json:"titles"`
+	Fields        FieldMessages             `json:"fields"`
+	Descriptions  DescriptionMessages       `json:"descriptions"`
+	Footers       FooterMessages            `json:"footers"`
+	Buttons       ButtonMessages            `json:"buttons"`
+	SelectMenus   SelectMenuMessages        `json:"select_menus"`
+	Votes         VoteMessages              `json:"votes"`
+	Help          HelpMessages              `json:"help"`
+	Commands      map[string]CommandStrings `json:"commands"`
+	Voice         VoiceMessages             `json:"voice"`
+	Admin         AdminMessages             `json:"admin"`
+	Settings      SettingsMessages          `json:"settings"`
+	SettingsPanel SettingsPanelMessages     `json:"settings_panel"`
+	Status        StatusMessages            `json:"status"`
+	Music         MusicMessages             `json:"music"`
+	Queue         QueueMessages             `json:"queue"`
+	Player        PlayerMessages            `json:"player"`
+	YouTube       YouTubeMessages           `json:"youtube"`
+	VoiceHandler  VoiceHandlerMessages      `json:"voice_handler"`
+	RPC           RPCMessages               `json:"rpc"`
+	AutoMixPanel  AutoMixPanelMessages      `json:"automix_panel"`
 }
 
 type AutoMixPanelMessages struct {
@@ -348,6 +349,31 @@ type SettingsMessages struct {
 	LanguageCurrentTitle        string `json:"language_current_title"`
 	LanguageCurrentDesc         string `json:"language_current_desc"`
 	LanguageSaveFailed          string `json:"language_save_failed"`
+}
+
+type SettingsPanelMessages struct {
+	Title               string            `json:"title"`
+	Description         string            `json:"description"`
+	CategoryPlaceholder string            `json:"category_placeholder"`
+	SettingPlaceholder  string            `json:"setting_placeholder"`
+	ChoicePlaceholder   string            `json:"choice_placeholder"`
+	BackOption          string            `json:"back_option"`
+	DefaultValue        string            `json:"default_value"`
+	DefaultOption       string            `json:"default_option"`
+	EditButton          string            `json:"edit_button"`
+	ModalTitle          string            `json:"modal_title"`
+	NotAdmin            string            `json:"not_admin"`
+	NotNumber           string            `json:"not_number"`
+	OutOfRange          string            `json:"out_of_range"`
+	TooLong             string            `json:"too_long"`
+	SaveFailed          string            `json:"save_failed"`
+	ReadFailed          string            `json:"read_failed"`
+	RepeatOff           string            `json:"repeat_off"`
+	RepeatAll           string            `json:"repeat_all"`
+	RepeatSingle        string            `json:"repeat_single"`
+	Categories          map[string]string `json:"categories"`
+	Labels              map[string]string `json:"labels"`
+	Hints               map[string]string `json:"hints"`
 }
 
 type StatusMessages struct {

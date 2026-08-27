@@ -340,6 +340,13 @@
       "example": "setlanguage ko, setlanguage en, setlanguage",
       "aliases": ["setlanguage", "setlang", "language", "lang"]
     },
+    "settings": {
+      "description": "Opens the server settings panel",
+      "options": { "category": "Category to open first" },
+      "usage": "settings [general|playback|mixing]",
+      "example": "settings, settings playback",
+      "aliases": ["settings", "config", "settingspanel"]
+    },
     "forceskip": {
       "description": "Force skips the current song (admin only)",
       "options": {},
@@ -798,6 +805,59 @@
       "loop.two_beats": "2 Beat Loop",
       "loop.four_beats": "4 Beat Loop",
       "loop.eight_beats": "8 Beat Loop"
+    }
+  },
+  "settings_panel": {
+    "title": "Server Settings",
+    "description": "Pick a category below, toggle a setting with its button, or open a button marked with … to type a value.",
+    "category_placeholder": "Choose a category",
+    "setting_placeholder": "Choose a setting to change",
+    "choice_placeholder": "Choose a value for %s",
+    "back_option": "Back to the setting list",
+    "default_value": "default (%s)",
+    "default_option": "Use the default",
+    "edit_button": "%s …",
+    "modal_title": "Edit %s",
+    "not_admin": "Only an admin can change this setting.",
+    "not_number": "%s must be a number.",
+    "out_of_range": "%s must be between %s and %s.",
+    "too_long": "%s must be at most %d characters.",
+    "save_failed": "Could not save %s: %v",
+    "read_failed": "unavailable",
+    "repeat_off": "Off",
+    "repeat_all": "All",
+    "repeat_single": "Single",
+    "categories": {
+      "general": "General",
+      "playback": "Playback",
+      "mixing": "Mixing"
+    },
+    "labels": {
+      "prefix": "Prefix",
+      "language": "Language",
+      "volume": "Volume",
+      "repeat": "Repeat",
+      "sponsorblock": "SponsorBlock",
+      "normalization": "Normalization",
+      "showstartedtrack": "Announce Tracks",
+      "fadein": "Fade In",
+      "fadein_duration": "Fade In Seconds",
+      "fadeout": "Fade Out",
+      "fadeout_duration": "Fade Out Seconds",
+      "crossfade": "Crossfade",
+      "crossfade_duration": "Crossfade Seconds",
+      "automix": "AutoMix",
+      "automix_beats": "AutoMix Beats",
+      "fadeonstop": "Fade On Stop",
+      "trimsilence": "Trim Silence"
+    },
+    "hints": {
+      "prefix": "Up to 5 characters, empty to reset",
+      "volume": "0 to 1000",
+      "fadein_duration": "1 to 30 seconds",
+      "fadeout_duration": "1 to 30 seconds",
+      "crossfade_duration": "1 to 30 seconds",
+      "automix_beats": "4 to 64 beats"
     }
   }
 }

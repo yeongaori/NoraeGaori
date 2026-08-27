@@ -68,10 +68,6 @@ func voiceChannelBitrate(s *discordgo.Session, guildID string) int {
 	return channel.Bitrate
 }
 
-func newPanelToken() string {
-	return strconv.FormatInt(time.Now().UnixNano(), 36)
-}
-
 func transitionPairs(songs []*queue.Song) []transitionPair {
 	pairs := make([]transitionPair, 0, len(songs))
 	for index := 0; index+1 < len(songs); index++ {
@@ -578,7 +574,7 @@ func HandleAutoMixPanel(s *discordgo.Session, i *discordgo.InteractionCreate) er
 		page = totalPages
 	}
 
-	token := newPanelToken()
+	token := discord.NewComponentToken()
 	rows := hydrateTransitionRows(guildID, state, transitionPageSlice(state.pairs, page))
 	embed := createTransitionPanelEmbed(guildID, state, rows, page, totalPages)
 	components := createTransitionPanelComponents(guildID, rows, page, totalPages, token)
@@ -612,7 +608,7 @@ func OpenPanelFromComponent(s *discordgo.Session, ic *discordgo.InteractionCreat
 	go player.StartAnalysisBackfill(guildID, voiceChannelBitrate(s, guildID))
 
 	totalPages := transitionPageCount(state.pairs)
-	token := newPanelToken()
+	token := discord.NewComponentToken()
 	rows := hydrateTransitionRows(guildID, state, transitionPageSlice(state.pairs, 1))
 	embed := createTransitionPanelEmbed(guildID, state, rows, 1, totalPages)
 	components := createTransitionPanelComponents(guildID, rows, 1, totalPages, token)
@@ -776,7 +772,7 @@ func openTransitionEditor(s *discordgo.Session, ic *discordgo.InteractionCreate,
 	}
 
 	row := hydrateTransitionRow(guildID, state, pair)
-	token := newPanelToken()
+	token := discord.NewComponentToken()
 	if err := s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{

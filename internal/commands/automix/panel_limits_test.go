@@ -7,6 +7,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/audio/transition"
+	"noraegaori/internal/discord"
 	"noraegaori/internal/queue"
 )
 
@@ -139,7 +140,7 @@ func TestPanelAndEditorStayInsideDiscordLimits(t *testing.T) {
 
 			for page := 1; page <= totalPages; page++ {
 				pageRows := hydrateTransitionRows("check-guild", state, transitionPageSlice(state.pairs, page))
-				components := createTransitionPanelComponents("check-guild", pageRows, page, totalPages, newPanelToken())
+				components := createTransitionPanelComponents("check-guild", pageRows, page, totalPages, discord.NewComponentToken())
 				rowCount, selects, buttons := inspectComponents(components)
 
 				if rowCount > 5 {
@@ -166,7 +167,7 @@ func TestPanelAndEditorStayInsideDiscordLimits(t *testing.T) {
 			}
 
 			for _, row := range rows {
-				components := createTransitionEditorComponents("check-guild", state, row, newPanelToken())
+				components := createTransitionEditorComponents("check-guild", state, row, discord.NewComponentToken())
 				rowCount, selects, _ := inspectComponents(components)
 
 				if rowCount != len(transitionCategories) {
@@ -211,7 +212,7 @@ func fourSongPanel(t *testing.T) (panelState, []transitionRow) {
 
 func TestPanelCustomIDsAreUnique(t *testing.T) {
 	state, rows := fourSongPanel(t)
-	token := newPanelToken()
+	token := discord.NewComponentToken()
 	components := createTransitionPanelComponents("check-guild", rows, 1, transitionPageCount(state.pairs), token)
 	_, selects, buttons := inspectComponents(components)
 
@@ -232,7 +233,7 @@ func TestPanelCustomIDsAreUnique(t *testing.T) {
 
 func TestPanelCustomIDsCarryThePanelToken(t *testing.T) {
 	state, rows := fourSongPanel(t)
-	token := newPanelToken()
+	token := discord.NewComponentToken()
 	components := createTransitionPanelComponents("check-guild", rows, 1, transitionPageCount(state.pairs), token)
 	_, selects, buttons := inspectComponents(components)
 
@@ -251,7 +252,7 @@ func TestPanelCustomIDsCarryThePanelToken(t *testing.T) {
 func TestTwoEditorsProduceDisjointCustomIDs(t *testing.T) {
 	state, rows := fourSongPanel(t)
 
-	firstToken := newPanelToken()
+	firstToken := discord.NewComponentToken()
 	secondToken := firstToken + "b"
 	_, firstSelects, _ := inspectComponents(createTransitionEditorComponents("check-guild", state, rows[0], firstToken))
 	_, secondSelects, _ := inspectComponents(createTransitionEditorComponents("check-guild", state, rows[1], secondToken))
@@ -270,7 +271,7 @@ func TestTwoEditorsProduceDisjointCustomIDs(t *testing.T) {
 func TestEditorCustomIDsRoundTripToTheirCategory(t *testing.T) {
 	state, rows := fourSongPanel(t)
 
-	token := newPanelToken()
+	token := discord.NewComponentToken()
 	_, selects, _ := inspectComponents(createTransitionEditorComponents("check-guild", state, rows[0], token))
 	suffix := fmt.Sprintf("_%s_%d", token, rows[0].fromSong.ID)
 
