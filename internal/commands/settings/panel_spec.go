@@ -9,6 +9,8 @@ const (
 	categoryGeneral  = "general"
 	categoryPlayback = "playback"
 	categoryMixing   = "mixing"
+
+	maxPrefixLength = 5
 )
 
 var settingCategories = []string{categoryGeneral, categoryPlayback, categoryMixing}
@@ -28,6 +30,7 @@ type settingSpec struct {
 	category  string
 	kind      settingKind
 	adminOnly bool
+	isInteger bool
 	min       float64
 	max       float64
 	options   func() []string
@@ -41,7 +44,7 @@ var settingSpecs = []settingSpec{
 		category:  categoryGeneral,
 		kind:      settingText,
 		adminOnly: true,
-		max:       5,
+		max:       maxPrefixLength,
 		read:      readPrefix,
 		write:     writePrefix,
 	},
@@ -146,13 +149,14 @@ var settingSpecs = []settingSpec{
 		write:    boolWriter(queue.SetAutoMix),
 	},
 	{
-		key:      "automix_beats",
-		category: categoryMixing,
-		kind:     settingNumber,
-		min:      4,
-		max:      64,
-		read:     readAutoMixBeats,
-		write:    writeAutoMixBeats,
+		key:       "automix_beats",
+		category:  categoryMixing,
+		kind:      settingNumber,
+		isInteger: true,
+		min:       4,
+		max:       64,
+		read:      readAutoMixBeats,
+		write:     writeAutoMixBeats,
 	},
 	{
 		key:      "fadeonstop",

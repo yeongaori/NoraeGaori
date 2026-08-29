@@ -3,6 +3,8 @@ package settings
 import (
 	"errors"
 	"testing"
+
+	"noraegaori/internal/testutil/dbtest"
 )
 
 func specFor(t *testing.T, key string) settingSpec {
@@ -187,5 +189,42 @@ func TestCategoryChoicesCoverEveryCategory(t *testing.T) {
 		if choice.Value != settingCategories[index] {
 			t.Errorf("choice %d is %v, want %q", index, choice.Value, settingCategories[index])
 		}
+	}
+}
+
+func TestThePanelAndSetPrefixAgreeOnLength(t *testing.T) {
+	dbtest.Setup(t)
+
+	spec := specFor(t, "prefix")
+	korean := "가나다라마"
+
+	if len([]rune(korean)) > maxPrefixLength {
+		t.Fatalf("the sample prefix %q is already over the limit", korean)
+	}
+	if _, err := normalizeValue(spec, korean); err != nil {
+		t.Errorf("the panel rejected a %d rune prefix: %v", len([]rune(korean)), err)
+	}
+	if len([]rune(korean+"바")) <= maxPrefixLength {
+		t.Fatal("the over-limit sample is not actually over the limit")
+	}
+	if _, err := normalizeValue(spec, korean+"바"); !errors.Is(err, errTooLong) {
+		t.Errorf("the panel accepted an over-limit prefix, got err %v", err)
+	}
+}
+
+func TestThePanelStoresPrefixesInLowercase(t *testing.T) {
+	dbtest.Setup(t)
+
+	spec := specFor(t, "prefix")
+	if err := applySetting(checkGuildID, spec, "AB"); err != nil {
+		t.Fatalf("failed to set the prefix: %v", err)
+	}
+
+	stored, ok := currentValue(checkGuildID, spec)
+	if !ok {
+		t.Fatal("could not read the prefix back")
+	}
+	if stored != "ab" {
+		t.Errorf("stored %q, want \"ab\"", stored)
 	}
 }

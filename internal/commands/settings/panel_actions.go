@@ -1,17 +1,20 @@
 package settings
 
 import (
+	"fmt"
+
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/logger"
 	"noraegaori/internal/messages"
 )
 
 func handlePanelInteraction(s *discordgo.Session, ic *discordgo.InteractionCreate, session *panelSession) {
+	if ic.GuildID != session.guildID {
+		return
+	}
+
 	switch ic.Type {
 	case discordgo.InteractionMessageComponent:
-		if ic.Message == nil || ic.Message.ID != session.messageID {
-			return
-		}
 		handlePanelComponent(s, ic, session)
 	case discordgo.InteractionModalSubmit:
 		handlePanelModalSubmit(s, ic, session)
@@ -72,6 +75,9 @@ func chooseValue(s *discordgo.Session, ic *discordgo.InteractionCreate, session 
 	if !found || spec.kind != settingChoice {
 		return
 	}
+	if !allowedToEdit(s, ic, session, spec) {
+		return
+	}
 
 	session.setOpenSetting("")
 	if values[0] == backValue {
@@ -93,6 +99,7 @@ func toggleSetting(s *discordgo.Session, ic *discordgo.InteractionCreate, sessio
 func openSettingModal(s *discordgo.Session, ic *discordgo.InteractionCreate, session *panelSession, spec settingSpec) {
 	if err := s.InteractionRespond(ic.Interaction, buildSettingModal(session.guildID, spec, session.token)); err != nil {
 		logger.Errorf("Failed to open the settings modal for %s: %v", spec.key, err)
+		respondPanelError(s, ic, session, fmt.Sprintf(panelStrings(session.guildID).ModalFailed, settingLabel(session.guildID, spec.key)))
 	}
 }
 
@@ -108,6 +115,9 @@ func handlePanelModalSubmit(s *discordgo.Session, ic *discordgo.InteractionCreat
 	if !found {
 		return
 	}
+	if !allowedToEdit(s, ic, session, spec) {
+		return
+	}
 
 	value, found := modalInputValue(data, key)
 	if !found {
@@ -118,10 +128,6 @@ func handlePanelModalSubmit(s *discordgo.Session, ic *discordgo.InteractionCreat
 }
 
 func writeSetting(s *discordgo.Session, ic *discordgo.InteractionCreate, session *panelSession, spec settingSpec, value string) {
-	if !allowedToEdit(s, ic, session, spec) {
-		return
-	}
-
 	if err := applySetting(session.guildID, spec, value); err != nil {
 		respondPanelError(s, ic, session, validationMessage(session.guildID, spec, err))
 		return

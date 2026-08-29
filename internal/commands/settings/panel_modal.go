@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	modalTitleLimit = 45
-	modalLabelLimit = 45
+	modalTitleLimit       = 45
+	modalLabelLimit       = 45
+	modalPlaceholderLimit = 100
 )
 
 func buildSettingModal(guildID string, spec settingSpec, token string) *discordgo.InteractionResponse {
@@ -21,7 +22,7 @@ func buildSettingModal(guildID string, spec settingSpec, token string) *discordg
 		CustomID:    inputPrefix + spec.key,
 		Label:       discord.TruncateRunes(label, modalLabelLimit),
 		Style:       discordgo.TextInputShort,
-		Placeholder: settingHint(guildID, spec.key),
+		Placeholder: discord.TruncateRunes(settingHint(guildID, spec.key), modalPlaceholderLimit),
 		Value:       value,
 		Required:    spec.kind != settingText,
 	}

@@ -34,7 +34,7 @@ func TestEveryCategoryStaysWithinDiscordComponentLimits(t *testing.T) {
 
 	for _, category := range settingCategories {
 		for _, isAdmin := range []bool{true, false} {
-			components := buildSettingsComponents(checkGuildID, category, "", "token", isAdmin)
+			components := buildSettingsComponents(newPanelView(checkGuildID, category, "", "token", isAdmin))
 
 			if len(components) > discordRowLimit {
 				t.Errorf("category %q (admin=%v) built %d rows, want at most %d",
@@ -62,14 +62,14 @@ func TestEveryCategoryShowsExactlyTwoRows(t *testing.T) {
 			if len(settingsInCategory(category, isAdmin)) == 0 {
 				continue
 			}
-			components := buildSettingsComponents(checkGuildID, category, "", "token", isAdmin)
+			components := buildSettingsComponents(newPanelView(checkGuildID, category, "", "token", isAdmin))
 			if len(components) != 2 {
 				t.Errorf("category %q (admin=%v) built %d rows, want 2", category, isAdmin, len(components))
 			}
 		}
 	}
 
-	open := buildSettingsComponents(checkGuildID, categoryGeneral, "language", "token", true)
+	open := buildSettingsComponents(newPanelView(checkGuildID, categoryGeneral, "language", "token", true))
 	if len(open) != 2 {
 		t.Errorf("the open language view built %d rows, want 2", len(open))
 	}
@@ -84,7 +84,8 @@ func TestThePickerListsEverySettingWithItsCurrentValue(t *testing.T) {
 			continue
 		}
 
-		components := buildSettingsComponents(checkGuildID, category, "", "token", true)
+		view := newPanelView(checkGuildID, category, "", "token", true)
+		components := buildSettingsComponents(view)
 		menu := rowMenu(t, components[len(components)-1])
 
 		if menu.CustomID != pickPrefix+"token" {
@@ -101,9 +102,9 @@ func TestThePickerListsEverySettingWithItsCurrentValue(t *testing.T) {
 			if option.Label != settingLabel(checkGuildID, spec.key) {
 				t.Errorf("picker option %q is labelled %q", spec.key, option.Label)
 			}
-			if option.Description != displayValue(checkGuildID, spec) {
+			if option.Description != view.displayValue(spec) {
 				t.Errorf("picker option %q describes %q, want the current value %q",
-					spec.key, option.Description, displayValue(checkGuildID, spec))
+					spec.key, option.Description, view.displayValue(spec))
 			}
 			if option.Default {
 				t.Errorf("picker option %q is marked selected, which stops it firing when picked again", spec.key)
@@ -152,7 +153,7 @@ func TestEmbedListsEveryVisibleSettingInTheCategory(t *testing.T) {
 	dbtest.Setup(t)
 
 	for _, category := range settingCategories {
-		embed := buildSettingsEmbed(checkGuildID, category, true)
+		embed := buildSettingsEmbed(newPanelView(checkGuildID, category, "", "token", true))
 		specs := settingsInCategory(category, true)
 
 		if len(embed.Fields) != len(specs) {
@@ -192,7 +193,8 @@ func TestTogglingASettingPersistsAndShowsTheNewValue(t *testing.T) {
 	if after == before {
 		t.Errorf("sponsorblock stayed %q after a toggle", before)
 	}
-	if displayValue(checkGuildID, spec) == "" {
+	view := newPanelView(checkGuildID, spec.category, "", "token", true)
+	if view.displayValue(spec) == "" {
 		t.Error("sponsorblock renders an empty value after a toggle")
 	}
 }
@@ -224,7 +226,7 @@ func TestRejectedModalValuesLeaveTheSettingUntouched(t *testing.T) {
 func TestOpeningLanguageReplacesThePickerWithItsValues(t *testing.T) {
 	dbtest.Setup(t)
 
-	components := buildSettingsComponents(checkGuildID, categoryGeneral, "language", "token", true)
+	components := buildSettingsComponents(newPanelView(checkGuildID, categoryGeneral, "language", "token", true))
 	menu := rowMenu(t, components[1])
 
 	if menu.CustomID != customID(choicePrefix, "language", "token") {
@@ -257,7 +259,7 @@ func TestAnUnknownOrNonChoiceOpenSettingFallsBackToThePicker(t *testing.T) {
 	dbtest.Setup(t)
 
 	for _, open := range []string{"no-such-setting", "prefix", "sponsorblock"} {
-		components := buildSettingsComponents(checkGuildID, categoryGeneral, open, "token", true)
+		components := buildSettingsComponents(newPanelView(checkGuildID, categoryGeneral, open, "token", true))
 		menu := rowMenu(t, components[1])
 
 		if menu.CustomID != pickPrefix+"token" {

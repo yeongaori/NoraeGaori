@@ -45,26 +45,60 @@ func defaultFor(spec settingSpec) string {
 	}
 }
 
-func displayValue(guildID string, spec settingSpec) string {
-	panel := panelStrings(guildID)
+type settingValue struct {
+	raw string
+	ok  bool
+}
 
-	value, ok := currentValue(guildID, spec)
-	if !ok {
+type panelView struct {
+	guildID     string
+	category    string
+	openSetting string
+	token       string
+	isAdmin     bool
+	specs       []settingSpec
+	values      map[string]settingValue
+}
+
+func newPanelView(guildID, category, openSetting, token string, isAdmin bool) panelView {
+	specs := settingsInCategory(category, isAdmin)
+	values := make(map[string]settingValue, len(specs))
+	for _, spec := range specs {
+		raw, ok := currentValue(guildID, spec)
+		values[spec.key] = settingValue{raw: raw, ok: ok}
+	}
+
+	return panelView{
+		guildID:     guildID,
+		category:    category,
+		openSetting: openSetting,
+		token:       token,
+		isAdmin:     isAdmin,
+		specs:       specs,
+		values:      values,
+	}
+}
+
+func (view panelView) displayValue(spec settingSpec) string {
+	panel := panelStrings(view.guildID)
+
+	value := view.values[spec.key]
+	if !value.ok {
 		return panel.ReadFailed
 	}
 
 	switch spec.kind {
 	case settingToggle:
-		return toggleDisplay(guildID, value)
+		return toggleDisplay(view.guildID, value.raw)
 	case settingCycle:
-		return repeatDisplay(guildID, value)
+		return repeatDisplay(view.guildID, value.raw)
 	case settingText, settingChoice:
-		if value == "" {
+		if value.raw == "" {
 			return fmt.Sprintf(panel.DefaultValue, defaultFor(spec))
 		}
-		return value
+		return value.raw
 	default:
-		return value
+		return value.raw
 	}
 }
 
@@ -95,6 +129,8 @@ func validationMessage(guildID string, spec settingSpec, err error) string {
 	switch {
 	case errors.Is(err, errNotNumber):
 		return fmt.Sprintf(panel.NotNumber, label)
+	case errors.Is(err, errNotInteger):
+		return fmt.Sprintf(panel.NotInteger, label)
 	case errors.Is(err, errOutOfRange):
 		return fmt.Sprintf(panel.OutOfRange, label, formatFloat(spec.min), formatFloat(spec.max))
 	case errors.Is(err, errTooLong):

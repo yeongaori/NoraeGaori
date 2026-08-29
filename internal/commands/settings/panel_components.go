@@ -44,16 +44,15 @@ func defaultCategory(isAdmin bool) string {
 	return categoryPlayback
 }
 
-func buildSettingsComponents(guildID, category, openSetting, token string, isAdmin bool) []discordgo.MessageComponent {
-	components := []discordgo.MessageComponent{categoryRow(guildID, category, token, isAdmin)}
+func buildSettingsComponents(view panelView) []discordgo.MessageComponent {
+	components := []discordgo.MessageComponent{categoryRow(view)}
 
-	specs := settingsInCategory(category, isAdmin)
-	if spec, found := openChoice(specs, openSetting); found {
-		return append(components, choiceRow(guildID, spec, token))
+	if spec, found := openChoice(view.specs, view.openSetting); found {
+		return append(components, choiceRow(view, spec))
 	}
 
-	if len(specs) > 0 {
-		components = append(components, settingRow(guildID, specs, token))
+	if len(view.specs) > 0 {
+		components = append(components, settingRow(view))
 	}
 
 	return components
@@ -71,37 +70,37 @@ func openChoice(specs []settingSpec, openSetting string) (settingSpec, bool) {
 	return settingSpec{}, false
 }
 
-func categoryRow(guildID, category, token string, isAdmin bool) discordgo.ActionsRow {
-	visible := visibleCategories(isAdmin)
+func categoryRow(view panelView) discordgo.ActionsRow {
+	visible := visibleCategories(view.isAdmin)
 	options := make([]discordgo.SelectMenuOption, 0, len(visible))
 	for _, name := range visible {
 		options = append(options, discordgo.SelectMenuOption{
-			Label:   categoryLabel(guildID, name),
+			Label:   categoryLabel(view.guildID, name),
 			Value:   name,
-			Default: name == category,
+			Default: name == view.category,
 		})
 	}
 
 	return discordgo.ActionsRow{
 		Components: []discordgo.MessageComponent{
 			discordgo.SelectMenu{
-				CustomID:    categoryPrefix + token,
-				Placeholder: panelStrings(guildID).CategoryPlaceholder,
+				CustomID:    categoryPrefix + view.token,
+				Placeholder: panelStrings(view.guildID).CategoryPlaceholder,
 				Options:     options,
 			},
 		},
 	}
 }
 
-func settingRow(guildID string, specs []settingSpec, token string) discordgo.ActionsRow {
-	options := make([]discordgo.SelectMenuOption, 0, len(specs))
-	for _, spec := range specs {
+func settingRow(view panelView) discordgo.ActionsRow {
+	options := make([]discordgo.SelectMenuOption, 0, len(view.specs))
+	for _, spec := range view.specs {
 		if len(options) >= selectOptionLimit {
 			break
 		}
 		options = append(options, discordgo.SelectMenuOption{
-			Label:       discord.TruncateRunes(settingLabel(guildID, spec.key), optionLabelLimit),
-			Description: discord.TruncateRunes(displayValue(guildID, spec), optionLabelLimit),
+			Label:       discord.TruncateRunes(settingLabel(view.guildID, spec.key), optionLabelLimit),
+			Description: discord.TruncateRunes(view.displayValue(spec), optionLabelLimit),
 			Value:       spec.key,
 		})
 	}
@@ -109,17 +108,17 @@ func settingRow(guildID string, specs []settingSpec, token string) discordgo.Act
 	return discordgo.ActionsRow{
 		Components: []discordgo.MessageComponent{
 			discordgo.SelectMenu{
-				CustomID:    pickPrefix + token,
-				Placeholder: panelStrings(guildID).SettingPlaceholder,
+				CustomID:    pickPrefix + view.token,
+				Placeholder: panelStrings(view.guildID).SettingPlaceholder,
 				Options:     options,
 			},
 		},
 	}
 }
 
-func choiceRow(guildID string, spec settingSpec, token string) discordgo.ActionsRow {
-	panel := panelStrings(guildID)
-	current, _ := currentValue(guildID, spec)
+func choiceRow(view panelView, spec settingSpec) discordgo.ActionsRow {
+	panel := panelStrings(view.guildID)
+	current := view.values[spec.key].raw
 
 	values := spec.options()
 	options := make([]discordgo.SelectMenuOption, 0, len(values)+2)
@@ -145,8 +144,8 @@ func choiceRow(guildID string, spec settingSpec, token string) discordgo.Actions
 	return discordgo.ActionsRow{
 		Components: []discordgo.MessageComponent{
 			discordgo.SelectMenu{
-				CustomID:    customID(choicePrefix, spec.key, token),
-				Placeholder: fmt.Sprintf(panel.ChoicePlaceholder, settingLabel(guildID, spec.key)),
+				CustomID:    customID(choicePrefix, spec.key, view.token),
+				Placeholder: fmt.Sprintf(panel.ChoicePlaceholder, settingLabel(view.guildID, spec.key)),
 				Options:     options,
 			},
 		},

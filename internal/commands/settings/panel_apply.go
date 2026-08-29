@@ -2,6 +2,7 @@ package settings
 
 import (
 	"errors"
+	"math"
 	"strconv"
 	"strings"
 
@@ -10,6 +11,7 @@ import (
 
 var (
 	errNotNumber  = errors.New("value is not a number")
+	errNotInteger = errors.New("value is not a whole number")
 	errOutOfRange = errors.New("value is out of range")
 	errTooLong    = errors.New("value is too long")
 )
@@ -52,6 +54,9 @@ func normalizeValue(spec settingSpec, value string) (string, error) {
 		}
 		if number < spec.min || number > spec.max {
 			return "", errOutOfRange
+		}
+		if spec.isInteger && number != math.Trunc(number) {
+			return "", errNotInteger
 		}
 		return formatFloat(number), nil
 	default:

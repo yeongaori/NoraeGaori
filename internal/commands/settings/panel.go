@@ -16,7 +16,6 @@ const settingsPanelExpiry = 5 * time.Minute
 type panelSession struct {
 	guildID    string
 	token      string
-	messageID  string
 	panelAdmin bool
 
 	viewMux     sync.Mutex
@@ -54,8 +53,8 @@ func (session *panelSession) render() (*discordgo.MessageEmbed, []discordgo.Mess
 	category, open := session.category, session.openSetting
 	session.viewMux.Unlock()
 
-	return buildSettingsEmbed(session.guildID, category, session.panelAdmin),
-		buildSettingsComponents(session.guildID, category, open, session.token, session.panelAdmin)
+	view := newPanelView(session.guildID, category, open, session.token, session.panelAdmin)
+	return buildSettingsEmbed(view), buildSettingsComponents(view)
 }
 
 func canEditAdminSettings(s *discordgo.Session, guildID string, member *discordgo.Member) bool {
@@ -87,30 +86,39 @@ func HandleSettingsPanel(s *discordgo.Session, i *discordgo.InteractionCreate) e
 	}
 
 	embed, components := session.render()
-	msg, err := discord.RespondEmbedWithComponents(s, i, embed, components)
+
+	removeHandler := s.AddHandler(func(s *discordgo.Session, ic *discordgo.InteractionCreate) {
+		handlePanelInteraction(s, ic, session)
+	})
+
+	panelMsg, err := discord.RespondEmbedWithComponents(s, i, embed, components)
 	if err != nil {
+		removeHandler()
 		logger.Errorf("Failed to send the settings panel: %v", err)
 		return err
 	}
 
-	session.messageID = msg.ID
-	go runSettingsPanel(s, msg, session)
+	go expireSettingsPanel(s, i, panelMsg, session, removeHandler)
 	return nil
 }
 
-func runSettingsPanel(s *discordgo.Session, panelMsg *discordgo.Message, session *panelSession) {
-	removeHandler := s.AddHandler(func(s *discordgo.Session, ic *discordgo.InteractionCreate) {
-		handlePanelInteraction(s, ic, session)
-	})
+func expireSettingsPanel(s *discordgo.Session, i *discordgo.InteractionCreate, panelMsg *discordgo.Message, session *panelSession, removeHandler func()) {
 	defer removeHandler()
 
 	<-time.After(settingsPanelExpiry)
 
+	panelMsg = discord.ResolvePanelMessage(s, i, panelMsg)
+	if panelMsg == nil {
+		return
+	}
+
 	embed, _ := session.render()
-	s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+	if _, err := s.ChannelMessageEditComplex(&discordgo.MessageEdit{
 		ID:         panelMsg.ID,
 		Channel:    panelMsg.ChannelID,
 		Embeds:     &[]*discordgo.MessageEmbed{embed},
 		Components: &[]discordgo.MessageComponent{},
-	})
+	}); err != nil {
+		logger.Errorf("Failed to close the settings panel: %v", err)
+	}
 }

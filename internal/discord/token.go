@@ -1,10 +1,12 @@
 package discord
 
 import (
-	"strconv"
-	"time"
+	"crypto/rand"
+	"encoding/hex"
 )
 
 func NewComponentToken() string {
-	return strconv.FormatInt(time.Now().UnixNano(), 36)
+	buffer := make([]byte, 8)
+	rand.Read(buffer)
+	return hex.EncodeToString(buffer)
 }

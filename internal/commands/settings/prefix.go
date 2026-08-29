@@ -37,7 +37,7 @@ func HandleSetPrefix(s *discordgo.Session, i *discordgo.InteractionCreate) error
 		return nil
 	}
 
-	if len(requested) > 5 {
+	if len([]rune(requested)) > maxPrefixLength {
 		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(t.Titles.Error,
 			t.Settings.PrefixTooLong))
 		return nil

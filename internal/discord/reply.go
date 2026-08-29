@@ -78,7 +78,12 @@ func RespondEmbedWithComponents(s *discordgo.Session, i *discordgo.InteractionCr
 		return nil, err
 	}
 
-	return s.InteractionResponse(i.Interaction)
+	msg, err := s.InteractionResponse(i.Interaction)
+	if err != nil {
+		logger.Errorf("Failed to resolve the message for an interaction response: %v", err)
+		return nil, nil
+	}
+	return msg, nil
 }
 
 func DeferResponse(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -186,4 +191,17 @@ func GetResponseMessage(s *discordgo.Session, i *discordgo.InteractionCreate) (*
 		return nil, fmt.Errorf("message responder not found")
 	}
 	return s.InteractionResponse(i.Interaction)
+}
+
+func ResolvePanelMessage(s *discordgo.Session, i *discordgo.InteractionCreate, panelMsg *discordgo.Message) *discordgo.Message {
+	if panelMsg != nil {
+		return panelMsg
+	}
+
+	msg, err := GetResponseMessage(s, i)
+	if err != nil {
+		logger.Errorf("Failed to resolve the panel message for cleanup: %v", err)
+		return nil
+	}
+	return msg
 }

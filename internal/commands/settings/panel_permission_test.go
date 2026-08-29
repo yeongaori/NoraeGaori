@@ -60,8 +60,8 @@ func TestAPlainMemberMayNotEditAdminSettings(t *testing.T) {
 
 func TestNonAdminSettingsAreOpenToEveryone(t *testing.T) {
 	session := guildSession(t)
-	interaction := componentInteraction("panel-message", "", memberWithRoles("regular", memberRoleID))
-	panelSess := &panelSession{guildID: checkGuildID, token: checkToken, messageID: "panel-message"}
+	interaction := componentInteraction("", memberWithRoles("regular", memberRoleID))
+	panelSess := &panelSession{guildID: checkGuildID, token: checkToken}
 
 	if !allowedToEdit(session, interaction, panelSess, specFor(t, "sponsorblock")) {
 		t.Error("a plain member was refused a non-admin setting")
@@ -70,21 +70,25 @@ func TestNonAdminSettingsAreOpenToEveryone(t *testing.T) {
 
 func TestAdminOnlySettingsStayOpenToAdmins(t *testing.T) {
 	session := guildSession(t)
-	interaction := componentInteraction("panel-message", "", memberWithRoles("boss", adminRoleID))
-	panelSess := &panelSession{guildID: checkGuildID, token: checkToken, messageID: "panel-message"}
+	interaction := componentInteraction("", memberWithRoles("boss", adminRoleID))
+	panelSess := &panelSession{guildID: checkGuildID, token: checkToken}
 
 	if !allowedToEdit(session, interaction, panelSess, specFor(t, "prefix")) {
 		t.Error("an administrator was refused an admin-only setting")
 	}
 }
 
-func componentInteraction(messageID, customID string, member *discordgo.Member, values ...string) *discordgo.InteractionCreate {
+func componentInteraction(customID string, member *discordgo.Member, values ...string) *discordgo.InteractionCreate {
+	return guildComponentInteraction(checkGuildID, customID, member, values...)
+}
+
+func guildComponentInteraction(guildID, customID string, member *discordgo.Member, values ...string) *discordgo.InteractionCreate {
 	return &discordgo.InteractionCreate{
 		Interaction: &discordgo.Interaction{
 			Type:    discordgo.InteractionMessageComponent,
-			GuildID: checkGuildID,
+			GuildID: guildID,
 			Member:  member,
-			Message: &discordgo.Message{ID: messageID},
+			Message: &discordgo.Message{ID: "panel-message"},
 			Data:    discordgo.MessageComponentInteractionData{CustomID: customID, Values: values},
 		},
 	}
@@ -109,25 +113,32 @@ func assertSponsorBlockUnchanged(t *testing.T, fire func()) {
 	}
 }
 
-func TestThePanelIgnoresInteractionsFromOtherMessages(t *testing.T) {
+func TestThePanelIgnoresInteractionsFromAnotherGuild(t *testing.T) {
 	dbtest.Setup(t)
 
-	panelSess := &panelSession{guildID: checkGuildID, token: checkToken, messageID: "panel-message"}
+	panelSess := &panelSession{guildID: checkGuildID, token: checkToken}
 	pick := pickPrefix + checkToken
 
 	assertSponsorBlockUnchanged(t, func() {
-		handlePanelInteraction(nil, componentInteraction("another-message", pick, nil, "sponsorblock"), panelSess)
+		handlePanelInteraction(nil, guildComponentInteraction("another-guild", pick, nil, "sponsorblock"), panelSess)
 
-		noMessage := componentInteraction("", pick, nil, "sponsorblock")
-		noMessage.Message = nil
-		handlePanelInteraction(nil, noMessage, panelSess)
+		foreignModal := &discordgo.InteractionCreate{
+			Interaction: &discordgo.Interaction{
+				Type:    discordgo.InteractionModalSubmit,
+				GuildID: "another-guild",
+				Data: discordgo.ModalSubmitInteractionData{
+					CustomID: customID(modalPrefix, "sponsorblock", checkToken),
+				},
+			},
+		}
+		handlePanelInteraction(nil, foreignModal, panelSess)
 	})
 }
 
-func TestThePanelIgnoresUnrelatedComponentsOnItsOwnMessage(t *testing.T) {
+func TestThePanelIgnoresUnrelatedComponents(t *testing.T) {
 	dbtest.Setup(t)
 
-	panelSess := &panelSession{guildID: checkGuildID, token: checkToken, messageID: "panel-message"}
+	panelSess := &panelSession{guildID: checkGuildID, token: checkToken}
 
 	assertSponsorBlockUnchanged(t, func() {
 		for _, id := range []string{
@@ -135,7 +146,7 @@ func TestThePanelIgnoresUnrelatedComponentsOnItsOwnMessage(t *testing.T) {
 			"help_next",
 			pickPrefix + "other-token",
 		} {
-			handlePanelInteraction(nil, componentInteraction("panel-message", id, nil, "sponsorblock"), panelSess)
+			handlePanelInteraction(nil, componentInteraction(id, nil, "sponsorblock"), panelSess)
 		}
 	})
 }
@@ -143,7 +154,7 @@ func TestThePanelIgnoresUnrelatedComponentsOnItsOwnMessage(t *testing.T) {
 func TestThePanelIgnoresModalSubmitsFromAnotherPanel(t *testing.T) {
 	dbtest.Setup(t)
 
-	panelSess := &panelSession{guildID: checkGuildID, token: checkToken, messageID: "panel-message"}
+	panelSess := &panelSession{guildID: checkGuildID, token: checkToken}
 
 	assertSponsorBlockUnchanged(t, func() {
 		foreign := &discordgo.InteractionCreate{
@@ -162,19 +173,19 @@ func TestThePanelIgnoresModalSubmitsFromAnotherPanel(t *testing.T) {
 func TestThePickerIgnoresEmptyAndUnknownSelections(t *testing.T) {
 	dbtest.Setup(t)
 
-	panelSess := &panelSession{guildID: checkGuildID, token: checkToken, messageID: "panel-message"}
+	panelSess := &panelSession{guildID: checkGuildID, token: checkToken}
 	pick := pickPrefix + checkToken
 
 	assertSponsorBlockUnchanged(t, func() {
-		handlePanelInteraction(nil, componentInteraction("panel-message", pick, nil), panelSess)
-		handlePanelInteraction(nil, componentInteraction("panel-message", pick, nil, "no-such-setting"), panelSess)
+		handlePanelInteraction(nil, componentInteraction(pick, nil), panelSess)
+		handlePanelInteraction(nil, componentInteraction(pick, nil, "no-such-setting"), panelSess)
 
 		choice := customID(choicePrefix, "language", checkToken)
-		handlePanelInteraction(nil, componentInteraction("panel-message", choice, nil), panelSess)
+		handlePanelInteraction(nil, componentInteraction(choice, nil), panelSess)
 
 		category := categoryPrefix + checkToken
-		handlePanelInteraction(nil, componentInteraction("panel-message", category, nil), panelSess)
-		handlePanelInteraction(nil, componentInteraction("panel-message", category, nil, "no-such-category"), panelSess)
+		handlePanelInteraction(nil, componentInteraction(category, nil), panelSess)
+		handlePanelInteraction(nil, componentInteraction(category, nil, "no-such-category"), panelSess)
 	})
 
 	if got := panelSess.currentCategory(); got != "" {

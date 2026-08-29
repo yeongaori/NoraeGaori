@@ -75,7 +75,7 @@ func readPrefix(guildID string) (string, error) {
 }
 
 func writePrefix(guildID, value string) error {
-	return guild.SetPrefix(guildID, value)
+	return guild.SetPrefix(guildID, strings.ToLower(value))
 }
 
 func readLanguage(guildID string) (string, error) {

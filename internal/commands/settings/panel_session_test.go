@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -196,11 +197,11 @@ func TestAutoMixBeatsAreStoredAsWholeBeats(t *testing.T) {
 		t.Errorf("stored %d beats, want 32", beats)
 	}
 
-	if err := applySetting(checkGuildID, spec, "16.9"); err != nil {
-		t.Fatalf("failed to set fractional beats: %v", err)
+	if err := applySetting(checkGuildID, spec, "16.9"); !errors.Is(err, errNotInteger) {
+		t.Fatalf("fractional beats returned %v, want errNotInteger", err)
 	}
-	if beats, _ := queue.GetAutoMixBeats(checkGuildID); beats != 16 {
-		t.Errorf("16.9 beats stored as %d, want 16", beats)
+	if beats, _ := queue.GetAutoMixBeats(checkGuildID); beats != 32 {
+		t.Errorf("a rejected fractional value changed the stored beats to %d, want 32", beats)
 	}
 }
 
@@ -216,6 +217,11 @@ func TestValidationMessagesNameTheSettingAndItsBounds(t *testing.T) {
 
 	if message := validationMessage(checkGuildID, volume, errNotNumber); !strings.Contains(message, settingLabel(checkGuildID, "volume")) {
 		t.Errorf("the not-a-number message %q does not name the setting", message)
+	}
+
+	beats := specFor(t, "automix_beats")
+	if message := validationMessage(checkGuildID, beats, errNotInteger); !strings.Contains(message, settingLabel(checkGuildID, "automix_beats")) {
+		t.Errorf("the not-an-integer message %q does not name the setting", message)
 	}
 
 	prefix := specFor(t, "prefix")

@@ -360,10 +360,11 @@ type SettingsPanelMessages struct {
 	BackOption          string            `json:"back_option"`
 	DefaultValue        string            `json:"default_value"`
 	DefaultOption       string            `json:"default_option"`
-	EditButton          string            `json:"edit_button"`
 	ModalTitle          string            `json:"modal_title"`
+	ModalFailed         string            `json:"modal_failed"`
 	NotAdmin            string            `json:"not_admin"`
 	NotNumber           string            `json:"not_number"`
+	NotInteger          string            `json:"not_integer"`
 	OutOfRange          string            `json:"out_of_range"`
 	TooLong             string            `json:"too_long"`
 	SaveFailed          string            `json:"save_failed"`
