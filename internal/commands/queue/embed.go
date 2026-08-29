@@ -2,14 +2,24 @@ package queue
 
 import (
 	"fmt"
-	"noraegaori/internal/commands/automix"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"noraegaori/internal/commands/automix"
+	"noraegaori/internal/discord"
+	"noraegaori/internal/logger"
 	"noraegaori/internal/messages"
 	"noraegaori/internal/queue"
+)
+
+const (
+	queuePanelExpiry = 5 * time.Minute
+
+	queuePrevPrefix    = "queue_prev_"
+	queueNextPrefix    = "queue_next_"
+	queueOpenMixPrefix = "queue_open_mix_"
 )
 
 func createQueueEmbed(guildID string, songs []*queue.Song, page, totalPages, perPage int) *discordgo.MessageEmbed {
@@ -58,121 +68,140 @@ func createQueueEmbed(guildID string, songs []*queue.Song, page, totalPages, per
 	}
 }
 
-func createQueueButtons(guildID string, page, totalPages int) []discordgo.MessageComponent {
+func createQueueButtons(guildID string, page, totalPages int, token string) []discordgo.MessageComponent {
 	return []discordgo.MessageComponent{
 		discordgo.ActionsRow{
 			Components: []discordgo.MessageComponent{
 				discordgo.Button{
 					Label:    messages.T(guildID).Buttons.Previous,
 					Style:    discordgo.PrimaryButton,
-					CustomID: "queue_prev",
+					CustomID: queuePrevPrefix + token,
 					Disabled: page == 1,
 				},
 				discordgo.Button{
 					Label:    messages.T(guildID).Queue.QueueNextButton,
 					Style:    discordgo.PrimaryButton,
-					CustomID: "queue_next",
+					CustomID: queueNextPrefix + token,
 					Disabled: page == totalPages,
 				},
 				discordgo.Button{
 					Label:    messages.T(guildID).AutoMixPanel.MixButton,
 					Style:    discordgo.SecondaryButton,
-					CustomID: "queue_open_mix",
+					CustomID: queueOpenMixPrefix + token,
 				},
 			},
 		},
 	}
 }
 
-func handleQueueButtons(s *discordgo.Session, i *discordgo.InteractionCreate, originalMsg *discordgo.Message, guildID string, totalPages, perPage int) {
-	timeout := time.After(5 * time.Minute)
-	currentPage := 1
-	var pageMu sync.Mutex
+type queuePanel struct {
+	guildID string
+	token   string
+	perPage int
 
-	options := i.ApplicationCommandData().Options
-	if len(options) > 0 {
-		currentPage = int(options[0].IntValue())
+	pageMu sync.Mutex
+	page   int
+}
+
+func (panel *queuePanel) pageCount(songs int) int {
+	if songs <= panel.perPage {
+		return 1
 	}
+	return (songs + panel.perPage - 1) / panel.perPage
+}
 
-	originalMsgID := ""
-	if originalMsg != nil {
-		originalMsgID = originalMsg.ID
+func (panel *queuePanel) isPageButton(customID string) bool {
+	return customID == queuePrevPrefix+panel.token || customID == queueNextPrefix+panel.token
+}
+
+func (panel *queuePanel) turnPage(customID string, totalPages int) int {
+	panel.pageMu.Lock()
+	defer panel.pageMu.Unlock()
+
+	if customID == queuePrevPrefix+panel.token && panel.page > 1 {
+		panel.page--
 	}
-
-	buttonHandler := func(s *discordgo.Session, ic *discordgo.InteractionCreate) {
-		if ic.Type != discordgo.InteractionMessageComponent {
-			return
-		}
-
-		if originalMsgID != "" && (ic.Message == nil || ic.Message.ID != originalMsgID) {
-			return
-		}
-
-		data := ic.MessageComponentData()
-
-		if data.CustomID == "queue_open_mix" {
-			automix.OpenPanelFromComponent(s, ic)
-			return
-		}
-
-		if data.CustomID != "queue_prev" && data.CustomID != "queue_next" {
-			return
-		}
-
-		pageMu.Lock()
-		switch data.CustomID {
-		case "queue_prev":
-			if currentPage > 1 {
-				currentPage--
-			}
-		case "queue_next":
-			if currentPage < totalPages {
-				currentPage++
-			}
-		default:
-			pageMu.Unlock()
-			return
-		}
-		page := currentPage
-		pageMu.Unlock()
-
-		q, err := queue.GetQueue(guildID, false)
-		if err != nil || q == nil || len(q.Songs) == 0 {
-			return
-		}
-
-		embed := createQueueEmbed(guildID, q.Songs, page, totalPages, perPage)
-		components := createQueueButtons(guildID, page, totalPages)
-
-		s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseUpdateMessage,
-			Data: &discordgo.InteractionResponseData{
-				Embeds:     []*discordgo.MessageEmbed{embed},
-				Components: components,
-			},
-		})
+	if customID == queueNextPrefix+panel.token && panel.page < totalPages {
+		panel.page++
 	}
+	return panel.clampedPage(totalPages)
+}
 
-	removeHandler := s.AddHandler(buttonHandler)
-	defer removeHandler()
+func (panel *queuePanel) currentPage(totalPages int) int {
+	panel.pageMu.Lock()
+	defer panel.pageMu.Unlock()
+	return panel.clampedPage(totalPages)
+}
 
-	<-timeout
+func (panel *queuePanel) clampedPage(totalPages int) int {
+	if panel.page > totalPages {
+		panel.page = totalPages
+	}
+	if panel.page < 1 {
+		panel.page = 1
+	}
+	return panel.page
+}
 
-	q, err := queue.GetQueue(guildID, false)
-	if err != nil || q == nil || originalMsg == nil {
+func (panel *queuePanel) handleInteraction(s *discordgo.Session, ic *discordgo.InteractionCreate) {
+	if ic.Type != discordgo.InteractionMessageComponent || ic.GuildID != panel.guildID {
 		return
 	}
 
-	pageMu.Lock()
-	finalPage := currentPage
-	pageMu.Unlock()
+	data := ic.MessageComponentData()
+	if data.CustomID == queueOpenMixPrefix+panel.token {
+		automix.OpenPanelFromComponent(s, ic)
+		return
+	}
+	if !panel.isPageButton(data.CustomID) {
+		return
+	}
 
-	embed := createQueueEmbed(guildID, q.Songs, finalPage, totalPages, perPage)
+	q, err := queue.GetQueue(panel.guildID, false)
+	if err != nil || q == nil || len(q.Songs) == 0 {
+		return
+	}
 
-	s.ChannelMessageEditComplex(&discordgo.MessageEdit{
-		ID:         originalMsg.ID,
-		Channel:    originalMsg.ChannelID,
+	totalPages := panel.pageCount(len(q.Songs))
+	page := panel.turnPage(data.CustomID, totalPages)
+
+	embed := createQueueEmbed(panel.guildID, q.Songs, page, totalPages, panel.perPage)
+	components := createQueueButtons(panel.guildID, page, totalPages, panel.token)
+
+	if err := s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseUpdateMessage,
+		Data: &discordgo.InteractionResponseData{
+			Embeds:     []*discordgo.MessageEmbed{embed},
+			Components: components,
+		},
+	}); err != nil {
+		logger.Errorf("Failed to turn the queue page: %v", err)
+	}
+}
+
+func expireQueuePanel(s *discordgo.Session, i *discordgo.InteractionCreate, panelMsg *discordgo.Message, panel *queuePanel, removeHandler func()) {
+	defer removeHandler()
+
+	<-time.After(queuePanelExpiry)
+
+	panelMsg = discord.ResolvePanelMessage(s, i, panelMsg)
+	if panelMsg == nil {
+		return
+	}
+
+	q, err := queue.GetQueue(panel.guildID, false)
+	if err != nil || q == nil {
+		return
+	}
+
+	totalPages := panel.pageCount(len(q.Songs))
+	embed := createQueueEmbed(panel.guildID, q.Songs, panel.currentPage(totalPages), totalPages, panel.perPage)
+	if _, err := s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+		ID:         panelMsg.ID,
+		Channel:    panelMsg.ChannelID,
 		Embeds:     &[]*discordgo.MessageEmbed{embed},
 		Components: &[]discordgo.MessageComponent{},
-	})
+	}); err != nil {
+		logger.Errorf("Failed to close the queue panel: %v", err)
+	}
 }

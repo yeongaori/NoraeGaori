@@ -31,16 +31,26 @@ func HandleQueue(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		}
 	}
 
-	embed := createQueueEmbed(i.GuildID, q.Songs, currentPage, totalPages, songsPerPage)
-	components := createQueueButtons(i.GuildID, currentPage, totalPages)
+	panel := &queuePanel{
+		guildID: i.GuildID,
+		token:   discord.NewComponentToken(),
+		perPage: songsPerPage,
+		page:    currentPage,
+	}
 
-	msg, err := discord.RespondEmbedWithComponents(s, i, embed, components)
+	embed := createQueueEmbed(i.GuildID, q.Songs, currentPage, totalPages, songsPerPage)
+	components := createQueueButtons(i.GuildID, currentPage, totalPages, panel.token)
+
+	removeHandler := s.AddHandler(panel.handleInteraction)
+
+	panelMsg, err := discord.RespondEmbedWithComponents(s, i, embed, components)
 	if err != nil {
+		removeHandler()
 		logger.Errorf("Failed to send response: %v", err)
 		return err
 	}
 
-	go handleQueueButtons(s, i, msg, i.GuildID, totalPages, songsPerPage)
+	go expireQueuePanel(s, i, panelMsg, panel, removeHandler)
 
 	return nil
 }

@@ -6,6 +6,7 @@ import (
 	"noraegaori/internal/discord/command"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -13,6 +14,13 @@ import (
 	"noraegaori/internal/guild"
 	"noraegaori/internal/logger"
 	"noraegaori/internal/messages"
+)
+
+const (
+	helpPanelExpiry = 5 * time.Minute
+
+	helpPrevPrefix = "help_prev_"
+	helpNextPrefix = "help_next_"
 )
 
 type CommandInfo struct {
@@ -80,15 +88,28 @@ func HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return nil
 	}
 
-	components := createHelpButtons(i.GuildID, page, totalPages)
+	panel := &helpPanel{
+		guildID:    i.GuildID,
+		token:      discord.NewComponentToken(),
+		totalPages: totalPages,
+		perPage:    commandsPerPage,
+		prefix:     prefix,
+		commands:   filteredCommands,
+		page:       page,
+	}
 
-	msg, err := discord.RespondEmbedWithComponents(s, i, embed, components)
+	components := createHelpButtons(i.GuildID, page, totalPages, panel.token)
+
+	removeHandler := s.AddHandler(panel.handleInteraction)
+
+	panelMsg, err := discord.RespondEmbedWithComponents(s, i, embed, components)
 	if err != nil {
+		removeHandler()
 		logger.Errorf("Failed to send response: %v", err)
 		return err
 	}
 
-	go handleHelpButtons(s, i, msg, i.GuildID, totalPages, commandsPerPage, filteredCommands, prefix)
+	go expireHelpPanel(s, i, panelMsg, panel, removeHandler)
 
 	return nil
 }
@@ -131,7 +152,7 @@ func buildHelpEmbed(guildID string, commands []CommandInfo, page, totalPages, st
 	}
 }
 
-func createHelpButtons(guildID string, page, totalPages int) []discordgo.MessageComponent {
+func createHelpButtons(guildID string, page, totalPages int, token string) []discordgo.MessageComponent {
 	t := messages.T(guildID)
 	return []discordgo.MessageComponent{
 		discordgo.ActionsRow{
@@ -139,13 +160,13 @@ func createHelpButtons(guildID string, page, totalPages int) []discordgo.Message
 				discordgo.Button{
 					Label:    t.Buttons.Previous,
 					Style:    discordgo.PrimaryButton,
-					CustomID: "help_prev",
+					CustomID: helpPrevPrefix + token,
 					Disabled: page == 1,
 				},
 				discordgo.Button{
 					Label:    t.Buttons.Next,
 					Style:    discordgo.PrimaryButton,
-					CustomID: "help_next",
+					CustomID: helpNextPrefix + token,
 					Disabled: page == totalPages,
 				},
 			},
@@ -153,105 +174,93 @@ func createHelpButtons(guildID string, page, totalPages int) []discordgo.Message
 	}
 }
 
-func handleHelpButtons(s *discordgo.Session, i *discordgo.InteractionCreate, originalMsg *discordgo.Message, guildID string, totalPages, perPage int, allCommands []CommandInfo, prefix string) {
-	timeout := time.After(5 * time.Minute)
-	currentPage := 1
+type helpPanel struct {
+	guildID    string
+	token      string
+	totalPages int
+	perPage    int
+	prefix     string
+	commands   []CommandInfo
 
-	options := i.ApplicationCommandData().Options
-	if len(options) > 0 {
-		currentPage = int(options[0].IntValue())
+	pageMu sync.Mutex
+	page   int
+}
+
+func (panel *helpPanel) turnPage(customID string) (int, bool) {
+	panel.pageMu.Lock()
+	defer panel.pageMu.Unlock()
+
+	switch customID {
+	case helpPrevPrefix + panel.token:
+		if panel.page > 1 {
+			panel.page--
+		}
+	case helpNextPrefix + panel.token:
+		if panel.page < panel.totalPages {
+			panel.page++
+		}
+	default:
+		return 0, false
+	}
+	return panel.page, true
+}
+
+func (panel *helpPanel) render(page int) (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
+	start := (page - 1) * panel.perPage
+	end := start + panel.perPage
+	if end > len(panel.commands) {
+		end = len(panel.commands)
 	}
 
-	originalMsgID := ""
-	if originalMsg != nil {
-		originalMsgID = originalMsg.ID
-	}
+	embed := buildHelpEmbed(panel.guildID, panel.commands[start:end], page, panel.totalPages, start, len(panel.commands), panel.prefix)
+	return embed, createHelpButtons(panel.guildID, page, panel.totalPages, panel.token)
+}
 
-	buttonHandler := func(s *discordgo.Session, ic *discordgo.InteractionCreate) {
-		if ic.Type != discordgo.InteractionMessageComponent {
-			return
-		}
-
-		if originalMsgID != "" && (ic.Message == nil || ic.Message.ID != originalMsgID) {
-			return
-		}
-
-		data := ic.MessageComponentData()
-		if data.CustomID != "help_prev" && data.CustomID != "help_next" {
-			return
-		}
-
-		switch data.CustomID {
-		case "help_prev":
-			if currentPage > 1 {
-				currentPage--
-			}
-		case "help_next":
-			if currentPage < totalPages {
-				currentPage++
-			}
-		default:
-			return
-		}
-
-		start := (currentPage - 1) * perPage
-		end := start + perPage
-		if end > len(allCommands) {
-			end = len(allCommands)
-		}
-		pageCommands := allCommands[start:end]
-
-		embed := buildHelpEmbed(guildID, pageCommands, currentPage, totalPages, start, len(allCommands), prefix)
-
-		components := createHelpButtons(guildID, currentPage, totalPages)
-
-		s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseUpdateMessage,
-			Data: &discordgo.InteractionResponseData{
-				Embeds:     []*discordgo.MessageEmbed{embed},
-				Components: components,
-			},
-		})
-	}
-
-	removeHandler := s.AddHandler(buttonHandler)
-	defer removeHandler()
-
-	<-timeout
-
-	start := (currentPage - 1) * perPage
-	end := start + perPage
-	if end > len(allCommands) {
-		end = len(allCommands)
-	}
-	pageCommands := allCommands[start:end]
-
-	embed := buildHelpEmbed(guildID, pageCommands, currentPage, totalPages, start, len(allCommands), prefix)
-
-	var msg *discordgo.Message
-	if i.Interaction.Message != nil {
-		msg = i.Interaction.Message
-	} else {
-
-		msg, err := discord.GetResponseMessage(s, i)
-		if err != nil {
-			return
-		}
-		s.ChannelMessageEditComplex(&discordgo.MessageEdit{
-			ID:         msg.ID,
-			Channel:    msg.ChannelID,
-			Embeds:     &[]*discordgo.MessageEmbed{embed},
-			Components: &[]discordgo.MessageComponent{},
-		})
+func (panel *helpPanel) handleInteraction(s *discordgo.Session, ic *discordgo.InteractionCreate) {
+	if ic.Type != discordgo.InteractionMessageComponent || ic.GuildID != panel.guildID {
 		return
 	}
 
-	s.ChannelMessageEditComplex(&discordgo.MessageEdit{
-		ID:         msg.ID,
-		Channel:    msg.ChannelID,
+	page, turned := panel.turnPage(ic.MessageComponentData().CustomID)
+	if !turned {
+		return
+	}
+
+	embed, components := panel.render(page)
+	if err := s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseUpdateMessage,
+		Data: &discordgo.InteractionResponseData{
+			Embeds:     []*discordgo.MessageEmbed{embed},
+			Components: components,
+		},
+	}); err != nil {
+		logger.Errorf("Failed to turn the help page: %v", err)
+	}
+}
+
+func expireHelpPanel(s *discordgo.Session, i *discordgo.InteractionCreate, panelMsg *discordgo.Message, panel *helpPanel, removeHandler func()) {
+	defer removeHandler()
+
+	<-time.After(helpPanelExpiry)
+
+	panelMsg = discord.ResolvePanelMessage(s, i, panelMsg)
+	if panelMsg == nil {
+		return
+	}
+
+	panel.pageMu.Lock()
+	page := panel.page
+	panel.pageMu.Unlock()
+
+	embed, _ := panel.render(page)
+	if _, err := s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+		ID:         panelMsg.ID,
+		Channel:    panelMsg.ChannelID,
 		Embeds:     &[]*discordgo.MessageEmbed{embed},
 		Components: &[]discordgo.MessageComponent{},
-	})
+	}); err != nil {
+		logger.Errorf("Failed to close the help panel: %v", err)
+	}
 }
 
 func getAllCommands(guildID string) []CommandInfo {

@@ -94,12 +94,15 @@ func HandleSearch(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		},
 	}
 
+	awaitSelection, cancelSelection := startSearchSelection(s, i, results, customID, voiceState.ChannelID, searchMessageID)
+
 	if err := discord.UpdateResponseEmbedWithComponents(s, i, embed, components); err != nil {
+		cancelSelection()
 		logger.Errorf("Failed to update message with results: %v", err)
 		return err
 	}
 
-	go handleSearchSelection(s, i, results, customID, voiceState.ChannelID, searchMessageID)
+	go awaitSelection()
 
 	return nil
 }
@@ -297,16 +300,8 @@ func (c *searchSelection) handle(s *discordgo.Session, i *discordgo.InteractionC
 	player.ResumeOrStart(s, c.original.GuildID)
 }
 
-func handleSearchSelection(s *discordgo.Session, originalInteraction *discordgo.InteractionCreate, results []youtube.SearchResult, customID, voiceChannelID, searchMessageID string) {
-	logger.Debugf("handleSearchSelection started, customID='%s', searchMessageID='%s'", customID, searchMessageID)
-	timeout := time.After(30 * time.Second)
-	done := make(chan struct{})
-
-	defer func() {
-		searchSelectionsMu.Lock()
-		delete(searchSelections, searchMessageID)
-		searchSelectionsMu.Unlock()
-	}()
+func startSearchSelection(s *discordgo.Session, originalInteraction *discordgo.InteractionCreate, results []youtube.SearchResult, customID, voiceChannelID, searchMessageID string) (func(), func()) {
+	logger.Debugf("startSearchSelection registered, customID='%s', searchMessageID='%s'", customID, searchMessageID)
 
 	selection := &searchSelection{
 		results:         results,
@@ -314,16 +309,29 @@ func handleSearchSelection(s *discordgo.Session, originalInteraction *discordgo.
 		voiceChannelID:  voiceChannelID,
 		searchMessageID: searchMessageID,
 		original:        originalInteraction,
-		done:            done,
+		done:            make(chan struct{}),
 	}
 
 	removeHandler := s.AddHandler(selection.handle)
-	defer removeHandler()
+	cleanup := sync.OnceFunc(func() {
+		removeHandler()
+		searchSelectionsMu.Lock()
+		delete(searchSelections, selection.searchMessageID)
+		searchSelectionsMu.Unlock()
+	})
+
+	return func() { expireSearchSelection(s, selection, cleanup) }, cleanup
+}
+
+func expireSearchSelection(s *discordgo.Session, selection *searchSelection, cleanup func()) {
+	defer cleanup()
+
+	originalInteraction := selection.original
 
 	select {
-	case <-done:
+	case <-selection.done:
 		return
-	case <-timeout:
+	case <-time.After(30 * time.Second):
 	}
 
 	timeoutEmbed := messages.CreateWarningEmbed(messages.T(originalInteraction.GuildID).Queue.SearchTimeoutTitle, messages.T(originalInteraction.GuildID).Queue.SearchTimeoutDesc)
