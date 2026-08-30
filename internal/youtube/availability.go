@@ -19,11 +19,6 @@ type AvailabilityResult struct {
 	IsLive    bool
 }
 
-type cachedAvailability struct {
-	result    *AvailabilityResult
-	timestamp time.Time
-}
-
 var checkAvailabilityViaInnertube = func(guildID, url string) (*AvailabilityResult, error) {
 	return getInnertubeClient().CheckVideoAvailability(guildID, url)
 }
@@ -65,10 +60,7 @@ func checkAvailabilityWithYtDlp(guildID, url, cacheKey string, startTime time.Ti
 				Error:     err.Error(),
 			}
 
-			availabilityCache.Store(cacheKey, &cachedAvailability{
-				result:    unavailResult,
-				timestamp: time.Now(),
-			})
+			saveAvailability(cacheKey, unavailResult)
 			return unavailResult, true, nil
 		}
 
@@ -147,15 +139,9 @@ func checkAvailabilityWithYtDlp(guildID, url, cacheKey string, startTime time.Ti
 func CheckVideoAvailability(guildID, url string) (*AvailabilityResult, error) {
 	cacheKey := guildID + "|" + url
 
-	if cached, ok := availabilityCache.Load(cacheKey); ok {
-		cachedEntry := cached.(*cachedAvailability)
-		if time.Since(cachedEntry.timestamp) < cacheTTL {
-			logger.Debugf("Cache hit for: %s (age: %v)", url, time.Since(cachedEntry.timestamp))
-			return cachedEntry.result, nil
-		}
-
-		availabilityCache.Delete(cacheKey)
-		logger.Debugf("Cache expired for: %s", url)
+	if cached, ok := loadAvailability(cacheKey); ok {
+		logger.Debugf("Cache hit for: %s", url)
+		return cached, nil
 	}
 
 	if err := ytCircuitBreaker.canAttempt(); err != nil {
@@ -179,10 +165,7 @@ func CheckVideoAvailability(guildID, url string) (*AvailabilityResult, error) {
 		availResult = fallbackResult
 	}
 
-	availabilityCache.Store(cacheKey, &cachedAvailability{
-		result:    availResult,
-		timestamp: time.Now(),
-	})
+	saveAvailability(cacheKey, availResult)
 	logger.Debugf("Cached result for: %s", url)
 
 	ytCircuitBreaker.recordSuccess()
@@ -306,14 +289,9 @@ func CheckIfLiveStreamEnded(url string) (bool, error) {
 
 func CheckAvailability(url string) (available bool, isLive bool, err error) {
 
-	if cached, ok := availabilityCache.Load(url); ok {
-		cachedEntry := cached.(*cachedAvailability)
-		if time.Since(cachedEntry.timestamp) < cacheTTL {
-			logger.Debugf("Cache hit for: %s (age: %v)", url, time.Since(cachedEntry.timestamp))
-			return cachedEntry.result.Available, cachedEntry.result.IsLive, nil
-		}
-
-		availabilityCache.Delete(url)
+	if cached, ok := loadAvailability(url); ok {
+		logger.Debugf("Cache hit for: %s", url)
+		return cached.Available, cached.IsLive, nil
 	}
 
 	if err := ytCircuitBreaker.canAttempt(); err != nil {
@@ -375,12 +353,9 @@ func CheckAvailability(url string) (available bool, isLive bool, err error) {
 	logger.Debugf("Check completed in %v for: %s (available: %v, isLive: %v)", checkTime, url, available, isLive)
 
 	if available {
-		availabilityCache.Store(url, &cachedAvailability{
-			result: &AvailabilityResult{
-				Available: true,
-				IsLive:    isLive,
-			},
-			timestamp: time.Now(),
+		saveAvailability(url, &AvailabilityResult{
+			Available: true,
+			IsLive:    isLive,
 		})
 	}
 

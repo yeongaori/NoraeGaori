@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"noraegaori/internal/logger"
@@ -56,9 +55,6 @@ type Song struct {
 
 var (
 	searchClient *ytsearch.Client
-
-	availabilityCache = &sync.Map{}
-	cacheTTL          = 10 * time.Minute
 
 	ytCircuitBreaker = &circuitBreaker{
 		state: circuitClosed,

@@ -20,10 +20,7 @@ func resetAvailabilityState(t *testing.T) {
 		runYtDlpAvailability = previousYtDlp
 	})
 
-	availabilityCache.Range(func(key, _ any) bool {
-		availabilityCache.Delete(key)
-		return true
-	})
+	resetAvailabilityCache()
 
 	ytCircuitBreaker = &circuitBreaker{}
 }
