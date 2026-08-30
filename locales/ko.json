@@ -546,6 +546,7 @@
 
   "music": {
     "enter_query": "재생할 곡의 제목이나 URL을 입력해주세요.",
+    "unsupported_url": "재생할 수 있는 영상 링크가 아닙니다.\n영상 링크나 검색어를 입력해주세요.",
     "queue_create_failed": "큐 생성 실패",
     "song_add_failed": "곡 추가 실패: %v",
     "added_as_next": "다음 곡으로 추가됨",

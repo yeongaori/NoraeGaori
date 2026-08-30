@@ -394,6 +394,7 @@ type StatusMessages struct {
 
 type MusicMessages struct {
 	EnterQuery                 string `json:"enter_query"`
+	UnsupportedURL             string `json:"unsupported_url"`
 	QueueCreateFailed          string `json:"queue_create_failed"`
 	SongAddFailed              string `json:"song_add_failed"`
 	AddedAsNext                string `json:"added_as_next"`

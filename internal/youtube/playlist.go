@@ -3,7 +3,6 @@ package youtube
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
@@ -37,60 +36,30 @@ type URLAnalysis struct {
 	PlaylistID string
 }
 
-var (
-	schemePrefixRegex  = regexp.MustCompile(`^https?://`)
-	playlistRegex      = regexp.MustCompile(`youtube\.com/playlist\?list=([a-zA-Z0-9_-]+)`)
-	videoWithListRegex = regexp.MustCompile(`[?&]v=([a-zA-Z0-9_-]+).*[?&]list=([a-zA-Z0-9_-]+)`)
-	youtuBeRegex       = regexp.MustCompile(`youtu\.be/([a-zA-Z0-9_-]+).*[?&]list=([a-zA-Z0-9_-]+)`)
-	watchRegex         = regexp.MustCompile(`[?&]v=([a-zA-Z0-9_-]+)`)
-	youtuBeShortRegex  = regexp.MustCompile(`youtu\.be/([a-zA-Z0-9_-]+)`)
-)
-
 func AnalyzeYouTubeURL(urlStr string) *URLAnalysis {
-
-	if !schemePrefixRegex.MatchString(urlStr) {
-		urlStr = "https://" + urlStr
+	parsed, ok := parseYouTubeURL(urlStr)
+	if !ok {
+		return &URLAnalysis{Type: URLTypeVideoOnly}
 	}
 
-	if matches := playlistRegex.FindStringSubmatch(urlStr); len(matches) > 1 {
+	if parsed.VideoID != "" && parsed.PlaylistID != "" {
+		return &URLAnalysis{
+			Type:       URLTypeVideoWithPlaylist,
+			VideoID:    parsed.VideoID,
+			PlaylistID: parsed.PlaylistID,
+		}
+	}
+
+	if parsed.PlaylistID != "" {
 		return &URLAnalysis{
 			Type:       URLTypePurePlaylist,
-			PlaylistID: matches[1],
-		}
-	}
-
-	if matches := videoWithListRegex.FindStringSubmatch(urlStr); len(matches) > 2 {
-		return &URLAnalysis{
-			Type:       URLTypeVideoWithPlaylist,
-			VideoID:    matches[1],
-			PlaylistID: matches[2],
-		}
-	}
-
-	if matches := youtuBeRegex.FindStringSubmatch(urlStr); len(matches) > 2 {
-		return &URLAnalysis{
-			Type:       URLTypeVideoWithPlaylist,
-			VideoID:    matches[1],
-			PlaylistID: matches[2],
-		}
-	}
-
-	if matches := watchRegex.FindStringSubmatch(urlStr); len(matches) > 1 {
-		return &URLAnalysis{
-			Type:    URLTypeVideoOnly,
-			VideoID: matches[1],
-		}
-	}
-
-	if matches := youtuBeShortRegex.FindStringSubmatch(urlStr); len(matches) > 1 {
-		return &URLAnalysis{
-			Type:    URLTypeVideoOnly,
-			VideoID: matches[1],
+			PlaylistID: parsed.PlaylistID,
 		}
 	}
 
 	return &URLAnalysis{
-		Type: URLTypeVideoOnly,
+		Type:    URLTypeVideoOnly,
+		VideoID: parsed.VideoID,
 	}
 }
 

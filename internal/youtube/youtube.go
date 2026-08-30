@@ -3,7 +3,6 @@ package youtube
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -56,7 +55,6 @@ type Song struct {
 }
 
 var (
-	youtubeRegex = regexp.MustCompile(`^(https?://)?(www\.)?(music\.youtube\.com|youtube\.com|youtu\.be)/.+$`)
 	searchClient *ytsearch.Client
 
 	availabilityCache = &sync.Map{}
@@ -74,10 +72,6 @@ func Initialize() error {
 	searchClient = ytsearch.NewClient(nil)
 
 	return nil
-}
-
-func IsYouTubeURL(query string) bool {
-	return youtubeRegex.MatchString(query)
 }
 
 func retryWithBackoff(operation func() error, operationName string) error {
@@ -129,6 +123,10 @@ func retryWithBackoff(operation func() error, operationName string) error {
 
 func GetVideoInfo(guildID, url, requesterName, requesterID string) (*Song, error) {
 	logger.Debugf("Fetching video info for: %s", url)
+
+	if extractVideoID(url) == "" {
+		return nil, ErrUnsupportedYouTubeURL
+	}
 
 	client := getInnertubeClient()
 	song, innertubeErr := client.GetVideoInfo(guildID, url, requesterName, requesterID)

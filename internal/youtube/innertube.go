@@ -77,11 +77,6 @@ var (
 		regexp.MustCompile(`"innertubeApiKey":"([^"]+)"`),
 	}
 
-	videoIDPatterns = []*regexp.Regexp{
-		regexp.MustCompile(`(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})`),
-		regexp.MustCompile(`youtube\.com/embed/([a-zA-Z0-9_-]{11})`),
-	}
-
 	innertubeClient *InnertubeClient
 	innertubeOnce   = &sync.Once{}
 	innertubeInit   = initInnertubeClient
@@ -143,12 +138,11 @@ func getInnertubeClient() *InnertubeClient {
 }
 
 func extractVideoID(url string) string {
-	for _, re := range videoIDPatterns {
-		if matches := re.FindStringSubmatch(url); len(matches) > 1 {
-			return matches[1]
-		}
+	parsed, ok := parseYouTubeURL(url)
+	if !ok {
+		return ""
 	}
-	return ""
+	return parsed.VideoID
 }
 
 func (c *InnertubeClient) callPlayerEndpoint(ctx context.Context, videoID string) (*innertubeResponse, error) {

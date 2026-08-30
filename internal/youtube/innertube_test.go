@@ -56,6 +56,10 @@ func TestExtractVideoIDHandlesEveryURLShapeTheBotStores(t *testing.T) {
 		{"short with tracking", "https://youtu.be/r2ko422xW0w?si=FbAFmfYCH0ccc1EW", "r2ko422xW0w"},
 		{"watch in a playlist", "https://www.youtube.com/watch?v=D3boQlSnHCg&list=PLabc", "D3boQlSnHCg"},
 		{"embed", "https://www.youtube.com/embed/tXHXkDqn_Ic", "tXHXkDqn_Ic"},
+		{"shorts", "https://www.youtube.com/shorts/tXHXkDqn_Ic", "tXHXkDqn_Ic"},
+		{"live", "https://www.youtube.com/live/tXHXkDqn_Ic", "tXHXkDqn_Ic"},
+		{"watch behind another parameter", "https://www.youtube.com/watch?app=desktop&v=tXHXkDqn_Ic", "tXHXkDqn_Ic"},
+		{"mobile watch", "https://m.youtube.com/watch?v=tXHXkDqn_Ic", "tXHXkDqn_Ic"},
 		{"not a video URL", "https://example.com/song.mp3", ""},
 	}
 

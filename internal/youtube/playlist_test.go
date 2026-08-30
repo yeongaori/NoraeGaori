@@ -55,6 +55,18 @@ func TestAnalyzeYouTubeURL(t *testing.T) {
 			wantVideo: "a_b-cD3fG_1",
 		},
 		{
+			name:      "mobile subdomain watch link",
+			url:       "https://m.youtube.com/watch?v=a_b-cD3fG_1",
+			wantType:  URLTypeVideoOnly,
+			wantVideo: "a_b-cD3fG_1",
+		},
+		{
+			name:      "shorts link",
+			url:       "https://www.youtube.com/shorts/a_b-cD3fG_1",
+			wantType:  URLTypeVideoOnly,
+			wantVideo: "a_b-cD3fG_1",
+		},
+		{
 			name:     "unrecognized url",
 			url:      "https://example.com/video",
 			wantType: URLTypeVideoOnly,

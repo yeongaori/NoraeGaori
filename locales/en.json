@@ -546,6 +546,7 @@
 
   "music": {
     "enter_query": "Please enter a song title or URL to play.",
+    "unsupported_url": "That link is not a playable video.\nSend a video link or a search term.",
     "queue_create_failed": "Failed to create queue",
     "song_add_failed": "Failed to add song: %v",
     "added_as_next": "Added as Next",

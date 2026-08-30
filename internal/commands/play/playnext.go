@@ -1,6 +1,7 @@
 package play
 
 import (
+	"errors"
 	"fmt"
 	"noraegaori/internal/discord"
 
@@ -35,6 +36,10 @@ func HandlePlayNext(s *discordgo.Session, i *discordgo.InteractionCreate) error 
 	logger.Debugf("Searching for: %s", query)
 	song, err := youtube.Search(i.GuildID, query, i.Member.User.Username, i.Member.User.ID)
 	if err != nil {
+		if errors.Is(err, youtube.ErrUnsupportedYouTubeURL) {
+			discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.UnsupportedURL))
+			return nil
+		}
 		discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.SongNotFound))
 		return err
 	}
