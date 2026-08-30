@@ -108,6 +108,12 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
+	if cfg.RPCIntervalSeconds <= 0 {
+		fallback := DefaultConfig().RPCIntervalSeconds
+		logger.Warnf("Invalid RPC_INTERVAL_SECONDS=%d, falling back to %d", cfg.RPCIntervalSeconds, fallback)
+		cfg.RPCIntervalSeconds = fallback
+	}
+
 	return &cfg, nil
 }
 

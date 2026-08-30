@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"noraegaori/internal/messages"
 
@@ -299,4 +300,61 @@ func TestUpdateRPCRefusesConcurrentLoops(t *testing.T) {
 	if stopChan != first {
 		t.Error("a second UpdateRPC replaced the stop channel of the running loop")
 	}
+}
+
+func TestLoadConfigReplacesANonPositiveInterval(t *testing.T) {
+	for name, interval := range map[string]string{"zero": "0", "negative": "-30"} {
+		t.Run(name, func(t *testing.T) {
+			configPath := isolatedConfigDir(t)
+			writeConfig(t, configPath, []byte(`{
+				"RPC_ENABLED": true,
+				"RPC_INTERVAL_SECONDS": `+interval+`,
+				"activities": [{"name": "Testing", "type": "Playing"}]
+			}`))
+
+			cfg, err := LoadConfig()
+			if err != nil {
+				t.Fatalf("LoadConfig returned an error: %v", err)
+			}
+
+			if cfg.RPCIntervalSeconds != DefaultConfig().RPCIntervalSeconds {
+				t.Errorf("got interval %d, want the default %d", cfg.RPCIntervalSeconds, DefaultConfig().RPCIntervalSeconds)
+			}
+		})
+	}
+}
+
+func TestLoadConfigKeepsAPositiveInterval(t *testing.T) {
+	configPath := isolatedConfigDir(t)
+	writeConfig(t, configPath, []byte(`{
+		"RPC_ENABLED": true,
+		"RPC_INTERVAL_SECONDS": 45,
+		"activities": [{"name": "Testing", "type": "Playing"}]
+	}`))
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig returned an error: %v", err)
+	}
+
+	if cfg.RPCIntervalSeconds != 45 {
+		t.Errorf("got interval %d, want 45", cfg.RPCIntervalSeconds)
+	}
+}
+
+func TestUpdateRPCSurvivesAConfigWithoutAnInterval(t *testing.T) {
+	resetRPCState(t)
+	configPath := isolatedConfigDir(t)
+	writeConfig(t, configPath, []byte(`{
+		"RPC_ENABLED": true,
+		"activities": [{"name": "Testing", "type": "Playing"}]
+	}`))
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig returned an error: %v", err)
+	}
+
+	ticker := time.NewTicker(time.Duration(cfg.RPCIntervalSeconds) * time.Second)
+	ticker.Stop()
 }
