@@ -3,6 +3,7 @@ package command
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/logger"
@@ -15,6 +16,8 @@ func RegisterSlashCommands(session *discordgo.Session) error {
 
 	registered := Snapshot()
 
+	guildContexts := []discordgo.InteractionContextType{discordgo.InteractionContextGuild}
+
 	desired := make([]*discordgo.ApplicationCommand, 0, len(registered))
 	for _, cmd := range registered {
 		if cmd.TextOnly {
@@ -25,6 +28,7 @@ func RegisterSlashCommands(session *discordgo.Session) error {
 			Name:        cmd.Name,
 			Description: cmd.Description,
 			Options:     cmd.Options,
+			Contexts:    &guildContexts,
 		})
 	}
 
@@ -75,6 +79,20 @@ func fillMissingCommandDescriptions(cmds []*discordgo.ApplicationCommand) {
 	}
 }
 
+func canonicalContexts(contexts *[]discordgo.InteractionContextType) []discordgo.InteractionContextType {
+	if contexts == nil || len(*contexts) == 0 {
+		return []discordgo.InteractionContextType{
+			discordgo.InteractionContextGuild,
+			discordgo.InteractionContextBotDM,
+			discordgo.InteractionContextPrivateChannel,
+		}
+	}
+
+	sorted := append([]discordgo.InteractionContextType(nil), *contexts...)
+	sort.Slice(sorted, func(a, b int) bool { return sorted[a] < sorted[b] })
+	return sorted
+}
+
 func canonicalCommandMap(cmds []*discordgo.ApplicationCommand) (map[string]string, error) {
 	out := make(map[string]string, len(cmds))
 	for _, cmd := range cmds {
@@ -86,7 +104,8 @@ func canonicalCommandMap(cmds []*discordgo.ApplicationCommand) (map[string]strin
 			Name        string                                `json:"name"`
 			Description string                                `json:"description"`
 			Options     []*discordgo.ApplicationCommandOption `json:"options"`
-		}{cmd.Name, cmd.Description, opts}
+			Contexts    []discordgo.InteractionContextType    `json:"contexts"`
+		}{cmd.Name, cmd.Description, opts, canonicalContexts(cmd.Contexts)}
 		buf, err := json.Marshal(shape)
 		if err != nil {
 			return nil, fmt.Errorf("marshal command %q: %w", cmd.Name, err)

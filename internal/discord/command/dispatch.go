@@ -30,15 +30,19 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
-	if cmd.AdminOnly {
-		if !config.IsAdmin(i.Member.User.ID) && !discord.IsGuildAdmin(s, i.GuildID, i.Member) {
-			discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.NoPermission, messages.T(i.GuildID).Errors.AdminOnly))
-			return
-		}
+	member := discord.InteractionMember(i)
+	if member == nil {
+		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.GuildOnly))
+		return
+	}
+
+	if cmd.AdminOnly && !discord.IsAdminMember(s, i.GuildID, member) {
+		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.NoPermission, messages.T(i.GuildID).Errors.AdminOnly))
+		return
 	}
 
 	logger.Debugf("Executing command: %s (user: %s, guild: %s)",
-		cmdName, i.Member.User.Username, i.GuildID)
+		cmdName, member.User.Username, i.GuildID)
 
 	if err := cmd.Handler(s, i); err != nil {
 		logger.Errorf("Command %s failed: %v", cmdName, err)

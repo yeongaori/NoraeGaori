@@ -100,6 +100,7 @@ type ErrorMessages struct {
 	UnknownCommand        string `json:"unknown_command"`
 	CommandExecutionError string `json:"command_execution_error"`
 	MustBeInBotChannel    string `json:"must_be_in_bot_channel"`
+	GuildOnly             string `json:"guild_only"`
 }
 
 type TitleMessages struct {

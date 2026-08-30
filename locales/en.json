@@ -9,7 +9,8 @@
     "duplicate_song": "This song is already in the queue",
     "unknown_command": "Unknown command.",
     "command_execution_error": "An error occurred while executing the command: %v",
-    "must_be_in_bot_channel": "You must be in the same voice channel as the bot!"
+    "must_be_in_bot_channel": "You must be in the same voice channel as the bot!",
+    "guild_only": "This command can only be used in a server."
   },
 
   "titles": {
