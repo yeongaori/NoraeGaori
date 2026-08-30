@@ -9,73 +9,73 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-func (p *GuildPlayer) processCommands() {
+func (player *GuildPlayer) processCommands() {
 	defer func() {
 
 		if r := recover(); r != nil {
-			logger.Errorf("Panic recovered for guild %s: %v", p.GuildID, r)
+			logger.Errorf("Panic recovered for guild %s: %v", player.GuildID, r)
 		}
 
-		p.mu.Lock()
-		p.processorRunning = false
-		p.mu.Unlock()
-		logger.Debugf("Stopped for guild: %s", p.GuildID)
+		player.mu.Lock()
+		player.processorRunning = false
+		player.mu.Unlock()
+		logger.Debugf("Stopped for guild: %s", player.GuildID)
 	}()
 
-	logger.Debugf("Started for guild: %s", p.GuildID)
+	logger.Debugf("Started for guild: %s", player.GuildID)
 
 	for {
 		select {
-		case cmd, ok := <-p.CommandChan:
+		case cmd, ok := <-player.CommandChan:
 			if !ok {
 
-				logger.Debugf("CommandChan closed for guild: %s", p.GuildID)
+				logger.Debugf("CommandChan closed for guild: %s", player.GuildID)
 				return
 			}
 
-			logger.Debugf("Received %s command for guild: %s", cmd.Type, p.GuildID)
+			logger.Debugf("Received %s command for guild: %s", cmd.Type, player.GuildID)
 
 			func() {
 				var err error
 				defer func() {
 					if r := recover(); r != nil {
 						err = fmt.Errorf("command panic: %v", r)
-						logger.Errorf("Command %s panicked for guild %s: %v", cmd.Type, p.GuildID, r)
+						logger.Errorf("Command %s panicked for guild %s: %v", cmd.Type, player.GuildID, r)
 					}
 
-					logger.Debugf("Command %s completed for guild %s with error: %v", cmd.Type, p.GuildID, err)
+					logger.Debugf("Command %s completed for guild %s with error: %v", cmd.Type, player.GuildID, err)
 
 					if cmd.Done != nil {
 						select {
 						case cmd.Done <- err:
 						default:
-							logger.Warnf("Could not send result for %s command in guild %s", cmd.Type, p.GuildID)
+							logger.Warnf("Could not send result for %s command in guild %s", cmd.Type, player.GuildID)
 						}
 						close(cmd.Done)
 					}
 				}()
 
-				handler := p.dispatch
+				handler := player.dispatch
 				if handler == nil {
-					handler = p.defaultDispatch
+					handler = player.defaultDispatch
 				}
 				err = handler(cmd)
 			}()
 
-		case <-p.QuitChan:
+		case <-player.QuitChan:
 
-			logger.Debugf("Quit signal received for guild: %s", p.GuildID)
+			logger.Debugf("Quit signal received for guild: %s", player.GuildID)
 			return
 		}
 	}
 }
 
-func (p *GuildPlayer) defaultDispatch(cmd PlayerCommand) error {
+func (player *GuildPlayer) defaultDispatch(cmd PlayerCommand) error {
 	switch cmd.Type {
 	case "play":
 		return playInternal(cmd.Session, cmd.GuildID)
 	case "skip":
-		logger.Debugf("Processing skip command for guild: %s", p.GuildID)
+		logger.Debugf("Processing skip command for guild: %s", player.GuildID)
 		return skipInternal(cmd.Session, cmd.GuildID)
 	case "stop":
 		return stopInternal(cmd.GuildID)

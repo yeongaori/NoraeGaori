@@ -156,7 +156,7 @@ func (os *outroState) process(frame []int16, sentFrames int, volume float64) {
 	os.appliedNext++
 }
 
-func (os *outroState) flush(player *GuildPlayer, stopCh chan struct{}, enc *opus.Encoder, sentFrames *int) {
+func (os *outroState) flush(player *GuildPlayer, conn voiceConnection, stopCh chan struct{}, enc *opus.Encoder, sentFrames *int) {
 	if !os.committed || os.processor == nil {
 		return
 	}
@@ -190,8 +190,8 @@ func (os *outroState) flush(player *GuildPlayer, stopCh chan struct{}, enc *opus
 		copy(packet, os.opusScratch[:opusLen])
 
 		select {
-		case player.VoiceConn.OpusSendChan() <- packet:
-		case <-player.VoiceConn.DeadChan():
+		case conn.OpusSendChan() <- packet:
+		case <-conn.DeadChan():
 			return
 		case <-stopCh:
 			return

@@ -471,7 +471,7 @@ func (cs *crossfadeState) pullBFrame() []int16 {
 	}
 }
 
-func (cs *crossfadeState) mixAndSend(player *GuildPlayer, stopCh chan struct{}, aFrame, bFrame []int16, volume float64, enc *opus.Encoder) error {
+func (cs *crossfadeState) mixAndSend(player *GuildPlayer, conn voiceConnection, stopCh chan struct{}, aFrame, bFrame []int16, volume float64, enc *opus.Encoder) error {
 	progress := 0.0
 	if cs.crossfadeFrames > 0 {
 		progress = float64(cs.mixedFrames) / float64(cs.crossfadeFrames)
@@ -527,10 +527,10 @@ func (cs *crossfadeState) mixAndSend(player *GuildPlayer, stopCh chan struct{}, 
 	copy(opusData, cs.opusScratch[:opusLen])
 
 	select {
-	case player.VoiceConn.OpusSendChan() <- opusData:
+	case conn.OpusSendChan() <- opusData:
 		return nil
-	case <-player.VoiceConn.DeadChan():
-		return fmt.Errorf("voice connection died: %v", player.VoiceConn.Err())
+	case <-conn.DeadChan():
+		return fmt.Errorf("voice connection died: %v", conn.Err())
 	case <-stopCh:
 		return fmt.Errorf("playback stopped by user")
 	}
@@ -558,7 +558,7 @@ func (cs *crossfadeState) handoff(player *GuildPlayer, enc *opus.Encoder) {
 	cs.scope.Debugf("handed off to song ID %d after %d crossfade frames for guild: %s", cs.nextSongID, cs.mixedFrames, player.GuildID)
 }
 
-func (cs *crossfadeState) consume(player *GuildPlayer, stopCh chan struct{}, pcmData []int16, volume float64, enc *opus.Encoder, sentFrames *int) (bool, error) {
+func (cs *crossfadeState) consume(player *GuildPlayer, conn voiceConnection, stopCh chan struct{}, pcmData []int16, volume float64, enc *opus.Encoder, sentFrames *int) (bool, error) {
 	if !cs.armed || cs.handedOff {
 		return false, nil
 	}
@@ -595,7 +595,7 @@ func (cs *crossfadeState) consume(player *GuildPlayer, stopCh chan struct{}, pcm
 	}
 
 	bFrame := cs.pullBFrame()
-	if err := cs.mixAndSend(player, stopCh, aFrame, bFrame, volume, enc); err != nil {
+	if err := cs.mixAndSend(player, conn, stopCh, aFrame, bFrame, volume, enc); err != nil {
 		cs.abort()
 		return true, err
 	}
@@ -609,7 +609,7 @@ func (cs *crossfadeState) consume(player *GuildPlayer, stopCh chan struct{}, pcm
 	return false, nil
 }
 
-func (cs *crossfadeState) finishOnDrain(player *GuildPlayer, stopCh chan struct{}, enc *opus.Encoder, sentFrames *int) (bool, error) {
+func (cs *crossfadeState) finishOnDrain(player *GuildPlayer, conn voiceConnection, stopCh chan struct{}, enc *opus.Encoder, sentFrames *int) (bool, error) {
 	if !cs.armed || cs.handedOff {
 		return false, nil
 	}
@@ -629,7 +629,7 @@ func (cs *crossfadeState) finishOnDrain(player *GuildPlayer, stopCh chan struct{
 		}
 
 		bFrame := cs.pullBFrame()
-		if err := cs.mixAndSend(player, stopCh, aFrame, bFrame, volume, enc); err != nil {
+		if err := cs.mixAndSend(player, conn, stopCh, aFrame, bFrame, volume, enc); err != nil {
 			cs.abort()
 			return true, err
 		}

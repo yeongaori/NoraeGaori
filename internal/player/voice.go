@@ -35,6 +35,19 @@ func (d *discordVoice) Err() error                           { return d.vc.Err }
 func (d *discordVoice) Speaking(b bool) error                { return d.vc.Speaking(b) }
 func (d *discordVoice) Disconnect(ctx context.Context) error { return d.vc.Disconnect(ctx) }
 
+func (player *GuildPlayer) currentVoice() voiceConnection {
+	player.mu.Lock()
+	defer player.mu.Unlock()
+	return player.VoiceConn
+}
+
+func (player *GuildPlayer) setVoice(conn voiceConnection, channelID string) {
+	player.mu.Lock()
+	defer player.mu.Unlock()
+	player.VoiceConn = conn
+	player.VoiceChannelID = channelID
+}
+
 func JoinVoice(session *discordgo.Session, guildID, channelID string) (voiceConnection, error) {
 	player := GetPlayer(guildID)
 	player.mu.Lock()

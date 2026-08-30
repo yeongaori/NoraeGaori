@@ -125,6 +125,7 @@ var (
 	dismissLoadingMessage     func(session *discordgo.Session, guildID string)
 	lookupVoiceChannelBitrate func(session *discordgo.Session, channelID string) int
 	announceSongError         func(session *discordgo.Session, guildID string, song *queue.Song, reason string)
+	announceAutoPause         func(session *discordgo.Session, guildID, voiceChannelID string)
 )
 
 func init() {
@@ -135,6 +136,7 @@ func init() {
 	dismissLoadingMessage = deleteLoadingMessageFor
 	lookupVoiceChannelBitrate = readVoiceChannelBitrate
 	announceSongError = sendSongErrorMessage
+	announceAutoPause = sendAutoPauseNotification
 }
 
 func readVoiceChannelBitrate(session *discordgo.Session, channelID string) int {

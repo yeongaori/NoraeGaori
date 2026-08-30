@@ -360,18 +360,19 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 	logger.Debugf("FFmpeg started, setting voice speaking state for guild: %s", guildID)
 
 	logger.Debugf("About to call Speaking(true) for guild: %s", guildID)
-	if player.VoiceConn == nil {
+	conn := player.currentVoice()
+	if conn == nil {
 		stream.Stop()
 		return fmt.Errorf("voice connection is nil")
 	}
-	player.VoiceConn.Speaking(true)
+	conn.Speaking(true)
 	logger.Debugf("Speaking(true) completed for guild: %s", guildID)
 	defer func() {
 		player.mu.Lock()
 		handingOff := player.PendingStream != nil
 		player.mu.Unlock()
-		if !handingOff && player.VoiceConn != nil {
-			player.VoiceConn.Speaking(false)
+		if !handingOff {
+			conn.Speaking(false)
 		}
 	}()
 
@@ -420,13 +421,21 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 	}
 
 	for {
+		conn = player.currentVoice()
+		if conn == nil {
+			stream.Stop()
+			session.crossfade.abort()
+			return fmt.Errorf("voice connection is nil")
+		}
+		session.voice = conn
+
 		select {
 		case pcmData, ok := <-stream.PCM():
 			if !ok {
-				if done, err := session.crossfade.finishOnDrain(player, stopCh, opusEncoder, &session.sentFrames); done {
+				if done, err := session.crossfade.finishOnDrain(player, conn, stopCh, opusEncoder, &session.sentFrames); done {
 					return err
 				}
-				session.outro.flush(player, stopCh, opusEncoder, &session.sentFrames)
+				session.outro.flush(player, conn, stopCh, opusEncoder, &session.sentFrames)
 				return classifyDrainedStream(stream, song, session.sentFrames, frameOffset, resumeMode)
 			}
 
@@ -444,7 +453,7 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 
 			if session.reachedSilentTail() {
 				logger.Debugf("Trimming %d trailing silent frames for guild: %s", session.endStateAdj.SilentTailFrames, guildID)
-				session.outro.flush(player, stopCh, opusEncoder, &session.sentFrames)
+				session.outro.flush(player, conn, stopCh, opusEncoder, &session.sentFrames)
 				return nil
 			}
 
@@ -456,7 +465,7 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 			gain := session.frameGain(ramping)
 
 			wasActive := session.crossfade.active
-			if done, err := session.crossfade.consume(player, stopCh, pcmData, volumeFactor, opusEncoder, &session.sentFrames); done {
+			if done, err := session.crossfade.consume(player, conn, stopCh, pcmData, volumeFactor, opusEncoder, &session.sentFrames); done {
 				return err
 			} else if session.crossfade.active {
 				if !wasActive {
@@ -472,10 +481,10 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 				return err
 			}
 
-		case <-player.VoiceConn.DeadChan():
+		case <-conn.DeadChan():
 			stream.Stop()
 			session.crossfade.abort()
-			return fmt.Errorf("voice connection died: %v", player.VoiceConn.Err())
+			return fmt.Errorf("voice connection died: %v", conn.Err())
 
 		case <-stopCh:
 			stream.Stop()
@@ -493,6 +502,7 @@ type playbackSession struct {
 	stream      audioStream
 	opusEncoder *opus.Encoder
 	crossfade   *crossfadeState
+	voice       voiceConnection
 	outro       *outroState
 	activeTail  *transition.Tail
 
@@ -708,11 +718,11 @@ func (s *playbackSession) encodeAndSend(firstFrameCh chan<- struct{}) error {
 
 	sendStart := time.Now()
 	select {
-	case s.player.VoiceConn.OpusSendChan() <- packet:
-	case <-s.player.VoiceConn.DeadChan():
+	case s.voice.OpusSendChan() <- packet:
+	case <-s.voice.DeadChan():
 		s.stream.Stop()
 		s.crossfade.abort()
-		return fmt.Errorf("voice connection died: %v", s.player.VoiceConn.Err())
+		return fmt.Errorf("voice connection died: %v", s.voice.Err())
 	case <-s.stopCh:
 		s.stream.Stop()
 		s.crossfade.abort()

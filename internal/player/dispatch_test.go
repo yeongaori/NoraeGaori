@@ -26,8 +26,8 @@ func newTestPlayer(guildID string, handler func(PlayerCommand) error) *GuildPlay
 	return p
 }
 
-func (p *GuildPlayer) stopTestProcessor() {
-	close(p.QuitChan)
+func (player *GuildPlayer) stopTestProcessor() {
+	close(player.QuitChan)
 }
 
 func sendTestCommand(p *GuildPlayer, cmdType string) chan error {

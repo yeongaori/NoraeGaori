@@ -21,21 +21,21 @@ const (
 )
 
 func prepareVoiceConnection(session *discordgo.Session, player *GuildPlayer, guildID, voiceChannelID string) error {
-	needsReconnect := player.VoiceConn == nil
-	if player.VoiceConn != nil {
+	conn := player.currentVoice()
+	if conn != nil {
 		select {
-		case <-player.VoiceConn.DeadChan():
+		case <-conn.DeadChan():
 			logger.Warnf("Detected dead voice connection, will reconnect for guild: %s", guildID)
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			player.VoiceConn.Disconnect(ctx)
+			conn.Disconnect(ctx)
 			cancel()
-			player.VoiceConn = nil
-			needsReconnect = true
+			player.setVoice(nil, "")
+			conn = nil
 		default:
 		}
 	}
 
-	if !needsReconnect {
+	if conn != nil {
 		return nil
 	}
 
@@ -44,7 +44,7 @@ func prepareVoiceConnection(session *discordgo.Session, player *GuildPlayer, gui
 		return err
 	}
 
-	player.VoiceConn = vc
+	player.setVoice(vc, voiceChannelID)
 	logger.Debugf("Voice connection established for guild: %s", guildID)
 	return nil
 }
@@ -378,16 +378,12 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 		isVoiceError := strings.Contains(err.Error(), "voice connection")
 		if isVoiceError {
 			logger.Warnf("Voice connection error detected, clearing dead connection for guild: %s", guildID)
-			player.mu.Lock()
-			if player.VoiceConn != nil {
-
+			if conn := player.currentVoice(); conn != nil {
 				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-				player.VoiceConn.Disconnect(ctx)
+				conn.Disconnect(ctx)
 				cancel()
-				player.VoiceConn = nil
-				player.VoiceChannelID = ""
+				player.setVoice(nil, "")
 			}
-			player.mu.Unlock()
 		}
 
 		logger.Errorf("Playback error: %v", err)
