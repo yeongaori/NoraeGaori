@@ -28,9 +28,8 @@ func GetFadeIn(guildID string) (bool, error) {
 }
 
 func SetFadeIn(guildID string, enabled bool) error {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	value := boolToInt(enabled)
 	_, err := database.DB.Exec(
@@ -65,9 +64,8 @@ func GetFadeInDuration(guildID string) (float64, error) {
 }
 
 func SetFadeInDuration(guildID string, seconds float64) error {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	_, err := database.DB.Exec(
 		`INSERT INTO guild_settings (guild_id, fadein_duration) VALUES (?, ?)
@@ -101,9 +99,8 @@ func GetFadeOut(guildID string) (bool, error) {
 }
 
 func SetFadeOut(guildID string, enabled bool) error {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	value := boolToInt(enabled)
 	_, err := database.DB.Exec(
@@ -138,9 +135,8 @@ func GetFadeOutDuration(guildID string) (float64, error) {
 }
 
 func SetFadeOutDuration(guildID string, seconds float64) error {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	_, err := database.DB.Exec(
 		`INSERT INTO guild_settings (guild_id, fadeout_duration) VALUES (?, ?)
@@ -174,9 +170,8 @@ func GetAutoMix(guildID string) (bool, error) {
 }
 
 func SetAutoMix(guildID string, enabled bool) error {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	value := boolToInt(enabled)
 	_, err := database.DB.Exec(
@@ -211,9 +206,8 @@ func GetAutoMixBeats(guildID string) (int, error) {
 }
 
 func SetAutoMixBeats(guildID string, beats int) error {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	_, err := database.DB.Exec(
 		`INSERT INTO guild_settings (guild_id, automix_beats) VALUES (?, ?)
@@ -274,9 +268,8 @@ func SetAutoMixStyle(guildID, category, style string) error {
 		return fmt.Errorf("unknown automix style category: %s", category)
 	}
 
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	_, err := database.DB.Exec(
 		fmt.Sprintf(`INSERT INTO guild_settings (guild_id, %s) VALUES (?, ?)
@@ -307,9 +300,8 @@ func SetSongAutoMixStyle(guildID string, songID int, category, style string) err
 		return fmt.Errorf("unknown automix style category: %s", category)
 	}
 
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	result, err := database.DB.Exec(
 		fmt.Sprintf(`UPDATE songs SET %s = ? WHERE guild_id = ? AND id = ?`, column),
@@ -347,9 +339,8 @@ func GetCrossfade(guildID string) (bool, error) {
 }
 
 func SetCrossfade(guildID string, enabled bool) error {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	value := boolToInt(enabled)
 	_, err := database.DB.Exec(
@@ -384,9 +375,8 @@ func GetCrossfadeDuration(guildID string) (float64, error) {
 }
 
 func SetCrossfadeDuration(guildID string, seconds float64) error {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	_, err := database.DB.Exec(
 		`INSERT INTO guild_settings (guild_id, crossfade_duration) VALUES (?, ?)
@@ -420,9 +410,8 @@ func GetFadeOnStop(guildID string) (bool, error) {
 }
 
 func SetFadeOnStop(guildID string, enabled bool) error {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	value := boolToInt(enabled)
 	_, err := database.DB.Exec(
@@ -457,9 +446,8 @@ func GetTrimSilence(guildID string) (bool, error) {
 }
 
 func SetTrimSilence(guildID string, enabled bool) error {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	value := boolToInt(enabled)
 	_, err := database.DB.Exec(

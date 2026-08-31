@@ -9,9 +9,8 @@ import (
 )
 
 func SwapSongs(guildID string, pos1, pos2 int) error {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	q, err := loadQueueFromDB(guildID)
 	if err != nil {
@@ -82,9 +81,8 @@ func SwapSongs(guildID string, pos1, pos2 int) error {
 }
 
 func MoveSong(guildID string, fromPos, toPos int) error {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	q, err := loadQueueFromDB(guildID)
 	if err != nil {

@@ -11,9 +11,8 @@ import (
 )
 
 func CreateQueue(guildID, textChannelID, voiceChannelID string) error {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	_, err := database.DB.Exec(`DELETE FROM songs WHERE guild_id = ?`, guildID)
 	if err != nil {
@@ -39,9 +38,8 @@ func CreateQueue(guildID, textChannelID, voiceChannelID string) error {
 }
 
 func DeleteQueue(guildID string) error {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	_, err := database.DB.Exec(`DELETE FROM songs WHERE guild_id = ?`, guildID)
 	if err != nil {
@@ -59,9 +57,8 @@ func DeleteQueue(guildID string) error {
 }
 
 func DeleteGuildData(guildID string) error {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	_, err := database.DB.Exec(`DELETE FROM songs WHERE guild_id = ?`, guildID)
 	if err != nil {
@@ -89,9 +86,8 @@ func AddSongsBatch(guildID string, songs []*Song, position int) error {
 		return nil
 	}
 
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	var queueExists int
 	err := database.DB.QueryRow(`SELECT 1 FROM queues WHERE guild_id = ? LIMIT 1`, guildID).Scan(&queueExists)
@@ -169,9 +165,8 @@ func AddSongsBatch(guildID string, songs []*Song, position int) error {
 }
 
 func AddSong(guildID string, song *Song, position int) error {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	var queueExists int
 	err := database.DB.QueryRow(`SELECT 1 FROM queues WHERE guild_id = ? LIMIT 1`, guildID).Scan(&queueExists)
@@ -238,9 +233,8 @@ func AddSong(guildID string, song *Song, position int) error {
 }
 
 func UpdateSongSeekTime(guildID string, songID int, seekTime int) error {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	_, err := database.DB.Exec(
 		`UPDATE songs SET seek_time = ? WHERE guild_id = ? AND id = ?`,
@@ -256,9 +250,8 @@ func UpdateSongSeekTime(guildID string, songID int, seekTime int) error {
 }
 
 func RemoveFirstSong(guildID string) error {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	tx, err := database.DB.Begin()
 	if err != nil {
@@ -302,9 +295,8 @@ func RemoveFirstSong(guildID string) error {
 }
 
 func RemoveSong(guildID string, position int) error {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	tx, err := database.DB.Begin()
 	if err != nil {
@@ -346,9 +338,8 @@ func RemoveSong(guildID string, position int) error {
 }
 
 func SkipToPosition(guildID string, targetIndex int) error {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	tx, err := database.DB.Begin()
 	if err != nil {
@@ -410,9 +401,8 @@ func RemoveSongsByIDs(guildID string, songIDs []int) error {
 		return nil
 	}
 
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	tx, err := database.DB.Begin()
 	if err != nil {

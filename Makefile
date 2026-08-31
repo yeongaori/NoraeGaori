@@ -1,4 +1,4 @@
-.PHONY: all build run clean test deps install help local lint format automixcheck
+.PHONY: all build run clean test test-race deps install help local lint format automixcheck
 
 ifeq ($(OS),Windows_NT)
     NULL := nul
@@ -65,6 +65,11 @@ deps:
 test:
 	@echo Running tests...
 	@go test -v ./...
+
+## test-race: Run tests with the race detector
+test-race:
+	@echo Running tests with the race detector...
+	@CGO_ENABLED=1 go test -race ./...
 
 ## install: Install required system dependencies
 install:

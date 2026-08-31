@@ -16,9 +16,8 @@ func SetRepeatMode(guildID string, mode int) error {
 		return fmt.Errorf("invalid repeat mode: %d", mode)
 	}
 
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	_, err := database.DB.Exec(
 		`INSERT INTO guild_settings (guild_id, repeat) VALUES (?, ?)
@@ -44,9 +43,8 @@ func SetVolume(guildID string, volume float64) error {
 		return fmt.Errorf("volume must be between 0 and 1000, got: %g", volume)
 	}
 
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	result, err := database.DB.Exec(
 		`INSERT INTO guild_settings (guild_id, volume) VALUES (?, ?)
@@ -160,9 +158,8 @@ func GetNormalization(guildID string) (bool, error) {
 }
 
 func SetSponsorBlock(guildID string, enabled bool) error {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	sponsorblockInt := 0
 	if enabled {
@@ -184,9 +181,8 @@ func SetSponsorBlock(guildID string, enabled bool) error {
 }
 
 func SetShowStartedTrack(guildID string, enabled bool) error {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	showStartedTrackInt := 0
 	if enabled {
@@ -208,9 +204,8 @@ func SetShowStartedTrack(guildID string, enabled bool) error {
 }
 
 func SetNormalization(guildID string, enabled bool) error {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	normalizationInt := 0
 	if enabled {

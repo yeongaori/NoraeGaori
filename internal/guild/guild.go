@@ -61,9 +61,8 @@ func GetLanguage(guildID string) (string, error) {
 }
 
 func SetLanguage(guildID, lang string) error {
-	lock := AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := AcquireLock(guildID)
+	defer release()
 
 	var langValue interface{}
 	if lang == "" {
@@ -137,9 +136,8 @@ func GetPrefix(guildID string) (string, error) {
 }
 
 func SetPrefix(guildID, prefix string) error {
-	lock := AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := AcquireLock(guildID)
+	defer release()
 
 	var prefixValue interface{}
 	if prefix == "" {

@@ -9,9 +9,8 @@ import (
 )
 
 func SaveSeekTime(guildID string, songID int, seekTime int) (int, error) {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	_, err := database.DB.Exec(
 		`UPDATE songs SET seek_time = ? WHERE id = ? AND guild_id = ?`,
@@ -27,9 +26,8 @@ func SaveSeekTime(guildID string, songID int, seekTime int) (int, error) {
 }
 
 func UpdateVoiceChannel(guildID, channelID string) error {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	_, err := database.DB.Exec(
 		`UPDATE queues SET voice_channel_id = ? WHERE guild_id = ?`,
@@ -44,9 +42,8 @@ func UpdateVoiceChannel(guildID, channelID string) error {
 }
 
 func SetPaused(guildID string, paused bool) error {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	pausedInt := 0
 	if paused {
@@ -66,9 +63,8 @@ func SetPaused(guildID string, paused bool) error {
 }
 
 func SetPlaying(guildID string, playing bool) error {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	playingInt := 0
 	if playing {
@@ -88,9 +84,8 @@ func SetPlaying(guildID string, playing bool) error {
 }
 
 func SetLoading(guildID string, loading bool) error {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	loadingInt := 0
 	if loading {

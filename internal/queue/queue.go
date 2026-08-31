@@ -60,9 +60,8 @@ var (
 )
 
 func GetQueue(guildID string, forceRefresh bool) (*Queue, error) {
-	lock := guild.AcquireLock(guildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := guild.AcquireLock(guildID)
+	defer release()
 
 	if !forceRefresh {
 		cacheMux.RLock()
