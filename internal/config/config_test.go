@@ -13,8 +13,8 @@ func setupTestConfig(t *testing.T) {
 
 func teardownTestConfig(t *testing.T) {
 	os.RemoveAll("test_config")
-	config = nil
-	adminsConf = nil
+	config.Store(nil)
+	adminsConf.Store(nil)
 }
 
 func TestLoadDefaultConfig(t *testing.T) {
@@ -25,15 +25,15 @@ func TestLoadDefaultConfig(t *testing.T) {
 		t.Fatalf("Failed to load default config: %v", err)
 	}
 
-	if config == nil {
+	if config.Load() == nil {
 		t.Fatal("Config should not be nil")
 	}
 
-	if config.Prefix == "" {
+	if config.Load().Prefix == "" {
 		t.Error("Default prefix should not be empty")
 	}
 
-	if config.DefaultVolume <= 0 {
+	if config.Load().DefaultVolume <= 0 {
 		t.Error("Default volume should be positive")
 	}
 }
@@ -46,7 +46,7 @@ func TestLoadDefaultAdmins(t *testing.T) {
 		t.Fatalf("Failed to load default admins: %v", err)
 	}
 
-	if adminsConf == nil {
+	if adminsConf.Load() == nil {
 		t.Fatal("Admins config should not be nil")
 	}
 }
@@ -95,9 +95,9 @@ func TestIsAdmin(t *testing.T) {
 	setupTestConfig(t)
 	defer teardownTestConfig(t)
 
-	adminsConf = &AdminsConfig{
+	adminsConf.Store(&AdminsConfig{
 		Admins: []string{"admin1", "admin2", "admin3"},
-	}
+	})
 
 	testCases := []struct {
 		name     string
@@ -140,9 +140,9 @@ func TestGetAdmins(t *testing.T) {
 	setupTestConfig(t)
 	defer teardownTestConfig(t)
 
-	adminsConf = &AdminsConfig{
+	adminsConf.Store(&AdminsConfig{
 		Admins: []string{"admin1", "admin2"},
-	}
+	})
 
 	admins := GetAdmins()
 	if len(admins) != 2 {
@@ -184,35 +184,35 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	setupTestConfig(t)
 	defer teardownTestConfig(t)
 
-	config = &Config{
+	config.Store(&Config{
 		Prefix:           "?",
 		ShowStartedTrack: false,
 		DefaultVolume:    75,
-	}
+	})
 
-	if err := saveConfig(config); err != nil {
+	if err := saveConfig(config.Load()); err != nil {
 		t.Fatalf("Failed to save config: %v", err)
 	}
 
-	config = nil
+	config.Store(nil)
 
 	if err := loadConfig(); err != nil {
 		t.Fatalf("Failed to load config: %v", err)
 	}
 
-	if config.Prefix != "?" {
-		t.Errorf("Expected prefix ?, got %s", config.Prefix)
+	if config.Load().Prefix != "?" {
+		t.Errorf("Expected prefix ?, got %s", config.Load().Prefix)
 	}
-	if config.ShowStartedTrack != false {
+	if config.Load().ShowStartedTrack != false {
 		t.Error("ShowStartedTrack should be false")
 	}
-	if config.DefaultVolume != 75 {
-		t.Errorf("Expected volume 75, got %g", config.DefaultVolume)
+	if config.Load().DefaultVolume != 75 {
+		t.Errorf("Expected volume 75, got %g", config.Load().DefaultVolume)
 	}
 }
 
 func TestNilAdminsConfig(t *testing.T) {
-	adminsConf = nil
+	adminsConf.Store(nil)
 
 	admins := GetAdmins()
 	if admins == nil {

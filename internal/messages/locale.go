@@ -21,8 +21,8 @@ func SetGuildLangResolver(fn func(guildID string) (string, error)) {
 }
 
 var (
-	localeCacheMu sync.RWMutex
-	localeCache   = make(map[string]*Locale)
+	localeCacheWrite sync.Mutex
+	localeCache      atomic.Pointer[map[string]*Locale]
 )
 
 type Locale struct {
@@ -595,6 +595,7 @@ var activeLocale atomic.Pointer[localeState]
 
 func init() {
 	activeLocale.Store(&localeState{locale: &Locale{}, lang: "en"})
+	localeCache.Store(&map[string]*Locale{})
 }
 
 func setActiveLocale(loc *Locale, lang string) {
@@ -663,9 +664,7 @@ func localesDir() string {
 }
 
 func getCachedLocale(lang string) *Locale {
-	localeCacheMu.RLock()
-	loc, ok := localeCache[lang]
-	localeCacheMu.RUnlock()
+	loc, ok := (*localeCache.Load())[lang]
 	if ok {
 		return loc
 	}
@@ -673,9 +672,7 @@ func getCachedLocale(lang string) *Locale {
 	if err != nil {
 		return nil
 	}
-	localeCacheMu.Lock()
-	localeCache[lang] = loc
-	localeCacheMu.Unlock()
+	storeCachedLocale(lang, loc)
 	return loc
 }
 
@@ -704,9 +701,9 @@ func buildLocale(lang string) (*Locale, error) {
 }
 
 func InvalidateLocaleCache() {
-	localeCacheMu.Lock()
-	localeCache = make(map[string]*Locale)
-	localeCacheMu.Unlock()
+	localeCacheWrite.Lock()
+	localeCache.Store(&map[string]*Locale{})
+	localeCacheWrite.Unlock()
 }
 
 func LoadLocale(lang string) error {
@@ -719,17 +716,13 @@ func LoadLocale(lang string) error {
 		}
 		setActiveLocale(&base, lang)
 
-		localeCacheMu.Lock()
-		localeCache["en"] = &base
-		localeCacheMu.Unlock()
+		storeCachedLocale("en", &base)
 		return fmt.Errorf("failed to load locale %q, falling back to English: %w", lang, err)
 	}
 
 	setActiveLocale(loc, lang)
 
-	localeCacheMu.Lock()
-	localeCache[lang] = loc
-	localeCacheMu.Unlock()
+	storeCachedLocale(lang, loc)
 	return nil
 }
 
@@ -797,4 +790,17 @@ func mergeMap(base, overlay reflect.Value) {
 			base.SetMapIndex(key, overlayVal)
 		}
 	}
+}
+
+func storeCachedLocale(lang string, loc *Locale) {
+	localeCacheWrite.Lock()
+	defer localeCacheWrite.Unlock()
+
+	current := *localeCache.Load()
+	rebuilt := make(map[string]*Locale, len(current)+1)
+	for key, value := range current {
+		rebuilt[key] = value
+	}
+	rebuilt[lang] = loc
+	localeCache.Store(&rebuilt)
 }

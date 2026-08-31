@@ -11,18 +11,15 @@ func registerProbeCommand(t *testing.T, name string, adminOnly bool) *bool {
 
 	called := false
 
-	commandsMu.Lock()
-	previous := commands
-	commands = map[string]*Command{}
-	for existing, cmd := range previous {
-		commands[existing] = cmd
+	previous := commands.Load()
+	rebuilt := map[string]*Command{}
+	for existing, cmd := range *previous {
+		rebuilt[existing] = cmd
 	}
-	commandsMu.Unlock()
+	commands.Store(&rebuilt)
 
 	t.Cleanup(func() {
-		commandsMu.Lock()
-		commands = previous
-		commandsMu.Unlock()
+		commands.Store(previous)
 	})
 
 	RegisterCommand(&Command{

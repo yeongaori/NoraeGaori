@@ -75,9 +75,7 @@ func TestSetPrefixWithoutConfigReturnsError(t *testing.T) {
 	setupTestConfig(t)
 	defer teardownTestConfig(t)
 
-	configMux.Lock()
-	config = nil
-	configMux.Unlock()
+	config.Store(nil)
 
 	if err := SetPrefix("!"); err == nil {
 		t.Error("SetPrefix returned nil, want an error when the config is not initialized")

@@ -2,6 +2,7 @@ package command
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/logger"
@@ -21,58 +22,59 @@ type Command struct {
 }
 
 var (
-	commandsMu sync.RWMutex
-	commands   = make(map[string]*Command)
-	aliases    = make(map[string]string)
+	registryWrite sync.Mutex
+	commands      atomic.Pointer[map[string]*Command]
+	aliases       atomic.Pointer[map[string]string]
 )
 
+func init() {
+	commands.Store(&map[string]*Command{})
+	aliases.Store(&map[string]string{})
+}
+
 func lookupCommand(name string) (*Command, bool) {
-	commandsMu.RLock()
-	defer commandsMu.RUnlock()
-	cmd, ok := commands[name]
+	cmd, ok := (*commands.Load())[name]
 	return cmd, ok
 }
 
 func lookupAlias(alias string) (string, bool) {
-	commandsMu.RLock()
-	defer commandsMu.RUnlock()
-	name, ok := aliases[alias]
+	name, ok := (*aliases.Load())[alias]
 	return name, ok
 }
 
 func SnapshotAliases() map[string]string {
-	commandsMu.RLock()
-	defer commandsMu.RUnlock()
-
-	snapshot := make(map[string]string, len(aliases))
-	for alias, target := range aliases {
-		snapshot[alias] = target
-	}
-	return snapshot
+	return *aliases.Load()
 }
 
 func Snapshot() map[string]*Command {
-	commandsMu.RLock()
-	defer commandsMu.RUnlock()
-
-	snapshot := make(map[string]*Command, len(commands))
-	for name, cmd := range commands {
-		snapshot[name] = cmd
-	}
-	return snapshot
+	return *commands.Load()
 }
 
 func RegisterCommand(cmd *Command) {
-	commandsMu.Lock()
-	commands[cmd.Name] = cmd
-	commandsMu.Unlock()
+	registryWrite.Lock()
+
+	rebuilt := make(map[string]*Command, len(*commands.Load())+1)
+	for name, existing := range *commands.Load() {
+		rebuilt[name] = existing
+	}
+	rebuilt[cmd.Name] = cmd
+	commands.Store(&rebuilt)
+
+	registryWrite.Unlock()
 	logger.Debugf("Registered command: %s", cmd.Name)
 }
 
 func RegisterAlias(alias, commandName string) {
-	commandsMu.Lock()
-	aliases[alias] = commandName
-	commandsMu.Unlock()
+	registryWrite.Lock()
+
+	rebuilt := make(map[string]string, len(*aliases.Load())+1)
+	for existing, target := range *aliases.Load() {
+		rebuilt[existing] = target
+	}
+	rebuilt[alias] = commandName
+	aliases.Store(&rebuilt)
+
+	registryWrite.Unlock()
 	logger.Debugf("Registered alias: %s -> %s", alias, commandName)
 }
 
@@ -118,10 +120,10 @@ func ReloadAliases() {
 		rebuiltCommands[name] = &rebuilt
 	}
 
-	commandsMu.Lock()
-	commands = rebuiltCommands
-	aliases = rebuiltAliases
-	commandsMu.Unlock()
+	registryWrite.Lock()
+	commands.Store(&rebuiltCommands)
+	aliases.Store(&rebuiltAliases)
+	registryWrite.Unlock()
 
 	logger.Info("Aliases and descriptions reloaded for new locale")
 }

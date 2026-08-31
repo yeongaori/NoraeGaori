@@ -11,18 +11,14 @@ import (
 func seedTestCommands(t *testing.T, count int) {
 	t.Helper()
 
-	commandsMu.Lock()
-	previousCommands := commands
-	previousAliases := aliases
-	commands = make(map[string]*Command, count)
-	aliases = make(map[string]string, count)
-	commandsMu.Unlock()
+	previousCommands := commands.Load()
+	previousAliases := aliases.Load()
+	commands.Store(&map[string]*Command{})
+	aliases.Store(&map[string]string{})
 
 	t.Cleanup(func() {
-		commandsMu.Lock()
-		commands = previousCommands
-		aliases = previousAliases
-		commandsMu.Unlock()
+		commands.Store(previousCommands)
+		aliases.Store(previousAliases)
 	})
 
 	for i := 0; i < count; i++ {

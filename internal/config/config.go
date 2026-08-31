@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 
 	"noraegaori/internal/logger"
 
@@ -34,10 +35,9 @@ type AdminsConfig struct {
 }
 
 var (
-	config      *Config
-	adminsConf  *AdminsConfig
-	configMux   sync.RWMutex
-	adminsMux   sync.RWMutex
+	config      atomic.Pointer[Config]
+	adminsConf  atomic.Pointer[AdminsConfig]
+	configWrite sync.Mutex
 	watcher     *fsnotify.Watcher
 	configPath  = "config/config.json"
 	adminsPath  = "config/admins.json"
@@ -144,9 +144,7 @@ func loadConfig() error {
 		cfg.YtDlpChannel = YtDlpChannelAuto
 	}
 
-	configMux.Lock()
-	config = &cfg
-	configMux.Unlock()
+	config.Store(&cfg)
 
 	logger.Infof("Loaded config: prefix=%s, language=%s, volume=%g, max_download_speed=%.1fMbps, ytdlp_channel=%s",
 		cfg.Prefix, cfg.Language, cfg.DefaultVolume, cfg.MaxDownloadSpeedMbps, cfg.YtDlpChannel)
@@ -175,9 +173,7 @@ func loadAdmins() error {
 		return fmt.Errorf("failed to parse admins file: %w", err)
 	}
 
-	adminsMux.Lock()
-	adminsConf = &admins
-	adminsMux.Unlock()
+	adminsConf.Store(&admins)
 
 	logger.Infof("Loaded %d admin users", len(admins.Admins))
 	return nil
@@ -294,48 +290,45 @@ func watchFiles() {
 }
 
 func GetConfig() *Config {
-	configMux.RLock()
-	defer configMux.RUnlock()
-	return config
+	return config.Load()
 }
 
 func SetPrefix(prefix string) error {
-	configMux.Lock()
-	defer configMux.Unlock()
+	configWrite.Lock()
+	defer configWrite.Unlock()
 
-	if config == nil {
+	current := config.Load()
+	if current == nil {
 		return fmt.Errorf("config is not initialized")
 	}
 
-	updated := *config
+	updated := *current
 	updated.Prefix = prefix
 
 	if err := saveConfig(&updated); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	config = &updated
+	config.Store(&updated)
 
 	logger.Infof("Prefix updated to: %s", prefix)
 	return nil
 }
 
 func GetAdmins() []string {
-	adminsMux.RLock()
-	defer adminsMux.RUnlock()
-	if adminsConf == nil {
+	current := adminsConf.Load()
+	if current == nil {
 		return []string{}
 	}
-	return adminsConf.Admins
+	return current.Admins
 }
 
 func IsAdmin(userID string) bool {
-	adminsMux.RLock()
-	defer adminsMux.RUnlock()
-	if adminsConf == nil {
+	current := adminsConf.Load()
+	if current == nil {
 		return false
 	}
-	for _, adminID := range adminsConf.Admins {
+	for _, adminID := range current.Admins {
 		if adminID == userID {
 			return true
 		}
