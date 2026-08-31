@@ -188,7 +188,13 @@ type PreCache struct {
 }
 
 func IsPlaybackActive(guildID string) bool {
-	player := GetPlayer(guildID)
+	playersMu.RLock()
+	player, exists := players[guildID]
+	playersMu.RUnlock()
+
+	if !exists {
+		return false
+	}
 
 	player.mu.Lock()
 	defer player.mu.Unlock()

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"noraegaori/internal/discord"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"noraegaori/internal/lockmap"
 	"noraegaori/internal/logger"
 	"noraegaori/internal/messages"
 	"noraegaori/internal/player"
@@ -17,20 +17,7 @@ import (
 	ytdlpUpdater "noraegaori/internal/ytdlp"
 )
 
-var (
-	playlistLocks   = make(map[string]*sync.Mutex)
-	playlistLocksMu sync.Mutex
-)
-
-func getPlaylistLock(guildID string) *sync.Mutex {
-	playlistLocksMu.Lock()
-	defer playlistLocksMu.Unlock()
-
-	if _, exists := playlistLocks[guildID]; !exists {
-		playlistLocks[guildID] = &sync.Mutex{}
-	}
-	return playlistLocks[guildID]
-}
+var playlistLocks lockmap.Map
 
 func handlePurePlaylist(s *discordgo.Session, i *discordgo.InteractionCreate, playlistURL string, voiceState *discordgo.VoiceState) error {
 	playlistInfo, err := youtube.GetPlaylistInfo(playlistURL, i.Member.User.Username, i.Member.User.ID)
@@ -356,9 +343,8 @@ func handlePlaylistRestConfirmationReaction(s *discordgo.Session, originalIntera
 }
 
 func addPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreate, playlistInfo *youtube.PlaylistInfo, voiceState *discordgo.VoiceState, messageID string) {
-	lock := getPlaylistLock(i.GuildID)
-	lock.Lock()
-	defer lock.Unlock()
+	release := playlistLocks.Acquire(i.GuildID)
+	defer release()
 
 	startTime := time.Now()
 	logger.Debugf("Starting playlist processing for %d songs", len(playlistInfo.Videos))

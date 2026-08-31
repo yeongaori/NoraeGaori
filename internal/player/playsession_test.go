@@ -162,3 +162,24 @@ func TestPlayCommandDoesNotBlockTheProcessor(t *testing.T) {
 	close(release)
 	waitForPlayLockRelease(t, guildID)
 }
+
+func TestIsPlaybackActiveDoesNotCreateAPlayer(t *testing.T) {
+	guildID := "unknownguild"
+
+	playersMu.RLock()
+	before := len(players)
+	playersMu.RUnlock()
+
+	if IsPlaybackActive(guildID) {
+		t.Error("IsPlaybackActive reported an unknown guild as active")
+	}
+
+	playersMu.RLock()
+	after := len(players)
+	_, exists := players[guildID]
+	playersMu.RUnlock()
+
+	if exists || after != before {
+		t.Errorf("IsPlaybackActive created a player: len went %d -> %d", before, after)
+	}
+}

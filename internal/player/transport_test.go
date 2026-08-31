@@ -7,6 +7,9 @@ import (
 	"time"
 
 	"noraegaori/internal/queue"
+	"noraegaori/internal/testutil"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 func TestForceSkipSpamConcurrent(t *testing.T) {
@@ -138,5 +141,38 @@ func TestPlayAudioStopsOnSignal(t *testing.T) {
 	}
 	if n := mock.disconnectCount(); n != 0 {
 		t.Errorf("playAudio must not disconnect the voice connection, got %d disconnects", n)
+	}
+}
+
+func TestSkipDoesNotWaitForTheNextSession(t *testing.T) {
+	guildID := "skiphandoff"
+	setupPlayerDB(t, guildID, 2)
+
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	defer close(release)
+
+	testutil.Swap(t, &resumePlayback, func(*discordgo.Session, string) error {
+		close(entered)
+		<-release
+		return nil
+	})
+
+	returned := make(chan error, 1)
+	go func() { returned <- Skip(nil, guildID) }()
+
+	select {
+	case err := <-returned:
+		if err != nil && err != ErrQueueEmpty {
+			t.Errorf("unexpected skip error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Skip blocked on the next playback session instead of handing off asynchronously")
+	}
+
+	select {
+	case <-entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the next session was never started")
 	}
 }
