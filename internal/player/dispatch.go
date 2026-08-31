@@ -25,13 +25,7 @@ func (player *GuildPlayer) processCommands() {
 
 	for {
 		select {
-		case cmd, ok := <-player.CommandChan:
-			if !ok {
-
-				logger.Debugf("CommandChan closed for guild: %s", player.GuildID)
-				return
-			}
-
+		case cmd := <-player.CommandChan:
 			logger.Debugf("Received %s command for guild: %s", cmd.Type, player.GuildID)
 
 			func() {
@@ -88,29 +82,11 @@ func (player *GuildPlayer) defaultDispatch(cmd PlayerCommand) error {
 }
 
 func Play(session *discordgo.Session, guildID string) error {
-	player := GetPlayer(guildID)
-
-	cmd := PlayerCommand{
+	return sendCommandToPlayer(guildID, PlayerCommand{
 		Type:    "play",
 		Session: session,
 		GuildID: guildID,
-	}
-
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Warnf("Recovered from panic (channel likely closed) for guild %s: %v", guildID, r)
-		}
-	}()
-
-	select {
-	case player.CommandChan <- cmd:
-
-		return nil
-	default:
-
-		logger.Warnf("Command queue full for guild %s", guildID)
-		return fmt.Errorf("command queue full, please try again")
-	}
+	})
 }
 
 func playInternal(session *discordgo.Session, guildID string) error {

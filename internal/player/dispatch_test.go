@@ -1,6 +1,7 @@
 package player
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -343,3 +344,46 @@ func TestResumeOrStartAnnouncesFirstStartedSong(t *testing.T) {
 		t.Error("started song is still marked announced, so no now playing message would be sent")
 	}
 }
+
+func TestDeletePlayerKeepsCommandDeliveryHonest(t *testing.T) {
+	guildID := "deletedguild"
+
+	stale := GetPlayer(guildID)
+	DeletePlayer(guildID)
+
+	t.Cleanup(func() { DeletePlayer(guildID) })
+
+	if err := sendCommandToPlayer(guildID, PlayerCommand{Type: inertCommandType, GuildID: guildID}); err != nil {
+		t.Fatalf("send after DeletePlayer returned %v, want delivery to a fresh player", err)
+	}
+
+	if live := GetPlayer(guildID); live == stale {
+		t.Fatal("command was delivered to the deleted player instead of a fresh one")
+	}
+}
+
+func TestConcurrentSendAndDeleteNeverPanic(t *testing.T) {
+	guildID := "racyguild"
+	t.Cleanup(func() { DeletePlayer(guildID) })
+
+	var waitGroup sync.WaitGroup
+	for index := 0; index < 40; index++ {
+		waitGroup.Add(1)
+		go func(shouldDelete bool) {
+			defer waitGroup.Done()
+
+			if shouldDelete {
+				DeletePlayer(guildID)
+				return
+			}
+
+			err := sendCommandToPlayer(guildID, PlayerCommand{Type: inertCommandType, GuildID: guildID})
+			if err != nil && !errors.Is(err, ErrCommandQueueFull) {
+				t.Errorf("send returned an undeclared error: %v", err)
+			}
+		}(index%2 == 0)
+	}
+	waitGroup.Wait()
+}
+
+const inertCommandType = "test-inert"

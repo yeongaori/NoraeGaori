@@ -22,15 +22,22 @@ import (
 var (
 	ErrQueueEmpty            = errors.New("queue is empty after skip")
 	ErrPlaybackAlreadyActive = errors.New("playback is already active for this guild")
+	ErrCommandQueueFull      = errors.New("command queue is full")
+	ErrCommandTimeout        = errors.New("command timed out")
 )
 
-var playLockWait = 2 * time.Second
+var (
+	playLockWait         = 2 * time.Second
+	resumeCommandTimeout = 30 * time.Second
+)
 
 const (
 	channels   = dsp.Channels
 	frameRate  = dsp.SampleRate
 	frameSize  = dsp.FrameSize
 	maxRetries = 3
+
+	commandBufferSize = 10
 
 	healthyPlaybackFrames = 500
 	maxOpusFrameBytes     = 1500
@@ -183,6 +190,10 @@ func GetPlayer(guildID string) *GuildPlayer {
 	playersMu.Lock()
 	defer playersMu.Unlock()
 
+	return getOrCreatePlayerLocked(guildID)
+}
+
+func getOrCreatePlayerLocked(guildID string) *GuildPlayer {
 	if player, exists := players[guildID]; exists {
 
 		player.mu.Lock()
@@ -191,7 +202,7 @@ func GetPlayer(guildID string) *GuildPlayer {
 
 			logger.Warnf("Processor not running for guild %s, restarting", guildID)
 
-			player.CommandChan = make(chan PlayerCommand, 10)
+			player.CommandChan = make(chan PlayerCommand, commandBufferSize)
 			player.QuitChan = make(chan struct{})
 
 			player.processorRunning = true
@@ -210,7 +221,7 @@ func GetPlayer(guildID string) *GuildPlayer {
 		Volume:           1.0,
 		StopChan:         make(chan struct{}),
 		PlaybackDone:     make(chan struct{}, 1),
-		CommandChan:      make(chan PlayerCommand, 10),
+		CommandChan:      make(chan PlayerCommand, commandBufferSize),
 		QuitChan:         make(chan struct{}),
 		processorRunning: true,
 	}
@@ -221,6 +232,21 @@ func GetPlayer(guildID string) *GuildPlayer {
 	return player
 }
 
+func sendCommandToPlayer(guildID string, cmd PlayerCommand) error {
+	playersMu.Lock()
+	defer playersMu.Unlock()
+
+	player := getOrCreatePlayerLocked(guildID)
+
+	select {
+	case player.CommandChan <- cmd:
+		return nil
+	default:
+		logger.Warnf("Command queue full for guild %s", guildID)
+		return ErrCommandQueueFull
+	}
+}
+
 func DeletePlayer(guildID string) {
 	playersMu.Lock()
 	player, exists := players[guildID]
@@ -229,11 +255,8 @@ func DeletePlayer(guildID string) {
 		return
 	}
 	delete(players, guildID)
-	playersMu.Unlock()
-
 	close(player.QuitChan)
-
-	close(player.CommandChan)
+	playersMu.Unlock()
 
 	clearRetryCountsForGuild(guildID)
 

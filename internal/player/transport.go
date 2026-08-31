@@ -211,8 +211,6 @@ func RestartForNormalization(guildID string) {
 }
 
 func Resume(session *discordgo.Session, guildID string) error {
-	player := GetPlayer(guildID)
-
 	done := make(chan error, 1)
 	cmd := PlayerCommand{
 		Type:    "resume",
@@ -221,36 +219,16 @@ func Resume(session *discordgo.Session, guildID string) error {
 		Done:    done,
 	}
 
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Warnf("Recovered from panic (channel likely closed) for guild %s: %v", guildID, r)
-		}
-	}()
+	if err := sendCommandToPlayer(guildID, cmd); err != nil {
+		return err
+	}
 
 	select {
-	case player.CommandChan <- cmd:
-
-		select {
-		case err := <-done:
-			return err
-		case <-time.After(30 * time.Second):
-
-			player.mu.Lock()
-			playing := player.Playing
-			paused := player.Paused
-			player.mu.Unlock()
-
-			if playing && !paused {
-				logger.Debugf("Command completed successfully after timeout for guild %s", guildID)
-				return nil
-			}
-
-			logger.Warnf("Command timeout - operation failed for guild %s", guildID)
-			return fmt.Errorf("resume command timeout")
-		}
-	default:
-		logger.Warnf("Command queue full for guild %s", guildID)
-		return fmt.Errorf("command queue full, please try again")
+	case err := <-done:
+		return err
+	case <-time.After(resumeCommandTimeout):
+		logger.Warnf("Resume command timed out for guild %s", guildID)
+		return ErrCommandTimeout
 	}
 }
 
