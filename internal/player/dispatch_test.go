@@ -3,12 +3,10 @@ package player
 import (
 	"errors"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
 
-	"noraegaori/internal/database"
 	"noraegaori/internal/queue"
 )
 
@@ -143,33 +141,8 @@ func TestDispatchUnknownCommand(t *testing.T) {
 }
 
 func TestForceSkipSpamAdvancesQueueCleanly(t *testing.T) {
-	os.RemoveAll("data")
-	if err := database.Initialize(); err != nil {
-		t.Fatalf("db init: %v", err)
-	}
-	defer func() {
-		database.Close()
-		os.RemoveAll("data")
-	}()
-
 	guildID := "spamguild"
-	if err := queue.CreateQueue(guildID, "text", "voice"); err != nil {
-		t.Fatalf("create queue: %v", err)
-	}
-	defer queue.DeleteQueue(guildID)
-
-	for i := 0; i < 2; i++ {
-		song := &queue.Song{
-			URL:            fmt.Sprintf("https://youtube.com/watch?v=spam%d", i),
-			Title:          fmt.Sprintf("Spam %d", i),
-			Duration:       "3:00",
-			RequestedByID:  "user1",
-			RequestedByTag: "User#1234",
-		}
-		if err := queue.AddSong(guildID, song, -1); err != nil {
-			t.Fatalf("seed: %v", err)
-		}
-	}
+	setupPlayerDB(t, guildID, 2)
 
 	p := newTestPlayer(guildID, func(cmd PlayerCommand) error {
 		if cmd.Type == "skip" {

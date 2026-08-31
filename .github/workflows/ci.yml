@@ -45,6 +45,11 @@ jobs:
           CGO_ENABLED: "1"
         run: go test -race ./...
 
+      - name: Run tests repeatedly
+        env:
+          CGO_ENABLED: "1"
+        run: go test -count=3 ./...
+
   lint:
     name: Lint
     runs-on: ubuntu-latest

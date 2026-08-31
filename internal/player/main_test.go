@@ -29,6 +29,7 @@ func setupPlayerDB(t *testing.T, guildID string, songs int) {
 	t.Helper()
 
 	dbtest.Setup(t)
+	t.Cleanup(func() { DeletePlayer(guildID) })
 	if err := queue.CreateQueue(guildID, "text", "voice"); err != nil {
 		t.Fatalf("create queue: %v", err)
 	}
