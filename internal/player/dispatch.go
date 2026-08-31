@@ -2,7 +2,6 @@ package player
 
 import (
 	"fmt"
-	"time"
 
 	"noraegaori/internal/logger"
 
@@ -116,37 +115,17 @@ func Play(session *discordgo.Session, guildID string) error {
 
 func playInternal(session *discordgo.Session, guildID string) error {
 
-	lock := acquirePlayLock(guildID)
-
-	lockAcquired := make(chan bool, 1)
-	unlockChan := make(chan struct{})
-
-	go func() {
-		lock.Lock()
-		select {
-		case lockAcquired <- true:
-
-			<-unlockChan
-			lock.Unlock()
-		default:
-
-			lock.Unlock()
-		}
-	}()
-
-	select {
-	case <-lockAcquired:
-
-		defer close(unlockChan)
-	case <-time.After(lockTimeout):
-		logger.Warnf("Lock timeout for guild: %s", guildID)
-		return fmt.Errorf("play lock timeout")
+	release, isAcquired := playLocks.AcquireWithTimeout(guildID, playLockWait)
+	if !isAcquired {
+		logger.Debugf("Playback already active for guild: %s", guildID)
+		return ErrPlaybackAlreadyActive
 	}
+	defer release()
 
 	logger.Debugf("Lock acquired for guild: %s", guildID)
 
 	for {
-		result := playSingleSong(session, guildID)
+		result := playCurrentSong(session, guildID)
 		switch result {
 		case playContinue:
 

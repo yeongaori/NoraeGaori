@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"noraegaori/internal/lockmap"
 	"noraegaori/internal/logger"
 	"noraegaori/internal/queue"
 	"noraegaori/internal/youtube"
@@ -18,14 +19,18 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-var ErrQueueEmpty = errors.New("queue is empty after skip")
+var (
+	ErrQueueEmpty            = errors.New("queue is empty after skip")
+	ErrPlaybackAlreadyActive = errors.New("playback is already active for this guild")
+)
+
+var playLockWait = 2 * time.Second
 
 const (
-	channels    = dsp.Channels
-	frameRate   = dsp.SampleRate
-	frameSize   = dsp.FrameSize
-	maxRetries  = 3
-	lockTimeout = 30 * time.Second
+	channels   = dsp.Channels
+	frameRate  = dsp.SampleRate
+	frameSize  = dsp.FrameSize
+	maxRetries = 3
 
 	healthyPlaybackFrames = 500
 	maxOpusFrameBytes     = 1500
@@ -87,8 +92,7 @@ var (
 	players   = make(map[string]*GuildPlayer)
 	playersMu sync.RWMutex
 
-	playLocks   = make(map[string]*sync.Mutex)
-	playLocksMu sync.Mutex
+	playLocks lockmap.Map
 
 	loadingMessages   = make(map[string]*discordgo.Message)
 	loadingMessagesMu sync.RWMutex
@@ -111,6 +115,8 @@ var (
 
 	resumePlayback = playInternal
 
+	playCurrentSong func(*discordgo.Session, string) playResult
+
 	getLiveStreamPipe = func(url string, sponsorBlock bool, bitrate, seekTime int) (io.ReadCloser, error) {
 		return youtube.GetStreamPipe(url, sponsorBlock, bitrate, seekTime)
 	}
@@ -129,6 +135,7 @@ var (
 )
 
 func init() {
+	playCurrentSong = playSingleSong
 	joinVoiceChannel = JoinVoice
 	announceNowPlaying = sendNowPlayingMessage
 	announceLeaving = sendLeavingMessage
@@ -170,16 +177,6 @@ type PreCache struct {
 	Timestamp  time.Time
 	CancelFunc context.CancelFunc
 	Analysis   *analysis.TrackAnalysis
-}
-
-func acquirePlayLock(guildID string) *sync.Mutex {
-	playLocksMu.Lock()
-	defer playLocksMu.Unlock()
-
-	if _, exists := playLocks[guildID]; !exists {
-		playLocks[guildID] = &sync.Mutex{}
-	}
-	return playLocks[guildID]
 }
 
 func GetPlayer(guildID string) *GuildPlayer {

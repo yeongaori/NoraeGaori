@@ -2,6 +2,7 @@ package player
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -410,8 +411,8 @@ func Skip(session *discordgo.Session, guildID string) error {
 
 		if err := resumePlayback(session, guildID); err != nil {
 
-			if err.Error() == "play lock timeout" {
-				logger.Debugf("Play lock timeout for guild %s (expected during rapid skips)", guildID)
+			if errors.Is(err, ErrPlaybackAlreadyActive) {
+				logger.Debugf("Playback already active for guild %s (expected during rapid skips)", guildID)
 			} else {
 				logger.Errorf("Failed to play next song: %v", err)
 			}
@@ -475,8 +476,8 @@ func SkipTo(session *discordgo.Session, guildID string) error {
 		}
 
 		if err := playInternal(session, guildID); err != nil {
-			if err.Error() == "play lock timeout" {
-				logger.Debugf("Play lock timeout for guild %s (expected during rapid skips)", guildID)
+			if errors.Is(err, ErrPlaybackAlreadyActive) {
+				logger.Debugf("Playback already active for guild %s (expected during rapid skips)", guildID)
 			} else {
 				logger.Errorf("Failed to play: %v", err)
 			}
@@ -572,8 +573,8 @@ func skipInternal(session *discordgo.Session, guildID string) error {
 
 		if err := playInternal(session, guildID); err != nil {
 
-			if err.Error() == "play lock timeout" {
-				logger.Debugf("Play lock timeout for guild %s (expected during rapid skips)", guildID)
+			if errors.Is(err, ErrPlaybackAlreadyActive) {
+				logger.Debugf("Playback already active for guild %s (expected during rapid skips)", guildID)
 			} else {
 				logger.Errorf("Failed to play next song: %v", err)
 			}
