@@ -51,8 +51,7 @@ func HandleSkipTo(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return err
 	}
 
-	p := player.GetPlayer(i.GuildID)
-	if p.Playing || p.Loading {
+	if player.IsPlaybackActive(i.GuildID) {
 		if err := player.SkipTo(s, i.GuildID); err != nil {
 			discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
 				fmt.Sprintf(messages.T(i.GuildID).Queue.SkipToFailed, err)))

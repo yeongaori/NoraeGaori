@@ -142,8 +142,7 @@ func countPlayingGuilds(s *discordgo.Session) int {
 	count := 0
 
 	for _, guild := range s.State.Guilds {
-		p := player.GetPlayer(guild.ID)
-		if p.Playing {
+		if player.IsPlaybackActive(guild.ID) {
 			count++
 		}
 	}

@@ -249,7 +249,9 @@ func ResumeOrStart(session *discordgo.Session, guildID string) {
 	if paused {
 		logger.Debugf("Resuming playback for guild: %s", guildID)
 		go func() {
-			if err := Resume(session, guildID); err != nil {
+			if err := Resume(session, guildID); errors.Is(err, ErrPlaybackAlreadyActive) {
+				logger.Debugf("Playback already active for guild %s", guildID)
+			} else if err != nil {
 				logger.Warnf("Failed to resume playback for guild %s: %v", guildID, err)
 			}
 		}()
@@ -258,7 +260,9 @@ func ResumeOrStart(session *discordgo.Session, guildID string) {
 
 	logger.Debugf("Starting playback for guild: %s", guildID)
 	go func() {
-		if err := Play(session, guildID); err != nil {
+		if err := Play(session, guildID); errors.Is(err, ErrPlaybackAlreadyActive) {
+			logger.Debugf("Playback already active for guild %s", guildID)
+		} else if err != nil {
 			logger.Warnf("Failed to start playback for guild %s: %v", guildID, err)
 		}
 	}()
@@ -285,7 +289,7 @@ func resumeInternal(session *discordgo.Session, guildID string) error {
 				player.mu.Unlock()
 
 				logger.Infof("Skipping to next song after ended live stream")
-				return playInternal(session, guildID)
+				return startPlaybackSession(session, guildID)
 			}
 		}
 	}
@@ -299,7 +303,7 @@ func resumeInternal(session *discordgo.Session, guildID string) error {
 	ClearAutoPauseTimer(guildID)
 
 	logger.Debugf("Resuming playback for guild: %s", guildID)
-	return playInternal(session, guildID)
+	return startPlaybackSession(session, guildID)
 }
 
 func Skip(session *discordgo.Session, guildID string) error {
@@ -376,26 +380,7 @@ func Skip(session *discordgo.Session, guildID string) error {
 		return ErrQueueEmpty
 	}
 
-	go func() {
-		player := GetPlayer(guildID)
-		player.mu.Lock()
-		alreadyActive := player.Playing || player.Loading
-		player.mu.Unlock()
-
-		if alreadyActive {
-			logger.Debugf("Play operation already in progress for guild %s, skipping redundant play call", guildID)
-			return
-		}
-
-		if err := resumePlayback(session, guildID); err != nil {
-
-			if errors.Is(err, ErrPlaybackAlreadyActive) {
-				logger.Debugf("Playback already active for guild %s (expected during rapid skips)", guildID)
-			} else {
-				logger.Errorf("Failed to play next song: %v", err)
-			}
-		}
-	}()
+	startNextSongAsync(session, guildID)
 
 	return nil
 }
@@ -442,25 +427,7 @@ func SkipTo(session *discordgo.Session, guildID string) error {
 
 	logger.Debugf("Starting playback of target song for guild: %s", guildID)
 
-	go func() {
-		player := GetPlayer(guildID)
-		player.mu.Lock()
-		alreadyActive := player.Playing || player.Loading
-		player.mu.Unlock()
-
-		if alreadyActive {
-			logger.Debugf("Play operation already in progress for guild %s", guildID)
-			return
-		}
-
-		if err := playInternal(session, guildID); err != nil {
-			if errors.Is(err, ErrPlaybackAlreadyActive) {
-				logger.Debugf("Playback already active for guild %s (expected during rapid skips)", guildID)
-			} else {
-				logger.Errorf("Failed to play: %v", err)
-			}
-		}
-	}()
+	startNextSongAsync(session, guildID)
 
 	return nil
 }
@@ -538,26 +505,7 @@ func skipInternal(session *discordgo.Session, guildID string) error {
 		return ErrQueueEmpty
 	}
 
-	go func() {
-		player := GetPlayer(guildID)
-		player.mu.Lock()
-		alreadyActive := player.Playing || player.Loading
-		player.mu.Unlock()
-
-		if alreadyActive {
-			logger.Debugf("Play operation already in progress for guild %s, skipping redundant play call", guildID)
-			return
-		}
-
-		if err := playInternal(session, guildID); err != nil {
-
-			if errors.Is(err, ErrPlaybackAlreadyActive) {
-				logger.Debugf("Playback already active for guild %s (expected during rapid skips)", guildID)
-			} else {
-				logger.Errorf("Failed to play next song: %v", err)
-			}
-		}
-	}()
+	startNextSongAsync(session, guildID)
 
 	return nil
 }
@@ -662,4 +610,19 @@ func stopInternal(guildID string) error {
 	DeletePlayer(guildID)
 	logger.Debugf("Stopped playback for guild: %s", guildID)
 	return nil
+}
+
+func startNextSongAsync(session *discordgo.Session, guildID string) {
+	if IsPlaybackActive(guildID) {
+		logger.Debugf("Play operation already in progress for guild %s, skipping redundant play call", guildID)
+		return
+	}
+
+	if err := resumePlayback(session, guildID); err != nil {
+		if errors.Is(err, ErrPlaybackAlreadyActive) {
+			logger.Debugf("Playback already active for guild %s (expected during rapid skips)", guildID)
+		} else {
+			logger.Errorf("Failed to play next song: %v", err)
+		}
+	}
 }

@@ -66,7 +66,7 @@ func (player *GuildPlayer) processCommands() {
 func (player *GuildPlayer) defaultDispatch(cmd PlayerCommand) error {
 	switch cmd.Type {
 	case "play":
-		return playInternal(cmd.Session, cmd.GuildID)
+		return startPlaybackSession(cmd.Session, cmd.GuildID)
 	case "skip":
 		logger.Debugf("Processing skip command for guild: %s", player.GuildID)
 		return skipInternal(cmd.Session, cmd.GuildID)
@@ -89,29 +89,38 @@ func Play(session *discordgo.Session, guildID string) error {
 	})
 }
 
-func playInternal(session *discordgo.Session, guildID string) error {
-
+func startPlaybackSession(session *discordgo.Session, guildID string) error {
 	release, isAcquired := playLocks.AcquireWithTimeout(guildID, playLockWait)
 	if !isAcquired {
 		logger.Debugf("Playback already active for guild: %s", guildID)
 		return ErrPlaybackAlreadyActive
 	}
-	defer release()
 
 	logger.Debugf("Lock acquired for guild: %s", guildID)
+	go runPlaybackSession(session, guildID, release)
 
-	for {
-		result := playCurrentSong(session, guildID)
-		switch result {
-		case playContinue:
+	return nil
+}
 
-			continue
-		case playStop:
+func runPlaybackSession(session *discordgo.Session, guildID string, release func()) {
+	defer release()
+	defer recoverPlaybackSession(guildID)
 
-			return nil
-		case playError:
-
-			return fmt.Errorf("playback error")
-		}
+	for playCurrentSong(session, guildID) != playStop {
 	}
+}
+
+func recoverPlaybackSession(guildID string) {
+	reason := recover()
+	if reason == nil {
+		return
+	}
+
+	logger.Errorf("Playback session panicked for guild %s: %v", guildID, reason)
+
+	player := GetPlayer(guildID)
+	player.mu.Lock()
+	player.Playing = false
+	player.Loading = false
+	player.mu.Unlock()
 }

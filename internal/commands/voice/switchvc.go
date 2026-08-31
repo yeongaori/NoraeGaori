@@ -25,8 +25,7 @@ func HandleSwitchVC(s *discordgo.Session, i *discordgo.InteractionCreate) error 
 		targetChannelID = voiceState.ChannelID
 	}
 
-	p := player.GetPlayer(i.GuildID)
-	wasPlaying := p != nil && p.Playing
+	wasPlaying := player.IsPlaybackActive(i.GuildID)
 
 	q, _ := queue.GetQueue(i.GuildID, false)
 	hasSongs := q != nil && len(q.Songs) > 0

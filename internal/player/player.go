@@ -120,7 +120,7 @@ var (
 	onPlaybackEndedCallback func(guildID string)
 	callbackMu              sync.RWMutex
 
-	resumePlayback = playInternal
+	resumePlayback func(*discordgo.Session, string) error
 
 	playCurrentSong func(*discordgo.Session, string) playResult
 
@@ -143,6 +143,7 @@ var (
 
 func init() {
 	playCurrentSong = playSingleSong
+	resumePlayback = startPlaybackSession
 	joinVoiceChannel = JoinVoice
 	announceNowPlaying = sendNowPlayingMessage
 	announceLeaving = sendLeavingMessage
@@ -184,6 +185,15 @@ type PreCache struct {
 	Timestamp  time.Time
 	CancelFunc context.CancelFunc
 	Analysis   *analysis.TrackAnalysis
+}
+
+func IsPlaybackActive(guildID string) bool {
+	player := GetPlayer(guildID)
+
+	player.mu.Lock()
+	defer player.mu.Unlock()
+
+	return player.Playing || player.Loading
 }
 
 func GetPlayer(guildID string) *GuildPlayer {

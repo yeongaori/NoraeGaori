@@ -17,7 +17,6 @@ type playResult int
 const (
 	playContinue playResult = iota
 	playStop
-	playError
 )
 
 func prepareVoiceConnection(session *discordgo.Session, player *GuildPlayer, guildID, voiceChannelID string) error {
