@@ -1,13 +1,12 @@
 package player
 
 import (
+	"errors"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
 
-	"noraegaori/internal/database"
 	"noraegaori/internal/queue"
 )
 
@@ -26,8 +25,8 @@ func newTestPlayer(guildID string, handler func(PlayerCommand) error) *GuildPlay
 	return p
 }
 
-func (p *GuildPlayer) stopTestProcessor() {
-	close(p.QuitChan)
+func (player *GuildPlayer) stopTestProcessor() {
+	close(player.QuitChan)
 }
 
 func sendTestCommand(p *GuildPlayer, cmdType string) chan error {
@@ -142,33 +141,8 @@ func TestDispatchUnknownCommand(t *testing.T) {
 }
 
 func TestForceSkipSpamAdvancesQueueCleanly(t *testing.T) {
-	os.RemoveAll("data")
-	if err := database.Initialize(); err != nil {
-		t.Fatalf("db init: %v", err)
-	}
-	defer func() {
-		database.Close()
-		os.RemoveAll("data")
-	}()
-
 	guildID := "spamguild"
-	if err := queue.CreateQueue(guildID, "text", "voice"); err != nil {
-		t.Fatalf("create queue: %v", err)
-	}
-	defer queue.DeleteQueue(guildID)
-
-	for i := 0; i < 2; i++ {
-		song := &queue.Song{
-			URL:            fmt.Sprintf("https://youtube.com/watch?v=spam%d", i),
-			Title:          fmt.Sprintf("Spam %d", i),
-			Duration:       "3:00",
-			RequestedByID:  "user1",
-			RequestedByTag: "User#1234",
-		}
-		if err := queue.AddSong(guildID, song, -1); err != nil {
-			t.Fatalf("seed: %v", err)
-		}
-	}
+	setupPlayerDB(t, guildID, 2)
 
 	p := newTestPlayer(guildID, func(cmd PlayerCommand) error {
 		if cmd.Type == "skip" {
@@ -238,3 +212,151 @@ func TestCommandChanBufferFull(t *testing.T) {
 	default:
 	}
 }
+
+func registerTestPlayer(t *testing.T, guildID string, handler func(PlayerCommand) error) *GuildPlayer {
+	t.Helper()
+
+	p := newTestPlayer(guildID, handler)
+	playersMu.Lock()
+	players[guildID] = p
+	playersMu.Unlock()
+
+	t.Cleanup(func() {
+		playersMu.Lock()
+		delete(players, guildID)
+		playersMu.Unlock()
+		p.stopTestProcessor()
+		clearAnnounced(guildID)
+	})
+
+	return p
+}
+
+func TestResumeOrStartAnnouncesResumedSong(t *testing.T) {
+	guildID := "resumeannounce"
+
+	dispatched := make(chan string, 4)
+	p := registerTestPlayer(t, guildID, func(cmd PlayerCommand) error {
+		dispatched <- cmd.Type
+		return nil
+	})
+
+	p.mu.Lock()
+	p.Paused = true
+	p.mu.Unlock()
+
+	markAnnounced(guildID, 7)
+
+	ResumeOrStart(nil, guildID)
+
+	select {
+	case cmdType := <-dispatched:
+		if cmdType != "resume" {
+			t.Errorf("want resume command, got %s", cmdType)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("paused player was never resumed")
+	}
+
+	if !markAnnounced(guildID, 7) {
+		t.Error("resumed song is still marked announced, so no now playing message would be sent")
+	}
+}
+
+func TestResumeOrStartLeavesActivePlaybackAlone(t *testing.T) {
+	guildID := "resumeactive"
+
+	dispatched := make(chan string, 4)
+	p := registerTestPlayer(t, guildID, func(cmd PlayerCommand) error {
+		dispatched <- cmd.Type
+		return nil
+	})
+
+	p.mu.Lock()
+	p.Playing = true
+	p.mu.Unlock()
+
+	markAnnounced(guildID, 7)
+
+	ResumeOrStart(nil, guildID)
+
+	select {
+	case cmdType := <-dispatched:
+		t.Errorf("playing player should not be restarted, got %s command", cmdType)
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	if markAnnounced(guildID, 7) {
+		t.Error("announcement state was cleared while the song was still playing")
+	}
+}
+
+func TestResumeOrStartAnnouncesFirstStartedSong(t *testing.T) {
+	guildID := "resumeidle"
+
+	dispatched := make(chan string, 4)
+	registerTestPlayer(t, guildID, func(cmd PlayerCommand) error {
+		dispatched <- cmd.Type
+		return nil
+	})
+
+	markAnnounced(guildID, 7)
+
+	ResumeOrStart(nil, guildID)
+
+	select {
+	case cmdType := <-dispatched:
+		if cmdType != "play" {
+			t.Errorf("want play command, got %s", cmdType)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("idle player never started playback")
+	}
+
+	if !markAnnounced(guildID, 7) {
+		t.Error("started song is still marked announced, so no now playing message would be sent")
+	}
+}
+
+func TestDeletePlayerKeepsCommandDeliveryHonest(t *testing.T) {
+	guildID := "deletedguild"
+
+	stale := GetPlayer(guildID)
+	DeletePlayer(guildID)
+
+	t.Cleanup(func() { DeletePlayer(guildID) })
+
+	if err := sendCommandToPlayer(guildID, PlayerCommand{Type: inertCommandType, GuildID: guildID}); err != nil {
+		t.Fatalf("send after DeletePlayer returned %v, want delivery to a fresh player", err)
+	}
+
+	if live := GetPlayer(guildID); live == stale {
+		t.Fatal("command was delivered to the deleted player instead of a fresh one")
+	}
+}
+
+func TestConcurrentSendAndDeleteNeverPanic(t *testing.T) {
+	guildID := "racyguild"
+	t.Cleanup(func() { DeletePlayer(guildID) })
+
+	var waitGroup sync.WaitGroup
+	for index := 0; index < 40; index++ {
+		waitGroup.Add(1)
+		go func(shouldDelete bool) {
+			defer waitGroup.Done()
+
+			if shouldDelete {
+				DeletePlayer(guildID)
+				return
+			}
+
+			err := sendCommandToPlayer(guildID, PlayerCommand{Type: inertCommandType, GuildID: guildID})
+			if err != nil && !errors.Is(err, ErrCommandQueueFull) {
+				t.Errorf("send returned an undeclared error: %v", err)
+			}
+		}(index%2 == 0)
+	}
+	waitGroup.Wait()
+}
+
+const inertCommandType = "test-inert"

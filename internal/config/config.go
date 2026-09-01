@@ -7,8 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 
-	"noraegaori/pkg/logger"
+	"noraegaori/internal/logger"
 
 	"github.com/fsnotify/fsnotify"
 )
@@ -20,17 +21,23 @@ type Config struct {
 	DefaultVolume        float64 `json:"default_volume"`
 	MaxDownloadSpeedMbps float64 `json:"max_download_speed_mbps"`
 	LogFile              string  `json:"log_file"`
+	YtDlpChannel         string  `json:"ytdlp_channel"`
 }
+
+const (
+	YtDlpChannelAuto    = "auto"
+	YtDlpChannelStable  = "stable"
+	YtDlpChannelNightly = "nightly"
+)
 
 type AdminsConfig struct {
 	Admins []string `json:"admins"`
 }
 
 var (
-	config      *Config
-	adminsConf  *AdminsConfig
-	configMux   sync.RWMutex
-	adminsMux   sync.RWMutex
+	config      atomic.Pointer[Config]
+	adminsConf  atomic.Pointer[AdminsConfig]
+	configWrite sync.Mutex
 	watcher     *fsnotify.Watcher
 	configPath  = "config/config.json"
 	adminsPath  = "config/admins.json"
@@ -89,6 +96,7 @@ func loadConfig() error {
 			DefaultVolume:        100,
 			MaxDownloadSpeedMbps: 10.0,
 			LogFile:              "latest.log",
+			YtDlpChannel:         YtDlpChannelAuto,
 		}
 		if err := saveConfig(defaultConfig); err != nil {
 			return fmt.Errorf("failed to create default config: %w", err)
@@ -127,12 +135,19 @@ func loadConfig() error {
 		cfg.LogFile = "latest.log"
 	}
 
-	configMux.Lock()
-	config = &cfg
-	configMux.Unlock()
+	switch cfg.YtDlpChannel {
+	case YtDlpChannelAuto, YtDlpChannelStable, YtDlpChannelNightly:
+	case "":
+		cfg.YtDlpChannel = YtDlpChannelAuto
+	default:
+		logger.Warnf("Invalid ytdlp_channel=%q, falling back to %q", cfg.YtDlpChannel, YtDlpChannelAuto)
+		cfg.YtDlpChannel = YtDlpChannelAuto
+	}
 
-	logger.Infof("Loaded config: prefix=%s, language=%s, volume=%g, max_download_speed=%.1fMbps",
-		cfg.Prefix, cfg.Language, cfg.DefaultVolume, cfg.MaxDownloadSpeedMbps)
+	config.Store(&cfg)
+
+	logger.Infof("Loaded config: prefix=%s, language=%s, volume=%g, max_download_speed=%.1fMbps, ytdlp_channel=%s",
+		cfg.Prefix, cfg.Language, cfg.DefaultVolume, cfg.MaxDownloadSpeedMbps, cfg.YtDlpChannel)
 	return nil
 }
 
@@ -158,9 +173,7 @@ func loadAdmins() error {
 		return fmt.Errorf("failed to parse admins file: %w", err)
 	}
 
-	adminsMux.Lock()
-	adminsConf = &admins
-	adminsMux.Unlock()
+	adminsConf.Store(&admins)
 
 	logger.Infof("Loaded %d admin users", len(admins.Admins))
 	return nil
@@ -182,6 +195,83 @@ func saveAdmins(admins *AdminsConfig) error {
 	return os.WriteFile(adminsPath, data, 0644)
 }
 
+func isDuplicateWriteEvent(absPath string, fileInfo os.FileInfo) bool {
+	if fileInfo == nil {
+		return false
+	}
+
+	currentModTime := fileInfo.ModTime().UnixNano()
+
+	modTimeMux.RLock()
+	lastMod, exists := lastModTime[absPath]
+	modTimeMux.RUnlock()
+
+	if exists && lastMod == currentModTime {
+		return true
+	}
+
+	modTimeMux.Lock()
+	lastModTime[absPath] = currentModTime
+	modTimeMux.Unlock()
+
+	return false
+}
+
+func notifyReloadCallbacks() {
+	onReloadMux.Lock()
+	callbacks := make([]func(), len(onReloadCallbacks))
+	copy(callbacks, onReloadCallbacks)
+	onReloadMux.Unlock()
+
+	for _, fn := range callbacks {
+		fn()
+	}
+}
+
+func reloadWatchedFile(absPath string) {
+	configAbsPath, _ := filepath.Abs(configPath)
+	adminsAbsPath, _ := filepath.Abs(adminsPath)
+
+	switch absPath {
+	case configAbsPath:
+		if err := loadConfig(); err != nil {
+			logger.Errorf("Failed to reload config: %v", err)
+			return
+		}
+		logger.Info("Configuration reloaded")
+		notifyReloadCallbacks()
+	case adminsAbsPath:
+		if err := loadAdmins(); err != nil {
+			logger.Errorf("Failed to reload admins: %v", err)
+			return
+		}
+		logger.Info("Admins configuration reloaded")
+	}
+}
+
+func handleWatchEvent(event fsnotify.Event) {
+	fileInfo, err := os.Stat(event.Name)
+	if err == nil {
+		logger.Debugf("Event: %s | Op: %s | File: %s | Size: %d | ModTime: %v",
+			event.String(), event.Op.String(), event.Name, fileInfo.Size(), fileInfo.ModTime().UnixNano())
+	} else {
+		logger.Debugf("Event: %s | Op: %s | File: %s | (stat error: %v)",
+			event.String(), event.Op.String(), event.Name, err)
+	}
+
+	if event.Op&fsnotify.Write != fsnotify.Write {
+		return
+	}
+
+	absPath, _ := filepath.Abs(event.Name)
+	if isDuplicateWriteEvent(absPath, fileInfo) {
+		logger.Debugf("Skipping duplicate event for %s (same ModTime)", event.Name)
+		return
+	}
+
+	reloadWatchedFile(absPath)
+}
+
 func watchFiles() {
 	for {
 		select {
@@ -189,60 +279,7 @@ func watchFiles() {
 			if !ok {
 				return
 			}
-
-			fileInfo, err := os.Stat(event.Name)
-			if err == nil {
-				logger.Debugf("[Config Watcher] Event: %s | Op: %s | File: %s | Size: %d | ModTime: %v",
-					event.String(), event.Op.String(), event.Name, fileInfo.Size(), fileInfo.ModTime().UnixNano())
-			} else {
-				logger.Debugf("[Config Watcher] Event: %s | Op: %s | File: %s | (stat error: %v)",
-					event.String(), event.Op.String(), event.Name, err)
-			}
-
-			if event.Op&fsnotify.Write == fsnotify.Write {
-				absPath, _ := filepath.Abs(event.Name)
-				configAbsPath, _ := filepath.Abs(configPath)
-				adminsAbsPath, _ := filepath.Abs(adminsPath)
-
-				if fileInfo != nil {
-					currentModTime := fileInfo.ModTime().UnixNano()
-
-					modTimeMux.RLock()
-					lastMod, exists := lastModTime[absPath]
-					modTimeMux.RUnlock()
-
-					if exists && lastMod == currentModTime {
-						logger.Debugf("[Config Watcher] Skipping duplicate event for %s (same ModTime)", event.Name)
-						continue
-					}
-
-					modTimeMux.Lock()
-					lastModTime[absPath] = currentModTime
-					modTimeMux.Unlock()
-				}
-
-				if absPath == configAbsPath {
-					if err := loadConfig(); err != nil {
-						logger.Errorf("Failed to reload config: %v", err)
-					} else {
-						logger.Info("Configuration reloaded")
-
-						onReloadMux.Lock()
-						cbs := make([]func(), len(onReloadCallbacks))
-						copy(cbs, onReloadCallbacks)
-						onReloadMux.Unlock()
-						for _, fn := range cbs {
-							fn()
-						}
-					}
-				} else if absPath == adminsAbsPath {
-					if err := loadAdmins(); err != nil {
-						logger.Errorf("Failed to reload admins: %v", err)
-					} else {
-						logger.Info("Admins configuration reloaded")
-					}
-				}
-			}
+			handleWatchEvent(event)
 		case err, ok := <-watcher.Errors:
 			if !ok {
 				return
@@ -253,41 +290,45 @@ func watchFiles() {
 }
 
 func GetConfig() *Config {
-	configMux.RLock()
-	defer configMux.RUnlock()
-	return config
+	return config.Load()
 }
 
 func SetPrefix(prefix string) error {
-	configMux.Lock()
-	defer configMux.Unlock()
+	configWrite.Lock()
+	defer configWrite.Unlock()
 
-	config.Prefix = prefix
+	current := config.Load()
+	if current == nil {
+		return fmt.Errorf("config is not initialized")
+	}
 
-	if err := saveConfig(config); err != nil {
+	updated := *current
+	updated.Prefix = prefix
+
+	if err := saveConfig(&updated); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	logger.Infof("[Config] Prefix updated to: %s", prefix)
+	config.Store(&updated)
+
+	logger.Infof("Prefix updated to: %s", prefix)
 	return nil
 }
 
 func GetAdmins() []string {
-	adminsMux.RLock()
-	defer adminsMux.RUnlock()
-	if adminsConf == nil {
+	current := adminsConf.Load()
+	if current == nil {
 		return []string{}
 	}
-	return adminsConf.Admins
+	return current.Admins
 }
 
 func IsAdmin(userID string) bool {
-	adminsMux.RLock()
-	defer adminsMux.RUnlock()
-	if adminsConf == nil {
+	current := adminsConf.Load()
+	if current == nil {
 		return false
 	}
-	for _, adminID := range adminsConf.Admins {
+	for _, adminID := range current.Admins {
 		if adminID == userID {
 			return true
 		}

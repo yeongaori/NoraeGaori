@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"noraegaori/locales"
 )
@@ -20,31 +21,72 @@ func SetGuildLangResolver(fn func(guildID string) (string, error)) {
 }
 
 var (
-	localeCacheMu sync.RWMutex
-	localeCache   = make(map[string]*Locale) 
+	localeCacheWrite sync.Mutex
+	localeCache      atomic.Pointer[map[string]*Locale]
 )
 
 type Locale struct {
-	Errors       ErrorMessages              `json:"errors"`
-	Titles       TitleMessages              `json:"titles"`
-	Fields       FieldMessages              `json:"fields"`
-	Descriptions DescriptionMessages        `json:"descriptions"`
-	Footers      FooterMessages             `json:"footers"`
-	Buttons      ButtonMessages             `json:"buttons"`
-	SelectMenus  SelectMenuMessages         `json:"select_menus"`
-	Votes        VoteMessages               `json:"votes"`
-	Help         HelpMessages               `json:"help"`
-	Commands     map[string]CommandStrings   `json:"commands"`
-	Voice        VoiceMessages              `json:"voice"`
-	Admin        AdminMessages              `json:"admin"`
-	Settings     SettingsMessages           `json:"settings"`
-	Status       StatusMessages             `json:"status"`
-	Music        MusicMessages              `json:"music"`
-	Queue        QueueMessages              `json:"queue"`
-	Player       PlayerMessages             `json:"player"`
-	YouTube      YouTubeMessages            `json:"youtube"`
-	VoiceHandler VoiceHandlerMessages       `json:"voice_handler"`
-	RPC          RPCMessages                `json:"rpc"`
+	Errors        ErrorMessages             `json:"errors"`
+	Titles        TitleMessages             `json:"titles"`
+	Fields        FieldMessages             `json:"fields"`
+	Descriptions  DescriptionMessages       `json:"descriptions"`
+	Footers       FooterMessages            `json:"footers"`
+	Buttons       ButtonMessages            `json:"buttons"`
+	SelectMenus   SelectMenuMessages        `json:"select_menus"`
+	Votes         VoteMessages              `json:"votes"`
+	Help          HelpMessages              `json:"help"`
+	Commands      map[string]CommandStrings `json:"commands"`
+	Voice         VoiceMessages             `json:"voice"`
+	Admin         AdminMessages             `json:"admin"`
+	Settings      SettingsMessages          `json:"settings"`
+	SettingsPanel SettingsPanelMessages     `json:"settings_panel"`
+	Status        StatusMessages            `json:"status"`
+	Music         MusicMessages             `json:"music"`
+	Queue         QueueMessages             `json:"queue"`
+	Player        PlayerMessages            `json:"player"`
+	YouTube       YouTubeMessages           `json:"youtube"`
+	VoiceHandler  VoiceHandlerMessages      `json:"voice_handler"`
+	RPC           RPCMessages               `json:"rpc"`
+	AutoMixPanel  AutoMixPanelMessages      `json:"automix_panel"`
+}
+
+type AutoMixPanelMessages struct {
+	Title                string            `json:"title"`
+	Description          string            `json:"description"`
+	EmptyTitle           string            `json:"empty_title"`
+	EmptyDesc            string            `json:"empty_desc"`
+	SelectPlaceholder    string            `json:"select_placeholder"`
+	RefreshButton        string            `json:"refresh_button"`
+	MixButton            string            `json:"mix_button"`
+	Analyzing            string            `json:"analyzing"`
+	Unknown              string            `json:"unknown"`
+	NowMarker            string            `json:"now_marker"`
+	OverrideMarker       string            `json:"override_marker"`
+	Legend               string            `json:"legend"`
+	RepeatSingleNotice   string            `json:"repeat_single_notice"`
+	AutoMixOffNotice     string            `json:"automix_off_notice"`
+	TransitionsOffNotice string            `json:"transitions_off_notice"`
+	OutroLabel           string            `json:"outro_label"`
+	OutroField           string            `json:"outro_field"`
+	EditorTitle          string            `json:"editor_title"`
+	OutgoingField        string            `json:"outgoing_field"`
+	IncomingField        string            `json:"incoming_field"`
+	CompatibilityField   string            `json:"compatibility_field"`
+	AutoRecipeField      string            `json:"auto_recipe_field"`
+	EffectiveField       string            `json:"effective_field"`
+	BPMDelta             string            `json:"bpm_delta"`
+	CamelotDistance      string            `json:"camelot_distance"`
+	Harmonic             string            `json:"harmonic"`
+	Clashing             string            `json:"clashing"`
+	AutoOption           string            `json:"auto_option"`
+	AutoOptionDesc       string            `json:"auto_option_desc"`
+	SourceAuto           string            `json:"source_auto"`
+	SourceGuild          string            `json:"source_guild"`
+	SourceSong           string            `json:"source_song"`
+	SongGone             string            `json:"song_gone"`
+	UpdateFailed         string            `json:"update_failed"`
+	CategoryLabels       map[string]string `json:"category_labels"`
+	StyleLabels          map[string]string `json:"style_labels"`
 }
 
 type ErrorMessages struct {
@@ -58,38 +100,40 @@ type ErrorMessages struct {
 	UnknownCommand        string `json:"unknown_command"`
 	CommandExecutionError string `json:"command_execution_error"`
 	MustBeInBotChannel    string `json:"must_be_in_bot_channel"`
+	GuildOnly             string `json:"guild_only"`
 }
 
 type TitleMessages struct {
-	Added        string `json:"added"`
-	Success      string `json:"success"`
-	Removed      string `json:"removed"`
-	Skipped      string `json:"skipped"`
-	Resumed      string `json:"resumed"`
-	Paused       string `json:"paused"`
-	RepeatAll    string `json:"repeat_all"`
-	RepeatSingle string `json:"repeat_single"`
-	RepeatOff    string `json:"repeat_off"`
-	Searching    string `json:"searching"`
-	Loading      string `json:"loading"`
-	NowPlaying   string `json:"now_playing"`
-	Queue        string `json:"queue"`
-	Help         string `json:"help"`
-	SearchResults   string `json:"search_results"`
-	PlaylistFound   string `json:"playlist_found"`
-	PlaylistAdded   string `json:"playlist_added"`
-	PlaylistStart   string `json:"playlist_start"`
-	SkipVote        string `json:"skip_vote"`
-	StopVote        string `json:"stop_vote"`
-	SystemInfo      string `json:"system_info"`
-	Warning         string `json:"warning"`
-	Duplicate       string `json:"duplicate"`
-	Unavailable     string `json:"unavailable"`
-	Error           string `json:"error"`
-	EmptyQueue      string `json:"empty_queue"`
-	NoSong          string `json:"no_song"`
-	NoPermission    string `json:"no_permission"`
-	AlreadyVoted    string `json:"already_voted"`
+	Added         string `json:"added"`
+	Success       string `json:"success"`
+	Removed       string `json:"removed"`
+	Skipped       string `json:"skipped"`
+	Resumed       string `json:"resumed"`
+	Paused        string `json:"paused"`
+	RepeatAll     string `json:"repeat_all"`
+	RepeatSingle  string `json:"repeat_single"`
+	RepeatOff     string `json:"repeat_off"`
+	Searching     string `json:"searching"`
+	Loading       string `json:"loading"`
+	NowPlaying    string `json:"now_playing"`
+	Queue         string `json:"queue"`
+	Help          string `json:"help"`
+	SearchResults string `json:"search_results"`
+	PlaylistFound string `json:"playlist_found"`
+	PlaylistAdded string `json:"playlist_added"`
+	PlaylistStart string `json:"playlist_start"`
+	SkipVote      string `json:"skip_vote"`
+	StopVote      string `json:"stop_vote"`
+	RemoveVote    string `json:"remove_vote"`
+	SystemInfo    string `json:"system_info"`
+	Warning       string `json:"warning"`
+	Duplicate     string `json:"duplicate"`
+	Unavailable   string `json:"unavailable"`
+	Error         string `json:"error"`
+	EmptyQueue    string `json:"empty_queue"`
+	NoSong        string `json:"no_song"`
+	NoPermission  string `json:"no_permission"`
+	AlreadyVoted  string `json:"already_voted"`
 }
 
 type FieldMessages struct {
@@ -99,6 +143,7 @@ type FieldMessages struct {
 	NextSong       string `json:"next_song"`
 	TotalSongs     string `json:"total_songs"`
 	CurrentVote    string `json:"current_vote"`
+	AdderVote      string `json:"adder_vote"`
 	RequiredVote   string `json:"required_vote"`
 	VoteResult     string `json:"vote_result"`
 	RemovedSongs   string `json:"removed_songs"`
@@ -154,17 +199,22 @@ type VoteMessages struct {
 	More             string `json:"more"`
 	Expired          string `json:"expired"`
 	StopAlreadyVoted string `json:"stop_already_voted"`
+	InProgress       string `json:"in_progress"`
+	Cancelled        string `json:"cancelled"`
+	Superseded       string `json:"superseded"`
+	AllAddersAgreed  string `json:"all_adders_agreed"`
+	QueueEnded       string `json:"queue_ended"`
 }
 
 type HelpMessages struct {
-	CommandFormat     string `json:"command_format"`
-	AdminMarker       string `json:"admin_marker"`
-	NoCommandsTitle   string `json:"no_commands_title"`
-	NoCommandsDesc    string `json:"no_commands_desc"`
-	MessageLabel      string `json:"message_label"`
-	AliasLabel        string `json:"alias_label"`
-	SlashLabel        string `json:"slash_label"`
-	ExampleLabel      string `json:"example_label"`
+	CommandFormat      string `json:"command_format"`
+	AdminMarker        string `json:"admin_marker"`
+	NoCommandsTitle    string `json:"no_commands_title"`
+	NoCommandsDesc     string `json:"no_commands_desc"`
+	MessageLabel       string `json:"message_label"`
+	AliasLabel         string `json:"alias_label"`
+	SlashLabel         string `json:"slash_label"`
+	ExampleLabel       string `json:"example_label"`
 	TotalCommandsValue string `json:"total_commands_value"`
 }
 
@@ -197,197 +247,232 @@ type VoiceMessages struct {
 }
 
 type AdminMessages struct {
-	MentionTarget      string `json:"mention_target"`
-	NoSongsToDelete    string `json:"no_songs_to_delete"`
-	InvalidMention     string `json:"invalid_mention"`
-	UserNotFound       string `json:"user_not_found"`
-	UserNoSongs        string `json:"user_no_songs"`
-	ExcludingCurrent   string `json:"excluding_current"`
-	RemoveFailed       string `json:"remove_failed"`
+	MentionTarget       string `json:"mention_target"`
+	NoSongsToDelete     string `json:"no_songs_to_delete"`
+	InvalidMention      string `json:"invalid_mention"`
+	UserNotFound        string `json:"user_not_found"`
+	UserNoSongs         string `json:"user_no_songs"`
+	ExcludingCurrent    string `json:"excluding_current"`
+	RemoveFailed        string `json:"remove_failed"`
 	DeleteCompleteTitle string `json:"delete_complete_title"`
 	DeleteCompleteDesc  string `json:"delete_complete_desc"`
-	EnterPositions     string `json:"enter_positions"`
-	EnterValidRange    string `json:"enter_valid_range"`
-	SamePosition       string `json:"same_position"`
-	CannotMovePlaying  string `json:"cannot_move_playing"`
-	MoveFailed         string `json:"move_failed"`
-	MoveCompleteTitle  string `json:"move_complete_title"`
-	MoveCompleteDesc   string `json:"move_complete_desc"`
-	NoSongsTitle       string `json:"no_songs_title"`
-	NoSongsDesc        string `json:"no_songs_desc"`
-	StopFailed         string `json:"stop_failed"`
-	ForceStopTitle     string `json:"force_stop_title"`
-	ForceStopDesc      string `json:"force_stop_desc"`
+	EnterPositions      string `json:"enter_positions"`
+	EnterValidRange     string `json:"enter_valid_range"`
+	SamePosition        string `json:"same_position"`
+	CannotMovePlaying   string `json:"cannot_move_playing"`
+	MoveFailed          string `json:"move_failed"`
+	MoveCompleteTitle   string `json:"move_complete_title"`
+	MoveCompleteDesc    string `json:"move_complete_desc"`
+	NoSongsTitle        string `json:"no_songs_title"`
+	NoSongsDesc         string `json:"no_songs_desc"`
+	StopFailed          string `json:"stop_failed"`
+	ForceStopTitle      string `json:"force_stop_title"`
+	ForceStopDesc       string `json:"force_stop_desc"`
 }
 
 type SettingsMessages struct {
-	StatusOn              string `json:"status_on"`
-	StatusOff             string `json:"status_off"`
-	SponsorBlockError     string `json:"sponsorblock_error"`
-	SponsorBlockTitle     string `json:"sponsorblock_title"`
-	SponsorBlockDesc      string `json:"sponsorblock_desc"`
-	SponsorBlockWhatTitle string `json:"sponsorblock_what_title"`
-	SponsorBlockWhatDesc  string `json:"sponsorblock_what_desc"`
-	NoteTitle             string `json:"note_title"`
-	SettingApplyNext      string `json:"setting_apply_next"`
-	ShowTrackError        string `json:"showtrack_error"`
-	ShowTrackTitle        string `json:"showtrack_title"`
-	ShowTrackDesc         string `json:"showtrack_desc"`
-	ShowTrackWhatTitle    string `json:"showtrack_what_title"`
-	ShowTrackWhatDesc     string `json:"showtrack_what_desc"`
-	NormalizationError    string `json:"normalization_error"`
-	NormalizationTitle    string `json:"normalization_title"`
-	NormalizationDesc     string `json:"normalization_desc"`
-	NormalizationWhatTitle string `json:"normalization_what_title"`
-	NormalizationWhatDesc  string `json:"normalization_what_desc"`
-	FadeInError           string `json:"fadein_error"`
-	FadeInTitle           string `json:"fadein_title"`
-	FadeInDesc            string `json:"fadein_desc"`
-	FadeInWhatTitle       string `json:"fadein_what_title"`
-	FadeInWhatDesc        string `json:"fadein_what_desc"`
-	FadeInDurationLabel   string `json:"fadein_duration_label"`
-	FadeOutError          string `json:"fadeout_error"`
-	FadeOutTitle          string `json:"fadeout_title"`
-	FadeOutDesc           string `json:"fadeout_desc"`
-	FadeOutWhatTitle      string `json:"fadeout_what_title"`
-	FadeOutWhatDesc       string `json:"fadeout_what_desc"`
-	FadeOutDurationLabel  string `json:"fadeout_duration_label"`
-	AutoMixError          string `json:"automix_error"`
-	AutoMixTitle          string `json:"automix_title"`
-	AutoMixDesc           string `json:"automix_desc"`
-	AutoMixWhatTitle      string `json:"automix_what_title"`
-	AutoMixWhatDesc       string `json:"automix_what_desc"`
-	AutoMixBeatsLabel     string `json:"automix_beats_label"`
-	CrossfadeError        string `json:"crossfade_error"`
-	CrossfadeTitle        string `json:"crossfade_title"`
-	CrossfadeDesc         string `json:"crossfade_desc"`
-	CrossfadeWhatTitle    string `json:"crossfade_what_title"`
-	CrossfadeWhatDesc     string `json:"crossfade_what_desc"`
-	CrossfadeDurationLabel string `json:"crossfade_duration_label"`
-	FadeOnStopError       string `json:"fadeonstop_error"`
-	FadeOnStopTitle       string `json:"fadeonstop_title"`
-	FadeOnStopDesc        string `json:"fadeonstop_desc"`
-	FadeOnStopWhatTitle   string `json:"fadeonstop_what_title"`
-	FadeOnStopWhatDesc    string `json:"fadeonstop_what_desc"`
-	TrimSilenceError      string `json:"trimsilence_error"`
-	TrimSilenceTitle      string `json:"trimsilence_title"`
-	TrimSilenceDesc       string `json:"trimsilence_desc"`
-	TrimSilenceWhatTitle  string `json:"trimsilence_what_title"`
-	TrimSilenceWhatDesc   string `json:"trimsilence_what_desc"`
-	DurationLabel         string `json:"duration_label"`
-	PrefixEmpty           string `json:"prefix_empty"`
-	PrefixTooLong         string `json:"prefix_too_long"`
-	PrefixError           string `json:"prefix_error"`
-	PrefixChangedTitle    string `json:"prefix_changed_title"`
-	PrefixChangedDesc     string `json:"prefix_changed_desc"`
-	PrefixExampleTitle    string `json:"prefix_example_title"`
-	PrefixExampleValue    string `json:"prefix_example_value"`
-	PrefixResetTitle      string `json:"prefix_reset_title"`
-	PrefixResetDesc       string `json:"prefix_reset_desc"`
-	LanguageUnknown       string `json:"language_unknown"`
-	LanguageChangedTitle  string `json:"language_changed_title"`
-	LanguageChangedDesc   string `json:"language_changed_desc"`
-	LanguageResetTitle    string `json:"language_reset_title"`
-	LanguageResetDesc     string `json:"language_reset_desc"`
-	LanguageCurrentTitle  string `json:"language_current_title"`
-	LanguageCurrentDesc   string `json:"language_current_desc"`
-	LanguageSaveFailed    string `json:"language_save_failed"`
+	StatusOn                    string `json:"status_on"`
+	StatusOff                   string `json:"status_off"`
+	SponsorBlockError           string `json:"sponsorblock_error"`
+	SponsorBlockTitle           string `json:"sponsorblock_title"`
+	SponsorBlockDesc            string `json:"sponsorblock_desc"`
+	SponsorBlockWhatTitle       string `json:"sponsorblock_what_title"`
+	SponsorBlockWhatDesc        string `json:"sponsorblock_what_desc"`
+	NoteTitle                   string `json:"note_title"`
+	SettingApplyNext            string `json:"setting_apply_next"`
+	ShowTrackError              string `json:"showtrack_error"`
+	ShowTrackTitle              string `json:"showtrack_title"`
+	ShowTrackDesc               string `json:"showtrack_desc"`
+	ShowTrackWhatTitle          string `json:"showtrack_what_title"`
+	ShowTrackWhatDesc           string `json:"showtrack_what_desc"`
+	NormalizationError          string `json:"normalization_error"`
+	NormalizationTitle          string `json:"normalization_title"`
+	NormalizationDesc           string `json:"normalization_desc"`
+	NormalizationWhatTitle      string `json:"normalization_what_title"`
+	NormalizationWhatDesc       string `json:"normalization_what_desc"`
+	FadeInError                 string `json:"fadein_error"`
+	FadeInTitle                 string `json:"fadein_title"`
+	FadeInDesc                  string `json:"fadein_desc"`
+	FadeInWhatTitle             string `json:"fadein_what_title"`
+	FadeInWhatDesc              string `json:"fadein_what_desc"`
+	FadeInDurationLabel         string `json:"fadein_duration_label"`
+	FadeOutError                string `json:"fadeout_error"`
+	FadeOutTitle                string `json:"fadeout_title"`
+	FadeOutDesc                 string `json:"fadeout_desc"`
+	FadeOutWhatTitle            string `json:"fadeout_what_title"`
+	FadeOutWhatDesc             string `json:"fadeout_what_desc"`
+	FadeOutDurationLabel        string `json:"fadeout_duration_label"`
+	AutoMixError                string `json:"automix_error"`
+	AutoMixTitle                string `json:"automix_title"`
+	AutoMixDesc                 string `json:"automix_desc"`
+	AutoMixWhatTitle            string `json:"automix_what_title"`
+	AutoMixWhatDesc             string `json:"automix_what_desc"`
+	AutoMixBeatsLabel           string `json:"automix_beats_label"`
+	AutoMixStyleTitle           string `json:"automixstyle_title"`
+	AutoMixStyleDesc            string `json:"automixstyle_desc"`
+	AutoMixStyleWhatTitle       string `json:"automixstyle_what_title"`
+	AutoMixStyleWhatDesc        string `json:"automixstyle_what_desc"`
+	AutoMixStyleChanged         string `json:"automixstyle_changed"`
+	AutoMixStyleError           string `json:"automixstyle_error"`
+	AutoMixStyleInvalidCategory string `json:"automixstyle_invalid_category"`
+	AutoMixStyleInvalidValue    string `json:"automixstyle_invalid_value"`
+	CrossfadeError              string `json:"crossfade_error"`
+	CrossfadeTitle              string `json:"crossfade_title"`
+	CrossfadeDesc               string `json:"crossfade_desc"`
+	CrossfadeWhatTitle          string `json:"crossfade_what_title"`
+	CrossfadeWhatDesc           string `json:"crossfade_what_desc"`
+	CrossfadeDurationLabel      string `json:"crossfade_duration_label"`
+	FadeOnStopError             string `json:"fadeonstop_error"`
+	FadeOnStopTitle             string `json:"fadeonstop_title"`
+	FadeOnStopDesc              string `json:"fadeonstop_desc"`
+	FadeOnStopWhatTitle         string `json:"fadeonstop_what_title"`
+	FadeOnStopWhatDesc          string `json:"fadeonstop_what_desc"`
+	TrimSilenceError            string `json:"trimsilence_error"`
+	TrimSilenceTitle            string `json:"trimsilence_title"`
+	TrimSilenceDesc             string `json:"trimsilence_desc"`
+	TrimSilenceWhatTitle        string `json:"trimsilence_what_title"`
+	TrimSilenceWhatDesc         string `json:"trimsilence_what_desc"`
+	DurationLabel               string `json:"duration_label"`
+	PrefixEmpty                 string `json:"prefix_empty"`
+	PrefixTooLong               string `json:"prefix_too_long"`
+	PrefixError                 string `json:"prefix_error"`
+	PrefixChangedTitle          string `json:"prefix_changed_title"`
+	PrefixChangedDesc           string `json:"prefix_changed_desc"`
+	PrefixExampleTitle          string `json:"prefix_example_title"`
+	PrefixExampleValue          string `json:"prefix_example_value"`
+	PrefixResetTitle            string `json:"prefix_reset_title"`
+	PrefixResetDesc             string `json:"prefix_reset_desc"`
+	LanguageUnknown             string `json:"language_unknown"`
+	LanguageChangedTitle        string `json:"language_changed_title"`
+	LanguageChangedDesc         string `json:"language_changed_desc"`
+	LanguageResetTitle          string `json:"language_reset_title"`
+	LanguageResetDesc           string `json:"language_reset_desc"`
+	LanguageCurrentTitle        string `json:"language_current_title"`
+	LanguageCurrentDesc         string `json:"language_current_desc"`
+	LanguageSaveFailed          string `json:"language_save_failed"`
+}
+
+type SettingsPanelMessages struct {
+	Title               string            `json:"title"`
+	Description         string            `json:"description"`
+	CategoryPlaceholder string            `json:"category_placeholder"`
+	SettingPlaceholder  string            `json:"setting_placeholder"`
+	ChoicePlaceholder   string            `json:"choice_placeholder"`
+	BackOption          string            `json:"back_option"`
+	DefaultValue        string            `json:"default_value"`
+	DefaultOption       string            `json:"default_option"`
+	ModalTitle          string            `json:"modal_title"`
+	ModalFailed         string            `json:"modal_failed"`
+	NotAdmin            string            `json:"not_admin"`
+	NotNumber           string            `json:"not_number"`
+	NotInteger          string            `json:"not_integer"`
+	OutOfRange          string            `json:"out_of_range"`
+	TooLong             string            `json:"too_long"`
+	SaveFailed          string            `json:"save_failed"`
+	ReadFailed          string            `json:"read_failed"`
+	RepeatOff           string            `json:"repeat_off"`
+	RepeatAll           string            `json:"repeat_all"`
+	RepeatSingle        string            `json:"repeat_single"`
+	Categories          map[string]string `json:"categories"`
+	Labels              map[string]string `json:"labels"`
+	Hints               map[string]string `json:"hints"`
 }
 
 type StatusMessages struct {
-	LoadingTitle      string `json:"loading_title"`
-	LoadingDesc       string `json:"loading_desc"`
-	Title             string `json:"title"`
-	Description       string `json:"description"`
-	CPUInfoValue      string `json:"cpu_info_value"`
-	CPUUsageValue     string `json:"cpu_usage_value"`
-	TotalMemoryValue  string `json:"total_memory_value"`
-	MemoryUsageValue  string `json:"memory_usage_value"`
-	BotMemoryValue    string `json:"bot_memory_value"`
-	ServerMemoryValue string `json:"server_memory_value"`
+	LoadingTitle        string `json:"loading_title"`
+	LoadingDesc         string `json:"loading_desc"`
+	Title               string `json:"title"`
+	Description         string `json:"description"`
+	CPUInfoValue        string `json:"cpu_info_value"`
+	CPUUsageValue       string `json:"cpu_usage_value"`
+	TotalMemoryValue    string `json:"total_memory_value"`
+	MemoryUsageValue    string `json:"memory_usage_value"`
+	BotMemoryValue      string `json:"bot_memory_value"`
+	ServerMemoryValue   string `json:"server_memory_value"`
 	PlayingServersValue string `json:"playing_servers_value"`
 }
 
 type MusicMessages struct {
-	EnterQuery            string `json:"enter_query"`
-	QueueCreateFailed     string `json:"queue_create_failed"`
-	SongAddFailed         string `json:"song_add_failed"`
-	AddedAsNext           string `json:"added_as_next"`
-	PlaylistInfoFailed    string `json:"playlist_info_failed"`
-	PlaylistConfirmDesc   string `json:"playlist_confirm_desc"`
-	PlaylistConfirmFooter string `json:"playlist_confirm_footer"`
-	VideoUnavailableTitle string `json:"video_unavailable_title"`
-	VideoUnavailableDesc  string `json:"video_unavailable_desc"`
-	VideoUnavailableFooter string `json:"video_unavailable_footer"`
+	EnterQuery                 string `json:"enter_query"`
+	UnsupportedURL             string `json:"unsupported_url"`
+	QueueCreateFailed          string `json:"queue_create_failed"`
+	SongAddFailed              string `json:"song_add_failed"`
+	AddedAsNext                string `json:"added_as_next"`
+	PlaylistInfoFailed         string `json:"playlist_info_failed"`
+	PlaylistConfirmDesc        string `json:"playlist_confirm_desc"`
+	PlaylistConfirmFooter      string `json:"playlist_confirm_footer"`
+	VideoUnavailableTitle      string `json:"video_unavailable_title"`
+	VideoUnavailableDesc       string `json:"video_unavailable_desc"`
+	VideoUnavailableFooter     string `json:"video_unavailable_footer"`
 	VideoWithPlaylistDuplicate string `json:"video_with_playlist_duplicate"`
 	VideoWithPlaylistFound     string `json:"video_with_playlist_found"`
 	VideoWithPlaylistFooter    string `json:"video_with_playlist_footer"`
-	NotPlayingOrLoading   string `json:"not_playing_or_loading"`
-	PauseFailed           string `json:"pause_failed"`
-	NoSongsToResume       string `json:"no_songs_to_resume"`
-	AlreadyPlaying        string `json:"already_playing"`
-	PlaybackStartError    string `json:"playback_start_error"`
-	QueueNotFound         string `json:"queue_not_found"`
-	LiveCheckingTitle     string `json:"live_checking_title"`
-	LiveCheckingDesc      string `json:"live_checking_desc"`
-	LiveEndedTitle        string `json:"live_ended_title"`
-	LiveEndedNoQueue      string `json:"live_ended_no_queue"`
-	LiveEndedSkip         string `json:"live_ended_skip"`
-	LiveStartTitle        string `json:"live_start_title"`
-	LiveStartDesc         string `json:"live_start_desc"`
-	ResumeStartTitle      string `json:"resume_start_title"`
-	ResumeStartDesc       string `json:"resume_start_desc"`
-	EnterVoiceChannel     string `json:"enter_voice_channel"`
-	ServerInfoFailed      string `json:"server_info_failed"`
-	SkipFailedTitle       string `json:"skip_failed_title"`
-	SkipFailedDesc        string `json:"skip_failed_desc"`
-	SeekedTitle           string `json:"seeked_title"`
-	SeekedDesc            string `json:"seeked_desc"`
-	SeekInvalidFormat     string `json:"seek_invalid_format"`
-	SeekOutOfBounds       string `json:"seek_out_of_bounds"`
-	SeekLiveStream        string `json:"seek_live_stream"`
-	SeekFailed            string `json:"seek_failed"`
-	PlaybackEndedTitle    string `json:"playback_ended_title"`
-	PlaybackEndedSkip     string `json:"playback_ended_skip"`
-	ForceSkipped          string `json:"force_skipped"`
-	ForceSkippedEnded     string `json:"force_skipped_ended"`
-	StopFailedTitle       string `json:"stop_failed_title"`
-	StopFailedDesc        string `json:"stop_failed_desc"`
-	StopSuccessTitle      string `json:"stop_success_title"`
-	StopSuccessDesc       string `json:"stop_success_desc"`
-	StopAlreadyVoted      string `json:"stop_already_voted"`
-	NowPlayingLoading     string `json:"nowplaying_loading"`
-	NowPlayingPlaying     string `json:"nowplaying_playing"`
-	NowPlayingPaused      string `json:"nowplaying_paused"`
-	VolumeQueryFailed     string `json:"volume_query_failed"`
-	CurrentVolumeTitle    string `json:"current_volume_title"`
-	CurrentVolumeDesc     string `json:"current_volume_desc"`
-	VolumeNotNumber       string `json:"volume_not_number"`
-	VolumeOutOfRange      string `json:"volume_out_of_range"`
-	VolumeSetFailed       string `json:"volume_set_failed"`
-	VolumeSetTitle        string `json:"volume_set_title"`
-	VolumeSetDesc         string `json:"volume_set_desc"`
-	RepeatSetFailed       string `json:"repeat_set_failed"`
-	PlaylistAddingTitle   string `json:"playlist_adding_title"`
-	PlaylistAddingAll     string `json:"playlist_adding_all"`
-	PlaylistAddingRest    string `json:"playlist_adding_rest"`
-	PlaylistTimeoutTitle  string `json:"playlist_timeout_title"`
-	PlaylistTimeoutDesc   string `json:"playlist_timeout_desc"`
-	PlaylistCompleteDesc  string `json:"playlist_complete_desc"`
-	PlaylistSkippedCount  string `json:"playlist_skipped_count"`
-	PlaylistSkippedOrDup  string `json:"playlist_skipped_or_dup"`
-	PlaylistAddedCount    string `json:"playlist_added_count"`
-	PlaylistAddedSongs    string `json:"playlist_added_songs"`
-	PlaylistSongsUnit     string `json:"playlist_songs_unit"`
-	ErrorPrivateVideo     string `json:"error_private_video"`
-	ErrorDeletedVideo     string `json:"error_deleted_video"`
-	ErrorAgeRestricted    string `json:"error_age_restricted"`
-	ErrorGeoRestricted    string `json:"error_geo_restricted"`
-	ErrorMembersOnly      string `json:"error_members_only"`
-	ErrorPremiumOnly      string `json:"error_premium_only"`
-	ErrorCopyright        string `json:"error_copyright"`
-	ErrorBlocked          string `json:"error_blocked"`
-	ErrorUnavailable      string `json:"error_unavailable"`
+	NotPlayingOrLoading        string `json:"not_playing_or_loading"`
+	PauseFailed                string `json:"pause_failed"`
+	NoSongsToResume            string `json:"no_songs_to_resume"`
+	AlreadyPlaying             string `json:"already_playing"`
+	PlaybackStartError         string `json:"playback_start_error"`
+	QueueNotFound              string `json:"queue_not_found"`
+	LiveCheckingTitle          string `json:"live_checking_title"`
+	LiveCheckingDesc           string `json:"live_checking_desc"`
+	LiveEndedTitle             string `json:"live_ended_title"`
+	LiveEndedNoQueue           string `json:"live_ended_no_queue"`
+	LiveEndedSkip              string `json:"live_ended_skip"`
+	LiveStartTitle             string `json:"live_start_title"`
+	LiveStartDesc              string `json:"live_start_desc"`
+	ResumeStartTitle           string `json:"resume_start_title"`
+	ResumeStartDesc            string `json:"resume_start_desc"`
+	EnterVoiceChannel          string `json:"enter_voice_channel"`
+	ServerInfoFailed           string `json:"server_info_failed"`
+	SkipFailedTitle            string `json:"skip_failed_title"`
+	SkipFailedDesc             string `json:"skip_failed_desc"`
+	SeekedTitle                string `json:"seeked_title"`
+	SeekedDesc                 string `json:"seeked_desc"`
+	SeekInvalidFormat          string `json:"seek_invalid_format"`
+	SeekOutOfBounds            string `json:"seek_out_of_bounds"`
+	SeekLiveStream             string `json:"seek_live_stream"`
+	SeekFailed                 string `json:"seek_failed"`
+	PlaybackEndedTitle         string `json:"playback_ended_title"`
+	PlaybackEndedSkip          string `json:"playback_ended_skip"`
+	ForceSkipped               string `json:"force_skipped"`
+	ForceSkippedEnded          string `json:"force_skipped_ended"`
+	StopFailedTitle            string `json:"stop_failed_title"`
+	StopFailedDesc             string `json:"stop_failed_desc"`
+	StopSuccessTitle           string `json:"stop_success_title"`
+	StopSuccessDesc            string `json:"stop_success_desc"`
+	StopAlreadyVoted           string `json:"stop_already_voted"`
+	NowPlayingLoading          string `json:"nowplaying_loading"`
+	NowPlayingPlaying          string `json:"nowplaying_playing"`
+	NowPlayingPaused           string `json:"nowplaying_paused"`
+	VolumeQueryFailed          string `json:"volume_query_failed"`
+	CurrentVolumeTitle         string `json:"current_volume_title"`
+	CurrentVolumeDesc          string `json:"current_volume_desc"`
+	VolumeNotNumber            string `json:"volume_not_number"`
+	VolumeOutOfRange           string `json:"volume_out_of_range"`
+	VolumeSetFailed            string `json:"volume_set_failed"`
+	VolumeSetTitle             string `json:"volume_set_title"`
+	VolumeSetDesc              string `json:"volume_set_desc"`
+	RepeatSetFailed            string `json:"repeat_set_failed"`
+	PlaylistAddingTitle        string `json:"playlist_adding_title"`
+	PlaylistAddingAll          string `json:"playlist_adding_all"`
+	PlaylistAddingRest         string `json:"playlist_adding_rest"`
+	PlaylistTimeoutTitle       string `json:"playlist_timeout_title"`
+	PlaylistTimeoutDesc        string `json:"playlist_timeout_desc"`
+	PlaylistCompleteDesc       string `json:"playlist_complete_desc"`
+	PlaylistSkippedCount       string `json:"playlist_skipped_count"`
+	PlaylistSkippedOrDup       string `json:"playlist_skipped_or_dup"`
+	PlaylistAddedCount         string `json:"playlist_added_count"`
+	PlaylistAddedSongs         string `json:"playlist_added_songs"`
+	PlaylistSongsUnit          string `json:"playlist_songs_unit"`
+	ErrorPrivateVideo          string `json:"error_private_video"`
+	ErrorDeletedVideo          string `json:"error_deleted_video"`
+	ErrorAgeRestricted         string `json:"error_age_restricted"`
+	ErrorGeoRestricted         string `json:"error_geo_restricted"`
+	ErrorMembersOnly           string `json:"error_members_only"`
+	ErrorPremiumOnly           string `json:"error_premium_only"`
+	ErrorCopyright             string `json:"error_copyright"`
+	ErrorBlocked               string `json:"error_blocked"`
+	ErrorUnavailable           string `json:"error_unavailable"`
 }
 
 type QueueMessages struct {
@@ -405,6 +490,9 @@ type QueueMessages struct {
 	RangeRemoved         string `json:"range_removed"`
 	EnterValidRange      string `json:"enter_valid_range"`
 	CannotRemoveCurrent  string `json:"cannot_remove_current"`
+	RemoveVoteDesc       string `json:"remove_vote_desc"`
+	RemoveRangeVoteDesc  string `json:"remove_range_vote_desc"`
+	RemoveTargetGone     string `json:"remove_target_gone"`
 	OnlyOwnSongs         string `json:"only_own_songs"`
 	SongRemoved          string `json:"song_removed"`
 	EnterSearchQuery     string `json:"enter_search_query"`
@@ -440,50 +528,50 @@ type QueueMessages struct {
 }
 
 type PlayerMessages struct {
-	PlaybackStarted          string `json:"playback_started"`
-	NowPlaying               string `json:"now_playing"`
-	StreamReconnectedTitle   string `json:"stream_reconnected_title"`
-	StreamReconnectedDesc    string `json:"stream_reconnected_desc"`
-	StreamReconnectingTitle  string `json:"stream_reconnecting_title"`
-	StreamReconnectingDesc   string `json:"stream_reconnecting_desc"`
-	PlaybackFailedTitle      string `json:"playback_failed_title"`
+	PlaybackStarted            string `json:"playback_started"`
+	NowPlaying                 string `json:"now_playing"`
+	StreamReconnectedTitle     string `json:"stream_reconnected_title"`
+	StreamReconnectedDesc      string `json:"stream_reconnected_desc"`
+	StreamReconnectingTitle    string `json:"stream_reconnecting_title"`
+	StreamReconnectingDesc     string `json:"stream_reconnecting_desc"`
+	PlaybackFailedTitle        string `json:"playback_failed_title"`
 	StreamReconnectFailedTitle string `json:"stream_reconnect_failed_title"`
 	StreamReconnectFailedDesc  string `json:"stream_reconnect_failed_desc"`
-	MaxRetriesSkipping       string `json:"max_retries_skipping"`
-	LeavingEmptyDesc         string `json:"leaving_empty_desc"`
-	LeavingEmptyFooter       string `json:"leaving_empty_footer"`
-	LeavingErrorDesc         string `json:"leaving_error_desc"`
-	LeavingErrorFooter       string `json:"leaving_error_footer"`
-	LeavingDefaultDesc       string `json:"leaving_default_desc"`
-	ErrorPrivateVideo        string `json:"error_private_video"`
-	ErrorDeletedVideo        string `json:"error_deleted_video"`
-	ErrorAgeRestricted       string `json:"error_age_restricted"`
-	ErrorGeoRestricted       string `json:"error_geo_restricted"`
-	ErrorMembersOnly         string `json:"error_members_only"`
-	ErrorPremiumOnly         string `json:"error_premium_only"`
-	ErrorCopyright           string `json:"error_copyright"`
-	ErrorBlocked             string `json:"error_blocked"`
-	ErrorRemovedByUploader   string `json:"error_removed_by_uploader"`
-	ErrorAccountTerminated   string `json:"error_account_terminated"`
-	ErrorUnavailable         string `json:"error_unavailable"`
+	MaxRetriesSkipping         string `json:"max_retries_skipping"`
+	LeavingEmptyDesc           string `json:"leaving_empty_desc"`
+	LeavingEmptyFooter         string `json:"leaving_empty_footer"`
+	LeavingErrorDesc           string `json:"leaving_error_desc"`
+	LeavingErrorFooter         string `json:"leaving_error_footer"`
+	LeavingDefaultDesc         string `json:"leaving_default_desc"`
+	ErrorPrivateVideo          string `json:"error_private_video"`
+	ErrorDeletedVideo          string `json:"error_deleted_video"`
+	ErrorAgeRestricted         string `json:"error_age_restricted"`
+	ErrorGeoRestricted         string `json:"error_geo_restricted"`
+	ErrorMembersOnly           string `json:"error_members_only"`
+	ErrorPremiumOnly           string `json:"error_premium_only"`
+	ErrorCopyright             string `json:"error_copyright"`
+	ErrorBlocked               string `json:"error_blocked"`
+	ErrorRemovedByUploader     string `json:"error_removed_by_uploader"`
+	ErrorAccountTerminated     string `json:"error_account_terminated"`
+	ErrorUnavailable           string `json:"error_unavailable"`
 }
 
 type YouTubeMessages struct {
-	ErrorPrivateVideo     string `json:"error_private_video"`
-	ErrorAgeRestricted    string `json:"error_age_restricted"`
-	ErrorGeoRestricted    string `json:"error_geo_restricted"`
-	ErrorMembersOnly      string `json:"error_members_only"`
-	ErrorPremiumOnly      string `json:"error_premium_only"`
-	ErrorCopyright        string `json:"error_copyright"`
-	ErrorUnplayable       string `json:"error_unplayable"`
-	ErrorUnplayableReason string `json:"error_unplayable_reason"`
-	ErrorDeletedVideo     string `json:"error_deleted_video"`
-	ErrorUnavailable      string `json:"error_unavailable"`
+	ErrorPrivateVideo      string `json:"error_private_video"`
+	ErrorAgeRestricted     string `json:"error_age_restricted"`
+	ErrorGeoRestricted     string `json:"error_geo_restricted"`
+	ErrorMembersOnly       string `json:"error_members_only"`
+	ErrorPremiumOnly       string `json:"error_premium_only"`
+	ErrorCopyright         string `json:"error_copyright"`
+	ErrorUnplayable        string `json:"error_unplayable"`
+	ErrorUnplayableReason  string `json:"error_unplayable_reason"`
+	ErrorDeletedVideo      string `json:"error_deleted_video"`
+	ErrorUnavailable       string `json:"error_unavailable"`
 	ErrorUnavailableReason string `json:"error_unavailable_reason"`
-	ErrorContentCheck     string `json:"error_content_check"`
-	ErrorAgeVerification  string `json:"error_age_verification"`
-	ErrorRegionRestricted string `json:"error_region_restricted"`
-	ErrorPrivateOrDeleted string `json:"error_private_or_deleted"`
+	ErrorContentCheck      string `json:"error_content_check"`
+	ErrorAgeVerification   string `json:"error_age_verification"`
+	ErrorRegionRestricted  string `json:"error_region_restricted"`
+	ErrorPrivateOrDeleted  string `json:"error_private_or_deleted"`
 }
 
 type VoiceHandlerMessages struct {
@@ -498,31 +586,45 @@ type RPCMessages struct {
 	ActivityDefault4 string `json:"activity_default_4"`
 }
 
-var currentLocale = &Locale{}
+type localeState struct {
+	locale *Locale
+	lang   string
+}
 
-var currentLang = "en"
+var activeLocale atomic.Pointer[localeState]
+
+func init() {
+	activeLocale.Store(&localeState{locale: &Locale{}, lang: "en"})
+	localeCache.Store(&map[string]*Locale{})
+}
+
+func setActiveLocale(loc *Locale, lang string) {
+	activeLocale.Store(&localeState{locale: loc, lang: lang})
+}
 
 func T(guildID ...string) *Locale {
+	active := activeLocale.Load()
 	if len(guildID) == 0 || guildID[0] == "" || guildLangResolver == nil {
-		return currentLocale
+		return active.locale
 	}
 	lang, err := guildLangResolver(guildID[0])
-	if err != nil || lang == "" || lang == currentLang {
-		return currentLocale
+	if err != nil || lang == "" || lang == active.lang {
+		return active.locale
 	}
 	if loc := getCachedLocale(lang); loc != nil {
 		return loc
 	}
-	return currentLocale
+	return active.locale
 }
 
 func Lang(guildID ...string) string {
+	active := activeLocale.Load()
 	if len(guildID) == 0 || guildID[0] == "" || guildLangResolver == nil {
-		return currentLang
+		return active.lang
 	}
 	lang, err := guildLangResolver(guildID[0])
 	if err != nil || lang == "" {
-		return currentLang
+		return active.lang
 	}
 	return lang
 }
@@ -562,9 +664,7 @@ func localesDir() string {
 }
 
 func getCachedLocale(lang string) *Locale {
-	localeCacheMu.RLock()
-	loc, ok := localeCache[lang]
-	localeCacheMu.RUnlock()
+	loc, ok := (*localeCache.Load())[lang]
 	if ok {
 		return loc
 	}
@@ -572,9 +672,7 @@ func getCachedLocale(lang string) *Locale {
 	if err != nil {
 		return nil
 	}
-	localeCacheMu.Lock()
-	localeCache[lang] = loc
-	localeCacheMu.Unlock()
+	storeCachedLocale(lang, loc)
 	return loc
 }
 
@@ -603,35 +701,28 @@ func buildLocale(lang string) (*Locale, error) {
 }
 
 func InvalidateLocaleCache() {
-	localeCacheMu.Lock()
-	localeCache = make(map[string]*Locale)
-	localeCacheMu.Unlock()
+	localeCacheWrite.Lock()
+	localeCache.Store(&map[string]*Locale{})
+	localeCacheWrite.Unlock()
 }
 
 func LoadLocale(lang string) error {
-	currentLang = lang
-
 	loc, err := buildLocale(lang)
 	if err != nil {
-		
+
 		var base Locale
 		if jerr := json.Unmarshal(locales.EnglishLocale, &base); jerr != nil {
 			return fmt.Errorf("failed to parse embedded English fallback: %w", jerr)
 		}
-		currentLocale = &base
-		
-		localeCacheMu.Lock()
-		localeCache["en"] = &base
-		localeCacheMu.Unlock()
+		setActiveLocale(&base, lang)
+
+		storeCachedLocale("en", &base)
 		return fmt.Errorf("failed to load locale %q, falling back to English: %w", lang, err)
 	}
 
-	currentLocale = loc
+	setActiveLocale(loc, lang)
 
-	
-	localeCacheMu.Lock()
-	localeCache[lang] = loc
-	localeCacheMu.Unlock()
+	storeCachedLocale(lang, loc)
 	return nil
 }
 
@@ -640,7 +731,7 @@ func readLocaleFile(path string) ([]byte, error) {
 	if err == nil {
 		return data, nil
 	}
-	
+
 	_, filename, _, _ := runtime.Caller(0)
 	dir := filepath.Dir(filename)
 	altPath := filepath.Join(dir, "..", "..", path)
@@ -685,10 +776,9 @@ func mergeMap(base, overlay reflect.Value) {
 		overlayVal := overlay.MapIndex(key)
 		baseVal := base.MapIndex(key)
 
-		
 		mapElemType := base.Type().Elem()
 		if mapElemType.Kind() == reflect.Struct {
-			
+
 			merged := reflect.New(mapElemType).Elem()
 			if baseVal.IsValid() {
 				merged.Set(baseVal)
@@ -696,9 +786,21 @@ func mergeMap(base, overlay reflect.Value) {
 			mergeStruct(merged, overlayVal)
 			base.SetMapIndex(key, merged)
 		} else {
-			
+
 			base.SetMapIndex(key, overlayVal)
 		}
 	}
 }
 
+func storeCachedLocale(lang string, loc *Locale) {
+	localeCacheWrite.Lock()
+	defer localeCacheWrite.Unlock()
+
+	current := *localeCache.Load()
+	rebuilt := make(map[string]*Locale, len(current)+1)
+	for key, value := range current {
+		rebuilt[key] = value
+	}
+	rebuilt[lang] = loc
+	localeCache.Store(&rebuilt)
+}

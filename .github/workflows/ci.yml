@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+      - dev
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Install ffmpeg
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          if timeout 240 bash -c '
+            sudo apt-get -o Acquire::Retries=3 \
+                         -o Acquire::http::Timeout=30 \
+                         -o DPkg::Lock::Timeout=60 update &&
+            sudo apt-get -o DPkg::Lock::Timeout=60 install -y ffmpeg
+          '; then
+            ffmpeg -version | head -1
+          else
+            echo "::warning title=ffmpeg unavailable::apt failed or timed out; tests that drive ffmpeg will skip"
+          fi
+
+      - name: Run tests
+        env:
+          CGO_ENABLED: "1"
+        run: go test -race ./...
+
+      - name: Run tests repeatedly
+        env:
+          CGO_ENABLED: "1"
+        run: go test -count=3 ./...
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v8

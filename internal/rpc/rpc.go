@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"noraegaori/internal/logger"
 	"noraegaori/internal/messages"
-	"noraegaori/pkg/logger"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -108,11 +108,18 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
+	if cfg.RPCIntervalSeconds <= 0 {
+		fallback := DefaultConfig().RPCIntervalSeconds
+		logger.Warnf("Invalid RPC_INTERVAL_SECONDS=%d, falling back to %d", cfg.RPCIntervalSeconds, fallback)
+		cfg.RPCIntervalSeconds = fallback
+	}
+
 	return &cfg, nil
 }
 
 var (
 	stopChan  chan bool
+	stopOnce  *sync.Once
 	running   bool
 	runningMu sync.Mutex
 )
@@ -126,6 +133,7 @@ func UpdateRPC(session *discordgo.Session) {
 	}
 	running = true
 	stopChan = make(chan bool, 1)
+	stopOnce = &sync.Once{}
 	runningMu.Unlock()
 
 	cfg, err := LoadConfig()
@@ -165,7 +173,7 @@ func UpdateRPC(session *discordgo.Session) {
 		case <-ticker.C:
 			updateActivity(session, cfg, &currentIndex)
 		case <-stopChan:
-			logger.Debug("[RPC] RPC update loop stopped")
+			logger.Debug("RPC update loop stopped")
 			runningMu.Lock()
 			running = false
 			runningMu.Unlock()
@@ -176,15 +184,14 @@ func UpdateRPC(session *discordgo.Session) {
 
 func Stop() {
 	runningMu.Lock()
-	defer runningMu.Unlock()
+	once, ch := stopOnce, stopChan
+	runningMu.Unlock()
 
-	if !running {
+	if once == nil || ch == nil {
 		return
 	}
 
-	if stopChan != nil {
-		close(stopChan)
-	}
+	once.Do(func() { close(ch) })
 }
 
 func updateActivity(session *discordgo.Session, cfg *Config, currentIndex *int) {

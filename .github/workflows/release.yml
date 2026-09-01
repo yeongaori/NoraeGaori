@@ -90,7 +90,7 @@ jobs:
           if [ "${{ matrix.goos }}" = "windows" ]; then
             BINARY="noraegaori.exe"
           fi
-          go build -ldflags="-s -w" -o "$BINARY" ./cmd/bot
+          go build -ldflags="-s -w" -o "$BINARY" .
 
       - name: Package
         run: |
