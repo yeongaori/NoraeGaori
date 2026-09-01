@@ -1,2 +1,1 @@
-- [x] Memory Optimization
-- [x] Add Settings Panel using Modal components
+- [ ] Fix GitHub Actions Lint: Node.js 20 deprecated
