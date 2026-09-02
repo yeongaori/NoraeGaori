@@ -162,16 +162,16 @@ func UpdateRPC(session *discordgo.Session) {
 		return
 	}
 
-	currentIndex := 0
+	activities := &updater{session: session, cfg: cfg}
 	ticker := time.NewTicker(time.Duration(cfg.RPCIntervalSeconds) * time.Second)
 	defer ticker.Stop()
 
-	updateActivity(session, cfg, &currentIndex)
+	activities.update()
 
 	for {
 		select {
 		case <-ticker.C:
-			updateActivity(session, cfg, &currentIndex)
+			activities.update()
 		case <-stopChan:
 			logger.Debug("RPC update loop stopped")
 			runningMu.Lock()
@@ -194,17 +194,29 @@ func Stop() {
 	once.Do(func() { close(ch) })
 }
 
-func updateActivity(session *discordgo.Session, cfg *Config, currentIndex *int) {
-	var activity Activity
+type statusUpdater interface {
+	UpdateStatusComplex(discordgo.UpdateStatusData) error
+}
 
-	if cfg.RandomizeRPC {
+type updater struct {
+	session      statusUpdater
+	cfg          *Config
+	currentIndex int
+	isFailing    bool
+}
 
-		activity = cfg.Activities[rand.Intn(len(cfg.Activities))]
-	} else {
-
-		activity = cfg.Activities[*currentIndex]
-		*currentIndex = (*currentIndex + 1) % len(cfg.Activities)
+func (u *updater) nextActivity() Activity {
+	if u.cfg.RandomizeRPC {
+		return u.cfg.Activities[rand.Intn(len(u.cfg.Activities))]
 	}
+
+	activity := u.cfg.Activities[u.currentIndex]
+	u.currentIndex = (u.currentIndex + 1) % len(u.cfg.Activities)
+	return activity
+}
+
+func (u *updater) update() {
+	activity := u.nextActivity()
 
 	activityType, ok := ActivityTypeMap[activity.Type]
 	if !ok {
@@ -214,7 +226,7 @@ func updateActivity(session *discordgo.Session, cfg *Config, currentIndex *int) 
 
 	name := resolveActivityName(activity.Name)
 
-	err := session.UpdateStatusComplex(discordgo.UpdateStatusData{
+	err := u.session.UpdateStatusComplex(discordgo.UpdateStatusData{
 		Activities: []*discordgo.Activity{
 			{
 				Name: name,
@@ -225,11 +237,19 @@ func updateActivity(session *discordgo.Session, cfg *Config, currentIndex *int) 
 	})
 
 	if err != nil {
-		logger.Warnf("Failed to update RPC: %v", err)
+		if !u.isFailing {
+			u.isFailing = true
+			logger.Warnf("Failed to update RPC: %v", err)
+		}
 		return
 	}
 
-	if cfg.LogRPCChanges {
+	if u.isFailing {
+		u.isFailing = false
+		logger.Info("RPC updates resumed")
+	}
+
+	if u.cfg.LogRPCChanges {
 		logger.Infof("RPC updated to: %s %s", activity.Type, name)
 	}
 }

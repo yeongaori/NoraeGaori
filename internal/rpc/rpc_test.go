@@ -358,3 +358,93 @@ func TestUpdateRPCSurvivesAConfigWithoutAnInterval(t *testing.T) {
 	ticker := time.NewTicker(time.Duration(cfg.RPCIntervalSeconds) * time.Second)
 	ticker.Stop()
 }
+
+type mockStatusUpdater struct {
+	err           error
+	activityNames []string
+}
+
+func (m *mockStatusUpdater) UpdateStatusComplex(data discordgo.UpdateStatusData) error {
+	for _, activity := range data.Activities {
+		m.activityNames = append(m.activityNames, activity.Name)
+	}
+	return m.err
+}
+
+func newTestUpdater(status statusUpdater, activities ...Activity) *updater {
+	return &updater{
+		session: status,
+		cfg:     &Config{Activities: activities},
+	}
+}
+
+func TestUpdateStaysMarkedFailingWhileTheGatewayIsGone(t *testing.T) {
+	status := &mockStatusUpdater{err: discordgo.ErrWSNotFound}
+	activities := newTestUpdater(status, Activity{Name: "Testing", Type: "Playing"})
+
+	activities.update()
+	if !activities.isFailing {
+		t.Fatal("the first failed update did not mark the updater as failing")
+	}
+
+	activities.update()
+	activities.update()
+
+	if !activities.isFailing {
+		t.Error("a repeated failure cleared the failing state")
+	}
+	if len(status.activityNames) != 3 {
+		t.Errorf("got %d status updates, want 3", len(status.activityNames))
+	}
+}
+
+func TestUpdateClearsFailingStateOnRecovery(t *testing.T) {
+	status := &mockStatusUpdater{err: discordgo.ErrWSNotFound}
+	activities := newTestUpdater(status, Activity{Name: "Testing", Type: "Playing"})
+
+	activities.update()
+	if !activities.isFailing {
+		t.Fatal("the first failed update did not mark the updater as failing")
+	}
+
+	status.err = nil
+	activities.update()
+
+	if activities.isFailing {
+		t.Error("a successful update did not clear the failing state")
+	}
+}
+
+func TestUpdateRotatesActivitiesInOrder(t *testing.T) {
+	status := &mockStatusUpdater{}
+	activities := newTestUpdater(status,
+		Activity{Name: "First", Type: "Playing"},
+		Activity{Name: "Second", Type: "Listening"},
+		Activity{Name: "Third", Type: "Watching"},
+	)
+
+	for range 4 {
+		activities.update()
+	}
+
+	want := []string{"First", "Second", "Third", "First"}
+	if len(status.activityNames) != len(want) {
+		t.Fatalf("got %d status updates, want %d", len(status.activityNames), len(want))
+	}
+	for index, name := range want {
+		if status.activityNames[index] != name {
+			t.Errorf("update %d sent %q, want %q", index, status.activityNames[index], name)
+		}
+	}
+}
+
+func TestUpdateSkipsAnInvalidActivityType(t *testing.T) {
+	status := &mockStatusUpdater{}
+	activities := newTestUpdater(status, Activity{Name: "Testing", Type: "Dancing"})
+
+	activities.update()
+
+	if len(status.activityNames) != 0 {
+		t.Errorf("got %d status updates, want none for an invalid activity type", len(status.activityNames))
+	}
+}
