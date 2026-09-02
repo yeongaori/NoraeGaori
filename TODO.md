@@ -1,1 +1,0 @@
-- [ ] Fix GitHub Actions Lint: Node.js 20 deprecated
