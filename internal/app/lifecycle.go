@@ -12,6 +12,15 @@ import (
 	"noraegaori/internal/shutdown"
 )
 
+const forcedExitTimeout = 15 * time.Second
+
+func forceExitAfter(timeout time.Duration, exit func(int)) {
+	time.AfterFunc(timeout, func() {
+		logger.Warnf("Shutdown timed out after %s, forcing exit", timeout)
+		exit(1)
+	})
+}
+
 func waitForShutdown() {
 	logger.Info("Bot is running. Press Ctrl+C to stop")
 
@@ -24,37 +33,29 @@ func waitForShutdown() {
 
 	logger.Info("Received shutdown signal, cleaning up... (press Ctrl+C again to force quit)")
 
+	forceExitAfter(forcedExitTimeout, os.Exit)
+
 	go func() {
 		<-sc
 		logger.Warn("Second shutdown signal received, forcing exit")
 		os.Exit(1)
 	}()
 
-	done := make(chan struct{})
-	go func() {
-		logger.Debug("Stopping RPC updates...")
-		rpc.Stop()
+	logger.Debug("Stopping RPC updates...")
+	rpc.Stop()
 
-		logger.Debug("Stopping all active players...")
-		player.StopAll()
+	logger.Debug("Stopping all active players...")
+	player.StopAll()
 
-		logger.Debug("Shutting down worker pool...")
-		player.ShutdownWorkerPool()
+	logger.Debug("Shutting down worker pool...")
+	player.ShutdownWorkerPool()
 
-		if session != nil {
-			logger.Debug("Closing Discord session...")
-			if err := session.Close(); err != nil {
-				logger.Errorf("Error closing Discord session: %v", err)
-			}
+	if session != nil {
+		logger.Debug("Closing Discord session...")
+		if err := session.Close(); err != nil {
+			logger.Errorf("Error closing Discord session: %v", err)
 		}
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		logger.Debug("Shutdown complete")
-	case <-time.After(15 * time.Second):
-		logger.Warn("Shutdown timed out after 15s, forcing exit")
-		os.Exit(1)
 	}
+
+	logger.Info("Shutdown complete")
 }
