@@ -28,6 +28,25 @@ func stubJoinVoice(t *testing.T, conn voiceConnection, err error) {
 	})
 }
 
+func stubJoinVoiceResults(t *testing.T, results ...error) *int {
+	t.Helper()
+
+	calls := 0
+	conn := newMockVoiceConn()
+
+	testutil.Swap(t, &voiceRejoinDelay, time.Millisecond)
+	testutil.Swap(t, &joinVoiceChannel, func(*discordgo.Session, string, string) (voiceConnection, error) {
+		index := calls
+		calls++
+		if index < len(results) && results[index] != nil {
+			return nil, results[index]
+		}
+		return conn, nil
+	})
+
+	return &calls
+}
+
 func stubPlayAudioResult(t *testing.T, err error) {
 	t.Helper()
 
@@ -70,6 +89,40 @@ func TestPlaySingleSongStopsWhenTheVoiceJoinFails(t *testing.T) {
 
 	if got := playSingleSong(nil, guildID); got != playStop {
 		t.Errorf("got %v, want playStop when the voice join fails", got)
+	}
+}
+
+func TestPlaySingleSongRetriesTheVoiceJoinWhileTheGatewayReconnects(t *testing.T) {
+	guildID := "singlegatewayback"
+	player := preparedPlayer(t, guildID, 1)
+
+	player.mu.Lock()
+	player.VoiceConn = nil
+	player.mu.Unlock()
+
+	calls := stubJoinVoiceResults(t, discordgo.ErrWSNotFound, discordgo.ErrWSNotFound)
+
+	if got := playSingleSong(nil, guildID); got == playStop {
+		t.Errorf("got playStop, want playback to continue once the gateway returned")
+	}
+	if *calls != 3 {
+		t.Errorf("got %d join attempts, want 3", *calls)
+	}
+}
+
+func TestPlaySingleSongStopsWhenTheGatewayNeverReturns(t *testing.T) {
+	guildID := "singlegatewaygone"
+	player := preparedPlayer(t, guildID, 1)
+
+	player.mu.Lock()
+	player.VoiceConn = nil
+	player.mu.Unlock()
+
+	testutil.Swap(t, &voiceRejoinDelay, time.Millisecond)
+	stubJoinVoice(t, nil, discordgo.ErrWSNotFound)
+
+	if got := playSingleSong(nil, guildID); got != playStop {
+		t.Errorf("got %v, want playStop once the rejoin budget is spent", got)
 	}
 }
 

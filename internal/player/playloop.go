@@ -2,6 +2,7 @@ package player
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"time"
@@ -38,7 +39,7 @@ func prepareVoiceConnection(session *discordgo.Session, player *GuildPlayer, gui
 		return nil
 	}
 
-	vc, err := joinVoiceChannel(session, guildID, voiceChannelID)
+	vc, err := joinVoiceWithGatewayRetry(session, guildID, voiceChannelID)
 	if err != nil {
 		return err
 	}
@@ -46,6 +47,27 @@ func prepareVoiceConnection(session *discordgo.Session, player *GuildPlayer, gui
 	player.setVoice(vc, voiceChannelID)
 	logger.Debugf("Voice connection established for guild: %s", guildID)
 	return nil
+}
+
+func joinVoiceWithGatewayRetry(session *discordgo.Session, guildID, channelID string) (voiceConnection, error) {
+	var conn voiceConnection
+	var err error
+
+	for attempt := range voiceRejoinAttempts {
+		conn, err = joinVoiceChannel(session, guildID, channelID)
+		if err == nil || !errors.Is(err, discordgo.ErrWSNotFound) {
+			return conn, err
+		}
+
+		if attempt == voiceRejoinAttempts-1 {
+			break
+		}
+
+		logger.Warnf("Gateway is offline, retrying the voice join (%d/%d) for guild: %s", attempt+1, voiceRejoinAttempts, guildID)
+		time.Sleep(voiceRejoinDelay)
+	}
+
+	return conn, err
 }
 
 func markPlayerLoading(player *GuildPlayer, guildID string) {

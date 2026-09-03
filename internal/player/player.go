@@ -29,6 +29,7 @@ var (
 var (
 	playLockWait         = 2 * time.Second
 	resumeCommandTimeout = 30 * time.Second
+	voiceRejoinDelay     = 3 * time.Second
 )
 
 const (
@@ -36,6 +37,8 @@ const (
 	frameRate  = dsp.SampleRate
 	frameSize  = dsp.FrameSize
 	maxRetries = 3
+
+	voiceRejoinAttempts = 10
 
 	commandBufferSize = 10
 
