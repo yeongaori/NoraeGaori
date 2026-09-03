@@ -97,16 +97,16 @@ func startPlaybackSession(session *discordgo.Session, guildID string) error {
 	}
 
 	logger.Debugf("Lock acquired for guild: %s", guildID)
-	go runPlaybackSession(session, guildID, release)
+	go runPlaybackSession(session, guildID, release, playCurrentSong)
 
 	return nil
 }
 
-func runPlaybackSession(session *discordgo.Session, guildID string, release func()) {
+func runPlaybackSession(session *discordgo.Session, guildID string, release func(), playSong func(*discordgo.Session, string) playResult) {
 	defer release()
 	defer recoverPlaybackSession(guildID)
 
-	for playCurrentSong(session, guildID) != playStop {
+	for playSong(session, guildID) != playStop {
 	}
 }
 

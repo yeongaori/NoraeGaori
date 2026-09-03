@@ -613,13 +613,15 @@ func stopInternal(guildID string) error {
 }
 
 func startNextSongAsync(session *discordgo.Session, guildID string) {
+	resume := resumePlayback
+
 	go func() {
 		if IsPlaybackActive(guildID) {
 			logger.Debugf("Play operation already in progress for guild %s, skipping redundant play call", guildID)
 			return
 		}
 
-		if err := resumePlayback(session, guildID); err != nil {
+		if err := resume(session, guildID); err != nil {
 			if errors.Is(err, ErrPlaybackAlreadyActive) {
 				logger.Debugf("Playback already active for guild %s (expected during rapid skips)", guildID)
 			} else {
