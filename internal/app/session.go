@@ -34,6 +34,10 @@ func Start(token string) error {
 		discordgo.IntentsMessageContent |
 		discordgo.IntentsGuildMessageReactions
 
+	if presence, ok := rpc.LoadIdentifyPresence(); ok {
+		session.Identify.Presence = presence
+	}
+
 	session.AddHandler(onReady)
 	session.AddHandler(onInteractionCreate)
 	session.AddHandler(onMessageCreate)

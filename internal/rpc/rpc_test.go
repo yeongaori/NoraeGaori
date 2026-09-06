@@ -382,13 +382,13 @@ func TestUpdateStaysMarkedFailingWhileTheGatewayIsGone(t *testing.T) {
 	status := &mockStatusUpdater{err: discordgo.ErrWSNotFound}
 	activities := newTestUpdater(status, Activity{Name: "Testing", Type: "Playing"})
 
-	activities.update()
+	activities.updateActivity()
 	if !activities.isFailing {
 		t.Fatal("the first failed update did not mark the updater as failing")
 	}
 
-	activities.update()
-	activities.update()
+	activities.updateActivity()
+	activities.updateActivity()
 
 	if !activities.isFailing {
 		t.Error("a repeated failure cleared the failing state")
@@ -402,13 +402,13 @@ func TestUpdateClearsFailingStateOnRecovery(t *testing.T) {
 	status := &mockStatusUpdater{err: discordgo.ErrWSNotFound}
 	activities := newTestUpdater(status, Activity{Name: "Testing", Type: "Playing"})
 
-	activities.update()
+	activities.updateActivity()
 	if !activities.isFailing {
 		t.Fatal("the first failed update did not mark the updater as failing")
 	}
 
 	status.err = nil
-	activities.update()
+	activities.updateActivity()
 
 	if activities.isFailing {
 		t.Error("a successful update did not clear the failing state")
@@ -424,7 +424,7 @@ func TestUpdateRotatesActivitiesInOrder(t *testing.T) {
 	)
 
 	for range 4 {
-		activities.update()
+		activities.updateActivity()
 	}
 
 	want := []string{"First", "Second", "Third", "First"}
@@ -442,9 +442,82 @@ func TestUpdateSkipsAnInvalidActivityType(t *testing.T) {
 	status := &mockStatusUpdater{}
 	activities := newTestUpdater(status, Activity{Name: "Testing", Type: "Dancing"})
 
-	activities.update()
+	activities.updateActivity()
 
 	if len(status.activityNames) != 0 {
 		t.Errorf("got %d status updates, want none for an invalid activity type", len(status.activityNames))
+	}
+}
+
+func TestLoadIdentifyPresenceBuildsAResolvedActivity(t *testing.T) {
+	configPath := isolatedConfigDir(t)
+	writeConfig(t, configPath, []byte(`{
+		"RPC_ENABLED": true,
+		"RPC_INTERVAL_SECONDS": 30,
+		"RANDOMIZE_RPC": false,
+		"activities": [{"name": "Testing", "type": "Watching"}]
+	}`))
+
+	presence, ok := LoadIdentifyPresence()
+	if !ok {
+		t.Fatal("LoadIdentifyPresence reported no presence, so identify would carry an empty one")
+	}
+	if presence.Game.Name != "Testing" {
+		t.Errorf("got activity name %q, want %q", presence.Game.Name, "Testing")
+	}
+	if presence.Game.Type != discordgo.ActivityTypeWatching {
+		t.Errorf("got activity type %d, want %d", presence.Game.Type, discordgo.ActivityTypeWatching)
+	}
+	if presence.Status != "online" {
+		t.Errorf("got status %q, want %q", presence.Status, "online")
+	}
+}
+
+func TestLoadIdentifyPresenceResolvesLocaleKeys(t *testing.T) {
+	if err := messages.LoadLocale("en"); err != nil {
+		t.Fatalf("failed to load the English locale: %v", err)
+	}
+
+	configPath := isolatedConfigDir(t)
+	writeConfig(t, configPath, []byte(`{
+		"RPC_ENABLED": true,
+		"RANDOMIZE_RPC": false,
+		"activities": [{"name": "lang.activity_default_1", "type": "Playing"}]
+	}`))
+
+	presence, ok := LoadIdentifyPresence()
+	if !ok {
+		t.Fatal("LoadIdentifyPresence reported no presence")
+	}
+	if presence.Game.Name == "lang.activity_default_1" {
+		t.Error("the locale key was sent unresolved, so the bot would show a raw key as its activity")
+	}
+	if presence.Game.Name != messages.T().RPC.ActivityDefault1 {
+		t.Errorf("got %q, want the localised name %q", presence.Game.Name, messages.T().RPC.ActivityDefault1)
+	}
+}
+
+func TestLoadIdentifyPresenceReportsNothingWhenDisabled(t *testing.T) {
+	configPath := isolatedConfigDir(t)
+	writeConfig(t, configPath, []byte(`{
+		"RPC_ENABLED": false,
+		"activities": [{"name": "Testing", "type": "Watching"}]
+	}`))
+
+	if _, ok := LoadIdentifyPresence(); ok {
+		t.Error("LoadIdentifyPresence returned a presence while RPC is disabled")
+	}
+}
+
+func TestLoadIdentifyPresenceReportsNothingForAnInvalidType(t *testing.T) {
+	configPath := isolatedConfigDir(t)
+	writeConfig(t, configPath, []byte(`{
+		"RPC_ENABLED": true,
+		"RANDOMIZE_RPC": false,
+		"activities": [{"name": "Testing", "type": "Dancing"}]
+	}`))
+
+	if _, ok := LoadIdentifyPresence(); ok {
+		t.Error("LoadIdentifyPresence returned a presence for an unmapped activity type")
 	}
 }

@@ -124,6 +124,28 @@ var (
 	runningMu sync.Mutex
 )
 
+func LoadIdentifyPresence() (discordgo.GatewayStatusUpdate, bool) {
+	cfg, err := LoadConfig()
+	if err != nil || !cfg.RPCEnabled || len(cfg.Activities) == 0 {
+		return discordgo.GatewayStatusUpdate{}, false
+	}
+
+	activity := (&updater{cfg: cfg}).nextActivity()
+
+	activityType, ok := ActivityTypeMap[activity.Type]
+	if !ok {
+		return discordgo.GatewayStatusUpdate{}, false
+	}
+
+	return discordgo.GatewayStatusUpdate{
+		Game: discordgo.Activity{
+			Name: resolveActivityName(activity.Name),
+			Type: activityType,
+		},
+		Status: "online",
+	}, true
+}
+
 func UpdateRPC(session *discordgo.Session) {
 	runningMu.Lock()
 	if running {
@@ -166,12 +188,12 @@ func UpdateRPC(session *discordgo.Session) {
 	ticker := time.NewTicker(time.Duration(cfg.RPCIntervalSeconds) * time.Second)
 	defer ticker.Stop()
 
-	activities.update()
+	activities.updateActivity()
 
 	for {
 		select {
 		case <-ticker.C:
-			activities.update()
+			activities.updateActivity()
 		case <-stopChan:
 			logger.Debug("RPC update loop stopped")
 			runningMu.Lock()
@@ -215,7 +237,7 @@ func (u *updater) nextActivity() Activity {
 	return activity
 }
 
-func (u *updater) update() {
+func (u *updater) updateActivity() {
 	activity := u.nextActivity()
 
 	activityType, ok := ActivityTypeMap[activity.Type]
