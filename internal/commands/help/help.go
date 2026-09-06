@@ -243,22 +243,12 @@ func expireHelpPanel(s *discordgo.Session, i *discordgo.InteractionCreate, panel
 
 	<-time.After(helpPanelExpiry)
 
-	panelMsg = discord.ResolvePanelMessage(s, i, panelMsg)
-	if panelMsg == nil {
-		return
-	}
-
 	panel.pageMu.Lock()
 	page := panel.page
 	panel.pageMu.Unlock()
 
 	embed, _ := panel.render(page)
-	if _, err := s.ChannelMessageEditComplex(&discordgo.MessageEdit{
-		ID:         panelMsg.ID,
-		Channel:    panelMsg.ChannelID,
-		Embeds:     &[]*discordgo.MessageEmbed{embed},
-		Components: &[]discordgo.MessageComponent{},
-	}); err != nil {
+	if err := discord.CloseComponentMessage(s, i, panelMsg, embed); err != nil {
 		logger.Errorf("Failed to close the help panel: %v", err)
 	}
 }

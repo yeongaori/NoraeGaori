@@ -107,18 +107,8 @@ func expireSettingsPanel(s *discordgo.Session, i *discordgo.InteractionCreate, p
 
 	<-time.After(settingsPanelExpiry)
 
-	panelMsg = discord.ResolvePanelMessage(s, i, panelMsg)
-	if panelMsg == nil {
-		return
-	}
-
 	embed, _ := session.render()
-	if _, err := s.ChannelMessageEditComplex(&discordgo.MessageEdit{
-		ID:         panelMsg.ID,
-		Channel:    panelMsg.ChannelID,
-		Embeds:     &[]*discordgo.MessageEmbed{embed},
-		Components: &[]discordgo.MessageComponent{},
-	}); err != nil {
+	if err := discord.CloseComponentMessage(s, i, panelMsg, embed); err != nil {
 		logger.Errorf("Failed to close the settings panel: %v", err)
 	}
 }

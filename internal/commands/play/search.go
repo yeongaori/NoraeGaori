@@ -16,6 +16,8 @@ import (
 	"noraegaori/internal/youtube"
 )
 
+var searchSelectionExpiry = 30 * time.Second
+
 var (
 	searchSelections   = make(map[string]bool)
 	searchSelectionsMu sync.Mutex
@@ -94,7 +96,7 @@ func HandleSearch(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		},
 	}
 
-	awaitSelection, cancelSelection := startSearchSelection(s, i, results, customID, voiceState.ChannelID, searchMessageID)
+	selection, cancelSelection := startSearchSelection(s, i, results, customID, voiceState.ChannelID, searchMessageID)
 
 	if err := discord.UpdateResponseEmbedWithComponents(s, i, embed, components); err != nil {
 		cancelSelection()
@@ -102,7 +104,13 @@ func HandleSearch(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return err
 	}
 
-	go awaitSelection()
+	searchMsg, err := discord.GetResponseMessage(s, i)
+	if err != nil {
+		logger.Errorf("Failed to resolve the search panel message: %v", err)
+	}
+	selection.panelMsg = searchMsg
+
+	go expireSearchSelection(s, selection, cancelSelection)
 
 	return nil
 }
@@ -127,7 +135,9 @@ type searchSelection struct {
 	voiceChannelID  string
 	searchMessageID string
 	original        *discordgo.InteractionCreate
+	panelMsg        *discordgo.Message
 	done            chan struct{}
+	finish          func()
 }
 
 func (c *searchSelection) handle(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -178,6 +188,11 @@ func (c *searchSelection) handle(s *discordgo.Session, i *discordgo.InteractionC
 		return
 	}
 
+	if selectedIndex < 0 || selectedIndex >= len(c.results) {
+		logger.Warnf("Invalid index %d for search with %d c.results", selectedIndex, len(c.results))
+		return
+	}
+
 	searchSelectionsMu.Lock()
 	logger.Debugf("Checking duplicate map with c.searchMessageID='%s', already_selected=%v", c.searchMessageID, searchSelections[c.searchMessageID])
 	if searchSelections[c.searchMessageID] {
@@ -197,10 +212,7 @@ func (c *searchSelection) handle(s *discordgo.Session, i *discordgo.InteractionC
 	searchSelections[c.searchMessageID] = true
 	searchSelectionsMu.Unlock()
 
-	if selectedIndex < 0 || selectedIndex >= len(c.results) {
-		logger.Warnf("Invalid index %d for search with %d c.results", selectedIndex, len(c.results))
-		return
-	}
+	defer c.finish()
 
 	selectedResult := c.results[selectedIndex]
 
@@ -295,12 +307,10 @@ func (c *searchSelection) handle(s *discordgo.Session, i *discordgo.InteractionC
 		logger.Errorf("Failed to edit message to added state: %v", err)
 	}
 
-	close(c.done)
-
 	player.ResumeOrStart(s, c.original.GuildID)
 }
 
-func startSearchSelection(s *discordgo.Session, originalInteraction *discordgo.InteractionCreate, results []youtube.SearchResult, customID, voiceChannelID, searchMessageID string) (func(), func()) {
+func startSearchSelection(s *discordgo.Session, originalInteraction *discordgo.InteractionCreate, results []youtube.SearchResult, customID, voiceChannelID, searchMessageID string) (*searchSelection, func()) {
 	logger.Debugf("startSearchSelection registered, customID='%s', searchMessageID='%s'", customID, searchMessageID)
 
 	selection := &searchSelection{
@@ -311,6 +321,7 @@ func startSearchSelection(s *discordgo.Session, originalInteraction *discordgo.I
 		original:        originalInteraction,
 		done:            make(chan struct{}),
 	}
+	selection.finish = sync.OnceFunc(func() { close(selection.done) })
 
 	removeHandler := s.AddHandler(selection.handle)
 	cleanup := sync.OnceFunc(func() {
@@ -320,26 +331,22 @@ func startSearchSelection(s *discordgo.Session, originalInteraction *discordgo.I
 		searchSelectionsMu.Unlock()
 	})
 
-	return func() { expireSearchSelection(s, selection, cleanup) }, cleanup
+	return selection, cleanup
 }
 
 func expireSearchSelection(s *discordgo.Session, selection *searchSelection, cleanup func()) {
 	defer cleanup()
 
-	originalInteraction := selection.original
-
 	select {
 	case <-selection.done:
 		return
-	case <-time.After(30 * time.Second):
+	case <-time.After(searchSelectionExpiry):
 	}
 
+	originalInteraction := selection.original
 	timeoutEmbed := messages.CreateWarningEmbed(messages.T(originalInteraction.GuildID).Queue.SearchTimeoutTitle, messages.T(originalInteraction.GuildID).Queue.SearchTimeoutDesc)
 
-	if _, err := s.InteractionResponseEdit(originalInteraction.Interaction, &discordgo.WebhookEdit{
-		Embeds:     &[]*discordgo.MessageEmbed{timeoutEmbed},
-		Components: &[]discordgo.MessageComponent{},
-	}); err != nil {
-		logger.Errorf("Failed to edit message to timeout state: %v", err)
+	if err := discord.CloseComponentMessage(s, originalInteraction, selection.panelMsg, timeoutEmbed); err != nil {
+		logger.Errorf("Failed to close the search panel: %v", err)
 	}
 }

@@ -184,11 +184,6 @@ func expireQueuePanel(s *discordgo.Session, i *discordgo.InteractionCreate, pane
 
 	<-time.After(queuePanelExpiry)
 
-	panelMsg = discord.ResolvePanelMessage(s, i, panelMsg)
-	if panelMsg == nil {
-		return
-	}
-
 	q, err := queue.GetQueue(panel.guildID, false)
 	if err != nil || q == nil {
 		return
@@ -196,12 +191,7 @@ func expireQueuePanel(s *discordgo.Session, i *discordgo.InteractionCreate, pane
 
 	totalPages := panel.pageCount(len(q.Songs))
 	embed := createQueueEmbed(panel.guildID, q.Songs, panel.currentPage(totalPages), totalPages, panel.perPage)
-	if _, err := s.ChannelMessageEditComplex(&discordgo.MessageEdit{
-		ID:         panelMsg.ID,
-		Channel:    panelMsg.ChannelID,
-		Embeds:     &[]*discordgo.MessageEmbed{embed},
-		Components: &[]discordgo.MessageComponent{},
-	}); err != nil {
+	if err := discord.CloseComponentMessage(s, i, panelMsg, embed); err != nil {
 		logger.Errorf("Failed to close the queue panel: %v", err)
 	}
 }

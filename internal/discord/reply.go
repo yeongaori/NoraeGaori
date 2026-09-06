@@ -205,3 +205,18 @@ func ResolvePanelMessage(s *discordgo.Session, i *discordgo.InteractionCreate, p
 	}
 	return msg
 }
+
+func CloseComponentMessage(s *discordgo.Session, i *discordgo.InteractionCreate, panelMsg *discordgo.Message, embed *discordgo.MessageEmbed) error {
+	panelMsg = ResolvePanelMessage(s, i, panelMsg)
+	if panelMsg == nil {
+		return fmt.Errorf("panel message not found")
+	}
+
+	_, err := s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+		ID:         panelMsg.ID,
+		Channel:    panelMsg.ChannelID,
+		Embeds:     &[]*discordgo.MessageEmbed{embed},
+		Components: &[]discordgo.MessageComponent{},
+	})
+	return err
+}

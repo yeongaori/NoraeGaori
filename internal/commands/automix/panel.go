@@ -782,17 +782,7 @@ func expireTransitionPanel(panel *transitionPanel) {
 	panel.isClosed = true
 	panel.removeHandler()
 
-	panelMsg := discord.ResolvePanelMessage(panel.session, panel.origin, panel.panelMsg)
-	if panelMsg == nil {
-		return
-	}
-
-	if _, err := panel.session.ChannelMessageEditComplex(&discordgo.MessageEdit{
-		ID:         panelMsg.ID,
-		Channel:    panelMsg.ChannelID,
-		Embeds:     &[]*discordgo.MessageEmbed{embed},
-		Components: &[]discordgo.MessageComponent{},
-	}); err != nil {
+	if err := discord.CloseComponentMessage(panel.session, panel.origin, panel.panelMsg, embed); err != nil {
 		logger.Errorf("Failed to close the transition panel: %v", err)
 	}
 }
