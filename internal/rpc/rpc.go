@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -130,7 +131,7 @@ func LoadIdentifyPresence() (discordgo.GatewayStatusUpdate, bool) {
 		return discordgo.GatewayStatusUpdate{}, false
 	}
 
-	activity := (&updater{cfg: cfg}).nextActivity()
+	activity := (&updater{cfg: cfg}).pickActivity()
 
 	activityType, ok := ActivityTypeMap[activity.Type]
 	if !ok {
@@ -227,22 +228,29 @@ type updater struct {
 	isFailing    bool
 }
 
-func (u *updater) nextActivity() Activity {
+func (u *updater) pickActivity() Activity {
 	if u.cfg.RandomizeRPC {
 		return u.cfg.Activities[rand.Intn(len(u.cfg.Activities))]
 	}
 
-	activity := u.cfg.Activities[u.currentIndex]
+	return u.cfg.Activities[u.currentIndex]
+}
+
+func (u *updater) advanceActivity() {
+	if u.cfg.RandomizeRPC {
+		return
+	}
+
 	u.currentIndex = (u.currentIndex + 1) % len(u.cfg.Activities)
-	return activity
 }
 
 func (u *updater) updateActivity() {
-	activity := u.nextActivity()
+	activity := u.pickActivity()
 
 	activityType, ok := ActivityTypeMap[activity.Type]
 	if !ok {
 		logger.Warnf("Invalid activity type: %s", activity.Type)
+		u.advanceActivity()
 		return
 	}
 
@@ -261,10 +269,16 @@ func (u *updater) updateActivity() {
 	if err != nil {
 		if !u.isFailing {
 			u.isFailing = true
-			logger.Warnf("Failed to update RPC: %v", err)
+			if errors.Is(err, discordgo.ErrWSNotFound) {
+				logger.Debugf("Skipped an RPC update while reconnecting: %v", err)
+			} else {
+				logger.Warnf("Failed to update RPC: %v", err)
+			}
 		}
 		return
 	}
+
+	u.advanceActivity()
 
 	if u.isFailing {
 		u.isFailing = false

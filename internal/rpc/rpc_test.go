@@ -2,12 +2,15 @@ package rpc
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"noraegaori/internal/logger"
 	"noraegaori/internal/messages"
 
 	"github.com/bwmarrin/discordgo"
@@ -519,5 +522,109 @@ func TestLoadIdentifyPresenceReportsNothingForAnInvalidType(t *testing.T) {
 
 	if _, ok := LoadIdentifyPresence(); ok {
 		t.Error("LoadIdentifyPresence returned a presence for an unmapped activity type")
+	}
+}
+
+func TestUpdateActivityKeepsThePositionAfterAFailedSend(t *testing.T) {
+	status := &mockStatusUpdater{err: errors.New("send failed")}
+	activities := newTestUpdater(status,
+		Activity{Name: "First", Type: "Playing"},
+		Activity{Name: "Second", Type: "Listening"},
+		Activity{Name: "Third", Type: "Watching"},
+	)
+
+	activities.updateActivity()
+	status.err = nil
+	activities.updateActivity()
+
+	want := []string{"First", "First"}
+	if len(status.activityNames) != len(want) {
+		t.Fatalf("got %d status updates, want %d", len(status.activityNames), len(want))
+	}
+	for index, name := range want {
+		if status.activityNames[index] != name {
+			t.Errorf("update %d sent %q, want %q: a failed send must not consume its activity", index, status.activityNames[index], name)
+		}
+	}
+}
+
+func TestUpdateActivityAdvancesPastAnInvalidType(t *testing.T) {
+	status := &mockStatusUpdater{}
+	activities := newTestUpdater(status,
+		Activity{Name: "First", Type: "Playing"},
+		Activity{Name: "Second", Type: "Dancing"},
+		Activity{Name: "Third", Type: "Watching"},
+	)
+
+	activities.updateActivity()
+	activities.updateActivity()
+	activities.updateActivity()
+
+	want := []string{"First", "Third"}
+	if len(status.activityNames) != len(want) {
+		t.Fatalf("got %d status updates, want %d", len(status.activityNames), len(want))
+	}
+	for index, name := range want {
+		if status.activityNames[index] != name {
+			t.Errorf("update %d sent %q, want %q: a misconfigured activity must not jam the rotation", index, status.activityNames[index], name)
+		}
+	}
+}
+
+func TestUpdateActivityKeepsTheIndexParkedWhenRandomized(t *testing.T) {
+	status := &mockStatusUpdater{}
+	activities := &updater{
+		session: status,
+		cfg: &Config{
+			RandomizeRPC: true,
+			Activities:   []Activity{{Name: "Testing", Type: "Playing"}},
+		},
+	}
+
+	activities.updateActivity()
+	activities.updateActivity()
+
+	if activities.currentIndex != 0 {
+		t.Errorf("currentIndex = %d, want 0: a randomized rotation must not advance it", activities.currentIndex)
+	}
+}
+
+func TestUpdateActivityStaysQuietWhileReconnecting(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "test.log")
+	logger.SetLogFile(logPath)
+	defer logger.SetLogFile("")
+
+	status := &mockStatusUpdater{err: discordgo.ErrWSNotFound}
+	activities := newTestUpdater(status, Activity{Name: "Testing", Type: "Playing"})
+
+	activities.updateActivity()
+
+	written, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("failed to read the log file: %v", err)
+	}
+
+	if strings.Contains(string(written), "Failed to update RPC") {
+		t.Errorf("a reconnect window was logged as a warning:\n%s", written)
+	}
+}
+
+func TestUpdateActivityWarnsOnARealFailure(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "test.log")
+	logger.SetLogFile(logPath)
+	defer logger.SetLogFile("")
+
+	status := &mockStatusUpdater{err: errors.New("rate limited")}
+	activities := newTestUpdater(status, Activity{Name: "Testing", Type: "Playing"})
+
+	activities.updateActivity()
+
+	written, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("failed to read the log file: %v", err)
+	}
+
+	if !strings.Contains(string(written), "Failed to update RPC") {
+		t.Errorf("a real failure was not logged as a warning:\n%s", written)
 	}
 }
