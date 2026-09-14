@@ -1,11 +1,9 @@
 package queue
 
 import (
-	"database/sql"
 	"fmt"
 	"math"
 
-	"noraegaori/internal/config"
 	"noraegaori/internal/database"
 	"noraegaori/internal/guild"
 	"noraegaori/internal/logger"
@@ -65,96 +63,23 @@ func SetVolume(guildID string, volume float64) error {
 }
 
 func GetVolume(guildID string) (float64, error) {
-	var volume float64
-	err := database.DB.QueryRow(
-		`SELECT volume FROM guild_settings WHERE guild_id = ?`,
-		guildID,
-	).Scan(&volume)
-
-	if err == sql.ErrNoRows {
-
-		cfg := config.GetConfig()
-		if cfg != nil {
-			return cfg.DefaultVolume, nil
-		}
-		return 100, nil
-	}
-	if err != nil {
-		return 0, fmt.Errorf("failed to get volume: %w", err)
-	}
-
-	return volume, nil
+	return readSetting(guildID, "volume", 0, func(settings *guildSettingsRow) float64 { return settings.volume })
 }
 
 func GetRepeatMode(guildID string) (int, error) {
-	var repeat int
-	err := database.DB.QueryRow(
-		`SELECT repeat FROM guild_settings WHERE guild_id = ?`,
-		guildID,
-	).Scan(&repeat)
-
-	if err == sql.ErrNoRows {
-		return RepeatOff, nil
-	}
-	if err != nil {
-		return RepeatOff, fmt.Errorf("failed to get repeat mode: %w", err)
-	}
-
-	return repeat, nil
+	return readSetting(guildID, "repeat mode", RepeatOff, func(settings *guildSettingsRow) int { return settings.repeat })
 }
 
 func GetSponsorBlock(guildID string) (bool, error) {
-	var sponsorblock int
-	err := database.DB.QueryRow(
-		`SELECT sponsorblock FROM guild_settings WHERE guild_id = ?`,
-		guildID,
-	).Scan(&sponsorblock)
-
-	if err == sql.ErrNoRows {
-
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("failed to get sponsorblock: %w", err)
-	}
-
-	return sponsorblock == 1, nil
+	return readSetting(guildID, "sponsorblock", false, func(settings *guildSettingsRow) bool { return settings.sponsorBlock })
 }
 
 func GetShowStartedTrack(guildID string) (bool, error) {
-	var showStartedTrack int
-	err := database.DB.QueryRow(
-		`SELECT show_started_track FROM guild_settings WHERE guild_id = ?`,
-		guildID,
-	).Scan(&showStartedTrack)
-
-	if err == sql.ErrNoRows {
-
-		return true, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("failed to get show_started_track: %w", err)
-	}
-
-	return showStartedTrack == 1, nil
+	return readSetting(guildID, "show_started_track", false, func(settings *guildSettingsRow) bool { return settings.showStartedTrack })
 }
 
 func GetNormalization(guildID string) (bool, error) {
-	var normalization int
-	err := database.DB.QueryRow(
-		`SELECT normalization FROM guild_settings WHERE guild_id = ?`,
-		guildID,
-	).Scan(&normalization)
-
-	if err == sql.ErrNoRows {
-
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("failed to get normalization: %w", err)
-	}
-
-	return normalization == 1, nil
+	return readSetting(guildID, "normalization", false, func(settings *guildSettingsRow) bool { return settings.normalization })
 }
 
 func SetSponsorBlock(guildID string, enabled bool) error {

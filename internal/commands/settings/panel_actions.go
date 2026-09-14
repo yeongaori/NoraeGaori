@@ -87,7 +87,7 @@ func chooseValue(s *discordgo.Session, ic *discordgo.InteractionCreate, session 
 	writeSetting(s, ic, session, spec, values[0])
 }
 
-func toggleSetting(s *discordgo.Session, ic *discordgo.InteractionCreate, session *panelSession, spec settingSpec) {
+func toggleSetting(s *discordgo.Session, ic *discordgo.InteractionCreate, session *panelSession, spec *settingSpec) {
 	current, ok := currentValue(session.guildID, spec)
 	if !ok {
 		respondPanelError(s, ic, session, panelStrings(session.guildID).ReadFailed)
@@ -96,7 +96,7 @@ func toggleSetting(s *discordgo.Session, ic *discordgo.InteractionCreate, sessio
 	writeSetting(s, ic, session, spec, nextValue(spec, current))
 }
 
-func openSettingModal(s *discordgo.Session, ic *discordgo.InteractionCreate, session *panelSession, spec settingSpec) {
+func openSettingModal(s *discordgo.Session, ic *discordgo.InteractionCreate, session *panelSession, spec *settingSpec) {
 	if err := s.InteractionRespond(ic.Interaction, buildSettingModal(session.guildID, spec, session.token)); err != nil {
 		logger.Errorf("Failed to open the settings modal for %s: %v", spec.key, err)
 		respondPanelError(s, ic, session, fmt.Sprintf(panelStrings(session.guildID).ModalFailed, settingLabel(session.guildID, spec.key)))
@@ -127,7 +127,7 @@ func handlePanelModalSubmit(s *discordgo.Session, ic *discordgo.InteractionCreat
 	writeSetting(s, ic, session, spec, value)
 }
 
-func writeSetting(s *discordgo.Session, ic *discordgo.InteractionCreate, session *panelSession, spec settingSpec, value string) {
+func writeSetting(s *discordgo.Session, ic *discordgo.InteractionCreate, session *panelSession, spec *settingSpec, value string) {
 	if err := applySetting(session.guildID, spec, value); err != nil {
 		respondPanelError(s, ic, session, validationMessage(session.guildID, spec, err))
 		return
@@ -136,7 +136,7 @@ func writeSetting(s *discordgo.Session, ic *discordgo.InteractionCreate, session
 	refreshPanel(s, ic, session)
 }
 
-func allowedToEdit(s *discordgo.Session, ic *discordgo.InteractionCreate, session *panelSession, spec settingSpec) bool {
+func allowedToEdit(s *discordgo.Session, ic *discordgo.InteractionCreate, session *panelSession, spec *settingSpec) bool {
 	if !spec.adminOnly {
 		return true
 	}

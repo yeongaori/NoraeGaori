@@ -60,6 +60,20 @@ func RespondEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *d
 }
 
 func RespondEmbedWithComponents(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, components []discordgo.MessageComponent) (*discordgo.Message, error) {
+	msg, err := sendEmbedWithComponents(s, i, embed, components)
+	if err != nil || IsMessageCommand(i) {
+		return msg, err
+	}
+
+	msg, err = s.InteractionResponse(i.Interaction)
+	if err != nil {
+		logger.Errorf("Failed to resolve the message for an interaction response: %v", err)
+		return nil, nil
+	}
+	return msg, nil
+}
+
+func sendEmbedWithComponents(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, components []discordgo.MessageComponent) (*discordgo.Message, error) {
 	if IsMessageCommand(i) {
 		if mr, ok := messageResponders.Load(i.Token); ok {
 			return mr.(*MessageResponse).SendEmbedWithComponents(embed, components)
@@ -67,23 +81,13 @@ func RespondEmbedWithComponents(s *discordgo.Session, i *discordgo.InteractionCr
 		return nil, fmt.Errorf("message responder not found")
 	}
 
-	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	return nil, s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
 			Embeds:     []*discordgo.MessageEmbed{embed},
 			Components: components,
 		},
 	})
-	if err != nil {
-		return nil, err
-	}
-
-	msg, err := s.InteractionResponse(i.Interaction)
-	if err != nil {
-		logger.Errorf("Failed to resolve the message for an interaction response: %v", err)
-		return nil, nil
-	}
-	return msg, nil
 }
 
 func DeferResponse(s *discordgo.Session, i *discordgo.InteractionCreate) {

@@ -50,6 +50,7 @@ type Queue struct {
 
 type queueCache struct {
 	queue     *Queue
+	db        *sql.DB
 	timestamp time.Time
 }
 
@@ -68,7 +69,7 @@ func GetQueue(guildID string, forceRefresh bool) (*Queue, error) {
 		cached, exists := cache[guildID]
 		cacheMux.RUnlock()
 
-		if exists && time.Since(cached.timestamp) < cacheTTL {
+		if exists && cached.db == database.DB && time.Since(cached.timestamp) < cacheTTL {
 			logger.Debugf("Using cached queue for guild: %s", guildID)
 			return cached.queue, nil
 		}
@@ -86,6 +87,7 @@ func GetQueue(guildID string, forceRefresh bool) (*Queue, error) {
 	cacheMux.Lock()
 	cache[guildID] = &queueCache{
 		queue:     queue,
+		db:        database.DB,
 		timestamp: time.Now(),
 	}
 	cacheMux.Unlock()
@@ -278,10 +280,12 @@ func loadQueueFromDB(guildID string) (*Queue, error) {
 		return nil, err
 	}
 
+	generation := settingsGeneration(guildID)
 	settings, err := loadGuildSettingsRow(guildID)
 	if err != nil {
 		return nil, err
 	}
+	storeGuildSettings(guildID, generation, settings)
 
 	songs, err := loadQueueSongs(guildID)
 	if err != nil {

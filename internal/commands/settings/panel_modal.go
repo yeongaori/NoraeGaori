@@ -13,7 +13,7 @@ const (
 	modalPlaceholderLimit = 100
 )
 
-func buildSettingModal(guildID string, spec settingSpec, token string) *discordgo.InteractionResponse {
+func buildSettingModal(guildID string, spec *settingSpec, token string) *discordgo.InteractionResponse {
 	panel := panelStrings(guildID)
 	label := settingLabel(guildID, spec.key)
 	value, _ := currentValue(guildID, spec)

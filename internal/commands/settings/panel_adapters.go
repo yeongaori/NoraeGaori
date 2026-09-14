@@ -21,7 +21,18 @@ const (
 	backValue          = "__back__"
 )
 
-var repeatValues = []string{valueRepeatOff, valueRepeatAll, valueRepeatSingle}
+var (
+	toggleValues = []string{valueOn, valueOff}
+	repeatValues = []string{valueRepeatOff, valueRepeatAll, valueRepeatSingle}
+)
+
+func writeNormalization(guildID, value string) error {
+	if err := queue.SetNormalization(guildID, value == valueOn); err != nil {
+		return err
+	}
+	player.RestartForNormalization(guildID)
+	return nil
+}
 
 func boolValue(enabled bool) string {
 	if enabled {

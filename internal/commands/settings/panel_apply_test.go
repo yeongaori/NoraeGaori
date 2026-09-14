@@ -7,7 +7,7 @@ import (
 	"noraegaori/internal/testutil/dbtest"
 )
 
-func specFor(t *testing.T, key string) settingSpec {
+func specFor(t *testing.T, key string) *settingSpec {
 	t.Helper()
 
 	spec, found := findSetting(key)
@@ -17,8 +17,32 @@ func specFor(t *testing.T, key string) settingSpec {
 	return spec
 }
 
+func TestTogglesAndRepeatRejectUnknownValues(t *testing.T) {
+	for key, value := range map[string]string{"sponsorblock": "maybe", "repeat": "double"} {
+		if _, err := normalizeValue(specFor(t, key), value); !errors.Is(err, errUnknownValue) {
+			t.Errorf("%s accepted %q, want errUnknownValue (got %v)", key, value, err)
+		}
+	}
+}
+
+func TestTogglesAndRepeatAcceptAnyCaseAndTheOnAlias(t *testing.T) {
+	cases := []struct{ key, input, want string }{
+		{"sponsorblock", "ON", valueOn},
+		{"sponsorblock", " off ", valueOff},
+		{"repeat", "Single", valueRepeatSingle},
+		{"repeat", "on", valueRepeatAll},
+	}
+	for _, c := range cases {
+		got, err := normalizeValue(specFor(t, c.key), c.input)
+		if err != nil || got != c.want {
+			t.Errorf("%s %q = (%q, %v), want %q", c.key, c.input, got, err, c.want)
+		}
+	}
+}
+
 func TestNumberSettingsRejectNonNumbers(t *testing.T) {
-	for _, spec := range settingSpecs {
+	for index := range settingSpecs {
+		spec := &settingSpecs[index]
 		if spec.kind != settingNumber {
 			continue
 		}
@@ -31,7 +55,8 @@ func TestNumberSettingsRejectNonNumbers(t *testing.T) {
 }
 
 func TestNumberSettingsRejectValuesOutsideTheirRange(t *testing.T) {
-	for _, spec := range settingSpecs {
+	for index := range settingSpecs {
+		spec := &settingSpecs[index]
 		if spec.kind != settingNumber {
 			continue
 		}
@@ -44,7 +69,8 @@ func TestNumberSettingsRejectValuesOutsideTheirRange(t *testing.T) {
 }
 
 func TestNumberSettingsAcceptTheirBoundaries(t *testing.T) {
-	for _, spec := range settingSpecs {
+	for index := range settingSpecs {
+		spec := &settingSpecs[index]
 		if spec.kind != settingNumber {
 			continue
 		}
@@ -136,7 +162,8 @@ func TestRepeatCycleRecoversFromAnUnknownMode(t *testing.T) {
 func TestSettingKeysSurviveACustomIDRoundTrip(t *testing.T) {
 	token := "abc123"
 
-	for _, spec := range settingSpecs {
+	for index := range settingSpecs {
+		spec := &settingSpecs[index]
 		id := customID(modalPrefix, spec.key, token)
 		if parsed := settingKeyFrom(id, modalPrefix, token); parsed != spec.key {
 			t.Errorf("%q round-tripped to %q", spec.key, parsed)
@@ -147,7 +174,8 @@ func TestSettingKeysSurviveACustomIDRoundTrip(t *testing.T) {
 func TestEverySettingIsLocalized(t *testing.T) {
 	panel := panelStrings("")
 
-	for _, spec := range settingSpecs {
+	for index := range settingSpecs {
+		spec := &settingSpecs[index]
 		if panel.Labels[spec.key] == "" {
 			t.Errorf("setting %q has no label in settings_panel.labels", spec.key)
 		}
@@ -172,7 +200,8 @@ func TestEveryCategoryIsLocalizedAndUsed(t *testing.T) {
 		}
 	}
 
-	for _, spec := range settingSpecs {
+	for index := range settingSpecs {
+		spec := &settingSpecs[index]
 		if !isKnownCategory(spec.category) {
 			t.Errorf("setting %q sits in unknown category %q", spec.key, spec.category)
 		}

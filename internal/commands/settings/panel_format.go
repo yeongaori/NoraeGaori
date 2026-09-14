@@ -8,8 +8,8 @@ import (
 	"noraegaori/internal/messages"
 )
 
-func panelStrings(guildID string) messages.SettingsPanelMessages {
-	return messages.T(guildID).SettingsPanel
+func panelStrings(guildID string) *messages.SettingsPanelMessages {
+	return &messages.T(guildID).SettingsPanel
 }
 
 func settingLabel(guildID, key string) string {
@@ -30,7 +30,7 @@ func categoryLabel(guildID, category string) string {
 	return category
 }
 
-func defaultFor(spec settingSpec) string {
+func defaultFor(spec *settingSpec) string {
 	cfg := config.GetConfig()
 	if cfg == nil {
 		return ""
@@ -56,11 +56,11 @@ type panelView struct {
 	openSetting string
 	token       string
 	isAdmin     bool
-	specs       []settingSpec
+	specs       []*settingSpec
 	values      map[string]settingValue
 }
 
-func newPanelView(guildID, category, openSetting, token string, isAdmin bool) panelView {
+func newPanelView(guildID, category, openSetting, token string, isAdmin bool) *panelView {
 	specs := settingsInCategory(category, isAdmin)
 	values := make(map[string]settingValue, len(specs))
 	for _, spec := range specs {
@@ -68,7 +68,7 @@ func newPanelView(guildID, category, openSetting, token string, isAdmin bool) pa
 		values[spec.key] = settingValue{raw: raw, ok: ok}
 	}
 
-	return panelView{
+	return &panelView{
 		guildID:     guildID,
 		category:    category,
 		openSetting: openSetting,
@@ -79,31 +79,33 @@ func newPanelView(guildID, category, openSetting, token string, isAdmin bool) pa
 	}
 }
 
-func (view panelView) displayValue(spec settingSpec) string {
-	panel := panelStrings(view.guildID)
-
+func (view *panelView) displayValue(spec *settingSpec) string {
 	value := view.values[spec.key]
 	if !value.ok {
-		return panel.ReadFailed
+		return panelStrings(view.guildID).ReadFailed
 	}
 
+	return formatSettingValue(view.guildID, spec, value.raw)
+}
+
+func formatSettingValue(guildID string, spec *settingSpec, raw string) string {
 	switch spec.kind {
 	case settingToggle:
-		return toggleDisplay(view.guildID, value.raw)
+		return toggleDisplay(guildID, raw)
 	case settingCycle:
-		return repeatDisplay(view.guildID, value.raw)
+		return repeatDisplay(guildID, raw)
 	case settingText, settingChoice:
-		if value.raw == "" {
-			return fmt.Sprintf(panel.DefaultValue, defaultFor(spec))
+		if raw == "" {
+			return fmt.Sprintf(panelStrings(guildID).DefaultValue, defaultFor(spec))
 		}
-		return value.raw
+		return raw
 	default:
-		return value.raw
+		return raw
 	}
 }
 
 func toggleDisplay(guildID, value string) string {
-	settings := messages.T(guildID).Settings
+	settings := &messages.T(guildID).Settings
 	if value == valueOn {
 		return settings.StatusOn
 	}
@@ -122,7 +124,7 @@ func repeatDisplay(guildID, value string) string {
 	}
 }
 
-func validationMessage(guildID string, spec settingSpec, err error) string {
+func validationMessage(guildID string, spec *settingSpec, err error) string {
 	panel := panelStrings(guildID)
 	label := settingLabel(guildID, spec.key)
 

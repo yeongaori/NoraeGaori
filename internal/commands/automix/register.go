@@ -1,6 +1,7 @@
 package automix
 
 import (
+	"noraegaori/internal/commands/settings"
 	"noraegaori/internal/discord/command"
 	"noraegaori/internal/messages"
 
@@ -31,7 +32,7 @@ func Register(cmd func(string) messages.CommandStrings) {
 				MaxValue:    30.0,
 			},
 		},
-		Handler:  HandleFadeIn,
+		Handler:  settings.HandleSetting("fadein"),
 		TextOnly: false,
 		Usage:    cmd("fadein").Usage,
 		Example:  cmd("fadein").Example,
@@ -60,7 +61,7 @@ func Register(cmd func(string) messages.CommandStrings) {
 				MaxValue:    30.0,
 			},
 		},
-		Handler:  HandleFadeOut,
+		Handler:  settings.HandleSetting("fadeout"),
 		TextOnly: false,
 		Usage:    cmd("fadeout").Usage,
 		Example:  cmd("fadeout").Example,
@@ -89,7 +90,7 @@ func Register(cmd func(string) messages.CommandStrings) {
 				MaxValue:    64.0,
 			},
 		},
-		Handler:  HandleAutoMix,
+		Handler:  settings.HandleSetting("automix"),
 		TextOnly: false,
 		Usage:    cmd("automix").Usage,
 		Example:  cmd("automix").Example,
@@ -166,7 +167,7 @@ func Register(cmd func(string) messages.CommandStrings) {
 				MaxValue:    30.0,
 			},
 		},
-		Handler:  HandleCrossfade,
+		Handler:  settings.HandleSetting("crossfade"),
 		TextOnly: false,
 		Usage:    cmd("crossfade").Usage,
 		Example:  cmd("crossfade").Example,
@@ -187,7 +188,7 @@ func Register(cmd func(string) messages.CommandStrings) {
 				},
 			},
 		},
-		Handler:  HandleFadeOnStop,
+		Handler:  settings.HandleSetting("fadeonstop"),
 		TextOnly: false,
 		Usage:    cmd("fadeonstop").Usage,
 		Example:  cmd("fadeonstop").Example,
@@ -208,7 +209,7 @@ func Register(cmd func(string) messages.CommandStrings) {
 				},
 			},
 		},
-		Handler:  HandleTrimSilence,
+		Handler:  settings.HandleSetting("trimsilence"),
 		TextOnly: false,
 		Usage:    cmd("trimsilence").Usage,
 		Example:  cmd("trimsilence").Example,

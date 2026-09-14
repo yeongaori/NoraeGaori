@@ -234,8 +234,6 @@ func TestParseCommandOptions(t *testing.T) {
 }
 
 func TestCreatePseudoInteraction(t *testing.T) {
-	t.Skip("requires a live or mocked Discord session: CreatePseudoInteraction calls Session.GuildMember")
-	session := &discordgo.Session{}
 	message := &discordgo.MessageCreate{
 		Message: &discordgo.Message{
 			ID:        "msg123",
@@ -245,6 +243,7 @@ func TestCreatePseudoInteraction(t *testing.T) {
 				ID:       "user123",
 				Username: "testuser",
 			},
+			Member: &discordgo.Member{Roles: []string{"role123"}},
 		},
 	}
 
@@ -260,7 +259,7 @@ func TestCreatePseudoInteraction(t *testing.T) {
 
 	args := []string{"test", "song"}
 
-	interaction := CreatePseudoInteraction(session, message, cmd.Name, cmd.Options, args)
+	interaction := CreatePseudoInteraction(message, MessageMember(nil, message), cmd.Name, cmd.Options, args)
 
 	if interaction == nil {
 		t.Fatal("Interaction should not be nil")

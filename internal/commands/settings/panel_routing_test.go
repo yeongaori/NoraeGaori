@@ -47,7 +47,8 @@ func TestComponentRoutingIgnoresUnrelatedCustomIDs(t *testing.T) {
 }
 
 func TestModalRoutingRecognisesEveryEditableSetting(t *testing.T) {
-	for _, spec := range settingSpecs {
+	for index := range settingSpecs {
+		spec := &settingSpecs[index]
 		if spec.kind != settingText && spec.kind != settingNumber {
 			continue
 		}

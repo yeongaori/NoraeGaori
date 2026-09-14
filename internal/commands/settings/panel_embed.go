@@ -7,7 +7,7 @@ import (
 	"noraegaori/internal/messages"
 )
 
-func buildSettingsEmbed(view panelView) *discordgo.MessageEmbed {
+func buildSettingsEmbed(view *panelView) *discordgo.MessageEmbed {
 	panel := panelStrings(view.guildID)
 
 	fields := make([]*discordgo.MessageEmbedField, 0, len(view.specs))

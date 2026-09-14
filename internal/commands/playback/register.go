@@ -1,6 +1,7 @@
 package playback
 
 import (
+	"noraegaori/internal/commands/settings"
 	"noraegaori/internal/discord/command"
 	"noraegaori/internal/messages"
 
@@ -104,7 +105,7 @@ func Register(cmd func(string) messages.CommandStrings) {
 				},
 			},
 		},
-		Handler:  HandleRepeat,
+		Handler:  settings.HandleSetting("repeat"),
 		TextOnly: false,
 		Usage:    cmd("repeat").Usage,
 		Example:  cmd("repeat").Example,

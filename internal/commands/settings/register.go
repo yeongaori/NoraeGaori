@@ -63,7 +63,7 @@ func Register(cmd func(string) messages.CommandStrings) {
 				},
 			},
 		},
-		Handler:  HandleSponsorBlock,
+		Handler:  HandleSetting("sponsorblock"),
 		TextOnly: false,
 		Usage:    cmd("sponsorblock").Usage,
 		Example:  cmd("sponsorblock").Example,
@@ -84,7 +84,7 @@ func Register(cmd func(string) messages.CommandStrings) {
 				},
 			},
 		},
-		Handler:  HandleShowStartedTrack,
+		Handler:  HandleSetting("showstartedtrack"),
 		TextOnly: false,
 		Usage:    cmd("showstartedtrack").Usage,
 		Example:  cmd("showstartedtrack").Example,
@@ -105,7 +105,7 @@ func Register(cmd func(string) messages.CommandStrings) {
 				},
 			},
 		},
-		Handler:  HandleNormalization,
+		Handler:  HandleSetting("normalization"),
 		TextOnly: false,
 		Usage:    cmd("normalization").Usage,
 		Example:  cmd("normalization").Example,
@@ -129,4 +129,5 @@ func Register(cmd func(string) messages.CommandStrings) {
 		Example:  cmd("settings").Example,
 	})
 	command.RegisterAliases("settings", cmd("settings"))
+	registerSettingMenus()
 }

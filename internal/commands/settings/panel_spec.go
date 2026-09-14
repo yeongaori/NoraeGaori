@@ -84,7 +84,7 @@ var settingSpecs = []settingSpec{
 		category: categoryPlayback,
 		kind:     settingToggle,
 		read:     boolReader(queue.GetNormalization),
-		write:    boolWriter(queue.SetNormalization),
+		write:    writeNormalization,
 	},
 	{
 		key:      "showstartedtrack",
@@ -174,18 +174,19 @@ var settingSpecs = []settingSpec{
 	},
 }
 
-func findSetting(key string) (settingSpec, bool) {
-	for _, spec := range settingSpecs {
-		if spec.key == key {
-			return spec, true
+func findSetting(key string) (*settingSpec, bool) {
+	for index := range settingSpecs {
+		if settingSpecs[index].key == key {
+			return &settingSpecs[index], true
 		}
 	}
-	return settingSpec{}, false
+	return nil, false
 }
 
-func settingsInCategory(category string, isAdmin bool) []settingSpec {
-	visible := make([]settingSpec, 0, len(settingSpecs))
-	for _, spec := range settingSpecs {
+func settingsInCategory(category string, isAdmin bool) []*settingSpec {
+	visible := make([]*settingSpec, 0, len(settingSpecs))
+	for index := range settingSpecs {
+		spec := &settingSpecs[index]
 		if spec.category != category {
 			continue
 		}

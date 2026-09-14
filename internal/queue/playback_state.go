@@ -108,5 +108,7 @@ func InvalidateCache(guildID string) {
 	cacheMux.Lock()
 	defer cacheMux.Unlock()
 	delete(cache, guildID)
+	delete(settingsCache, guildID)
+	settingsGenerations[guildID]++
 	logger.Debugf("Invalidated cache for guild: %s", guildID)
 }

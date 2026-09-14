@@ -32,7 +32,6 @@ type Locale struct {
 	Descriptions  DescriptionMessages       `json:"descriptions"`
 	Footers       FooterMessages            `json:"footers"`
 	Buttons       ButtonMessages            `json:"buttons"`
-	SelectMenus   SelectMenuMessages        `json:"select_menus"`
 	Votes         VoteMessages              `json:"votes"`
 	Help          HelpMessages              `json:"help"`
 	Commands      map[string]CommandStrings `json:"commands"`
@@ -40,6 +39,7 @@ type Locale struct {
 	Admin         AdminMessages             `json:"admin"`
 	Settings      SettingsMessages          `json:"settings"`
 	SettingsPanel SettingsPanelMessages     `json:"settings_panel"`
+	DropdownMenu  DropdownMenuMessages      `json:"dropdown_menu"`
 	Status        StatusMessages            `json:"status"`
 	Music         MusicMessages             `json:"music"`
 	Queue         QueueMessages             `json:"queue"`
@@ -93,9 +93,7 @@ type ErrorMessages struct {
 	NotInVoiceChannel     string `json:"not_in_voice_channel"`
 	EmptyQueue            string `json:"empty_queue"`
 	SongNotFound          string `json:"song_not_found"`
-	PermissionDenied      string `json:"permission_denied"`
 	AdminOnly             string `json:"admin_only"`
-	AlreadyVoted          string `json:"already_voted"`
 	DuplicateSong         string `json:"duplicate_song"`
 	UnknownCommand        string `json:"unknown_command"`
 	CommandExecutionError string `json:"command_execution_error"`
@@ -105,35 +103,23 @@ type ErrorMessages struct {
 
 type TitleMessages struct {
 	Added         string `json:"added"`
-	Success       string `json:"success"`
-	Removed       string `json:"removed"`
 	Skipped       string `json:"skipped"`
-	Resumed       string `json:"resumed"`
 	Paused        string `json:"paused"`
-	RepeatAll     string `json:"repeat_all"`
-	RepeatSingle  string `json:"repeat_single"`
-	RepeatOff     string `json:"repeat_off"`
 	Searching     string `json:"searching"`
 	Loading       string `json:"loading"`
-	NowPlaying    string `json:"now_playing"`
 	Queue         string `json:"queue"`
 	Help          string `json:"help"`
-	SearchResults string `json:"search_results"`
 	PlaylistFound string `json:"playlist_found"`
 	PlaylistAdded string `json:"playlist_added"`
-	PlaylistStart string `json:"playlist_start"`
 	SkipVote      string `json:"skip_vote"`
 	StopVote      string `json:"stop_vote"`
 	RemoveVote    string `json:"remove_vote"`
-	SystemInfo    string `json:"system_info"`
-	Warning       string `json:"warning"`
 	Duplicate     string `json:"duplicate"`
 	Unavailable   string `json:"unavailable"`
 	Error         string `json:"error"`
 	EmptyQueue    string `json:"empty_queue"`
 	NoSong        string `json:"no_song"`
 	NoPermission  string `json:"no_permission"`
-	AlreadyVoted  string `json:"already_voted"`
 }
 
 type FieldMessages struct {
@@ -144,9 +130,7 @@ type FieldMessages struct {
 	TotalSongs     string `json:"total_songs"`
 	CurrentVote    string `json:"current_vote"`
 	AdderVote      string `json:"adder_vote"`
-	RequiredVote   string `json:"required_vote"`
 	VoteResult     string `json:"vote_result"`
-	RemovedSongs   string `json:"removed_songs"`
 	CurrentPrefix  string `json:"current_prefix"`
 	TotalCommands  string `json:"total_commands"`
 	CPUInfo        string `json:"cpu_info"`
@@ -159,31 +143,18 @@ type FieldMessages struct {
 }
 
 type DescriptionMessages struct {
-	Searching        string `json:"searching"`
-	Loading          string `json:"loading"`
-	PlaylistConfirm  string `json:"playlist_confirm"`
-	PlaylistAdding   string `json:"playlist_adding"`
-	PlaylistSkipped  string `json:"playlist_skipped"`
-	VoteAdded        string `json:"vote_added"`
-	Skipped          string `json:"skipped"`
-	Paused           string `json:"paused"`
-	Resumed          string `json:"resumed"`
-	RepeatAll        string `json:"repeat_all"`
-	RepeatSingle     string `json:"repeat_single"`
-	RepeatOff        string `json:"repeat_off"`
-	RepeatOffRemoved string `json:"repeat_off_removed"`
-	SongsRemoved     string `json:"songs_removed"`
-	EmptyQueue       string `json:"empty_queue"`
-	SearchPrompt     string `json:"search_prompt"`
-	SystemStatus     string `json:"system_status"`
+	Searching  string `json:"searching"`
+	Loading    string `json:"loading"`
+	Skipped    string `json:"skipped"`
+	Paused     string `json:"paused"`
+	EmptyQueue string `json:"empty_queue"`
 }
 
 type FooterMessages struct {
-	Pagination      string `json:"pagination"`
-	HelpPagination  string `json:"help_pagination"`
-	PlaylistConfirm string `json:"playlist_confirm"`
-	RequestedBy     string `json:"requested_by"`
-	VoteReaction    string `json:"vote_reaction"`
+	Pagination     string `json:"pagination"`
+	HelpPagination string `json:"help_pagination"`
+	RequestedBy    string `json:"requested_by"`
+	VoteReaction   string `json:"vote_reaction"`
 }
 
 type ButtonMessages struct {
@@ -191,24 +162,16 @@ type ButtonMessages struct {
 	Next     string `json:"next"`
 }
 
-type SelectMenuMessages struct {
-	Placeholder string `json:"placeholder"`
-}
-
 type VoteMessages struct {
-	More             string `json:"more"`
-	Expired          string `json:"expired"`
-	StopAlreadyVoted string `json:"stop_already_voted"`
-	InProgress       string `json:"in_progress"`
-	Cancelled        string `json:"cancelled"`
-	Superseded       string `json:"superseded"`
-	AllAddersAgreed  string `json:"all_adders_agreed"`
-	QueueEnded       string `json:"queue_ended"`
+	Expired         string `json:"expired"`
+	InProgress      string `json:"in_progress"`
+	Cancelled       string `json:"cancelled"`
+	Superseded      string `json:"superseded"`
+	AllAddersAgreed string `json:"all_adders_agreed"`
+	QueueEnded      string `json:"queue_ended"`
 }
 
 type HelpMessages struct {
-	CommandFormat      string `json:"command_format"`
-	AdminMarker        string `json:"admin_marker"`
 	NoCommandsTitle    string `json:"no_commands_title"`
 	NoCommandsDesc     string `json:"no_commands_desc"`
 	MessageLabel       string `json:"message_label"`
@@ -273,41 +236,6 @@ type AdminMessages struct {
 type SettingsMessages struct {
 	StatusOn                    string `json:"status_on"`
 	StatusOff                   string `json:"status_off"`
-	SponsorBlockError           string `json:"sponsorblock_error"`
-	SponsorBlockTitle           string `json:"sponsorblock_title"`
-	SponsorBlockDesc            string `json:"sponsorblock_desc"`
-	SponsorBlockWhatTitle       string `json:"sponsorblock_what_title"`
-	SponsorBlockWhatDesc        string `json:"sponsorblock_what_desc"`
-	NoteTitle                   string `json:"note_title"`
-	SettingApplyNext            string `json:"setting_apply_next"`
-	ShowTrackError              string `json:"showtrack_error"`
-	ShowTrackTitle              string `json:"showtrack_title"`
-	ShowTrackDesc               string `json:"showtrack_desc"`
-	ShowTrackWhatTitle          string `json:"showtrack_what_title"`
-	ShowTrackWhatDesc           string `json:"showtrack_what_desc"`
-	NormalizationError          string `json:"normalization_error"`
-	NormalizationTitle          string `json:"normalization_title"`
-	NormalizationDesc           string `json:"normalization_desc"`
-	NormalizationWhatTitle      string `json:"normalization_what_title"`
-	NormalizationWhatDesc       string `json:"normalization_what_desc"`
-	FadeInError                 string `json:"fadein_error"`
-	FadeInTitle                 string `json:"fadein_title"`
-	FadeInDesc                  string `json:"fadein_desc"`
-	FadeInWhatTitle             string `json:"fadein_what_title"`
-	FadeInWhatDesc              string `json:"fadein_what_desc"`
-	FadeInDurationLabel         string `json:"fadein_duration_label"`
-	FadeOutError                string `json:"fadeout_error"`
-	FadeOutTitle                string `json:"fadeout_title"`
-	FadeOutDesc                 string `json:"fadeout_desc"`
-	FadeOutWhatTitle            string `json:"fadeout_what_title"`
-	FadeOutWhatDesc             string `json:"fadeout_what_desc"`
-	FadeOutDurationLabel        string `json:"fadeout_duration_label"`
-	AutoMixError                string `json:"automix_error"`
-	AutoMixTitle                string `json:"automix_title"`
-	AutoMixDesc                 string `json:"automix_desc"`
-	AutoMixWhatTitle            string `json:"automix_what_title"`
-	AutoMixWhatDesc             string `json:"automix_what_desc"`
-	AutoMixBeatsLabel           string `json:"automix_beats_label"`
 	AutoMixStyleTitle           string `json:"automixstyle_title"`
 	AutoMixStyleDesc            string `json:"automixstyle_desc"`
 	AutoMixStyleWhatTitle       string `json:"automixstyle_what_title"`
@@ -316,24 +244,6 @@ type SettingsMessages struct {
 	AutoMixStyleError           string `json:"automixstyle_error"`
 	AutoMixStyleInvalidCategory string `json:"automixstyle_invalid_category"`
 	AutoMixStyleInvalidValue    string `json:"automixstyle_invalid_value"`
-	CrossfadeError              string `json:"crossfade_error"`
-	CrossfadeTitle              string `json:"crossfade_title"`
-	CrossfadeDesc               string `json:"crossfade_desc"`
-	CrossfadeWhatTitle          string `json:"crossfade_what_title"`
-	CrossfadeWhatDesc           string `json:"crossfade_what_desc"`
-	CrossfadeDurationLabel      string `json:"crossfade_duration_label"`
-	FadeOnStopError             string `json:"fadeonstop_error"`
-	FadeOnStopTitle             string `json:"fadeonstop_title"`
-	FadeOnStopDesc              string `json:"fadeonstop_desc"`
-	FadeOnStopWhatTitle         string `json:"fadeonstop_what_title"`
-	FadeOnStopWhatDesc          string `json:"fadeonstop_what_desc"`
-	TrimSilenceError            string `json:"trimsilence_error"`
-	TrimSilenceTitle            string `json:"trimsilence_title"`
-	TrimSilenceDesc             string `json:"trimsilence_desc"`
-	TrimSilenceWhatTitle        string `json:"trimsilence_what_title"`
-	TrimSilenceWhatDesc         string `json:"trimsilence_what_desc"`
-	DurationLabel               string `json:"duration_label"`
-	PrefixEmpty                 string `json:"prefix_empty"`
 	PrefixTooLong               string `json:"prefix_too_long"`
 	PrefixError                 string `json:"prefix_error"`
 	PrefixChangedTitle          string `json:"prefix_changed_title"`
@@ -376,6 +286,11 @@ type SettingsPanelMessages struct {
 	Categories          map[string]string `json:"categories"`
 	Labels              map[string]string `json:"labels"`
 	Hints               map[string]string `json:"hints"`
+}
+
+type DropdownMenuMessages struct {
+	Current     string `json:"current"`
+	Placeholder string `json:"placeholder"`
 }
 
 type StatusMessages struct {
@@ -440,7 +355,6 @@ type MusicMessages struct {
 	StopFailedDesc             string `json:"stop_failed_desc"`
 	StopSuccessTitle           string `json:"stop_success_title"`
 	StopSuccessDesc            string `json:"stop_success_desc"`
-	StopAlreadyVoted           string `json:"stop_already_voted"`
 	NowPlayingLoading          string `json:"nowplaying_loading"`
 	NowPlayingPlaying          string `json:"nowplaying_playing"`
 	NowPlayingPaused           string `json:"nowplaying_paused"`
@@ -452,7 +366,6 @@ type MusicMessages struct {
 	VolumeSetFailed            string `json:"volume_set_failed"`
 	VolumeSetTitle             string `json:"volume_set_title"`
 	VolumeSetDesc              string `json:"volume_set_desc"`
-	RepeatSetFailed            string `json:"repeat_set_failed"`
 	PlaylistAddingTitle        string `json:"playlist_adding_title"`
 	PlaylistAddingAll          string `json:"playlist_adding_all"`
 	PlaylistAddingRest         string `json:"playlist_adding_rest"`
@@ -486,14 +399,12 @@ type QueueMessages struct {
 	SongsRemovedAll      string `json:"songs_removed_all"`
 	InvalidRange         string `json:"invalid_range"`
 	RangeIncludesCurrent string `json:"range_includes_current"`
-	NoUserSongsInRange   string `json:"no_user_songs_in_range"`
 	RangeRemoved         string `json:"range_removed"`
 	EnterValidRange      string `json:"enter_valid_range"`
 	CannotRemoveCurrent  string `json:"cannot_remove_current"`
 	RemoveVoteDesc       string `json:"remove_vote_desc"`
 	RemoveRangeVoteDesc  string `json:"remove_range_vote_desc"`
 	RemoveTargetGone     string `json:"remove_target_gone"`
-	OnlyOwnSongs         string `json:"only_own_songs"`
 	SongRemoved          string `json:"song_removed"`
 	EnterSearchQuery     string `json:"enter_search_query"`
 	SearchingTitle       string `json:"searching_title"`

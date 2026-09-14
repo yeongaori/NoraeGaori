@@ -10,16 +10,23 @@ import (
 	"noraegaori/internal/logger"
 )
 
-func CreatePseudoInteraction(s *discordgo.Session, m *discordgo.MessageCreate, name string, opts []*discordgo.ApplicationCommandOption, args []string) *discordgo.InteractionCreate {
+func MessageMember(s *discordgo.Session, m *discordgo.MessageCreate) *discordgo.Member {
+	if m.Member != nil {
+		member := *m.Member
+		member.User = m.Author
+		member.GuildID = m.GuildID
+		return &member
+	}
 
 	member, err := s.GuildMember(m.GuildID, m.Author.ID)
 	if err != nil {
 		logger.Errorf("Failed to get member: %v", err)
-		member = &discordgo.Member{
-			User: m.Author,
-		}
+		return &discordgo.Member{User: m.Author}
 	}
+	return member
+}
 
+func CreatePseudoInteraction(m *discordgo.MessageCreate, member *discordgo.Member, name string, opts []*discordgo.ApplicationCommandOption, args []string) *discordgo.InteractionCreate {
 	options := parseCommandOptions(opts, args)
 
 	interaction := &discordgo.InteractionCreate{

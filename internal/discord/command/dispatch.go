@@ -18,6 +18,11 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
+	if i.Type == discordgo.InteractionMessageComponent {
+		discord.HandleDropdownMenuPick(s, i)
+		return
+	}
+
 	if i.Type != discordgo.InteractionApplicationCommand {
 		return
 	}
@@ -90,18 +95,10 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
+	member := discord.MessageMember(s, m)
+
 	if cmd.AdminOnly {
-
-		member, err := s.State.Member(m.GuildID, m.Author.ID)
-		if err != nil {
-
-			member, err = s.GuildMember(m.GuildID, m.Author.ID)
-		}
-
-		isBotAdmin := config.IsAdmin(m.Author.ID)
-		isServerAdmin := (err == nil) && discord.IsGuildAdmin(s, m.GuildID, member)
-
-		if !isBotAdmin && !isServerAdmin {
+		if !config.IsAdmin(m.Author.ID) && !discord.IsGuildAdmin(s, m.GuildID, member) {
 			embed := messages.CreateErrorEmbed(messages.T(m.GuildID).Titles.NoPermission, messages.T(m.GuildID).Errors.AdminOnly)
 
 			s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
@@ -120,7 +117,7 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	args := parts[1:]
 
-	pseudoInteraction := discord.CreatePseudoInteraction(s, m, cmd.Name, cmd.Options, args)
+	pseudoInteraction := discord.CreatePseudoInteraction(m, member, cmd.Name, cmd.Options, args)
 
 	messageResponder := &discord.MessageResponse{
 		Session:       s,

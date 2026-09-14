@@ -1,7 +1,6 @@
 package queue
 
 import (
-	"database/sql"
 	"errors"
 	"fmt"
 
@@ -11,20 +10,7 @@ import (
 )
 
 func GetFadeIn(guildID string) (bool, error) {
-	var fadein int
-	err := database.DB.QueryRow(
-		`SELECT COALESCE(fadein, 0) FROM guild_settings WHERE guild_id = ?`,
-		guildID,
-	).Scan(&fadein)
-
-	if err == sql.ErrNoRows {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("failed to get fadein: %w", err)
-	}
-
-	return fadein == 1, nil
+	return readSetting(guildID, "fadein", false, func(settings *guildSettingsRow) bool { return settings.fadeIn })
 }
 
 func SetFadeIn(guildID string, enabled bool) error {
@@ -47,20 +33,7 @@ func SetFadeIn(guildID string, enabled bool) error {
 }
 
 func GetFadeInDuration(guildID string) (float64, error) {
-	var duration float64
-	err := database.DB.QueryRow(
-		`SELECT COALESCE(fadein_duration, 3) FROM guild_settings WHERE guild_id = ?`,
-		guildID,
-	).Scan(&duration)
-
-	if err == sql.ErrNoRows {
-		return 3, nil
-	}
-	if err != nil {
-		return 3, fmt.Errorf("failed to get fadein_duration: %w", err)
-	}
-
-	return duration, nil
+	return readSetting(guildID, "fadein_duration", 3, func(settings *guildSettingsRow) float64 { return settings.fadeInDuration })
 }
 
 func SetFadeInDuration(guildID string, seconds float64) error {
@@ -82,20 +55,7 @@ func SetFadeInDuration(guildID string, seconds float64) error {
 }
 
 func GetFadeOut(guildID string) (bool, error) {
-	var fadeout int
-	err := database.DB.QueryRow(
-		`SELECT COALESCE(fadeout, 0) FROM guild_settings WHERE guild_id = ?`,
-		guildID,
-	).Scan(&fadeout)
-
-	if err == sql.ErrNoRows {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("failed to get fadeout: %w", err)
-	}
-
-	return fadeout == 1, nil
+	return readSetting(guildID, "fadeout", false, func(settings *guildSettingsRow) bool { return settings.fadeOut })
 }
 
 func SetFadeOut(guildID string, enabled bool) error {
@@ -118,20 +78,7 @@ func SetFadeOut(guildID string, enabled bool) error {
 }
 
 func GetFadeOutDuration(guildID string) (float64, error) {
-	var duration float64
-	err := database.DB.QueryRow(
-		`SELECT COALESCE(fadeout_duration, 3) FROM guild_settings WHERE guild_id = ?`,
-		guildID,
-	).Scan(&duration)
-
-	if err == sql.ErrNoRows {
-		return 3, nil
-	}
-	if err != nil {
-		return 3, fmt.Errorf("failed to get fadeout_duration: %w", err)
-	}
-
-	return duration, nil
+	return readSetting(guildID, "fadeout_duration", 3, func(settings *guildSettingsRow) float64 { return settings.fadeOutDuration })
 }
 
 func SetFadeOutDuration(guildID string, seconds float64) error {
@@ -153,20 +100,7 @@ func SetFadeOutDuration(guildID string, seconds float64) error {
 }
 
 func GetAutoMix(guildID string) (bool, error) {
-	var automix int
-	err := database.DB.QueryRow(
-		`SELECT COALESCE(automix, 0) FROM guild_settings WHERE guild_id = ?`,
-		guildID,
-	).Scan(&automix)
-
-	if err == sql.ErrNoRows {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("failed to get automix: %w", err)
-	}
-
-	return automix == 1, nil
+	return readSetting(guildID, "automix", false, func(settings *guildSettingsRow) bool { return settings.autoMix })
 }
 
 func SetAutoMix(guildID string, enabled bool) error {
@@ -189,20 +123,7 @@ func SetAutoMix(guildID string, enabled bool) error {
 }
 
 func GetAutoMixBeats(guildID string) (int, error) {
-	var beats int
-	err := database.DB.QueryRow(
-		`SELECT COALESCE(automix_beats, 16) FROM guild_settings WHERE guild_id = ?`,
-		guildID,
-	).Scan(&beats)
-
-	if err == sql.ErrNoRows {
-		return 16, nil
-	}
-	if err != nil {
-		return 16, fmt.Errorf("failed to get automix_beats: %w", err)
-	}
-
-	return beats, nil
+	return readSetting(guildID, "automix_beats", 16, func(settings *guildSettingsRow) int { return settings.autoMixBeats })
 }
 
 func SetAutoMixBeats(guildID string, beats int) error {
@@ -243,23 +164,9 @@ func GetAutoMixStyle(guildID, category string) (string, error) {
 		return AutoMixStyleAuto, fmt.Errorf("unknown automix style category: %s", category)
 	}
 
-	var style string
-	err := database.DB.QueryRow(
-		fmt.Sprintf(`SELECT COALESCE(%s, '%s') FROM guild_settings WHERE guild_id = ?`, column, AutoMixStyleAuto),
-		guildID,
-	).Scan(&style)
-
-	if err == sql.ErrNoRows {
-		return AutoMixStyleAuto, nil
-	}
-	if err != nil {
-		return AutoMixStyleAuto, fmt.Errorf("failed to get %s: %w", column, err)
-	}
-
-	if style == "" {
-		return AutoMixStyleAuto, nil
-	}
-	return style, nil
+	return readSetting(guildID, column, AutoMixStyleAuto, func(settings *guildSettingsRow) string {
+		return defaultAutoMixStyle(autoMixStyleOf(settings, category))
+	})
 }
 
 func SetAutoMixStyle(guildID, category, style string) error {
@@ -322,20 +229,7 @@ func SetSongAutoMixStyle(guildID string, songID int, category, style string) err
 }
 
 func GetCrossfade(guildID string) (bool, error) {
-	var crossfade int
-	err := database.DB.QueryRow(
-		`SELECT COALESCE(crossfade, 0) FROM guild_settings WHERE guild_id = ?`,
-		guildID,
-	).Scan(&crossfade)
-
-	if err == sql.ErrNoRows {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("failed to get crossfade: %w", err)
-	}
-
-	return crossfade == 1, nil
+	return readSetting(guildID, "crossfade", false, func(settings *guildSettingsRow) bool { return settings.crossfade })
 }
 
 func SetCrossfade(guildID string, enabled bool) error {
@@ -358,20 +252,7 @@ func SetCrossfade(guildID string, enabled bool) error {
 }
 
 func GetCrossfadeDuration(guildID string) (float64, error) {
-	var duration float64
-	err := database.DB.QueryRow(
-		`SELECT COALESCE(crossfade_duration, 8) FROM guild_settings WHERE guild_id = ?`,
-		guildID,
-	).Scan(&duration)
-
-	if err == sql.ErrNoRows {
-		return 8, nil
-	}
-	if err != nil {
-		return 8, fmt.Errorf("failed to get crossfade_duration: %w", err)
-	}
-
-	return duration, nil
+	return readSetting(guildID, "crossfade_duration", 8, func(settings *guildSettingsRow) float64 { return settings.crossfadeDuration })
 }
 
 func SetCrossfadeDuration(guildID string, seconds float64) error {
@@ -393,20 +274,7 @@ func SetCrossfadeDuration(guildID string, seconds float64) error {
 }
 
 func GetFadeOnStop(guildID string) (bool, error) {
-	var fadeOnStop int
-	err := database.DB.QueryRow(
-		`SELECT COALESCE(fade_on_stop, 0) FROM guild_settings WHERE guild_id = ?`,
-		guildID,
-	).Scan(&fadeOnStop)
-
-	if err == sql.ErrNoRows {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("failed to get fade_on_stop: %w", err)
-	}
-
-	return fadeOnStop == 1, nil
+	return readSetting(guildID, "fade_on_stop", false, func(settings *guildSettingsRow) bool { return settings.fadeOnStop })
 }
 
 func SetFadeOnStop(guildID string, enabled bool) error {
@@ -429,20 +297,7 @@ func SetFadeOnStop(guildID string, enabled bool) error {
 }
 
 func GetTrimSilence(guildID string) (bool, error) {
-	var trimSilence int
-	err := database.DB.QueryRow(
-		`SELECT COALESCE(trim_silence, 0) FROM guild_settings WHERE guild_id = ?`,
-		guildID,
-	).Scan(&trimSilence)
-
-	if err == sql.ErrNoRows {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("failed to get trim_silence: %w", err)
-	}
-
-	return trimSilence == 1, nil
+	return readSetting(guildID, "trim_silence", false, func(settings *guildSettingsRow) bool { return settings.trimSilence })
 }
 
 func SetTrimSilence(guildID string, enabled bool) error {

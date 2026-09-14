@@ -116,7 +116,8 @@ func TestThePickerListsEverySettingWithItsCurrentValue(t *testing.T) {
 func TestAdminOnlySettingsAreHiddenFromNonAdmins(t *testing.T) {
 	dbtest.Setup(t)
 
-	for _, spec := range settingSpecs {
+	for index := range settingSpecs {
+		spec := &settingSpecs[index]
 		if !spec.adminOnly {
 			continue
 		}
