@@ -3,6 +3,7 @@ package queue
 import (
 	"testing"
 
+	"noraegaori/internal/config"
 	"noraegaori/internal/database"
 )
 
@@ -28,8 +29,8 @@ func TestLoadQueueFromDBAppliesEveryDefault(t *testing.T) {
 		t.Errorf("VoiceChannelID = %q, want %q", q.VoiceChannelID, "voice_channel_test")
 	}
 
-	if q.Volume != 100 {
-		t.Errorf("Volume = %g, want 100", q.Volume)
+	if q.Volume != config.DefaultVolume() {
+		t.Errorf("Volume = %g, want the configured default %g", q.Volume, config.DefaultVolume())
 	}
 	if q.AutoMixBeats != 16 {
 		t.Errorf("AutoMixBeats = %d, want 16", q.AutoMixBeats)

@@ -104,6 +104,10 @@ func SetLoading(guildID string, loading bool) error {
 	return nil
 }
 
+func init() {
+	guild.OnSettingsChange(InvalidateCache)
+}
+
 func InvalidateCache(guildID string) {
 	cacheMux.Lock()
 	defer cacheMux.Unlock()

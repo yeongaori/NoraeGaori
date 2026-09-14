@@ -17,6 +17,21 @@ func teardownTestConfig(t *testing.T) {
 	adminsConf.Store(nil)
 }
 
+func TestDefaultVolumeFallsBackWithoutAConfig(t *testing.T) {
+	previous := config.Load()
+	t.Cleanup(func() { config.Store(previous) })
+
+	config.Store(nil)
+	if got := DefaultVolume(); got != 100 {
+		t.Errorf("DefaultVolume() = %g without a config, want 100", got)
+	}
+
+	config.Store(&Config{DefaultVolume: 42})
+	if got := DefaultVolume(); got != 42 {
+		t.Errorf("DefaultVolume() = %g, want the configured 42", got)
+	}
+}
+
 func TestLoadDefaultConfig(t *testing.T) {
 	setupTestConfig(t)
 	defer teardownTestConfig(t)

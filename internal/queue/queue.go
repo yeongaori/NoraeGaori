@@ -155,13 +155,8 @@ func loadQueueRow(guildID string) (*queueRow, error) {
 }
 
 func defaultGuildSettingsRow() guildSettingsRow {
-	volume := 100.0
-	if cfg := config.GetConfig(); cfg != nil {
-		volume = cfg.DefaultVolume
-	}
-
 	return guildSettingsRow{
-		volume:            volume,
+		volume:            config.DefaultVolume(),
 		showStartedTrack:  true,
 		fadeInDuration:    3,
 		fadeOutDuration:   3,

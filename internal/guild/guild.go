@@ -71,12 +71,7 @@ func SetLanguage(guildID, lang string) error {
 		langValue = lang
 	}
 
-	_, err := database.DB.Exec(
-		`INSERT INTO guild_settings (guild_id, language) VALUES (?, ?)
-		 ON CONFLICT(guild_id) DO UPDATE SET language = ?`,
-		guildID, langValue, langValue,
-	)
-	if err != nil {
+	if err := SaveSetting(guildID, "language", langValue); err != nil {
 		return fmt.Errorf("failed to set guild language: %w", err)
 	}
 
@@ -146,12 +141,7 @@ func SetPrefix(guildID, prefix string) error {
 		prefixValue = prefix
 	}
 
-	_, err := database.DB.Exec(
-		`INSERT INTO guild_settings (guild_id, prefix) VALUES (?, ?)
-		 ON CONFLICT(guild_id) DO UPDATE SET prefix = ?`,
-		guildID, prefixValue, prefixValue,
-	)
-	if err != nil {
+	if err := SaveSetting(guildID, "prefix", prefixValue); err != nil {
 		return fmt.Errorf("failed to set guild prefix: %w", err)
 	}
 

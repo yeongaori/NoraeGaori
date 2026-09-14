@@ -295,6 +295,13 @@ func GetConfig() *Config {
 	return config.Load()
 }
 
+func DefaultVolume() float64 {
+	if cfg := GetConfig(); cfg != nil {
+		return cfg.DefaultVolume
+	}
+	return 100
+}
+
 func SetPrefix(prefix string) error {
 	configWrite.Lock()
 	defer configWrite.Unlock()

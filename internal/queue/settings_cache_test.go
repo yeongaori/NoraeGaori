@@ -1,6 +1,8 @@
 package queue
 
 import (
+	"errors"
+	"math"
 	"strings"
 	"testing"
 
@@ -134,6 +136,115 @@ func TestSettingGettersReadEveryDefault(t *testing.T) {
 		if check.got != check.want {
 			t.Errorf("%s = %v, want the default %v", check.name, check.got, check.want)
 		}
+	}
+}
+
+func TestGetQueueReportsAFailedSettingsLoad(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB(t)
+
+	if _, err := database.DB.Exec(`DROP TABLE guild_settings`); err != nil {
+		t.Fatalf("failed to drop guild_settings: %v", err)
+	}
+
+	if q, err := GetQueue("guild1", true); err == nil {
+		t.Errorf("GetQueue = (%v, nil) without a settings table, want an error", q)
+	}
+}
+
+func TestLoadQueueFromDBReportsAFailedSongsLoad(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB(t)
+
+	if _, err := database.DB.Exec(`DROP TABLE songs`); err != nil {
+		t.Fatalf("failed to drop songs: %v", err)
+	}
+
+	if q, err := loadQueueFromDB("guild1"); err == nil {
+		t.Errorf("loadQueueFromDB = (%v, nil) without a songs table, want an error", q)
+	}
+}
+
+func TestSettersKeepAnExistingRowsVolume(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB(t)
+
+	if err := SetVolume("guild1", 70); err != nil {
+		t.Fatalf("failed to set the volume: %v", err)
+	}
+	if err := SetSponsorBlock("guild1", true); err != nil {
+		t.Fatalf("failed to enable sponsorblock: %v", err)
+	}
+
+	if volume, err := GetVolume("guild1"); err != nil || volume != 70 {
+		t.Errorf("GetVolume = (%g, %v) after another setting was saved, want (70, nil)", volume, err)
+	}
+}
+
+func TestSettersReportInvalidInputAndSaveFailures(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB(t)
+	defer func() {
+		if err := database.Initialize(); err != nil {
+			t.Errorf("failed to reopen the test database: %v", err)
+		}
+	}()
+
+	if err := SetVolume("guild1", math.NaN()); err == nil {
+		t.Error("SetVolume accepted NaN")
+	}
+	if err := SetAutoMixStyle("guild1", "nope", "bass"); err == nil {
+		t.Error("SetAutoMixStyle accepted an unknown category")
+	}
+
+	if err := database.Close(); err != nil {
+		t.Fatalf("failed to close the test database: %v", err)
+	}
+	if err := SetSponsorBlock("guild1", true); err == nil || !strings.Contains(err.Error(), "failed to set sponsorblock") {
+		t.Errorf("SetSponsorBlock on a closed database = %v, want a wrapped error", err)
+	}
+}
+
+func TestSetSongAutoMixStyle(t *testing.T) {
+	setupTestDB(t)
+	defer teardownTestDB(t)
+
+	song := &Song{
+		URL:            "https://youtube.com/watch?v=style",
+		Title:          "Style Song",
+		Duration:       "3:00",
+		RequestedByID:  "user1",
+		RequestedByTag: "User#0001",
+	}
+	if err := AddSong("guild1", song, -1); err != nil {
+		t.Fatalf("failed to add a song: %v", err)
+	}
+	q, err := GetQueue("guild1", true)
+	if err != nil || q == nil || len(q.Songs) != 1 {
+		t.Fatalf("GetQueue = (%v, %v), want one song", q, err)
+	}
+	songID := q.Songs[0].ID
+
+	if err := SetSongAutoMixStyle("guild1", songID, "eq", "bass"); err != nil {
+		t.Errorf("setting the song's eq style failed: %v", err)
+	}
+	if err := SetSongAutoMixStyle("guild1", songID, "nope", "bass"); err == nil {
+		t.Error("an unknown style category was accepted")
+	}
+	if err := SetSongAutoMixStyle("guild1", songID+1000, "eq", "bass"); !errors.Is(err, ErrSongNotInQueue) {
+		t.Errorf("a missing song = %v, want ErrSongNotInQueue", err)
+	}
+
+	defer func() {
+		if err := database.Initialize(); err != nil {
+			t.Errorf("failed to reopen the test database: %v", err)
+		}
+	}()
+	if err := database.Close(); err != nil {
+		t.Fatalf("failed to close the test database: %v", err)
+	}
+	if err := SetSongAutoMixStyle("guild1", songID, "eq", "bass"); err == nil {
+		t.Error("setting a song style on a closed database succeeded")
 	}
 }
 

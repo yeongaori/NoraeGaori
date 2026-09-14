@@ -14,22 +14,7 @@ func GetFadeIn(guildID string) (bool, error) {
 }
 
 func SetFadeIn(guildID string, enabled bool) error {
-	release := guild.AcquireLock(guildID)
-	defer release()
-
-	value := boolToInt(enabled)
-	_, err := database.DB.Exec(
-		`INSERT INTO guild_settings (guild_id, fadein) VALUES (?, ?)
-		 ON CONFLICT(guild_id) DO UPDATE SET fadein = ?`,
-		guildID, value, value,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to set fadein: %w", err)
-	}
-
-	InvalidateCache(guildID)
-	logger.Debugf("Set fadein=%v for guild: %s", enabled, guildID)
-	return nil
+	return saveGuildSetting(guildID, "fadein", boolToInt(enabled))
 }
 
 func GetFadeInDuration(guildID string) (float64, error) {
@@ -37,21 +22,7 @@ func GetFadeInDuration(guildID string) (float64, error) {
 }
 
 func SetFadeInDuration(guildID string, seconds float64) error {
-	release := guild.AcquireLock(guildID)
-	defer release()
-
-	_, err := database.DB.Exec(
-		`INSERT INTO guild_settings (guild_id, fadein_duration) VALUES (?, ?)
-		 ON CONFLICT(guild_id) DO UPDATE SET fadein_duration = ?`,
-		guildID, seconds, seconds,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to set fadein_duration: %w", err)
-	}
-
-	InvalidateCache(guildID)
-	logger.Debugf("Set fadein_duration=%g for guild: %s", seconds, guildID)
-	return nil
+	return saveGuildSetting(guildID, "fadein_duration", seconds)
 }
 
 func GetFadeOut(guildID string) (bool, error) {
@@ -59,22 +30,7 @@ func GetFadeOut(guildID string) (bool, error) {
 }
 
 func SetFadeOut(guildID string, enabled bool) error {
-	release := guild.AcquireLock(guildID)
-	defer release()
-
-	value := boolToInt(enabled)
-	_, err := database.DB.Exec(
-		`INSERT INTO guild_settings (guild_id, fadeout) VALUES (?, ?)
-		 ON CONFLICT(guild_id) DO UPDATE SET fadeout = ?`,
-		guildID, value, value,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to set fadeout: %w", err)
-	}
-
-	InvalidateCache(guildID)
-	logger.Debugf("Set fadeout=%v for guild: %s", enabled, guildID)
-	return nil
+	return saveGuildSetting(guildID, "fadeout", boolToInt(enabled))
 }
 
 func GetFadeOutDuration(guildID string) (float64, error) {
@@ -82,21 +38,7 @@ func GetFadeOutDuration(guildID string) (float64, error) {
 }
 
 func SetFadeOutDuration(guildID string, seconds float64) error {
-	release := guild.AcquireLock(guildID)
-	defer release()
-
-	_, err := database.DB.Exec(
-		`INSERT INTO guild_settings (guild_id, fadeout_duration) VALUES (?, ?)
-		 ON CONFLICT(guild_id) DO UPDATE SET fadeout_duration = ?`,
-		guildID, seconds, seconds,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to set fadeout_duration: %w", err)
-	}
-
-	InvalidateCache(guildID)
-	logger.Debugf("Set fadeout_duration=%g for guild: %s", seconds, guildID)
-	return nil
+	return saveGuildSetting(guildID, "fadeout_duration", seconds)
 }
 
 func GetAutoMix(guildID string) (bool, error) {
@@ -104,22 +46,7 @@ func GetAutoMix(guildID string) (bool, error) {
 }
 
 func SetAutoMix(guildID string, enabled bool) error {
-	release := guild.AcquireLock(guildID)
-	defer release()
-
-	value := boolToInt(enabled)
-	_, err := database.DB.Exec(
-		`INSERT INTO guild_settings (guild_id, automix) VALUES (?, ?)
-		 ON CONFLICT(guild_id) DO UPDATE SET automix = ?`,
-		guildID, value, value,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to set automix: %w", err)
-	}
-
-	InvalidateCache(guildID)
-	logger.Debugf("Set automix=%v for guild: %s", enabled, guildID)
-	return nil
+	return saveGuildSetting(guildID, "automix", boolToInt(enabled))
 }
 
 func GetAutoMixBeats(guildID string) (int, error) {
@@ -127,21 +54,7 @@ func GetAutoMixBeats(guildID string) (int, error) {
 }
 
 func SetAutoMixBeats(guildID string, beats int) error {
-	release := guild.AcquireLock(guildID)
-	defer release()
-
-	_, err := database.DB.Exec(
-		`INSERT INTO guild_settings (guild_id, automix_beats) VALUES (?, ?)
-		 ON CONFLICT(guild_id) DO UPDATE SET automix_beats = ?`,
-		guildID, beats, beats,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to set automix_beats: %w", err)
-	}
-
-	InvalidateCache(guildID)
-	logger.Debugf("Set automix_beats=%d for guild: %s", beats, guildID)
-	return nil
+	return saveGuildSetting(guildID, "automix_beats", beats)
 }
 
 const AutoMixStyleAuto = "auto"
@@ -174,22 +87,7 @@ func SetAutoMixStyle(guildID, category, style string) error {
 	if !ok {
 		return fmt.Errorf("unknown automix style category: %s", category)
 	}
-
-	release := guild.AcquireLock(guildID)
-	defer release()
-
-	_, err := database.DB.Exec(
-		fmt.Sprintf(`INSERT INTO guild_settings (guild_id, %s) VALUES (?, ?)
-		 ON CONFLICT(guild_id) DO UPDATE SET %s = ?`, column, column),
-		guildID, style, style,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to set %s: %w", column, err)
-	}
-
-	InvalidateCache(guildID)
-	logger.Debugf("Set %s=%s for guild: %s", column, style, guildID)
-	return nil
+	return saveGuildSetting(guildID, column, style)
 }
 
 var ErrSongNotInQueue = errors.New("song is no longer in the queue")
@@ -233,22 +131,7 @@ func GetCrossfade(guildID string) (bool, error) {
 }
 
 func SetCrossfade(guildID string, enabled bool) error {
-	release := guild.AcquireLock(guildID)
-	defer release()
-
-	value := boolToInt(enabled)
-	_, err := database.DB.Exec(
-		`INSERT INTO guild_settings (guild_id, crossfade) VALUES (?, ?)
-		 ON CONFLICT(guild_id) DO UPDATE SET crossfade = ?`,
-		guildID, value, value,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to set crossfade: %w", err)
-	}
-
-	InvalidateCache(guildID)
-	logger.Debugf("Set crossfade=%v for guild: %s", enabled, guildID)
-	return nil
+	return saveGuildSetting(guildID, "crossfade", boolToInt(enabled))
 }
 
 func GetCrossfadeDuration(guildID string) (float64, error) {
@@ -256,21 +139,7 @@ func GetCrossfadeDuration(guildID string) (float64, error) {
 }
 
 func SetCrossfadeDuration(guildID string, seconds float64) error {
-	release := guild.AcquireLock(guildID)
-	defer release()
-
-	_, err := database.DB.Exec(
-		`INSERT INTO guild_settings (guild_id, crossfade_duration) VALUES (?, ?)
-		 ON CONFLICT(guild_id) DO UPDATE SET crossfade_duration = ?`,
-		guildID, seconds, seconds,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to set crossfade_duration: %w", err)
-	}
-
-	InvalidateCache(guildID)
-	logger.Debugf("Set crossfade_duration=%g for guild: %s", seconds, guildID)
-	return nil
+	return saveGuildSetting(guildID, "crossfade_duration", seconds)
 }
 
 func GetFadeOnStop(guildID string) (bool, error) {
@@ -278,22 +147,7 @@ func GetFadeOnStop(guildID string) (bool, error) {
 }
 
 func SetFadeOnStop(guildID string, enabled bool) error {
-	release := guild.AcquireLock(guildID)
-	defer release()
-
-	value := boolToInt(enabled)
-	_, err := database.DB.Exec(
-		`INSERT INTO guild_settings (guild_id, fade_on_stop) VALUES (?, ?)
-		 ON CONFLICT(guild_id) DO UPDATE SET fade_on_stop = ?`,
-		guildID, value, value,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to set fade_on_stop: %w", err)
-	}
-
-	InvalidateCache(guildID)
-	logger.Debugf("Set fade_on_stop=%v for guild: %s", enabled, guildID)
-	return nil
+	return saveGuildSetting(guildID, "fade_on_stop", boolToInt(enabled))
 }
 
 func GetTrimSilence(guildID string) (bool, error) {
@@ -301,20 +155,5 @@ func GetTrimSilence(guildID string) (bool, error) {
 }
 
 func SetTrimSilence(guildID string, enabled bool) error {
-	release := guild.AcquireLock(guildID)
-	defer release()
-
-	value := boolToInt(enabled)
-	_, err := database.DB.Exec(
-		`INSERT INTO guild_settings (guild_id, trim_silence) VALUES (?, ?)
-		 ON CONFLICT(guild_id) DO UPDATE SET trim_silence = ?`,
-		guildID, value, value,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to set trim_silence: %w", err)
-	}
-
-	InvalidateCache(guildID)
-	logger.Debugf("Set trim_silence=%v for guild: %s", enabled, guildID)
-	return nil
+	return saveGuildSetting(guildID, "trim_silence", boolToInt(enabled))
 }
