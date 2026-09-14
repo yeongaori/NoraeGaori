@@ -1,10 +1,13 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/fsnotify/fsnotify"
 )
 
 func writeWatchedFile(t *testing.T, path, contents string) os.FileInfo {
@@ -155,5 +158,67 @@ func TestReloadWatchedFileIgnoresUnrelatedPaths(t *testing.T) {
 
 	if got := GetConfig().Prefix; got != before {
 		t.Errorf("got prefix %q, want it unchanged at %q", got, before)
+	}
+}
+
+func waitForWatcherToStop(t *testing.T, fileWatcher *fsnotify.Watcher, stop func()) {
+	t.Helper()
+
+	done := make(chan struct{})
+	go func() {
+		watchFiles(fileWatcher)
+		close(done)
+	}()
+
+	stop()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("watchFiles kept running after its watcher closed")
+	}
+}
+
+func TestWatchFilesLogsErrorsAndStopsWhenEitherChannelCloses(t *testing.T) {
+	eventsClosing := &fsnotify.Watcher{Events: make(chan fsnotify.Event), Errors: make(chan error)}
+	waitForWatcherToStop(t, eventsClosing, func() {
+		eventsClosing.Errors <- errors.New("watch failed")
+		close(eventsClosing.Events)
+	})
+
+	errorsClosing := &fsnotify.Watcher{Events: make(chan fsnotify.Event), Errors: make(chan error)}
+	waitForWatcherToStop(t, errorsClosing, func() {
+		close(errorsClosing.Errors)
+	})
+}
+
+func TestInitializeReloadsTheConfigWhenTheFileChanges(t *testing.T) {
+	t.Chdir(t.TempDir())
+	setupTestConfig(t)
+	defer teardownTestConfig(t)
+	isolateReloadCallbacks(t)
+
+	reloaded := make(chan struct{}, 1)
+	OnReload(func() {
+		select {
+		case reloaded <- struct{}{}:
+		default:
+		}
+	})
+
+	if err := Initialize(); err != nil {
+		t.Fatalf("Initialize failed: %v", err)
+	}
+	defer Close()
+
+	writeWatchedFile(t, configPath, `{"prefix":"?","language":"en","default_volume":50}`)
+
+	select {
+	case <-reloaded:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the file watcher did not reload the changed config")
+	}
+	if got := GetConfig().Prefix; got != "?" {
+		t.Errorf("got prefix %q after the watched reload, want %q", got, "?")
 	}
 }

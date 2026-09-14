@@ -46,6 +46,8 @@ var (
 
 	onReloadCallbacks []func()
 	onReloadMux       sync.Mutex
+
+	newFileWatcher = fsnotify.NewWatcher
 )
 
 func OnReload(fn func()) {
@@ -68,7 +70,7 @@ func Initialize() error {
 	}
 
 	var err error
-	watcher, err = fsnotify.NewWatcher()
+	watcher, err = newFileWatcher()
 	if err != nil {
 		return fmt.Errorf("failed to create file watcher: %w", err)
 	}
@@ -80,7 +82,7 @@ func Initialize() error {
 		logger.Warnf("Failed to watch admins file: %v", err)
 	}
 
-	go watchFiles()
+	go watchFiles(watcher)
 
 	logger.Debugf("Configuration system initialized")
 	return nil
@@ -272,15 +274,15 @@ func handleWatchEvent(event fsnotify.Event) {
 	reloadWatchedFile(absPath)
 }
 
-func watchFiles() {
+func watchFiles(fileWatcher *fsnotify.Watcher) {
 	for {
 		select {
-		case event, ok := <-watcher.Events:
+		case event, ok := <-fileWatcher.Events:
 			if !ok {
 				return
 			}
 			handleWatchEvent(event)
-		case err, ok := <-watcher.Errors:
+		case err, ok := <-fileWatcher.Errors:
 			if !ok {
 				return
 			}
