@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
+	"noraegaori/internal/testutil/discordtest"
 )
 
 func memberMessage(member *discordgo.Member) *discordgo.MessageCreate {
@@ -20,7 +21,7 @@ func memberMessage(member *discordgo.Member) *discordgo.MessageCreate {
 }
 
 func TestMessageMemberUsesTheMemberSentWithTheMessage(t *testing.T) {
-	session, requests := stubDiscordAPI(t, http.StatusOK)
+	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 	sent := &discordgo.Member{Roles: []string{"role"}}
 	message := memberMessage(sent)
 
@@ -41,7 +42,7 @@ func TestMessageMemberUsesTheMemberSentWithTheMessage(t *testing.T) {
 }
 
 func TestMessageMemberFetchesTheMemberWhenTheMessageHasNone(t *testing.T) {
-	session, requests := stubDiscordAPI(t, http.StatusOK)
+	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 
 	member := MessageMember(session, memberMessage(nil))
 
@@ -49,13 +50,13 @@ func TestMessageMemberFetchesTheMemberWhenTheMessageHasNone(t *testing.T) {
 		t.Errorf("member = %+v, want the member returned by Discord", member)
 	}
 	sent := requests()
-	if len(sent) != 1 || sent[0].method != "GET" || sent[0].path != "/guilds/"+menuGuildID+"/members/author" {
+	if len(sent) != 1 || sent[0].Method != "GET" || sent[0].Path != "/guilds/"+menuGuildID+"/members/author" {
 		t.Errorf("sent %v, want one member lookup", sent)
 	}
 }
 
 func TestMessageMemberFallsBackToTheAuthorWhenTheLookupFails(t *testing.T) {
-	session, _ := stubDiscordAPI(t, http.StatusNotFound)
+	session, _ := discordtest.StubAPI(t, discordtest.Status(http.StatusNotFound))
 	message := memberMessage(nil)
 
 	member := MessageMember(session, message)

@@ -1,96 +1,15 @@
 package discord
 
 import (
-	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
-	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/messages"
+	"noraegaori/internal/testutil/discordtest"
 )
-
-type discordRequest struct {
-	method string
-	path   string
-	body   map[string]any
-}
-
-func stubDiscordAPI(t *testing.T, status int) (*discordgo.Session, func() []discordRequest) {
-	t.Helper()
-
-	return stubDiscordAPIWith(t, func(*http.Request) int { return status })
-}
-
-func stubDiscordAPIWith(t *testing.T, statusFor func(*http.Request) int) (*discordgo.Session, func() []discordRequest) {
-	t.Helper()
-
-	var mu sync.Mutex
-	var requests []discordRequest
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]any
-		_ = json.NewDecoder(r.Body).Decode(&body)
-
-		mu.Lock()
-		requests = append(requests, discordRequest{method: r.Method, path: r.URL.Path, body: body})
-		mu.Unlock()
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(statusFor(r))
-		io.WriteString(w, `{"id":"333","channel_id":"222","user":{"id":"fetched"},"roles":["fetched-role"]}`)
-	}))
-
-	api, webhooks, channels, guilds := discordgo.EndpointAPI, discordgo.EndpointWebhooks, discordgo.EndpointChannels, discordgo.EndpointGuilds
-	discordgo.EndpointAPI = server.URL + "/api/"
-	discordgo.EndpointWebhooks = server.URL + "/webhooks/"
-	discordgo.EndpointChannels = server.URL + "/channels/"
-	discordgo.EndpointGuilds = server.URL + "/guilds/"
-	t.Cleanup(func() {
-		discordgo.EndpointAPI = api
-		discordgo.EndpointWebhooks = webhooks
-		discordgo.EndpointChannels = channels
-		discordgo.EndpointGuilds = guilds
-		server.Close()
-	})
-
-	session, err := discordgo.New("Bot test")
-	if err != nil {
-		t.Fatalf("discordgo.New returned %v, want nil", err)
-	}
-
-	return session, func() []discordRequest {
-		mu.Lock()
-		defer mu.Unlock()
-		return append([]discordRequest(nil), requests...)
-	}
-}
-
-func jsonAt(t *testing.T, value any, path ...any) any {
-	t.Helper()
-
-	for _, step := range path {
-		switch key := step.(type) {
-		case string:
-			object, ok := value.(map[string]any)
-			if !ok {
-				t.Fatalf("expected an object before %q, got %T", key, value)
-			}
-			value = object[key]
-		case int:
-			list, ok := value.([]any)
-			if !ok || key >= len(list) {
-				t.Fatalf("expected a list with index %d, got %v", key, value)
-			}
-			value = list[key]
-		}
-	}
-	return value
-}
 
 func interactionWithToken(ic *discordgo.InteractionCreate) *discordgo.InteractionCreate {
 	ic.ID = "111"
@@ -241,7 +160,7 @@ func TestHandleDropdownMenuPickIgnoresUnrelatedComponents(t *testing.T) {
 }
 
 func TestRespondDropdownMenuSendsTheMenuForASlashCommand(t *testing.T) {
-	session, requests := stubDiscordAPI(t, http.StatusOK)
+	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 	var picked []string
 	registerTestMenu(t, "test_send", trackingApply(&picked))
 
@@ -256,19 +175,19 @@ func TestRespondDropdownMenuSendsTheMenuForASlashCommand(t *testing.T) {
 	if len(sent) != 1 {
 		t.Fatalf("sent %d requests, want only the interaction reply", len(sent))
 	}
-	if sent[0].method != "POST" || sent[0].path != "/api/interactions/111/token/callback" {
-		t.Errorf("first request = %s %s, want the interaction callback", sent[0].method, sent[0].path)
+	if sent[0].Method != "POST" || sent[0].Path != "/api/interactions/111/token/callback" {
+		t.Errorf("first request = %s %s, want the interaction callback", sent[0].Method, sent[0].Path)
 	}
-	if got := jsonAt(t, sent[0].body, "type"); got != float64(discordgo.InteractionResponseChannelMessageWithSource) {
+	if got := discordtest.JSONAt(t, sent[0].Body, "type"); got != float64(discordgo.InteractionResponseChannelMessageWithSource) {
 		t.Errorf("reply type = %v, want a channel message", got)
 	}
-	if got := jsonAt(t, sent[0].body, "data", "components", 0, "components", 0, "custom_id"); got != dropdownMenuPrefix+"test_send" {
+	if got := discordtest.JSONAt(t, sent[0].Body, "data", "components", 0, "components", 0, "custom_id"); got != dropdownMenuPrefix+"test_send" {
 		t.Errorf("dropdown custom ID = %v, want %q", got, dropdownMenuPrefix+"test_send")
 	}
 }
 
 func TestRespondEmbedWithComponentsStillFetchesTheSentMessage(t *testing.T) {
-	session, requests := stubDiscordAPI(t, http.StatusOK)
+	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 	ic := interactionWithToken(&discordgo.InteractionCreate{
 		Interaction: &discordgo.Interaction{Type: discordgo.InteractionApplicationCommand, GuildID: menuGuildID},
 	})
@@ -279,13 +198,13 @@ func TestRespondEmbedWithComponentsStillFetchesTheSentMessage(t *testing.T) {
 	}
 
 	sent := requests()
-	if len(sent) != 2 || sent[1].method != "GET" || sent[1].path != "/webhooks/app/token/messages/@original" {
+	if len(sent) != 2 || sent[1].Method != "GET" || sent[1].Path != "/webhooks/app/token/messages/@original" {
 		t.Errorf("sent %v, want the reply followed by the original-message lookup", sent)
 	}
 }
 
 func TestRespondEmbedWithComponentsToleratesAFailedMessageLookup(t *testing.T) {
-	session, _ := stubDiscordAPIWith(t, func(r *http.Request) int {
+	session, _ := discordtest.StubAPI(t, func(r *http.Request) int {
 		if r.Method == "GET" {
 			return http.StatusNotFound
 		}
@@ -301,7 +220,7 @@ func TestRespondEmbedWithComponentsToleratesAFailedMessageLookup(t *testing.T) {
 }
 
 func TestRespondEmbedWithComponentsSendsTextCommandRepliesToTheChannel(t *testing.T) {
-	session, requests := stubDiscordAPI(t, http.StatusOK)
+	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 	ic := &discordgo.InteractionCreate{Interaction: &discordgo.Interaction{GuildID: menuGuildID, Token: "message_111_222"}}
 
 	if _, err := RespondEmbedWithComponents(session, ic, &discordgo.MessageEmbed{}, nil); err == nil {
@@ -315,13 +234,13 @@ func TestRespondEmbedWithComponentsSendsTextCommandRepliesToTheChannel(t *testin
 	}
 
 	sent := requests()
-	if len(sent) != 1 || sent[0].method != "POST" || sent[0].path != "/channels/222/messages" {
+	if len(sent) != 1 || sent[0].Method != "POST" || sent[0].Path != "/channels/222/messages" {
 		t.Errorf("sent %v, want exactly one channel message and no interaction lookup", sent)
 	}
 }
 
 func TestHandleDropdownMenuPickRedrawsTheMenuInPlace(t *testing.T) {
-	session, requests := stubDiscordAPI(t, http.StatusOK)
+	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 
 	current := "off"
 	RegisterDropdownMenu("test_redraw", func(string) DropdownMenu {
@@ -343,22 +262,22 @@ func TestHandleDropdownMenuPickRedrawsTheMenuInPlace(t *testing.T) {
 	HandleDropdownMenuPick(session, interactionWithToken(pickInteraction(menuGuildID, dropdownMenuPrefix+"test_redraw", "all")))
 
 	sent := requests()
-	if len(sent) != 1 || sent[0].path != "/api/interactions/111/token/callback" {
+	if len(sent) != 1 || sent[0].Path != "/api/interactions/111/token/callback" {
 		t.Fatalf("sent %v, want one interaction callback", sent)
 	}
-	if got := jsonAt(t, sent[0].body, "type"); got != float64(discordgo.InteractionResponseUpdateMessage) {
+	if got := discordtest.JSONAt(t, sent[0].Body, "type"); got != float64(discordgo.InteractionResponseUpdateMessage) {
 		t.Errorf("reply type = %v, want an in-place message update", got)
 	}
-	if got, _ := jsonAt(t, sent[0].body, "data", "embeds", 0, "description").(string); !strings.Contains(got, "all") {
+	if got, _ := discordtest.JSONAt(t, sent[0].Body, "data", "embeds", 0, "description").(string); !strings.Contains(got, "all") {
 		t.Errorf("redrawn description %q does not show the new value", got)
 	}
-	if got := jsonAt(t, sent[0].body, "data", "components", 0, "components", 0, "options", 1, "default"); got != true {
+	if got := discordtest.JSONAt(t, sent[0].Body, "data", "components", 0, "components", 0, "options", 1, "default"); got != true {
 		t.Errorf("the picked option is not preselected after the redraw (default = %v)", got)
 	}
 }
 
 func TestHandleDropdownMenuPickRepliesPrivatelyWhenApplyFails(t *testing.T) {
-	session, requests := stubDiscordAPI(t, http.StatusOK)
+	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 	registerTestMenu(t, "test_private_failure", func(string) (*discordgo.MessageEmbed, error) {
 		return &discordgo.MessageEmbed{Title: "failed"}, errors.New("database is locked")
 	})
@@ -369,19 +288,19 @@ func TestHandleDropdownMenuPickRepliesPrivatelyWhenApplyFails(t *testing.T) {
 	if len(sent) != 1 {
 		t.Fatalf("sent %d requests, want one private reply", len(sent))
 	}
-	if got := jsonAt(t, sent[0].body, "type"); got != float64(discordgo.InteractionResponseChannelMessageWithSource) {
+	if got := discordtest.JSONAt(t, sent[0].Body, "type"); got != float64(discordgo.InteractionResponseChannelMessageWithSource) {
 		t.Errorf("reply type = %v, want a new message", got)
 	}
-	if got := jsonAt(t, sent[0].body, "data", "flags"); got != float64(discordgo.MessageFlagsEphemeral) {
+	if got := discordtest.JSONAt(t, sent[0].Body, "data", "flags"); got != float64(discordgo.MessageFlagsEphemeral) {
 		t.Errorf("reply flags = %v, want ephemeral", got)
 	}
-	if got := jsonAt(t, sent[0].body, "data", "embeds", 0, "title"); got != "failed" {
+	if got := discordtest.JSONAt(t, sent[0].Body, "data", "embeds", 0, "title"); got != "failed" {
 		t.Errorf("reply title = %v, want the failure embed", got)
 	}
 }
 
 func TestDropdownRepliesSurviveDiscordRejectingThem(t *testing.T) {
-	session, requests := stubDiscordAPI(t, http.StatusBadRequest)
+	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusBadRequest))
 	var picked []string
 	registerTestMenu(t, "test_rejected", trackingApply(&picked))
 	registerTestMenu(t, "test_rejected_failure", func(string) (*discordgo.MessageEmbed, error) {

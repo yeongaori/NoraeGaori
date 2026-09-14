@@ -9,6 +9,14 @@ import (
 func registerProbeCommand(t *testing.T, name string, adminOnly bool) *bool {
 	t.Helper()
 
+	return registerProbe(t, name, adminOnly, func(*discordgo.Session, *discordgo.InteractionCreate) error {
+		return nil
+	})
+}
+
+func registerProbe(t *testing.T, name string, adminOnly bool, handler func(*discordgo.Session, *discordgo.InteractionCreate) error) *bool {
+	t.Helper()
+
 	called := false
 
 	previous := commands.Load()
@@ -25,9 +33,9 @@ func registerProbeCommand(t *testing.T, name string, adminOnly bool) *bool {
 	RegisterCommand(&Command{
 		Name:      name,
 		AdminOnly: adminOnly,
-		Handler: func(*discordgo.Session, *discordgo.InteractionCreate) error {
+		Handler: func(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 			called = true
-			return nil
+			return handler(s, i)
 		},
 	})
 

@@ -48,6 +48,21 @@ func TestModalInputIsReadFromALabelWrapper(t *testing.T) {
 	}
 }
 
+func TestModalInputIsReadFromAValueLabelWrapper(t *testing.T) {
+	data := discordgo.ModalSubmitInteractionData{
+		Components: []discordgo.MessageComponent{
+			discordgo.Label{
+				Label:     "Prefix",
+				Component: discordgo.TextInput{CustomID: inputPrefix + "prefix", Value: "?"},
+			},
+		},
+	}
+
+	if value, found := modalInputValue(data, "prefix"); !found || value != "?" {
+		t.Errorf("modalInputValue = (%q, %v), want (\"?\", true)", value, found)
+	}
+}
+
 func TestModalInputIgnoresAnotherSettingsField(t *testing.T) {
 	data := discordgo.ModalSubmitInteractionData{
 		Components: []discordgo.MessageComponent{
