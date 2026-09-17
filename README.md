@@ -4,40 +4,23 @@ A feature-rich & high-quality audio Discord music bot written in Go.
 
 ## Features
 
-- **High-Quality Audio Streaming** from YouTube via
-  [yt-dlp](https://github.com/yt-dlp/yt-dlp), with Opus bitrate matched to the
-  voice channel
+- **High-Quality Audio Streaming**
 - **Persistent Queue**
-- **AutoMix** — beat- and key-aware transitions between songs (BPM detection,
-  musical key detection, beat-grid alignment); track analysis is stored in
-  SQLite and reused on later plays
-- **AutoMix Transition Styles** — volume, EQ, filter, effect, and loop styles
-  set per server, or left on `auto` so AutoMix picks per transition from the
-  song's BPM and key; a single upcoming transition can be overridden from the
-  AutoMix panel
-- **Crossfade** — timed crossfade between songs; combined with AutoMix it fades
-  along the beat-aligned transition
-- **Fade-In / Fade-Out** — smooth volume ramps at song edges, on seek, and on
-  resume
-- **Trim Silence** — skips silent intros and outros (forced on while AutoMix is
-  active)
+- **AutoMix**
+- **Crossfade**
+- **Fade-In / Fade-Out**
+- **Trim Silence**
 - **SponsorBlock**
 - **Live Stream Support**
-- **Queue Management** — move, swap, skip-to, remove by range
-- **Search Autocomplete** — YouTube suggestions while typing on `/play`,
-  `/playnext`, and `/search`
-- **Reaction Votes** — skip and stop votes are cast by reacting; un-react to
-  withdraw a vote. Only one vote of each type runs at a time, and completing one
-  cancels the other
-- **Per-Guild Settings** — volume, repeat, normalization, fades, AutoMix,
-  language, SponsorBlock
-- **Auto-Pause** when voice channel empties, **auto-resume** when a song is
-  added back to a paused queue
+- **Queue Management**
+- **Skip/Stop Votes**
+- **Per-Guild Settings**
+- **Auto Pause**
 - **Slash Commands & Prefix Commands**
-- **Multi-Language Support** (per-server, with `/setlanguage`)
+- **Multi-Language Support**
 - **Admin Commands**
 - **Hot-Reload Config**
-- **Smart yt-dlp updater**
+- **yt-dlp auto-updater**
 
 ## [Latest release](https://github.com/yeongaori/NoraeGaori/releases/latest)
 
@@ -206,50 +189,6 @@ global default — e.g. `!setprefix #`.
 | Command        | Aliases | Description                |
 | -------------- | ------- | -------------------------- |
 | `/help [page]` | `h`     | Show help for all commands |
-
-## Project Structure
-
-```
-NoraeGaori/
-├── main.go             Entry point (env + token, then app.Run)
-├── internal/
-│   ├── app/            Composition root: bootstrap, Discord session, shutdown
-│   ├── audio/
-│   │   ├── analysis/   Tempo, beat grid, key/Camelot detection and storage
-│   │   ├── dsp/        Filters, delay, reverb, frame conversion, easing
-│   │   ├── ffmpeg/     ffmpeg subprocess to PCM stream
-│   │   ├── opus/       Opus encoding (libopus via dlopen, WASM fallback)
-│   │   └── transition/ AutoMix styles, recipes, and the transition processor
-│   ├── commands/       Command registration, grouped by feature
-│   │   ├── admin/      forceskip, forcestop, forceremove, status
-│   │   ├── automix/    Fade/crossfade settings and the AutoMix panel
-│   │   ├── help/       Help pages
-│   │   ├── play/       play, playnext, search, autocomplete, playlists
-│   │   ├── playback/   pause, resume, seek, skip, stop, volume, repeat
-│   │   ├── queue/      Queue view, remove, swap, movetrack, skipto
-│   │   ├── settings/   Language, prefix, sponsorblock, normalization, showstartedtrack
-│   │   └── voice/      join, leave, switchvc
-│   ├── config/         Config loading with hot-reload
-│   ├── database/       SQLite
-│   ├── discord/        Discord plumbing: replies, reactions, permissions
-│   │   └── command/    Command registry, slash sync, interaction dispatch
-│   ├── guild/          Per-guild language and prefix
-│   ├── logger/         Logging
-│   ├── messages/       Locale system and embed helpers
-│   ├── player/         Playback runtime: loop, transport, voice, precache
-│   ├── queue/          Queue management with caching
-│   ├── rpc/            Discord Rich Presence
-│   ├── shutdown/       Graceful shutdown coordination
-│   ├── testutil/       Test helpers: fakes, fixtures, DB and locale setup
-│   ├── vote/           Reaction-vote engine (skip, stop, remove)
-│   ├── youtube/        InnerTube integration, search, availability pool
-│   └── ytdlp/          yt-dlp version management and updater
-├── locales/            Language files (ko.json, en.json) and their embed
-├── config/             Runtime config (gitignored, see *.example.json)
-├── Makefile
-├── Dockerfile
-└── docker-compose.yml
-```
 
 ## Docker
 
