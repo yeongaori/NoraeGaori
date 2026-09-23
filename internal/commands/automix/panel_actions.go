@@ -68,7 +68,9 @@ func prepareTransitionPanel(s *discordgo.Session, guildID string, page int) (*di
 		return nil, nil, false
 	}
 
-	go player.StartAnalysisBackfill(guildID, voiceChannelBitrate(s, guildID))
+	if state.autoSelect {
+		go player.StartAnalysisBackfill(guildID, voiceChannelBitrate(s, guildID))
+	}
 
 	embed, components := renderTransitionPage(guildID, &state, page)
 	return embed, components, true
