@@ -8,8 +8,11 @@ import (
 )
 
 func IsGuildAdmin(s *discordgo.Session, guildID string, member *discordgo.Member) bool {
-	if member == nil {
+	if member == nil || member.User == nil {
 		return false
+	}
+	if hasAdministrator(member.Permissions) {
+		return true
 	}
 
 	guild, err := s.State.Guild(guildID)
@@ -19,6 +22,10 @@ func IsGuildAdmin(s *discordgo.Session, guildID string, member *discordgo.Member
 			logger.Debugf("Failed to get guild %s: %v", guildID, err)
 			return false
 		}
+	}
+
+	if guild.OwnerID == member.User.ID {
+		return true
 	}
 
 	var perms int64 = 0
@@ -39,7 +46,11 @@ func IsGuildAdmin(s *discordgo.Session, guildID string, member *discordgo.Member
 		}
 	}
 
-	return (perms & discordgo.PermissionAdministrator) == discordgo.PermissionAdministrator
+	return hasAdministrator(perms)
+}
+
+func hasAdministrator(permissions int64) bool {
+	return (permissions & discordgo.PermissionAdministrator) == discordgo.PermissionAdministrator
 }
 
 func CheckUserInBotVoiceChannel(s *discordgo.Session, i *discordgo.InteractionCreate) (string, *discordgo.MessageEmbed) {
