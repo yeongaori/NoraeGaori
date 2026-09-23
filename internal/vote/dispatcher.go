@@ -54,6 +54,10 @@ func onVoteReactionAdd(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 		return
 	}
 
+	passVote(s, session, tally)
+}
+
+func passVote(s *discordgo.Session, session *Session, tally Tally) {
 	if !activeVotes.resolve(session) {
 		return
 	}

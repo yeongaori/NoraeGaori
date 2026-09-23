@@ -67,6 +67,9 @@ func Start(s *discordgo.Session, i *discordgo.InteractionCreate, request Request
 	}
 
 	go awaitVoteOutcome(s, session)
+	if tally.passed {
+		passVote(s, session, tally)
+	}
 	return nil
 }
 
