@@ -65,8 +65,14 @@ func TestAutocompleteHandsTheFocusedQueryToTheCommand(t *testing.T) {
 	if got := discordtest.ResponseType(&sent[0]); got != discordgo.InteractionApplicationCommandAutocompleteResult {
 		t.Errorf("response type = %d, want an autocomplete result", got)
 	}
-	if choices, _ := discordtest.JSONAt(t, sent[0].Body, "data", "choices").([]any); len(choices) != MaxAutocompleteChoices {
-		t.Errorf("answered with %d choices, want %d", len(choices), MaxAutocompleteChoices)
+	choices, _ := discordtest.JSONAt(t, sent[0].Body, "data", "choices").([]any)
+	if len(choices) != MaxAutocompleteChoices {
+		t.Fatalf("answered with %d choices, want %d", len(choices), MaxAutocompleteChoices)
+	}
+	for index, choice := range choices {
+		if name, _ := choice.(map[string]any)["name"].(string); name != fmt.Sprint(index) {
+			t.Errorf("choice %d is %q, want the handler's choices kept in order from the first", index, name)
+		}
 	}
 }
 

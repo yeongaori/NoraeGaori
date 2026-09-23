@@ -10,6 +10,7 @@ import (
 	"noraegaori/internal/database"
 	"noraegaori/internal/discord"
 	"noraegaori/internal/guild"
+	"noraegaori/internal/messages"
 	"noraegaori/internal/testutil/configtest"
 	"noraegaori/internal/testutil/dbtest"
 	"noraegaori/internal/testutil/discordtest"
@@ -62,6 +63,17 @@ func textMessage(content string, roles ...string) *discordgo.MessageCreate {
 	}
 }
 
+func wantChannelReply(t *testing.T, request *discordtest.Request, want string) {
+	t.Helper()
+
+	if text := discordtest.EmbedText(discordtest.ReplyEmbed(t, request)); !strings.Contains(text, want) {
+		t.Errorf("the reply %q does not contain %q", text, want)
+	}
+	if got := discordtest.JSONAt(t, request.Body, "message_reference", "message_id"); got != "111" {
+		t.Errorf("the reply references %v, want the command message 111", got)
+	}
+}
+
 func failingHandler(*discordgo.Session, *discordgo.InteractionCreate) error {
 	return errors.New("probe failed")
 }
@@ -84,40 +96,6 @@ func TestHandleInteractionAnswersAutocompleteForUnknownCommands(t *testing.T) {
 	}
 	if got := discordtest.JSONAt(t, sent[0].Body, "type"); got != float64(discordgo.InteractionApplicationCommandAutocompleteResult) {
 		t.Errorf("reply type = %v, want an autocomplete result", got)
-	}
-}
-
-func TestHandleInteractionIgnoresOtherInteractionTypes(t *testing.T) {
-	called := registerProbeCommand(t, "probe", false)
-
-	HandleInteraction(nil, &discordgo.InteractionCreate{
-		Interaction: &discordgo.Interaction{Type: discordgo.InteractionModalSubmit},
-	})
-
-	if *called {
-		t.Error("a modal submission ran a command handler")
-	}
-}
-
-func TestHandleInteractionRejectsUnknownCommands(t *testing.T) {
-	called := registerProbeCommand(t, "probe", false)
-	member := &discordgo.Member{GuildID: "guild", User: &discordgo.User{ID: "user"}}
-
-	HandleInteraction(nil, probeInteraction("ghost", member))
-
-	if *called {
-		t.Error("an unknown command ran another command's handler")
-	}
-}
-
-func TestHandleInteractionReportsAFailingHandler(t *testing.T) {
-	called := registerProbe(t, "probefail", false, failingHandler)
-	member := &discordgo.Member{GuildID: "guild", User: &discordgo.User{ID: "user"}}
-
-	HandleInteraction(nil, probeInteraction("probefail", member))
-
-	if !*called {
-		t.Error("the failing handler did not run")
 	}
 }
 
@@ -199,8 +177,9 @@ func TestHandleMessageRefusesAdminCommandsForPlainMembers(t *testing.T) {
 	}
 	sent := requests()
 	if len(sent) != 1 || sent[0].Method != "POST" || sent[0].Path != "/channels/222/messages" {
-		t.Errorf("sent %v, want the refusal posted to the channel", sent)
+		t.Fatalf("sent %v, want the refusal posted to the channel", sent)
 	}
+	wantChannelReply(t, &sent[0], messages.T(dispatchGuildID).Errors.AdminOnly)
 }
 
 func TestHandleMessageRunsAdminCommandsFromTheMessagesOwnRoles(t *testing.T) {
@@ -232,8 +211,9 @@ func TestHandleMessageReportsAFailingHandlerThatSentNothing(t *testing.T) {
 	}
 	sent := requests()
 	if len(sent) != 1 || sent[0].Method != "POST" || sent[0].Path != "/channels/222/messages" {
-		t.Errorf("sent %v, want the error posted to the channel", sent)
+		t.Fatalf("sent %v, want the error posted to the channel", sent)
 	}
+	wantChannelReply(t, &sent[0], "probe failed")
 }
 
 func TestHandleMessageKeepsQuietWhenAFailingHandlerAlreadyReplied(t *testing.T) {

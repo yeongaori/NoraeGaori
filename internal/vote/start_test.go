@@ -66,9 +66,13 @@ func TestStartPostsTheVoteAndWaitsForBallots(t *testing.T) {
 		t.Fatalf("Start returned %v", err)
 	}
 
+	sent := requests()
 	want := []string{http.MethodPatch + " " + originalReplyPath, http.MethodGet + " " + originalReplyPath}
-	if got := requestPaths(requests()); !slices.Equal(got, want) {
-		t.Errorf("sent %v, want %v", got, want)
+	if got := requestPaths(sent); !slices.Equal(got, want) {
+		t.Fatalf("sent %v, want %v", got, want)
+	}
+	if body := string(sent[0].RawBody); !strings.Contains(body, `"value":"1/2"`) || !strings.Contains(body, "Skip the song?") {
+		t.Errorf("the progress embed %s does not show the requester's vote as 1/2", body)
 	}
 	if snapshot, isLive := activeVotes.snapshotOf(guildID, KindSkip); !isLive || snapshot.messageID != "333" {
 		t.Errorf("vote snapshot = (%+v, %v), want a live vote on message 333", snapshot, isLive)
@@ -131,15 +135,26 @@ func TestRequiredVotesFetchMembersMissingFromTheCache(t *testing.T) {
 	const guildID = "fetch-guild"
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 	session.State.User = &discordgo.User{ID: "bot"}
-	discordtest.AddGuild(t, session, guildID, &discordgo.VoiceState{GuildID: guildID, UserID: "uncached", ChannelID: "voice1"})
+	discordtest.AddGuild(t, session, guildID,
+		&discordgo.VoiceState{GuildID: guildID, UserID: "uncached1", ChannelID: "voice1"},
+		&discordgo.VoiceState{GuildID: guildID, UserID: "uncached2", ChannelID: "voice1"},
+		&discordgo.VoiceState{GuildID: guildID, UserID: "uncached3", ChannelID: "voice1"},
+	)
 
 	required, err := RequiredInChannel(session, guildID, "voice1", ResolveWithFetch)
-	if err != nil || required != 1 {
-		t.Fatalf("RequiredInChannel = (%d, %v), want 1 vote", required, err)
+	if err != nil || required != 2 {
+		t.Fatalf("RequiredInChannel = (%d, %v), want 2 votes from 3 fetched listeners", required, err)
 	}
 
-	if sent := requests(); len(sent) != 1 || sent[0].Path != "/guilds/"+guildID+"/members/uncached" {
-		t.Errorf("sent %v, want one member lookup", requestPaths(sent))
+	sent := requests()
+	paths := make([]string, 0, len(sent))
+	for index := range sent {
+		paths = append(paths, sent[index].Path)
+	}
+	slices.Sort(paths)
+	want := []string{"/guilds/" + guildID + "/members/uncached1", "/guilds/" + guildID + "/members/uncached2", "/guilds/" + guildID + "/members/uncached3"}
+	if !slices.Equal(paths, want) {
+		t.Errorf("sent %v, want one member lookup per listener", paths)
 	}
 	if _, err := session.State.Member(guildID, "fetched"); err != nil {
 		t.Errorf("the fetched member was not cached: %v", err)

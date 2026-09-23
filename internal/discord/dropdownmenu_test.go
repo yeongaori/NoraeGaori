@@ -155,8 +155,14 @@ func TestRespondDropdownMenuRejectsAnUnregisteredKey(t *testing.T) {
 }
 
 func TestHandleDropdownMenuPickIgnoresUnrelatedComponents(t *testing.T) {
-	HandleDropdownMenuPick(nil, pickInteraction(menuGuildID, "settings_pick_token", "on"))
-	HandleDropdownMenuPick(nil, pickInteraction(menuGuildID, dropdownMenuPrefix+"test_missing", "on"))
+	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
+
+	HandleDropdownMenuPick(session, pickInteraction(menuGuildID, "settings_pick_token", "on"))
+	HandleDropdownMenuPick(session, pickInteraction(menuGuildID, dropdownMenuPrefix+"test_missing", "on"))
+
+	if sent := requests(); len(sent) != 0 {
+		t.Errorf("sent %v, want unrelated and unregistered picks ignored", sent)
+	}
 }
 
 func TestRespondDropdownMenuSendsTheMenuForASlashCommand(t *testing.T) {
@@ -210,15 +216,22 @@ func TestSendEmbedWithComponentsSendsTextCommandRepliesToTheChannel(t *testing.T
 		t.Error("a text command without a responder returned no error")
 	}
 
-	defer RegisterResponder(ic.Token, &MessageResponse{Session: session, ChannelID: "222", OriginalMsgID: "111"})()
+	responder := &MessageResponse{Session: session, ChannelID: "222", OriginalMsgID: "111"}
+	defer RegisterResponder(ic.Token, responder)()
 	message, err := SendEmbedWithComponents(session, ic, &discordgo.MessageEmbed{}, nil)
-	if err != nil || message == nil || message.ID != "333" {
+	if err != nil || message == nil {
 		t.Fatalf("SendEmbedWithComponents = (%v, %v), want the sent channel message", message, err)
+	}
+	if responder.Message != message {
+		t.Error("the sent reply was not kept for later edits")
 	}
 
 	sent := requests()
 	if len(sent) != 1 || sent[0].Method != "POST" || sent[0].Path != "/channels/222/messages" {
-		t.Errorf("sent %v, want exactly one channel message and no interaction lookup", sent)
+		t.Fatalf("sent %v, want exactly one channel message and no interaction lookup", sent)
+	}
+	if got := discordtest.JSONAt(t, sent[0].Body, "message_reference", "message_id"); got != "111" {
+		t.Errorf("the reply references %v, want the command message 111", got)
 	}
 }
 

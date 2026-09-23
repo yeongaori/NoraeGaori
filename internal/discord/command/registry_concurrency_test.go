@@ -64,21 +64,32 @@ func TestReloadAliasesRacesWithLookups(t *testing.T) {
 	wg.Wait()
 }
 
-func TestReloadAliasesDoesNotMutateHeldCommands(t *testing.T) {
-	seedTestCommands(t, 1)
+func TestReloadAliasesAppliesTheLocaleWithoutMutatingHeldCommands(t *testing.T) {
+	seedTestCommands(t, 0)
+	RegisterCommand(&Command{Name: "play", Description: "original"})
 
-	held, ok := lookupCommand("cmd0")
+	held, ok := lookupCommand("play")
 	if !ok {
 		t.Fatal("the seeded command was not registered")
-	}
-	if held.Description != "original" {
-		t.Fatalf("got description %q, want %q", held.Description, "original")
 	}
 
 	ReloadAliases()
 
 	if held.Description != "original" {
 		t.Errorf("a command held by a handler was mutated in place to %q", held.Description)
+	}
+	localized := messages.T().Commands["play"]
+	if localized.Description == "" || len(localized.Aliases) == 0 {
+		t.Fatal("the English locale has no play description or aliases to apply")
+	}
+	reloaded, _ := lookupCommand("play")
+	if reloaded.Description != localized.Description {
+		t.Errorf("the reloaded description is %q, want the locale's %q", reloaded.Description, localized.Description)
+	}
+	for _, alias := range localized.Aliases {
+		if name, found := lookupAlias(alias); !found || name != "play" {
+			t.Errorf("the locale alias %q does not reach play", alias)
+		}
 	}
 }
 

@@ -27,8 +27,14 @@ type replyCase struct {
 	send             func(s *discordgo.Session, i *discordgo.InteractionCreate)
 	wantMethod       string
 	wantPath         string
-	wantText         string
+	wantTexts        []string
+	unwantedTexts    []string
 }
+
+const (
+	privateFlag       = `"flags":64`
+	replyingToCommand = `"message_reference":{"message_id":"origin"`
+)
 
 func replyInteraction(isMessageCommand bool) *discordgo.InteractionCreate {
 	if isMessageCommand {
@@ -65,8 +71,16 @@ func runReplyCases(t *testing.T, cases []replyCase) {
 			if len(sent) != 1 || sent[0].Method != current.wantMethod || sent[0].Path != current.wantPath {
 				t.Fatalf("sent %v, want one %s %s", sent, current.wantMethod, current.wantPath)
 			}
-			if !strings.Contains(string(sent[0].RawBody), current.wantText) {
-				t.Errorf("the request body %s does not contain %q", sent[0].RawBody, current.wantText)
+			body := string(sent[0].RawBody)
+			for _, want := range current.wantTexts {
+				if !strings.Contains(body, want) {
+					t.Errorf("the request body %s does not contain %s", body, want)
+				}
+			}
+			for _, unwanted := range current.unwantedTexts {
+				if strings.Contains(body, unwanted) {
+					t.Errorf("the request body %s contains %s", body, unwanted)
+				}
 			}
 		})
 	}
@@ -75,25 +89,81 @@ func runReplyCases(t *testing.T, cases []replyCase) {
 func TestReplyHelpersOnEveryPath(t *testing.T) {
 	respondError := func(s *discordgo.Session, i *discordgo.InteractionCreate) { RespondError(s, i, "broken") }
 	respondSuccess := func(s *discordgo.Session, i *discordgo.InteractionCreate) { RespondSuccess(s, i, "done") }
+	respondEmbed := func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+		RespondEmbed(s, i, &discordgo.MessageEmbed{Title: "answer"})
+	}
+	deferResponse := func(s *discordgo.Session, i *discordgo.InteractionCreate) { DeferResponse(s, i) }
 	followUpMessage := func(s *discordgo.Session, i *discordgo.InteractionCreate) { FollowUpMessage(s, i, "later") }
 	followUpEmbed := func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		FollowUpEmbed(s, i, &discordgo.MessageEmbed{Title: "summary"})
 	}
+	loadingTitle := messages.T(menuGuildID).Titles.Loading
 
 	runReplyCases(t, []replyCase{
-		{name: "an error reply to a slash command", send: respondError, wantMethod: http.MethodPost, wantPath: interactionReply, wantText: `"flags":64`},
-		{name: "an error reply to a text command", isMessageCommand: true, hasResponder: true, send: respondError, wantMethod: http.MethodPost, wantPath: channelMessagePath, wantText: "broken"},
+		{name: "an error reply to a slash command", send: respondError, wantMethod: http.MethodPost, wantPath: interactionReply, wantTexts: []string{`"content":"broken"`, privateFlag}},
+		{name: "an error reply to a text command", isMessageCommand: true, hasResponder: true, send: respondError, wantMethod: http.MethodPost, wantPath: channelMessagePath, wantTexts: []string{`"content":"broken"`, replyingToCommand}},
 		{name: "an error reply without a responder", isMessageCommand: true, send: respondError},
-		{name: "a success reply to a slash command", send: respondSuccess, wantMethod: http.MethodPost, wantPath: interactionReply, wantText: "done"},
-		{name: "a success reply to a text command", isMessageCommand: true, hasResponder: true, send: respondSuccess, wantMethod: http.MethodPost, wantPath: channelMessagePath, wantText: "done"},
+		{name: "a success reply to a slash command", send: respondSuccess, wantMethod: http.MethodPost, wantPath: interactionReply, wantTexts: []string{`"content":"done"`}, unwantedTexts: []string{privateFlag}},
+		{name: "a success reply to a text command", isMessageCommand: true, hasResponder: true, send: respondSuccess, wantMethod: http.MethodPost, wantPath: channelMessagePath, wantTexts: []string{`"content":"done"`, replyingToCommand}},
 		{name: "a success reply without a responder", isMessageCommand: true, send: respondSuccess},
-		{name: "a follow-up text for a slash command", send: followUpMessage, wantMethod: http.MethodPost, wantPath: followUpPath, wantText: "later"},
-		{name: "a follow-up text for a text command", isMessageCommand: true, hasResponder: true, send: followUpMessage, wantMethod: http.MethodPost, wantPath: channelMessagePath, wantText: "later"},
+		{name: "an embed reply to a slash command", send: respondEmbed, wantMethod: http.MethodPost, wantPath: interactionReply, wantTexts: []string{`"type":4`, `"title":"answer"`}, unwantedTexts: []string{privateFlag}},
+		{name: "an embed reply to a text command", isMessageCommand: true, hasResponder: true, send: respondEmbed, wantMethod: http.MethodPost, wantPath: channelMessagePath, wantTexts: []string{`"title":"answer"`, replyingToCommand}},
+		{name: "an embed reply without a responder", isMessageCommand: true, send: respondEmbed},
+		{name: "a deferred slash command", send: deferResponse, wantMethod: http.MethodPost, wantPath: interactionReply, wantTexts: []string{`"type":5`}},
+		{name: "a deferred text command", isMessageCommand: true, hasResponder: true, send: deferResponse, wantMethod: http.MethodPost, wantPath: channelMessagePath, wantTexts: []string{loadingTitle, replyingToCommand}},
+		{name: "a deferred text command without a responder", isMessageCommand: true, send: deferResponse},
+		{name: "a follow-up text for a slash command", send: followUpMessage, wantMethod: http.MethodPost, wantPath: followUpPath, wantTexts: []string{`"content":"later"`}},
+		{name: "a follow-up text for a text command", isMessageCommand: true, hasResponder: true, send: followUpMessage, wantMethod: http.MethodPost, wantPath: channelMessagePath, wantTexts: []string{`"content":"later"`}, unwantedTexts: []string{"message_reference"}},
 		{name: "a follow-up text without a responder", isMessageCommand: true, send: followUpMessage},
-		{name: "a follow-up embed for a slash command", send: followUpEmbed, wantMethod: http.MethodPost, wantPath: followUpPath, wantText: "summary"},
-		{name: "a follow-up embed for a text command", isMessageCommand: true, hasResponder: true, send: followUpEmbed, wantMethod: http.MethodPost, wantPath: channelMessagePath, wantText: "summary"},
+		{name: "a follow-up embed for a slash command", send: followUpEmbed, wantMethod: http.MethodPost, wantPath: followUpPath, wantTexts: []string{`"title":"summary"`}},
+		{name: "a follow-up embed for a text command", isMessageCommand: true, hasResponder: true, send: followUpEmbed, wantMethod: http.MethodPost, wantPath: channelMessagePath, wantTexts: []string{`"title":"summary"`}, unwantedTexts: []string{"message_reference"}},
 		{name: "a follow-up embed without a responder", isMessageCommand: true, send: followUpEmbed},
 	})
+}
+
+func TestUpdateResponseEmbedOnEveryPath(t *testing.T) {
+	embed := &discordgo.MessageEmbed{Title: "final"}
+
+	t.Run("a slash command", func(t *testing.T) {
+		session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
+
+		if err := UpdateResponseEmbed(session, replyInteraction(false), embed); err != nil {
+			t.Fatalf("UpdateResponseEmbed returned %v", err)
+		}
+		if sent := requests(); len(sent) != 1 || sent[0].Method != http.MethodPatch || sent[0].Path != originalReplyPath || !strings.Contains(string(sent[0].RawBody), `"title":"final"`) {
+			t.Errorf("sent %v, want an edit of the original reply with the embed", sent)
+		}
+	})
+
+	t.Run("a text command with a reply", func(t *testing.T) {
+		session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
+		ic := replyInteraction(true)
+		defer RegisterResponder(ic.Token, newResponder(session, &discordgo.Message{ID: storedMessageID}))()
+
+		if err := UpdateResponseEmbed(session, ic, embed); err != nil {
+			t.Fatalf("UpdateResponseEmbed returned %v", err)
+		}
+		if sent := requests(); len(sent) != 1 || sent[0].Method != http.MethodPatch || sent[0].Path != channelMessagePath+"/"+storedMessageID || !strings.Contains(string(sent[0].RawBody), `"title":"final"`) {
+			t.Errorf("sent %v, want an edit of the stored reply with the embed", sent)
+		}
+	})
+
+	for name, hasResponder := range map[string]bool{"a text command before its reply": true, "a text command without responder": false} {
+		t.Run(name, func(t *testing.T) {
+			session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
+			ic := replyInteraction(true)
+			if hasResponder {
+				defer RegisterResponder(ic.Token, newResponder(session, nil))()
+			}
+
+			if err := UpdateResponseEmbed(session, ic, embed); err == nil {
+				t.Error("UpdateResponseEmbed returned no error without a reply to edit")
+			}
+			if sent := requests(); len(sent) != 0 {
+				t.Errorf("sent %v, want nothing", sent)
+			}
+		})
+	}
 }
 
 func TestUpdateResponseEmbedWithComponentsOnEveryPath(t *testing.T) {
@@ -119,8 +189,8 @@ func TestUpdateResponseEmbedWithComponentsOnEveryPath(t *testing.T) {
 		if err := UpdateResponseEmbedWithComponents(session, ic, embed, components); err != nil {
 			t.Fatalf("UpdateResponseEmbedWithComponents returned %v", err)
 		}
-		if sent := requests(); len(sent) != 1 || sent[0].Method != http.MethodPatch || sent[0].Path != channelMessagePath+"/"+storedMessageID {
-			t.Errorf("sent %v, want an edit of the stored reply", sent)
+		if sent := requests(); len(sent) != 1 || sent[0].Method != http.MethodPatch || sent[0].Path != channelMessagePath+"/"+storedMessageID || !strings.Contains(string(sent[0].RawBody), `"custom_id":"next"`) {
+			t.Errorf("sent %v, want an edit of the stored reply with the button", sent)
 		}
 	})
 

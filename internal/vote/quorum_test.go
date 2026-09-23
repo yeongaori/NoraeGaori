@@ -124,6 +124,7 @@ func TestRequiredVotesInChannelCountsMembersAttachedToVoiceStates(t *testing.T) 
 func TestRequiredVotesInChannelSkipsTheBotItself(t *testing.T) {
 	states := []*discordgo.VoiceState{
 		voiceStateWithMember("u1", "voice", false),
+		voiceStateWithMember("u2", "voice", false),
 		{GuildID: "g", UserID: "self", ChannelID: "voice"},
 	}
 
@@ -134,7 +135,7 @@ func TestRequiredVotesInChannelSkipsTheBotItself(t *testing.T) {
 		t.Fatalf("RequiredInChannel returned %v, want nil", err)
 	}
 	if got != 1 {
-		t.Errorf("got %d required votes, want 1 with only the bot beside one listener", got)
+		t.Errorf("got %d required votes, want 1 of 2 listeners without counting the bot", got)
 	}
 }
 

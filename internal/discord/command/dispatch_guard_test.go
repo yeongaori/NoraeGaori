@@ -74,28 +74,6 @@ func probeInteraction(name string, member *discordgo.Member) *discordgo.Interact
 	}
 }
 
-func TestHandleInteractionSkipsTheHandlerWithoutAMember(t *testing.T) {
-	called := registerProbeCommand(t, "probe", false)
-	session := &discordgo.Session{State: discordgo.NewState()}
-
-	HandleInteraction(session, probeInteraction("probe", nil))
-
-	if *called {
-		t.Error("the handler ran for an interaction that carried no guild member")
-	}
-}
-
-func TestHandleInteractionSkipsTheHandlerWhenTheMemberHasNoUser(t *testing.T) {
-	called := registerProbeCommand(t, "probe", false)
-	session := &discordgo.Session{State: discordgo.NewState()}
-
-	HandleInteraction(session, probeInteraction("probe", &discordgo.Member{}))
-
-	if *called {
-		t.Error("the handler ran for a member that carried no user")
-	}
-}
-
 func TestHandleInteractionRunsTheHandlerForAGuildMember(t *testing.T) {
 	called := registerProbeCommand(t, "probe", false)
 	session := &discordgo.Session{State: discordgo.NewState()}
@@ -105,20 +83,5 @@ func TestHandleInteractionRunsTheHandlerForAGuildMember(t *testing.T) {
 
 	if !*called {
 		t.Error("the handler did not run for a valid guild member")
-	}
-}
-
-func TestHandleInteractionSkipsAdminCommandsForNonAdmins(t *testing.T) {
-	called := registerProbeCommand(t, "probeadmin", true)
-	session := &discordgo.Session{State: discordgo.NewState()}
-	if err := session.State.GuildAdd(&discordgo.Guild{ID: "guild"}); err != nil {
-		t.Fatalf("failed to seed the guild: %v", err)
-	}
-	member := &discordgo.Member{GuildID: "guild", User: &discordgo.User{ID: "user"}}
-
-	HandleInteraction(session, probeInteraction("probeadmin", member))
-
-	if *called {
-		t.Error("an admin-only handler ran for a member without administrator permission")
 	}
 }

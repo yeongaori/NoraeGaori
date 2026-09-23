@@ -2,7 +2,7 @@ package discord
 
 import (
 	"net/http"
-	"strings"
+	"slices"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
@@ -43,22 +43,30 @@ func TestComponentRoutesReceiveTheirArguments(t *testing.T) {
 	calls := registerTestRoute(t, "test_route")
 
 	for _, ic := range []*discordgo.InteractionCreate{
-		routeInteraction(discordgo.InteractionMessageComponent, menuGuildID, "test_route:1:two"),
+		routeInteraction(discordgo.InteractionMessageComponent, menuGuildID, "test_route:1:two:3"),
 		routeInteraction(discordgo.InteractionModalSubmit, menuGuildID, "test_route"),
+		routeInteraction(discordgo.InteractionMessageComponent, menuGuildID, "test_route:"),
+		routeInteraction(discordgo.InteractionMessageComponent, menuGuildID, "test_route::1"),
 	} {
 		if !HandleComponentRoute(nil, ic) {
 			t.Errorf("interaction type %v was not routed", ic.Type)
 		}
 	}
 
-	if len(*calls) != 2 {
-		t.Fatalf("the route ran %d times, want 2", len(*calls))
+	if len(*calls) != 4 {
+		t.Fatalf("the route ran %d times, want 4", len(*calls))
 	}
-	if got := strings.Join((*calls)[0], ","); got != "1,two" {
-		t.Errorf("the component route received %q, want \"1,two\"", got)
+	if got := (*calls)[0]; !slices.Equal(got, []string{"1", "two", "3"}) {
+		t.Errorf("the component route received %q, want every argument", got)
 	}
 	if (*calls)[1] != nil {
 		t.Errorf("the modal route received %v, want no arguments", (*calls)[1])
+	}
+	if got := (*calls)[2]; !slices.Equal(got, []string{""}) {
+		t.Errorf("a trailing separator gave %q, want one empty argument", got)
+	}
+	if got := (*calls)[3]; !slices.Equal(got, []string{"", "1"}) {
+		t.Errorf("a doubled separator gave %q, want an empty argument before 1", got)
 	}
 }
 
@@ -116,8 +124,12 @@ func TestModalComponentsOnlyReadModalSubmissions(t *testing.T) {
 		Components: []discordgo.MessageComponent{&discordgo.TextInput{CustomID: "field", Value: "80"}},
 	}
 
-	if components, isModal := ModalComponents(modal); !isModal || len(components) != 1 {
-		t.Errorf("ModalComponents = (%v, %v), want the one submitted field", components, isModal)
+	components, isModal := ModalComponents(modal)
+	if !isModal || len(components) != 1 {
+		t.Fatalf("ModalComponents = (%v, %v), want the one submitted field", components, isModal)
+	}
+	if field, isText := components[0].(*discordgo.TextInput); !isText || field.Value != "80" {
+		t.Errorf("the submitted field is %+v, want the value 80", components[0])
 	}
 	if _, isModal := ModalComponents(routeInteraction(discordgo.InteractionMessageComponent, menuGuildID, "test:1")); isModal {
 		t.Error("a component interaction was read as a modal submission")
@@ -125,6 +137,9 @@ func TestModalComponentsOnlyReadModalSubmissions(t *testing.T) {
 }
 
 func TestViewArgumentsRoundTrip(t *testing.T) {
+	if ViewArgument(true) != "admin" || ViewArgument(false) != "member" {
+		t.Errorf("views = %q and %q, want admin and member as already posted in custom IDs", ViewArgument(true), ViewArgument(false))
+	}
 	for _, isAdmin := range []bool{true, false} {
 		parsed, isValid := ParseViewArgument(ViewArgument(isAdmin))
 		if !isValid || parsed != isAdmin {
@@ -186,25 +201,5 @@ func TestUpdateComponentMessageClearsMissingComponents(t *testing.T) {
 	}
 	if components, ok := discordtest.JSONAt(t, sent[0].Body, "data", "components").([]any); !ok || len(components) != 0 {
 		t.Errorf("components = %v, want an empty list that clears the old ones", components)
-	}
-}
-
-func TestRespondEphemeralEmbedRepliesPrivately(t *testing.T) {
-	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
-	ic := interactionWithToken(routeInteraction(discordgo.InteractionMessageComponent, menuGuildID, "test_route:1"))
-
-	if err := RespondEphemeralEmbed(session, ic, &discordgo.MessageEmbed{Title: "notice"}); err != nil {
-		t.Fatalf("RespondEphemeralEmbed returned %v", err)
-	}
-
-	sent := requests()
-	if len(sent) != 1 {
-		t.Fatalf("sent %d requests, want one interaction callback", len(sent))
-	}
-	if got := discordtest.JSONAt(t, sent[0].Body, "data", "flags"); got != float64(discordgo.MessageFlagsEphemeral) {
-		t.Errorf("reply flags = %v, want ephemeral", got)
-	}
-	if got := discordtest.JSONAt(t, sent[0].Body, "data", "embeds", 0, "title"); got != "notice" {
-		t.Errorf("reply title = %v, want the embed", got)
 	}
 }

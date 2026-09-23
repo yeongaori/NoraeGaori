@@ -1,12 +1,14 @@
 package vote
 
 import (
+	"net/http"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/messages"
+	"noraegaori/internal/testutil/discordtest"
 )
 
 func TestVoteProgressEmbedShowsTheRecomputedQuorum(t *testing.T) {
@@ -26,7 +28,7 @@ func TestVoteProgressEmbedShowsTheRecomputedQuorum(t *testing.T) {
 func TestVoteProgressEmbedClampsAnExpiredClock(t *testing.T) {
 	embed := voteProgressEmbed("g1", "Skip", "", "⏭", time.Now().Add(-2*voteExpirationTime), Tally{current: 1, required: 2})
 
-	if strings.Contains(embed.Footer.Text, "-") {
+	if !strings.HasSuffix(embed.Footer.Text, "expires in 0s") {
 		t.Errorf("footer = %q, want the remaining seconds clamped at zero", embed.Footer.Text)
 	}
 }
@@ -73,12 +75,20 @@ func TestRenderVoteFailureUsesAnErrorEmbed(t *testing.T) {
 }
 
 func TestEditVoteMessageSkipsAnUnpostedVote(t *testing.T) {
-	realEdit := editVoteMessage
-	t.Cleanup(func() { editVoteMessage = realEdit })
+	api, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
+	unposted := newVoteSession("g1", KindSkip, "Skip", "⏭", "voice1", 2)
+	posted := newVoteSession("g1", KindSkip, "Skip", "⏭", "voice1", 2)
+	posted.messageID, posted.channelID = "msg1", "chan1"
 
-	session := newVoteSession("g1", KindSkip, "Skip", "⏭", "voice1", 2)
+	renderVoteEnded(api, unposted, voteEndCancelled)
+	if sent := requests(); len(sent) != 0 {
+		t.Fatalf("sent %v for a vote that was never posted", sent)
+	}
 
-	renderVoteEnded(&discordgo.Session{}, session, voteEndCancelled)
+	renderVoteEnded(api, posted, voteEndCancelled)
+	if sent := requests(); len(sent) != 1 || sent[0].Method != http.MethodPatch || sent[0].Path != "/channels/chan1/messages/msg1" {
+		t.Errorf("sent %v, want one edit of the posted vote", sent)
+	}
 }
 
 func TestVoteProgressEmbedShowsRequesterAgreement(t *testing.T) {

@@ -71,6 +71,23 @@ func TestPageButtonRowPointsAtTheNeighbouringPages(t *testing.T) {
 		t.Errorf("the caller's arguments changed to %v", arguments)
 	}
 
+	if buttons[0].Label != "Previous" || buttons[1].Label != "Next" {
+		t.Errorf("labels = %q, %q, want Previous then Next", buttons[0].Label, buttons[1].Label)
+	}
+
+	for name, check := range map[string]struct {
+		page                     int
+		isPreviousOff, isNextOff bool
+	}{
+		"the first of three": {1, true, false},
+		"the last of three":  {3, false, true},
+	} {
+		row := pageButtons(t, PageButtonRow("queue_page", check.page, 3, "Previous", "Next", nil))
+		if row[0].Disabled != check.isPreviousOff || row[1].Disabled != check.isNextOff {
+			t.Errorf("%s: previous and next disabled = %v, %v, want %v, %v", name, row[0].Disabled, row[1].Disabled, check.isPreviousOff, check.isNextOff)
+		}
+	}
+
 	edges := pageButtons(t, PageButtonRow("queue_page", 1, 1, "Previous", "Next", nil))
 	if len(edges) != 2 || edges[0].CustomID != "queue_page:0" || edges[1].CustomID != "queue_page:2" {
 		t.Fatalf("single-page buttons = %+v", edges)
