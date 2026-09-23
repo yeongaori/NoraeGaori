@@ -11,41 +11,59 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+const defaultResponseBody = `{"id":"333","channel_id":"222","user":{"id":"fetched"},"roles":["fetched-role"]}`
+
 type Request struct {
-	Method string
-	Path   string
-	Body   map[string]any
+	Method  string
+	Path    string
+	Body    map[string]any
+	RawBody []byte
 }
 
 func StubAPI(t *testing.T, statusFor func(*http.Request) int) (*discordgo.Session, func() []Request) {
+	t.Helper()
+
+	return StubAPIResponder(t, func(r *http.Request) (int, string) {
+		return statusFor(r), defaultResponseBody
+	})
+}
+
+func StubAPIResponder(t *testing.T, respond func(*http.Request) (int, string)) (*discordgo.Session, func() []Request) {
 	t.Helper()
 
 	var mu sync.Mutex
 	var requests []Request
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
 		var body map[string]any
-		_ = json.NewDecoder(r.Body).Decode(&body)
+		_ = json.Unmarshal(raw, &body)
 
 		mu.Lock()
-		requests = append(requests, Request{Method: r.Method, Path: r.URL.Path, Body: body})
+		requests = append(requests, Request{Method: r.Method, Path: r.URL.Path, Body: body, RawBody: raw})
 		mu.Unlock()
 
+		status, responseBody := respond(r)
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(statusFor(r))
-		_, _ = io.WriteString(w, `{"id":"333","channel_id":"222","user":{"id":"fetched"},"roles":["fetched-role"]}`)
+		w.WriteHeader(status)
+		_, _ = io.WriteString(w, responseBody)
 	}))
 
 	api, webhooks, channels, guilds := discordgo.EndpointAPI, discordgo.EndpointWebhooks, discordgo.EndpointChannels, discordgo.EndpointGuilds
+	users, applications := discordgo.EndpointUsers, discordgo.EndpointApplications
 	discordgo.EndpointAPI = server.URL + "/api/"
 	discordgo.EndpointWebhooks = server.URL + "/webhooks/"
 	discordgo.EndpointChannels = server.URL + "/channels/"
 	discordgo.EndpointGuilds = server.URL + "/guilds/"
+	discordgo.EndpointUsers = server.URL + "/users/"
+	discordgo.EndpointApplications = server.URL + "/applications"
 	t.Cleanup(func() {
 		discordgo.EndpointAPI = api
 		discordgo.EndpointWebhooks = webhooks
 		discordgo.EndpointChannels = channels
 		discordgo.EndpointGuilds = guilds
+		discordgo.EndpointUsers = users
+		discordgo.EndpointApplications = applications
 		server.Close()
 	})
 
@@ -99,9 +117,7 @@ func SessionWithGuild(t *testing.T, botUserID, guildID string, states []*discord
 	t.Helper()
 
 	session := Session(t, botUserID)
-	if err := session.State.GuildAdd(&discordgo.Guild{ID: guildID, VoiceStates: states}); err != nil {
-		t.Fatalf("failed to seed the guild: %v", err)
-	}
+	AddGuild(t, session, guildID, states...)
 	for _, member := range members {
 		if err := session.State.MemberAdd(member); err != nil {
 			t.Fatalf("failed to seed member %s: %v", member.User.ID, err)

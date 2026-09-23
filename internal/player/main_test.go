@@ -7,8 +7,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"noraegaori/internal/queue"
-	"noraegaori/internal/testutil/dbtest"
 	"noraegaori/internal/testutil/localetest"
+	"noraegaori/internal/testutil/queuetest"
 )
 
 func TestMain(m *testing.M) {
@@ -28,21 +28,16 @@ func TestMain(m *testing.M) {
 func setupPlayerDB(t *testing.T, guildID string, songs int) {
 	t.Helper()
 
-	dbtest.Setup(t)
-	t.Cleanup(func() { DeletePlayer(guildID) })
-	if err := queue.CreateQueue(guildID, "text", "voice"); err != nil {
-		t.Fatalf("create queue: %v", err)
-	}
+	seeded := make([]*queue.Song, 0, songs)
 	for i := 0; i < songs; i++ {
-		song := &queue.Song{
+		seeded = append(seeded, &queue.Song{
 			URL:            fmt.Sprintf("https://youtube.com/watch?v=%s%d", guildID, i),
 			Title:          fmt.Sprintf("Song %d", i),
 			Duration:       "3:00",
 			RequestedByID:  "user1",
 			RequestedByTag: "User#1234",
-		}
-		if err := queue.AddSong(guildID, song, -1); err != nil {
-			t.Fatalf("seed song: %v", err)
-		}
+		})
 	}
+	queuetest.SeedWithVoice(t, guildID, "voice", seeded...)
+	t.Cleanup(func() { DeletePlayer(guildID) })
 }
