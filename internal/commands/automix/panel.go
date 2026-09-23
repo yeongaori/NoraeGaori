@@ -1,29 +1,23 @@
 package automix
 
 import (
-	"errors"
 	"fmt"
 	"noraegaori/internal/audio/analysis"
 	"noraegaori/internal/audio/transition"
 	"noraegaori/internal/discord"
 	"strconv"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"noraegaori/internal/logger"
 	"noraegaori/internal/messages"
 	"noraegaori/internal/player"
 	"noraegaori/internal/queue"
 )
 
 const (
-	transitionsPerPage    = 5
-	transitionPanelExpiry = 5 * time.Minute
-	transitionEditExpiry  = 5 * time.Minute
-	discordLabelLimit     = 100
-	discordSelectLimit    = 25
+	transitionsPerPage = 5
+	discordLabelLimit  = 100
+	discordSelectLimit = 25
 )
 
 var transitionCategories = []string{"volume", "eq", "filter", "effect", "loop"}
@@ -99,7 +93,7 @@ func (pair transitionPair) isOutro() bool {
 	return pair.toSong == nil
 }
 
-func hydrateTransitionRow(guildID string, state panelState, pair transitionPair) transitionRow {
+func hydrateTransitionRow(guildID string, state *panelState, pair transitionPair) transitionRow {
 	fromAnalysis := player.LookupAnalysisForDisplay(guildID, pair.fromSong, analysis.SegmentTail)
 
 	var toAnalysis *analysis.TrackAnalysis
@@ -135,7 +129,7 @@ func hydrateTransitionRow(guildID string, state panelState, pair transitionPair)
 	}
 }
 
-func hydrateTransitionRows(guildID string, state panelState, pairs []transitionPair) []transitionRow {
+func hydrateTransitionRows(guildID string, state *panelState, pairs []transitionPair) []transitionRow {
 	rows := make([]transitionRow, 0, len(pairs))
 	for _, pair := range pairs {
 		rows = append(rows, hydrateTransitionRow(guildID, state, pair))
@@ -144,13 +138,9 @@ func hydrateTransitionRows(guildID string, state panelState, pairs []transitionP
 }
 
 func transitionPageSlice(pairs []transitionPair, page int) []transitionPair {
-	start := (page - 1) * transitionsPerPage
-	if start < 0 || start >= len(pairs) {
+	start, end := discord.PageBounds(page, transitionsPerPage, len(pairs))
+	if start == end {
 		return nil
-	}
-	end := start + transitionsPerPage
-	if end > len(pairs) {
-		end = len(pairs)
 	}
 	return pairs[start:end]
 }
@@ -205,13 +195,10 @@ func loadPanelState(guildID string) (panelState, bool) {
 }
 
 func transitionPageCount(pairs []transitionPair) int {
-	if len(pairs) == 0 {
-		return 1
-	}
-	return (len(pairs) + transitionsPerPage - 1) / transitionsPerPage
+	return discord.PageCount(len(pairs), transitionsPerPage)
 }
 
-func autoStylesFor(state panelState, row transitionRow) map[string]string {
+func autoStylesFor(state *panelState, row transitionRow) map[string]string {
 	if !state.autoSelect {
 		_, styles, _ := transition.ResolveStyles(nil, nil, false,
 			transition.StyleOverrides{}, transition.StyleOverrides{})
@@ -224,7 +211,7 @@ func autoStylesFor(state panelState, row transitionRow) map[string]string {
 }
 
 func styleLabel(guildID, category, style string) string {
-	panel := messages.T(guildID).AutoMixPanel
+	panel := &messages.T(guildID).AutoMixPanel
 	if label, ok := panel.StyleLabels[category+"."+style]; ok && label != "" {
 		return label
 	}
@@ -232,7 +219,7 @@ func styleLabel(guildID, category, style string) string {
 }
 
 func categoryLabel(guildID, category string) string {
-	panel := messages.T(guildID).AutoMixPanel
+	panel := &messages.T(guildID).AutoMixPanel
 	if label, ok := panel.CategoryLabels[category]; ok && label != "" {
 		return label
 	}
@@ -240,7 +227,7 @@ func categoryLabel(guildID, category string) string {
 }
 
 func describeTrack(guildID string, track *analysis.TrackAnalysis, analyzing bool) string {
-	panel := messages.T(guildID).AutoMixPanel
+	panel := &messages.T(guildID).AutoMixPanel
 	if track == nil {
 		if analyzing {
 			return panel.Analyzing
@@ -262,7 +249,7 @@ func describeTrack(guildID string, track *analysis.TrackAnalysis, analyzing bool
 }
 
 func describeRecipe(guildID string, row transitionRow, marked bool) string {
-	panel := messages.T(guildID).AutoMixPanel
+	panel := &messages.T(guildID).AutoMixPanel
 	parts := make([]string, 0, len(transitionCategories))
 	for _, category := range transitionCategories {
 		style := row.effective[category]
@@ -292,8 +279,8 @@ func describeSongLine(guildID string, index int, song *queue.Song, analysis *ana
 		describeTrack(guildID, analysis, analyzing))
 }
 
-func createTransitionPanelEmbed(guildID string, state panelState, rows []transitionRow, page, totalPages int) *discordgo.MessageEmbed {
-	panel := messages.T(guildID).AutoMixPanel
+func createTransitionPanelEmbed(guildID string, state *panelState, rows []transitionRow, page, totalPages int) *discordgo.MessageEmbed {
+	panel := &messages.T(guildID).AutoMixPanel
 
 	if len(rows) == 0 {
 		return messages.CreateErrorEmbed(panel.EmptyTitle, panel.EmptyDesc)
@@ -350,62 +337,49 @@ func createTransitionPanelEmbed(guildID string, state panelState, rows []transit
 	}
 }
 
-func createTransitionPanelComponents(guildID string, rows []transitionRow, page, totalPages int, token string) []discordgo.MessageComponent {
-	panel := messages.T(guildID).AutoMixPanel
-	buttons := messages.T(guildID).Buttons
+func createTransitionPanelComponents(guildID string, rows []transitionRow, page, totalPages int) []discordgo.MessageComponent {
+	t := messages.T(guildID)
+	pageArgument := strconv.Itoa(page)
 
-	options := make([]discordgo.SelectMenuOption, 0, transitionsPerPage)
-	for _, row := range rows {
-		if len(options) >= discordSelectLimit {
+	options := make([]discordgo.SelectMenuOption, 0, min(len(rows), discordSelectLimit))
+	for index := range rows {
+		if len(options) == discordSelectLimit {
 			break
 		}
+		row := &rows[index]
 		options = append(options, discordgo.SelectMenuOption{
 			Label:       discord.TruncateRunes(transitionLabel(guildID, row.transitionPair), discordLabelLimit),
-			Description: discord.TruncateRunes(describeRecipe(guildID, row, false), discordLabelLimit),
+			Description: discord.TruncateRunes(describeRecipe(guildID, *row, false), discordLabelLimit),
 			Value:       strconv.Itoa(row.fromSong.ID),
 		})
 	}
 
-	components := make([]discordgo.MessageComponent, 0, 2)
-	if len(options) > 0 {
-		components = append(components, discordgo.ActionsRow{
+	refreshButton := discordgo.Button{
+		Label:    t.AutoMixPanel.RefreshButton,
+		Style:    discordgo.SecondaryButton,
+		CustomID: discord.ComponentID(transitionPageRoute, pageArgument),
+	}
+	pageRow := discord.PageButtonRow(transitionPageRoute, page, totalPages, t.Buttons.Previous, t.Buttons.Next, nil, refreshButton)
+	if len(options) == 0 {
+		return []discordgo.MessageComponent{pageRow}
+	}
+
+	return []discordgo.MessageComponent{
+		discordgo.ActionsRow{
 			Components: []discordgo.MessageComponent{
 				discordgo.SelectMenu{
-					CustomID:    "automix_pick_" + token,
-					Placeholder: panel.SelectPlaceholder,
+					CustomID:    discord.ComponentID(transitionPickRoute, pageArgument),
+					Placeholder: t.AutoMixPanel.SelectPlaceholder,
 					Options:     options,
 				},
 			},
-		})
-	}
-
-	components = append(components, discordgo.ActionsRow{
-		Components: []discordgo.MessageComponent{
-			discordgo.Button{
-				Label:    buttons.Previous,
-				Style:    discordgo.PrimaryButton,
-				CustomID: "automix_panel_prev_" + token,
-				Disabled: page <= 1,
-			},
-			discordgo.Button{
-				Label:    buttons.Next,
-				Style:    discordgo.PrimaryButton,
-				CustomID: "automix_panel_next_" + token,
-				Disabled: page >= totalPages,
-			},
-			discordgo.Button{
-				Label:    panel.RefreshButton,
-				Style:    discordgo.SecondaryButton,
-				CustomID: "automix_panel_refresh_" + token,
-			},
 		},
-	})
-
-	return components
+		pageRow,
+	}
 }
 
-func createTransitionEditorEmbed(guildID string, state panelState, row transitionRow, errorMessage string) *discordgo.MessageEmbed {
-	panel := messages.T(guildID).AutoMixPanel
+func createTransitionEditorEmbed(guildID string, state *panelState, row transitionRow, errorMessage string) *discordgo.MessageEmbed {
+	panel := &messages.T(guildID).AutoMixPanel
 
 	autoStyles := autoStylesFor(state, row)
 	autoParts := make([]string, 0, len(transitionCategories))
@@ -478,7 +452,7 @@ func createTransitionEditorEmbed(guildID string, state panelState, row transitio
 }
 
 func sourceLabel(guildID, source string) string {
-	panel := messages.T(guildID).AutoMixPanel
+	panel := &messages.T(guildID).AutoMixPanel
 	switch source {
 	case "guild":
 		return panel.SourceGuild
@@ -488,10 +462,12 @@ func sourceLabel(guildID, source string) string {
 	return panel.SourceAuto
 }
 
-func createTransitionEditorComponents(guildID string, state panelState, row transitionRow, token string) []discordgo.MessageComponent {
-	panel := messages.T(guildID).AutoMixPanel
+func createTransitionEditorComponents(guildID string, state *panelState, row transitionRow, location *panelLocation) []discordgo.MessageComponent {
+	panel := &messages.T(guildID).AutoMixPanel
 	autoStyles := autoStylesFor(state, row)
 	songOverrides := songStyleOverrides(row.fromSong)
+	songArgument := strconv.Itoa(row.fromSong.ID)
+	pageArgument := strconv.Itoa(location.page)
 
 	components := make([]discordgo.MessageComponent, 0, len(transitionCategories))
 	for _, category := range transitionCategories {
@@ -523,7 +499,7 @@ func createTransitionEditorComponents(guildID string, state panelState, row tran
 		components = append(components, discordgo.ActionsRow{
 			Components: []discordgo.MessageComponent{
 				discordgo.SelectMenu{
-					CustomID:    fmt.Sprintf("automix_style_%s_%s_%d", category, token, row.fromSong.ID),
+					CustomID:    discord.ComponentID(transitionStyleRoute, category, songArgument, location.messageID, pageArgument),
 					Placeholder: categoryLabel(guildID, category),
 					Options:     options,
 				},
@@ -548,408 +524,4 @@ func overrideForCategory(overrides transition.StyleOverrides, category string) s
 		return overrides.Loop
 	}
 	return ""
-}
-
-func HandleAutoMixPanel(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	guildID := i.GuildID
-	panel := messages.T(guildID).AutoMixPanel
-
-	state, ok := loadPanelState(guildID)
-	if !ok || len(state.pairs) == 0 {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(panel.EmptyTitle, panel.EmptyDesc))
-		return nil
-	}
-
-	go player.StartAnalysisBackfill(guildID, voiceChannelBitrate(s, guildID))
-
-	totalPages := transitionPageCount(state.pairs)
-	page := 1
-	if options := i.ApplicationCommandData().Options; len(options) > 0 {
-		page = int(options[0].IntValue())
-	}
-	if page < 1 {
-		page = 1
-	}
-	if page > totalPages {
-		page = totalPages
-	}
-
-	token := discord.NewComponentToken()
-	rows := hydrateTransitionRows(guildID, state, transitionPageSlice(state.pairs, page))
-	embed := createTransitionPanelEmbed(guildID, state, rows, page, totalPages)
-	components := createTransitionPanelComponents(guildID, rows, page, totalPages, token)
-
-	livePanel := startTransitionPanel(s, i, guildID, token, page)
-
-	panelMsg, err := discord.RespondEmbedWithComponents(s, i, embed, components)
-	if err != nil {
-		livePanel.close()
-		logger.Errorf("Failed to send panel: %v", err)
-		return err
-	}
-
-	livePanel.setMessage(panelMsg)
-	return nil
-}
-
-func OpenPanelFromComponent(s *discordgo.Session, ic *discordgo.InteractionCreate) {
-	guildID := ic.GuildID
-	panel := messages.T(guildID).AutoMixPanel
-
-	state, ok := loadPanelState(guildID)
-	if !ok || len(state.pairs) == 0 {
-		s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Embeds: []*discordgo.MessageEmbed{messages.CreateErrorEmbed(panel.EmptyTitle, panel.EmptyDesc)},
-				Flags:  discordgo.MessageFlagsEphemeral,
-			},
-		})
-		return
-	}
-
-	go player.StartAnalysisBackfill(guildID, voiceChannelBitrate(s, guildID))
-
-	totalPages := transitionPageCount(state.pairs)
-	token := discord.NewComponentToken()
-	rows := hydrateTransitionRows(guildID, state, transitionPageSlice(state.pairs, 1))
-	embed := createTransitionPanelEmbed(guildID, state, rows, 1, totalPages)
-	components := createTransitionPanelComponents(guildID, rows, 1, totalPages, token)
-
-	livePanel := startTransitionPanel(s, ic, guildID, token, 1)
-
-	if err := s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Embeds:     []*discordgo.MessageEmbed{embed},
-			Components: components,
-		},
-	}); err != nil {
-		livePanel.close()
-		logger.Errorf("Failed to open panel from component: %v", err)
-		return
-	}
-
-	panelMsg, err := s.InteractionResponse(ic.Interaction)
-	if err != nil {
-		logger.Errorf("Failed to resolve panel message: %v", err)
-	}
-
-	livePanel.setMessage(panelMsg)
-}
-
-type transitionPanel struct {
-	session *discordgo.Session
-	origin  *discordgo.InteractionCreate
-	guildID string
-	token   string
-
-	pageMu sync.Mutex
-	page   int
-
-	closeMu       sync.Mutex
-	panelMsg      *discordgo.Message
-	isClosed      bool
-	removeHandler func()
-}
-
-func (panel *transitionPanel) close() {
-	panel.closeMu.Lock()
-	alreadyClosed := panel.isClosed
-	panel.isClosed = true
-	panel.closeMu.Unlock()
-
-	if !alreadyClosed {
-		panel.removeHandler()
-	}
-}
-
-func (panel *transitionPanel) setMessage(panelMsg *discordgo.Message) {
-	panel.closeMu.Lock()
-	defer panel.closeMu.Unlock()
-	panel.panelMsg = panelMsg
-}
-
-func (panel *transitionPanel) render() (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
-	state, ok := loadPanelState(panel.guildID)
-	if !ok {
-		panelText := messages.T(panel.guildID).AutoMixPanel
-		return messages.CreateErrorEmbed(panelText.EmptyTitle, panelText.EmptyDesc), nil
-	}
-	totalPages := transitionPageCount(state.pairs)
-
-	panel.pageMu.Lock()
-	if panel.page > totalPages {
-		panel.page = totalPages
-	}
-	if panel.page < 1 {
-		panel.page = 1
-	}
-	page := panel.page
-	panel.pageMu.Unlock()
-
-	rows := hydrateTransitionRows(panel.guildID, state, transitionPageSlice(state.pairs, page))
-	return createTransitionPanelEmbed(panel.guildID, state, rows, page, totalPages),
-		createTransitionPanelComponents(panel.guildID, rows, page, totalPages, panel.token)
-}
-
-func (panel *transitionPanel) refreshMessage() {
-	embed, components := panel.render()
-
-	panel.closeMu.Lock()
-	defer panel.closeMu.Unlock()
-	if panel.isClosed || panel.panelMsg == nil {
-		return
-	}
-
-	if _, err := panel.session.ChannelMessageEditComplex(&discordgo.MessageEdit{
-		ID:         panel.panelMsg.ID,
-		Channel:    panel.panelMsg.ChannelID,
-		Embeds:     &[]*discordgo.MessageEmbed{embed},
-		Components: &components,
-	}); err != nil {
-		logger.Errorf("Failed to refresh the transition panel: %v", err)
-	}
-}
-
-func (panel *transitionPanel) turnPage(customID string) bool {
-	panel.pageMu.Lock()
-	defer panel.pageMu.Unlock()
-
-	switch {
-	case strings.HasPrefix(customID, "automix_panel_prev_"):
-		if panel.page > 1 {
-			panel.page--
-		}
-	case strings.HasPrefix(customID, "automix_panel_next_"):
-		panel.page++
-	case strings.HasPrefix(customID, "automix_panel_refresh_"):
-	default:
-		return false
-	}
-	return true
-}
-
-func (panel *transitionPanel) handleInteraction(s *discordgo.Session, ic *discordgo.InteractionCreate) {
-	if ic.Type != discordgo.InteractionMessageComponent || ic.GuildID != panel.guildID {
-		return
-	}
-
-	data := ic.MessageComponentData()
-	if !strings.HasSuffix(data.CustomID, panel.token) {
-		return
-	}
-
-	if strings.HasPrefix(data.CustomID, "automix_pick_") {
-		if len(data.Values) == 0 {
-			return
-		}
-		songID, err := strconv.Atoi(data.Values[0])
-		if err != nil {
-			return
-		}
-		openTransitionEditor(s, ic, panel.guildID, songID, panel.refreshMessage)
-		panel.refreshMessage()
-		return
-	}
-
-	if !panel.turnPage(data.CustomID) {
-		return
-	}
-
-	embed, components := panel.render()
-	if err := s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseUpdateMessage,
-		Data: &discordgo.InteractionResponseData{
-			Embeds:     []*discordgo.MessageEmbed{embed},
-			Components: components,
-		},
-	}); err != nil {
-		logger.Errorf("Failed to turn the transition panel page: %v", err)
-	}
-}
-
-func expireTransitionPanel(panel *transitionPanel) {
-	<-time.After(transitionPanelExpiry)
-
-	embed, _ := panel.render()
-
-	panel.closeMu.Lock()
-	defer panel.closeMu.Unlock()
-	if panel.isClosed {
-		return
-	}
-	panel.isClosed = true
-	panel.removeHandler()
-
-	if err := discord.CloseComponentMessage(panel.session, panel.origin, panel.panelMsg, embed); err != nil {
-		logger.Errorf("Failed to close the transition panel: %v", err)
-	}
-}
-
-func startTransitionPanel(s *discordgo.Session, origin *discordgo.InteractionCreate, guildID, token string, startPage int) *transitionPanel {
-	panel := &transitionPanel{session: s, origin: origin, guildID: guildID, token: token, page: startPage}
-	panel.removeHandler = s.AddHandler(panel.handleInteraction)
-	go expireTransitionPanel(panel)
-	return panel
-}
-
-func openTransitionEditor(s *discordgo.Session, ic *discordgo.InteractionCreate, guildID string, songID int, refreshPanel func()) {
-	panel := messages.T(guildID).AutoMixPanel
-
-	state, ok := loadPanelState(guildID)
-	if !ok {
-		respondEditorClosed(s, ic, messages.CreateErrorEmbed(panel.EmptyTitle, panel.EmptyDesc))
-		return
-	}
-	pair, found := findTransitionPair(state.pairs, songID)
-	if !found {
-		s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Embeds: []*discordgo.MessageEmbed{messages.CreateErrorEmbed(panel.EmptyTitle, panel.SongGone)},
-				Flags:  discordgo.MessageFlagsEphemeral,
-			},
-		})
-		return
-	}
-
-	row := hydrateTransitionRow(guildID, state, pair)
-	token := discord.NewComponentToken()
-	stopEditor := startTransitionEditor(s, ic.Interaction, guildID, songID, token, refreshPanel)
-
-	if err := s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Embeds:     []*discordgo.MessageEmbed{createTransitionEditorEmbed(guildID, state, row, "")},
-			Components: createTransitionEditorComponents(guildID, state, row, token),
-			Flags:      discordgo.MessageFlagsEphemeral,
-		},
-	}); err != nil {
-		stopEditor()
-		logger.Errorf("Failed to open editor: %v", err)
-		return
-	}
-}
-
-func startTransitionEditor(s *discordgo.Session, origin *discordgo.Interaction, guildID string, songID int, token string, refreshPanel func()) func() {
-	suffix := fmt.Sprintf("_%s_%d", token, songID)
-
-	handler := func(s *discordgo.Session, ic *discordgo.InteractionCreate) {
-		if ic.Type != discordgo.InteractionMessageComponent || ic.GuildID != guildID {
-			return
-		}
-
-		data := ic.MessageComponentData()
-		if !strings.HasPrefix(data.CustomID, "automix_style_") || !strings.HasSuffix(data.CustomID, suffix) {
-			return
-		}
-		if len(data.Values) == 0 {
-			return
-		}
-
-		category := strings.TrimSuffix(strings.TrimPrefix(data.CustomID, "automix_style_"), suffix)
-		style := data.Values[0]
-
-		panel := messages.T(guildID).AutoMixPanel
-		if !transition.ValidStyle(category, style) {
-			respondEditorRetry(s, ic, guildID, songID, token, fmt.Sprintf(panel.UpdateFailed, style))
-			return
-		}
-
-		if err := queue.SetSongAutoMixStyle(guildID, songID, category, style); err != nil {
-			if errors.Is(err, queue.ErrSongNotInQueue) {
-				respondEditorClosed(s, ic, messages.CreateErrorEmbed(panel.EmptyTitle, panel.SongGone))
-				return
-			}
-			respondEditorRetry(s, ic, guildID, songID, token, fmt.Sprintf(panel.UpdateFailed, err))
-			return
-		}
-
-		state, ok := loadPanelState(guildID)
-		if !ok {
-			respondEditorClosed(s, ic, messages.CreateErrorEmbed(panel.EmptyTitle, panel.EmptyDesc))
-			return
-		}
-		pair, found := findTransitionPair(state.pairs, songID)
-		if !found {
-			respondEditorClosed(s, ic, messages.CreateErrorEmbed(panel.EmptyTitle, panel.SongGone))
-			return
-		}
-
-		row := hydrateTransitionRow(guildID, state, pair)
-		s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseUpdateMessage,
-			Data: &discordgo.InteractionResponseData{
-				Embeds:     []*discordgo.MessageEmbed{createTransitionEditorEmbed(guildID, state, row, "")},
-				Components: createTransitionEditorComponents(guildID, state, row, token),
-			},
-		})
-
-		if refreshPanel != nil {
-			refreshPanel()
-		}
-	}
-
-	removeHandler := s.AddHandler(handler)
-	cancelled := make(chan struct{})
-	stopEditor := sync.OnceFunc(func() {
-		removeHandler()
-		close(cancelled)
-	})
-
-	go expireTransitionEditor(s, origin, removeHandler, cancelled)
-	return stopEditor
-}
-
-func expireTransitionEditor(s *discordgo.Session, origin *discordgo.Interaction, removeHandler func(), cancelled <-chan struct{}) {
-	select {
-	case <-cancelled:
-		return
-	case <-time.After(transitionEditExpiry):
-	}
-	removeHandler()
-
-	if origin == nil {
-		return
-	}
-	if _, err := s.InteractionResponseEdit(origin, &discordgo.WebhookEdit{
-		Components: &[]discordgo.MessageComponent{},
-	}); err != nil {
-		logger.Errorf("Failed to close the transition editor: %v", err)
-	}
-}
-
-func respondEditorRetry(s *discordgo.Session, ic *discordgo.InteractionCreate, guildID string, songID int, token, message string) {
-	panel := messages.T(guildID).AutoMixPanel
-
-	state, ok := loadPanelState(guildID)
-	if !ok {
-		respondEditorClosed(s, ic, messages.CreateErrorEmbed(panel.EmptyTitle, panel.EmptyDesc))
-		return
-	}
-	pair, found := findTransitionPair(state.pairs, songID)
-	if !found {
-		respondEditorClosed(s, ic, messages.CreateErrorEmbed(panel.EmptyTitle, panel.SongGone))
-		return
-	}
-
-	row := hydrateTransitionRow(guildID, state, pair)
-	s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseUpdateMessage,
-		Data: &discordgo.InteractionResponseData{
-			Embeds:     []*discordgo.MessageEmbed{createTransitionEditorEmbed(guildID, state, row, message)},
-			Components: createTransitionEditorComponents(guildID, state, row, token),
-		},
-	})
-}
-
-func respondEditorClosed(s *discordgo.Session, ic *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) {
-	s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseUpdateMessage,
-		Data: &discordgo.InteractionResponseData{
-			Embeds:     []*discordgo.MessageEmbed{embed},
-			Components: []discordgo.MessageComponent{},
-		},
-	})
 }

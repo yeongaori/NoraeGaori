@@ -18,8 +18,10 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
-	if i.Type == discordgo.InteractionMessageComponent {
-		discord.HandleDropdownMenuPick(s, i)
+	if i.Type == discordgo.InteractionMessageComponent || i.Type == discordgo.InteractionModalSubmit {
+		if !discord.HandleComponentRoute(s, i) && i.Type == discordgo.InteractionMessageComponent {
+			discord.HandleDropdownMenuPick(s, i)
+		}
 		return
 	}
 

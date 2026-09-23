@@ -2,9 +2,8 @@ package queue
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/commands/automix"
@@ -15,47 +14,43 @@ import (
 )
 
 const (
-	queuePanelExpiry = 5 * time.Minute
+	queuePageRoute = "queue_page"
+	queueMixRoute  = "queue_mix"
 
-	queuePrevPrefix    = "queue_prev_"
-	queueNextPrefix    = "queue_next_"
-	queueOpenMixPrefix = "queue_open_mix_"
+	songsPerPage = 10
 )
 
-func createQueueEmbed(guildID string, songs []*queue.Song, page, totalPages, perPage int) *discordgo.MessageEmbed {
+func renderQueuePage(guildID string, songs []*queue.Song, page int) (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
+	totalPages := discord.PageCount(len(songs), songsPerPage)
+	page = discord.ClampPage(page, totalPages)
+	return createQueueEmbed(guildID, songs, page, totalPages), createQueueButtons(guildID, page, totalPages)
+}
+
+func createQueueEmbed(guildID string, songs []*queue.Song, page, totalPages int) *discordgo.MessageEmbed {
 	t := messages.T(guildID)
-	start := (page - 1) * perPage
-	end := start + perPage
-	if end > len(songs) {
-		end = len(songs)
-	}
+	start, end := discord.PageBounds(page, songsPerPage, len(songs))
 
 	var description strings.Builder
-
-	for idx := start; idx < end; idx++ {
-		song := songs[idx]
+	for index := start; index < end; index++ {
+		song := songs[index]
 
 		duration := song.Duration
 		if song.IsLive {
 			duration = t.Queue.LiveBadge
 		}
 
-		if idx == 0 {
-			description.WriteString(fmt.Sprintf("▶️ %s\n   %s: %s | %s: %s | %s: %s\n\n",
-				messages.FormatBoldMaskedLink(song.Title, song.URL),
-				t.Fields.Uploader, messages.EscapeMarkdown(song.Uploader),
-				t.Fields.Duration, duration,
-				t.Fields.Requester, messages.EscapeMarkdown(song.RequestedByTag),
-			))
-		} else {
-			description.WriteString(fmt.Sprintf("%d. %s\n   %s: %s | %s: %s | %s: %s\n\n",
-				idx+1,
-				messages.FormatBoldMaskedLink(song.Title, song.URL),
-				t.Fields.Uploader, messages.EscapeMarkdown(song.Uploader),
-				t.Fields.Duration, duration,
-				t.Fields.Requester, messages.EscapeMarkdown(song.RequestedByTag),
-			))
+		marker := "▶️"
+		if index > 0 {
+			marker = strconv.Itoa(index+1) + "."
 		}
+
+		fmt.Fprintf(&description, "%s %s\n   %s: %s | %s: %s | %s: %s\n\n",
+			marker,
+			messages.FormatBoldMaskedLink(song.Title, song.URL),
+			t.Fields.Uploader, messages.EscapeMarkdown(song.Uploader),
+			t.Fields.Duration, duration,
+			t.Fields.Requester, messages.EscapeMarkdown(song.RequestedByTag),
+		)
 	}
 
 	return &discordgo.MessageEmbed{
@@ -68,130 +63,55 @@ func createQueueEmbed(guildID string, songs []*queue.Song, page, totalPages, per
 	}
 }
 
-func createQueueButtons(guildID string, page, totalPages int, token string) []discordgo.MessageComponent {
+func createQueueButtons(guildID string, page, totalPages int) []discordgo.MessageComponent {
+	t := messages.T(guildID)
+	mixButton := discordgo.Button{
+		Label:    t.AutoMixPanel.MixButton,
+		Style:    discordgo.SecondaryButton,
+		CustomID: queueMixRoute,
+	}
 	return []discordgo.MessageComponent{
-		discordgo.ActionsRow{
-			Components: []discordgo.MessageComponent{
-				discordgo.Button{
-					Label:    messages.T(guildID).Buttons.Previous,
-					Style:    discordgo.PrimaryButton,
-					CustomID: queuePrevPrefix + token,
-					Disabled: page == 1,
-				},
-				discordgo.Button{
-					Label:    messages.T(guildID).Queue.QueueNextButton,
-					Style:    discordgo.PrimaryButton,
-					CustomID: queueNextPrefix + token,
-					Disabled: page == totalPages,
-				},
-				discordgo.Button{
-					Label:    messages.T(guildID).AutoMixPanel.MixButton,
-					Style:    discordgo.SecondaryButton,
-					CustomID: queueOpenMixPrefix + token,
-				},
-			},
-		},
+		discord.PageButtonRow(queuePageRoute, page, totalPages, t.Buttons.Previous, t.Queue.QueueNextButton, nil, mixButton),
 	}
 }
 
-type queuePanel struct {
-	guildID string
-	token   string
-	perPage int
-
-	pageMu sync.Mutex
-	page   int
+func emptyQueueEmbed(guildID string) *discordgo.MessageEmbed {
+	t := messages.T(guildID)
+	return messages.CreateErrorEmbed(t.Titles.EmptyQueue, t.Descriptions.EmptyQueue)
 }
 
-func (panel *queuePanel) pageCount(songs int) int {
-	if songs <= panel.perPage {
-		return 1
-	}
-	return (songs + panel.perPage - 1) / panel.perPage
-}
-
-func (panel *queuePanel) isPageButton(customID string) bool {
-	return customID == queuePrevPrefix+panel.token || customID == queueNextPrefix+panel.token
-}
-
-func (panel *queuePanel) turnPage(customID string, totalPages int) int {
-	panel.pageMu.Lock()
-	defer panel.pageMu.Unlock()
-
-	if customID == queuePrevPrefix+panel.token && panel.page > 1 {
-		panel.page--
-	}
-	if customID == queueNextPrefix+panel.token && panel.page < totalPages {
-		panel.page++
-	}
-	return panel.clampedPage(totalPages)
-}
-
-func (panel *queuePanel) currentPage(totalPages int) int {
-	panel.pageMu.Lock()
-	defer panel.pageMu.Unlock()
-	return panel.clampedPage(totalPages)
-}
-
-func (panel *queuePanel) clampedPage(totalPages int) int {
-	if panel.page > totalPages {
-		panel.page = totalPages
-	}
-	if panel.page < 1 {
-		panel.page = 1
-	}
-	return panel.page
-}
-
-func (panel *queuePanel) handleInteraction(s *discordgo.Session, ic *discordgo.InteractionCreate) {
-	if ic.Type != discordgo.InteractionMessageComponent || ic.GuildID != panel.guildID {
+func turnQueuePage(s *discordgo.Session, ic *discordgo.InteractionCreate, arguments []string) {
+	page, hasPage := discord.PageArgument(ic, arguments, 1)
+	if !hasPage {
 		return
 	}
 
-	data := ic.MessageComponentData()
-	if data.CustomID == queueOpenMixPrefix+panel.token {
-		automix.OpenPanelFromComponent(s, ic)
+	q, err := queue.GetQueue(ic.GuildID, false)
+	if err != nil {
+		logger.Errorf("Failed to load the queue for a page turn: %v", err)
+		t := messages.T(ic.GuildID)
+		respondQueueNotice(s, ic, messages.CreateErrorEmbed(t.Titles.Error, fmt.Sprintf(t.Errors.CommandExecutionError, err)))
 		return
 	}
-	if !panel.isPageButton(data.CustomID) {
+	if q == nil || len(q.Songs) == 0 {
+		respondQueueNotice(s, ic, emptyQueueEmbed(ic.GuildID))
 		return
 	}
 
-	q, err := queue.GetQueue(panel.guildID, false)
-	if err != nil || q == nil || len(q.Songs) == 0 {
-		return
-	}
-
-	totalPages := panel.pageCount(len(q.Songs))
-	page := panel.turnPage(data.CustomID, totalPages)
-
-	embed := createQueueEmbed(panel.guildID, q.Songs, page, totalPages, panel.perPage)
-	components := createQueueButtons(panel.guildID, page, totalPages, panel.token)
-
-	if err := s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseUpdateMessage,
-		Data: &discordgo.InteractionResponseData{
-			Embeds:     []*discordgo.MessageEmbed{embed},
-			Components: components,
-		},
-	}); err != nil {
+	embed, components := renderQueuePage(ic.GuildID, q.Songs, page)
+	if err := discord.UpdateComponentMessage(s, ic, embed, components); err != nil {
 		logger.Errorf("Failed to turn the queue page: %v", err)
 	}
 }
 
-func expireQueuePanel(s *discordgo.Session, i *discordgo.InteractionCreate, panelMsg *discordgo.Message, panel *queuePanel, removeHandler func()) {
-	defer removeHandler()
-
-	<-time.After(queuePanelExpiry)
-
-	q, err := queue.GetQueue(panel.guildID, false)
-	if err != nil || q == nil {
-		return
+func respondQueueNotice(s *discordgo.Session, ic *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) {
+	if err := discord.RespondEphemeralEmbed(s, ic, embed); err != nil {
+		logger.Errorf("Failed to answer a queue page turn: %v", err)
 	}
+}
 
-	totalPages := panel.pageCount(len(q.Songs))
-	embed := createQueueEmbed(panel.guildID, q.Songs, panel.currentPage(totalPages), totalPages, panel.perPage)
-	if err := discord.CloseComponentMessage(s, i, panelMsg, embed); err != nil {
-		logger.Errorf("Failed to close the queue panel: %v", err)
+func openMixPanel(s *discordgo.Session, ic *discordgo.InteractionCreate, _ []string) {
+	if ic.Type == discordgo.InteractionMessageComponent {
+		automix.OpenPanelFromComponent(s, ic)
 	}
 }

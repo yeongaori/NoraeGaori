@@ -87,10 +87,10 @@ func TestSettingMenuRejectsAnUnknownPick(t *testing.T) {
 
 func TestThePanelShowsUnavailableForAnUnreadableSetting(t *testing.T) {
 	dbtest.Setup(t)
-	closeDatabaseUntilCleanup(t)
+	dbtest.CloseUntilCleanup(t)
 
 	spec := specFor(t, "sponsorblock")
-	view := newPanelView(checkGuildID, spec.category, "", "token", true)
+	view := newPanelView(checkGuildID, spec.category, true)
 	if got := view.displayValue(spec); got != panelStrings(checkGuildID).ReadFailed {
 		t.Errorf("an unreadable setting displays %q, want %q", got, panelStrings(checkGuildID).ReadFailed)
 	}
@@ -101,7 +101,7 @@ func TestFormatSettingValueMatchesThePanel(t *testing.T) {
 
 	for _, key := range []string{"sponsorblock", "repeat", "volume"} {
 		spec := specFor(t, key)
-		view := newPanelView(checkGuildID, spec.category, "", "token", true)
+		view := newPanelView(checkGuildID, spec.category, true)
 		if got, want := formatSettingValue(checkGuildID, spec, view.values[key].raw), view.displayValue(spec); got != want {
 			t.Errorf("%s formats as %q, the panel shows %q", key, got, want)
 		}

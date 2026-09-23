@@ -1,34 +1,54 @@
 package settings
 
-import "strings"
-
-type panelAction int
-
-const (
-	actionNone panelAction = iota
-	actionSwitchCategory
-	actionPickSetting
-	actionChooseValue
-	actionSubmitModal
+import (
+	"github.com/bwmarrin/discordgo"
+	"noraegaori/internal/discord"
 )
 
-func routeComponent(id, token string) (panelAction, string) {
-	switch id {
-	case categoryPrefix + token:
-		return actionSwitchCategory, ""
-	case pickPrefix + token:
-		return actionPickSetting, ""
-	}
-
-	if strings.HasPrefix(id, choicePrefix) && strings.HasSuffix(id, "_"+token) {
-		return actionChooseValue, settingKeyFrom(id, choicePrefix, token)
-	}
-	return actionNone, ""
+type panelTarget struct {
+	isAdmin  bool
+	category string
+	key      string
 }
 
-func routeModal(id, token string) (panelAction, string) {
-	if !strings.HasPrefix(id, modalPrefix) || !strings.HasSuffix(id, "_"+token) {
-		return actionNone, ""
+type panelHandler func(s *discordgo.Session, ic *discordgo.InteractionCreate, target *panelTarget)
+
+func registerPanelRoutes() {
+	discord.RegisterComponentRoute(categoryRoute, routePanel(1, switchCategory))
+	discord.RegisterComponentRoute(pickRoute, routePanel(2, pickSetting))
+	discord.RegisterComponentRoute(modalRoute, routePanel(3, submitSettingModal))
+}
+
+func routePanel(argumentCount int, handle panelHandler) discord.ComponentRoute {
+	return func(s *discordgo.Session, ic *discordgo.InteractionCreate, arguments []string) {
+		if len(arguments) != argumentCount {
+			return
+		}
+		if target, isValid := parsePanelArguments(arguments); isValid {
+			handle(s, ic, &target)
+		}
 	}
-	return actionSubmitModal, settingKeyFrom(id, modalPrefix, token)
+}
+
+func parsePanelArguments(arguments []string) (panelTarget, bool) {
+	if len(arguments) == 0 || len(arguments) > 3 {
+		return panelTarget{}, false
+	}
+
+	isAdmin, isValidView := discord.ParseViewArgument(arguments[0])
+	if !isValidView {
+		return panelTarget{}, false
+	}
+
+	target := panelTarget{isAdmin: isAdmin}
+	if len(arguments) > 1 {
+		target.category = arguments[1]
+		if !isVisibleCategory(target.category, isAdmin) {
+			return panelTarget{}, false
+		}
+	}
+	if len(arguments) > 2 {
+		target.key = arguments[2]
+	}
+	return target, true
 }

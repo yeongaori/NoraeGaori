@@ -1,6 +1,7 @@
 package help
 
 import (
+	"noraegaori/internal/discord"
 	"noraegaori/internal/discord/command"
 	"noraegaori/internal/messages"
 
@@ -26,4 +27,5 @@ func Register(cmd func(string) messages.CommandStrings) {
 		Example:  cmd("help").Example,
 	})
 	command.RegisterAliases("help", cmd("help"))
+	discord.RegisterComponentRoute(helpPageRoute, turnHelpPage)
 }

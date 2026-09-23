@@ -59,21 +59,30 @@ func RespondEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *d
 	})
 }
 
-func RespondEmbedWithComponents(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, components []discordgo.MessageComponent) (*discordgo.Message, error) {
-	msg, err := sendEmbedWithComponents(s, i, embed, components)
-	if err != nil || IsMessageCommand(i) {
-		return msg, err
-	}
-
-	msg, err = s.InteractionResponse(i.Interaction)
-	if err != nil {
-		logger.Errorf("Failed to resolve the message for an interaction response: %v", err)
-		return nil, nil
-	}
-	return msg, nil
+func RespondEphemeralEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error {
+	return s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Embeds: []*discordgo.MessageEmbed{embed},
+			Flags:  discordgo.MessageFlagsEphemeral,
+		},
+	})
 }
 
-func sendEmbedWithComponents(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, components []discordgo.MessageComponent) (*discordgo.Message, error) {
+func UpdateComponentMessage(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, components []discordgo.MessageComponent) error {
+	if components == nil {
+		components = []discordgo.MessageComponent{}
+	}
+	return s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseUpdateMessage,
+		Data: &discordgo.InteractionResponseData{
+			Embeds:     []*discordgo.MessageEmbed{embed},
+			Components: components,
+		},
+	})
+}
+
+func SendEmbedWithComponents(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, components []discordgo.MessageComponent) (*discordgo.Message, error) {
 	if IsMessageCommand(i) {
 		if mr, ok := messageResponders.Load(i.Token); ok {
 			return mr.(*MessageResponse).SendEmbedWithComponents(embed, components)

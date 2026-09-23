@@ -1,80 +1,61 @@
 package queue
 
 import (
-	"strings"
+	"fmt"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
+	"noraegaori/internal/messages"
+	"noraegaori/internal/queue"
 )
 
-func TestQueueButtonsCarryThePanelToken(t *testing.T) {
-	components := createQueueButtons("guild", 1, 3, "tok")
-
+func TestQueueButtonsPageAndOpenTheMixPanel(t *testing.T) {
+	components := createQueueButtons("guild", 2, 3)
+	if len(components) != 1 {
+		t.Fatalf("built %d rows, want one button row", len(components))
+	}
 	row, ok := components[0].(discordgo.ActionsRow)
 	if !ok {
-		t.Fatalf("the first component is %T, want an action row", components[0])
-	}
-	if len(row.Components) != 3 {
-		t.Fatalf("the row holds %d buttons, want 3", len(row.Components))
+		t.Fatalf("the row is %T, want an action row", components[0])
 	}
 
-	for _, component := range row.Components {
+	want := []string{queuePageRoute + ":1", queuePageRoute + ":3", queueMixRoute}
+	if len(row.Components) != len(want) {
+		t.Fatalf("the row holds %d buttons, want %d", len(row.Components), len(want))
+	}
+	for index, component := range row.Components {
 		button, ok := component.(discordgo.Button)
 		if !ok {
 			t.Fatalf("component %T is not a button", component)
 		}
-		if !strings.HasSuffix(button.CustomID, "_tok") {
-			t.Errorf("button custom id %q does not carry the panel token", button.CustomID)
+		if button.CustomID != want[index] {
+			t.Errorf("button %d routes to %q, want %q", index, button.CustomID, want[index])
+		}
+		if button.Disabled {
+			t.Errorf("button %q is disabled on a middle page", button.CustomID)
 		}
 	}
 }
 
-func TestTheQueuePanelOnlyTurnsOnItsOwnButtons(t *testing.T) {
-	panel := &queuePanel{guildID: "guild", token: "tok", perPage: 10, page: 2}
-
-	for _, customID := range []string{
-		queueNextPrefix + "other-token",
-		queuePrevPrefix + "other-token",
-		"queue_next",
-		"help_next_tok",
-		"",
-	} {
-		if panel.isPageButton(customID) {
-			t.Errorf("the panel claimed a foreign custom id %q", customID)
-		}
-		if page := panel.turnPage(customID, 3); page != 2 {
-			t.Errorf("a foreign custom id %q moved the panel to page %d, want 2", customID, page)
-		}
+func TestQueuePagesClampToTheCurrentQueue(t *testing.T) {
+	songs := make([]*queue.Song, 25)
+	for index := range songs {
+		songs[index] = &queue.Song{Title: fmt.Sprintf("song %d", index)}
 	}
 
-	if page := panel.turnPage(queueNextPrefix+"tok", 3); page != 3 {
-		t.Errorf("its own next button gave page %d, want 3", page)
-	}
-	if page := panel.turnPage(queueNextPrefix+"tok", 3); page != 3 {
-		t.Errorf("next past the last page gave %d, want it clamped to 3", page)
-	}
-	if page := panel.turnPage(queuePrevPrefix+"tok", 3); page != 2 {
-		t.Errorf("its own previous button gave page %d, want 2", page)
+	embed, _ := renderQueuePage("guild", songs, 9)
+
+	if want := fmt.Sprintf(messages.T("guild").Footers.Pagination, 3, 3, len(songs)); embed.Footer.Text != want {
+		t.Errorf("footer = %q, want %q", embed.Footer.Text, want)
 	}
 }
 
-func TestTheQueuePanelFollowsAShrinkingQueue(t *testing.T) {
-	panel := &queuePanel{guildID: "guild", token: "tok", perPage: 10, page: 3}
+func TestQueueRoutesIgnoreMalformedArguments(t *testing.T) {
+	component := &discordgo.InteractionCreate{Interaction: &discordgo.Interaction{Type: discordgo.InteractionMessageComponent, GuildID: "guild"}}
+	modal := &discordgo.InteractionCreate{Interaction: &discordgo.Interaction{Type: discordgo.InteractionModalSubmit, GuildID: "guild"}}
 
-	if got := panel.pageCount(25); got != 3 {
-		t.Errorf("25 songs span %d pages, want 3", got)
-	}
-	if got := panel.pageCount(10); got != 1 {
-		t.Errorf("10 songs span %d pages, want 1", got)
-	}
-	if got := panel.pageCount(0); got != 1 {
-		t.Errorf("an empty queue spans %d pages, want 1", got)
-	}
-
-	if page := panel.currentPage(panel.pageCount(5)); page != 1 {
-		t.Errorf("after the queue shrank to one page the panel sits on page %d, want 1", page)
-	}
-	if page := panel.turnPage(queueNextPrefix+"tok", 1); page != 1 {
-		t.Errorf("next on a single-page queue gave %d, want 1", page)
-	}
+	turnQueuePage(nil, component, nil)
+	turnQueuePage(nil, component, []string{"two"})
+	turnQueuePage(nil, modal, []string{"2"})
+	openMixPanel(nil, modal, nil)
 }

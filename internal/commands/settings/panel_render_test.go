@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
-	"noraegaori/internal/messages"
+	"noraegaori/internal/discord"
 	"noraegaori/internal/testutil/dbtest"
 )
 
@@ -34,7 +34,7 @@ func TestEveryCategoryStaysWithinDiscordComponentLimits(t *testing.T) {
 
 	for _, category := range settingCategories {
 		for _, isAdmin := range []bool{true, false} {
-			components := buildSettingsComponents(newPanelView(checkGuildID, category, "", "token", isAdmin))
+			components := buildSettingsComponents(newPanelView(checkGuildID, category, isAdmin))
 
 			if len(components) > discordRowLimit {
 				t.Errorf("category %q (admin=%v) built %d rows, want at most %d",
@@ -59,19 +59,14 @@ func TestEveryCategoryShowsExactlyTwoRows(t *testing.T) {
 
 	for _, category := range settingCategories {
 		for _, isAdmin := range []bool{true, false} {
-			if len(settingsInCategory(category, isAdmin)) == 0 {
+			if !hasVisibleSetting(category, isAdmin) {
 				continue
 			}
-			components := buildSettingsComponents(newPanelView(checkGuildID, category, "", "token", isAdmin))
+			components := buildSettingsComponents(newPanelView(checkGuildID, category, isAdmin))
 			if len(components) != 2 {
 				t.Errorf("category %q (admin=%v) built %d rows, want 2", category, isAdmin, len(components))
 			}
 		}
-	}
-
-	open := buildSettingsComponents(newPanelView(checkGuildID, categoryGeneral, "language", "token", true))
-	if len(open) != 2 {
-		t.Errorf("the open language view built %d rows, want 2", len(open))
 	}
 }
 
@@ -84,12 +79,12 @@ func TestThePickerListsEverySettingWithItsCurrentValue(t *testing.T) {
 			continue
 		}
 
-		view := newPanelView(checkGuildID, category, "", "token", true)
+		view := newPanelView(checkGuildID, category, true)
 		components := buildSettingsComponents(view)
 		menu := rowMenu(t, components[len(components)-1])
 
-		if menu.CustomID != pickPrefix+"token" {
-			t.Fatalf("category %q picker has custom id %q", category, menu.CustomID)
+		if want := discord.ComponentID(pickRoute, discord.ViewArgument(true), category); menu.CustomID != want {
+			t.Fatalf("category %q picker has custom id %q, want %q", category, menu.CustomID, want)
 		}
 		if len(menu.Options) != len(specs) {
 			t.Fatalf("category %q picker lists %d settings, want %d", category, len(menu.Options), len(specs))
@@ -154,7 +149,7 @@ func TestEmbedListsEveryVisibleSettingInTheCategory(t *testing.T) {
 	dbtest.Setup(t)
 
 	for _, category := range settingCategories {
-		embed := buildSettingsEmbed(newPanelView(checkGuildID, category, "", "token", true))
+		embed := buildSettingsEmbed(newPanelView(checkGuildID, category, true))
 		specs := settingsInCategory(category, true)
 
 		if len(embed.Fields) != len(specs) {
@@ -194,7 +189,7 @@ func TestTogglingASettingPersistsAndShowsTheNewValue(t *testing.T) {
 	if after == before {
 		t.Errorf("sponsorblock stayed %q after a toggle", before)
 	}
-	view := newPanelView(checkGuildID, spec.category, "", "token", true)
+	view := newPanelView(checkGuildID, spec.category, true)
 	if view.displayValue(spec) == "" {
 		t.Error("sponsorblock renders an empty value after a toggle")
 	}
@@ -221,50 +216,5 @@ func TestRejectedModalValuesLeaveTheSettingUntouched(t *testing.T) {
 	}
 	if after != "42" {
 		t.Errorf("volume is %q after rejected writes, want \"42\"", after)
-	}
-}
-
-func TestOpeningLanguageReplacesThePickerWithItsValues(t *testing.T) {
-	dbtest.Setup(t)
-
-	components := buildSettingsComponents(newPanelView(checkGuildID, categoryGeneral, "language", "token", true))
-	menu := rowMenu(t, components[1])
-
-	if menu.CustomID != customID(choicePrefix, "language", "token") {
-		t.Fatalf("the open language row has custom id %q", menu.CustomID)
-	}
-	if menu.Options[0].Value != backValue {
-		t.Errorf("the first option is %q, want the back entry %q", menu.Options[0].Value, backValue)
-	}
-	if menu.Options[1].Value != defaultChoiceValue {
-		t.Errorf("the second option is %q, want %q", menu.Options[1].Value, defaultChoiceValue)
-	}
-	if !menu.Options[1].Default {
-		t.Error("an unset language does not mark the default option as selected")
-	}
-
-	for _, code := range messages.AvailableLocales() {
-		found := false
-		for _, option := range menu.Options {
-			if option.Value == code {
-				found = true
-			}
-		}
-		if !found {
-			t.Errorf("locale %q is missing from the language list", code)
-		}
-	}
-}
-
-func TestAnUnknownOrNonChoiceOpenSettingFallsBackToThePicker(t *testing.T) {
-	dbtest.Setup(t)
-
-	for _, open := range []string{"no-such-setting", "prefix", "sponsorblock"} {
-		components := buildSettingsComponents(newPanelView(checkGuildID, categoryGeneral, open, "token", true))
-		menu := rowMenu(t, components[1])
-
-		if menu.CustomID != pickPrefix+"token" {
-			t.Errorf("open=%q rendered %q, want the picker", open, menu.CustomID)
-		}
 	}
 }

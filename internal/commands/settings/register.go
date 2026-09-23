@@ -130,4 +130,5 @@ func Register(cmd func(string) messages.CommandStrings) {
 	})
 	command.RegisterAliases("settings", cmd("settings"))
 	registerSettingMenus()
+	registerPanelRoutes()
 }

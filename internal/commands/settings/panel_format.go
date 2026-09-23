@@ -51,16 +51,14 @@ type settingValue struct {
 }
 
 type panelView struct {
-	guildID     string
-	category    string
-	openSetting string
-	token       string
-	isAdmin     bool
-	specs       []*settingSpec
-	values      map[string]settingValue
+	guildID  string
+	category string
+	isAdmin  bool
+	specs    []*settingSpec
+	values   map[string]settingValue
 }
 
-func newPanelView(guildID, category, openSetting, token string, isAdmin bool) *panelView {
+func newPanelView(guildID, category string, isAdmin bool) *panelView {
 	specs := settingsInCategory(category, isAdmin)
 	values := make(map[string]settingValue, len(specs))
 	for _, spec := range specs {
@@ -69,13 +67,11 @@ func newPanelView(guildID, category, openSetting, token string, isAdmin bool) *p
 	}
 
 	return &panelView{
-		guildID:     guildID,
-		category:    category,
-		openSetting: openSetting,
-		token:       token,
-		isAdmin:     isAdmin,
-		specs:       specs,
-		values:      values,
+		guildID:  guildID,
+		category: category,
+		isAdmin:  isAdmin,
+		specs:    specs,
+		values:   values,
 	}
 }
 
@@ -92,11 +88,12 @@ func formatSettingValue(guildID string, spec *settingSpec, raw string) string {
 	switch spec.kind {
 	case settingToggle:
 		return toggleDisplay(guildID, raw)
-	case settingCycle:
-		return repeatDisplay(guildID, raw)
 	case settingText, settingChoice:
 		if raw == "" {
 			return fmt.Sprintf(panelStrings(guildID).DefaultValue, defaultFor(spec))
+		}
+		if spec.formatValue != nil {
+			return spec.formatValue(guildID, raw)
 		}
 		return raw
 	default:

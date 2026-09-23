@@ -1,10 +1,77 @@
 package automix
 
 import (
+	"fmt"
 	"testing"
 
+	"noraegaori/internal/audio/analysis"
 	"noraegaori/internal/audio/transition"
+	"noraegaori/internal/messages"
+	"noraegaori/internal/queue"
 )
+
+func TestDescribeTrackCoversEveryAnalysisState(t *testing.T) {
+	panel := &messages.T("check-guild").AutoMixPanel
+
+	for _, check := range []struct {
+		name      string
+		track     *analysis.TrackAnalysis
+		analyzing bool
+		want      string
+	}{
+		{"missing while analyzing", nil, true, panel.Analyzing},
+		{"missing", nil, false, panel.Unknown},
+		{"no tempo while analyzing", &analysis.TrackAnalysis{}, true, panel.Analyzing},
+		{"no tempo", &analysis.TrackAnalysis{}, false, panel.Unknown},
+		{"no confident key", &analysis.TrackAnalysis{BPM: 128}, false, fmt.Sprintf("%.1f BPM · %s", 128.0, panel.Unknown)},
+		{
+			"a confident key",
+			&analysis.TrackAnalysis{BPM: 128, KeyConfidence: 1, Tonic: 9, Minor: true},
+			false,
+			fmt.Sprintf("%.1f BPM · %s (%s)", 128.0, analysis.KeyName(9, true), analysis.CamelotCode(9, true)),
+		},
+	} {
+		if got := describeTrack("check-guild", check.track, check.analyzing); got != check.want {
+			t.Errorf("%s: describeTrack = %q, want %q", check.name, got, check.want)
+		}
+	}
+}
+
+func TestSourceLabelsNameEveryOverrideSource(t *testing.T) {
+	panel := &messages.T("check-guild").AutoMixPanel
+
+	for source, want := range map[string]string{"guild": panel.SourceGuild, "song": panel.SourceSong, "auto": panel.SourceAuto} {
+		if got := sourceLabel("check-guild", source); got != want {
+			t.Errorf("sourceLabel(%q) = %q, want %q", source, got, want)
+		}
+	}
+}
+
+func TestFindTransitionPairLooksUpTheOutgoingSong(t *testing.T) {
+	pairs := transitionPairs(checkSongs(3, "Track"))
+
+	if pair, found := findTransitionPair(pairs, 2); !found || pair.fromSong.ID != 2 {
+		t.Errorf("findTransitionPair(2) = (%+v, %v), want the pair leaving song 2", pair, found)
+	}
+	if _, found := findTransitionPair(pairs, 99); found {
+		t.Error("a missing song was found")
+	}
+}
+
+func TestQueueStyleOverridesCopyEveryCategory(t *testing.T) {
+	stored := &queue.Queue{
+		AutoMixStyleVolume: "volume-style",
+		AutoMixStyleEQ:     "eq-style",
+		AutoMixStyleFilter: "filter-style",
+		AutoMixStyleEffect: "effect-style",
+		AutoMixStyleLoop:   "loop-style",
+	}
+	want := transition.StyleOverrides{Volume: "volume-style", EQ: "eq-style", Filter: "filter-style", Effect: "effect-style", Loop: "loop-style"}
+
+	if got := queueStyleOverrides(stored); got != want {
+		t.Errorf("queueStyleOverrides = %+v, want %+v", got, want)
+	}
+}
 
 func TestEmptyQueueYieldsNoTransitions(t *testing.T) {
 	if rows := checkRowsFor(nil); len(rows) != 0 {
@@ -39,7 +106,7 @@ func TestTwoSongsYieldOneTransitionAndAnOutro(t *testing.T) {
 
 func TestFiftySongsYieldFortyNineTransitionsPlusAnOutro(t *testing.T) {
 	state := checkPanelState(checkSongs(50, "Track"), transition.StyleOverrides{}, true)
-	rows := hydrateTransitionRows("check-guild", state, state.pairs)
+	rows := hydrateTransitionRows("check-guild", &state, state.pairs)
 
 	if len(rows) != 50 {
 		t.Errorf("got %d rows, want 50", len(rows))
@@ -155,7 +222,7 @@ func TestPanelHidesAutoSelectionWhenAutoMixIsOff(t *testing.T) {
 	songs[0].AutoMixStyleEffect = "reverb_out_end"
 
 	state := checkPanelState(songs, transition.StyleOverrides{EQ: "quick_bass"}, false)
-	rows := hydrateTransitionRows("check-guild", state, state.pairs)
+	rows := hydrateTransitionRows("check-guild", &state, state.pairs)
 	if len(rows) == 0 {
 		t.Fatal("no rows built")
 	}
@@ -204,7 +271,7 @@ func TestAnalyzingStateFollowsTheBackfillWorker(t *testing.T) {
 
 	idleState := checkPanelState(songs, transition.StyleOverrides{}, true)
 	idleState.backfillActive = false
-	idleRows := hydrateTransitionRows("check-guild", idleState, idleState.pairs)
+	idleRows := hydrateTransitionRows("check-guild", &idleState, idleState.pairs)
 	busyRows := checkRowsFor(songs)
 
 	if len(idleRows) != 2 || len(busyRows) != 2 {

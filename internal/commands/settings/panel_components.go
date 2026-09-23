@@ -1,36 +1,23 @@
 package settings
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/discord"
 )
 
 const (
-	categoryPrefix = "settings_cat_"
-	pickPrefix     = "settings_pick_"
-	choicePrefix   = "settings_choice_"
-	modalPrefix    = "settings_modal_"
-	inputPrefix    = "settings_input_"
+	categoryRoute = "settings_category"
+	pickRoute     = "settings_pick"
+	modalRoute    = "settings_modal"
 
 	selectOptionLimit = 25
 	optionLabelLimit  = 100
 )
 
-func customID(prefix, key, token string) string {
-	return prefix + key + "_" + token
-}
-
-func settingKeyFrom(customID, prefix, token string) string {
-	return strings.TrimSuffix(strings.TrimPrefix(customID, prefix), "_"+token)
-}
-
 func visibleCategories(isAdmin bool) []string {
 	visible := make([]string, 0, len(settingCategories))
 	for _, category := range settingCategories {
-		if len(settingsInCategory(category, isAdmin)) > 0 {
+		if hasVisibleSetting(category, isAdmin) {
 			visible = append(visible, category)
 		}
 	}
@@ -38,42 +25,29 @@ func visibleCategories(isAdmin bool) []string {
 }
 
 func defaultCategory(isAdmin bool) string {
-	if visible := visibleCategories(isAdmin); len(visible) > 0 {
-		return visible[0]
+	for _, category := range settingCategories {
+		if hasVisibleSetting(category, isAdmin) {
+			return category
+		}
 	}
 	return categoryPlayback
 }
 
 func buildSettingsComponents(view *panelView) []discordgo.MessageComponent {
-	components := []discordgo.MessageComponent{categoryRow(view)}
-
-	if spec := openChoice(view.specs, view.openSetting); spec != nil {
-		return append(components, choiceRow(view, spec))
-	}
-
+	components := make([]discordgo.MessageComponent, 0, 2)
+	components = append(components, categoryRow(view))
 	if len(view.specs) > 0 {
 		components = append(components, settingRow(view))
 	}
-
 	return components
 }
 
-func openChoice(specs []*settingSpec, openSetting string) *settingSpec {
-	if openSetting == "" {
-		return nil
-	}
-	for _, spec := range specs {
-		if spec.key == openSetting && spec.kind == settingChoice {
-			return spec
-		}
-	}
-	return nil
-}
-
 func categoryRow(view *panelView) discordgo.ActionsRow {
-	visible := visibleCategories(view.isAdmin)
-	options := make([]discordgo.SelectMenuOption, 0, len(visible))
-	for _, name := range visible {
+	options := make([]discordgo.SelectMenuOption, 0, len(settingCategories))
+	for _, name := range settingCategories {
+		if !hasVisibleSetting(name, view.isAdmin) {
+			continue
+		}
 		options = append(options, discordgo.SelectMenuOption{
 			Label:   categoryLabel(view.guildID, name),
 			Value:   name,
@@ -81,21 +55,17 @@ func categoryRow(view *panelView) discordgo.ActionsRow {
 		})
 	}
 
-	return discordgo.ActionsRow{
-		Components: []discordgo.MessageComponent{
-			discordgo.SelectMenu{
-				CustomID:    categoryPrefix + view.token,
-				Placeholder: panelStrings(view.guildID).CategoryPlaceholder,
-				Options:     options,
-			},
-		},
-	}
+	return selectRow(discordgo.SelectMenu{
+		CustomID:    discord.ComponentID(categoryRoute, discord.ViewArgument(view.isAdmin)),
+		Placeholder: panelStrings(view.guildID).CategoryPlaceholder,
+		Options:     options,
+	})
 }
 
 func settingRow(view *panelView) discordgo.ActionsRow {
-	options := make([]discordgo.SelectMenuOption, 0, len(view.specs))
+	options := make([]discordgo.SelectMenuOption, 0, min(len(view.specs), selectOptionLimit))
 	for _, spec := range view.specs {
-		if len(options) >= selectOptionLimit {
+		if len(options) == selectOptionLimit {
 			break
 		}
 		options = append(options, discordgo.SelectMenuOption{
@@ -105,49 +75,13 @@ func settingRow(view *panelView) discordgo.ActionsRow {
 		})
 	}
 
-	return discordgo.ActionsRow{
-		Components: []discordgo.MessageComponent{
-			discordgo.SelectMenu{
-				CustomID:    pickPrefix + view.token,
-				Placeholder: panelStrings(view.guildID).SettingPlaceholder,
-				Options:     options,
-			},
-		},
-	}
+	return selectRow(discordgo.SelectMenu{
+		CustomID:    discord.ComponentID(pickRoute, discord.ViewArgument(view.isAdmin), view.category),
+		Placeholder: panelStrings(view.guildID).SettingPlaceholder,
+		Options:     options,
+	})
 }
 
-func choiceRow(view *panelView, spec *settingSpec) discordgo.ActionsRow {
-	panel := panelStrings(view.guildID)
-	current := view.values[spec.key].raw
-
-	values := spec.options()
-	options := make([]discordgo.SelectMenuOption, 0, len(values)+2)
-	options = append(options,
-		discordgo.SelectMenuOption{Label: panel.BackOption, Value: backValue},
-		discordgo.SelectMenuOption{
-			Label:   panel.DefaultOption,
-			Value:   defaultChoiceValue,
-			Default: current == "",
-		},
-	)
-	for _, value := range values {
-		if len(options) >= selectOptionLimit {
-			break
-		}
-		options = append(options, discordgo.SelectMenuOption{
-			Label:   discord.TruncateRunes(value, optionLabelLimit),
-			Value:   value,
-			Default: value == current,
-		})
-	}
-
-	return discordgo.ActionsRow{
-		Components: []discordgo.MessageComponent{
-			discordgo.SelectMenu{
-				CustomID:    customID(choicePrefix, spec.key, view.token),
-				Placeholder: fmt.Sprintf(panel.ChoicePlaceholder, settingLabel(view.guildID, spec.key)),
-				Options:     options,
-			},
-		},
-	}
+func selectRow(menu discordgo.SelectMenu) discordgo.ActionsRow {
+	return discordgo.ActionsRow{Components: []discordgo.MessageComponent{menu}}
 }

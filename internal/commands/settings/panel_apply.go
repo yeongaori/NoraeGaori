@@ -19,22 +19,13 @@ var (
 )
 
 func nextValue(spec *settingSpec, current string) string {
-	switch spec.kind {
-	case settingToggle:
-		if current == valueOn {
-			return valueOff
-		}
-		return valueOn
-	case settingCycle:
-		for index, value := range repeatValues {
-			if value == current {
-				return repeatValues[(index+1)%len(repeatValues)]
-			}
-		}
-		return repeatValues[0]
-	default:
+	if spec.kind != settingToggle {
 		return current
 	}
+	if current == valueOn {
+		return valueOff
+	}
+	return valueOn
 }
 
 func normalizeValue(spec *settingSpec, value string) (string, error) {
@@ -47,12 +38,15 @@ func normalizeValue(spec *settingSpec, value string) (string, error) {
 			return "", errUnknownValue
 		}
 		return value, nil
-	case settingCycle:
+	case settingChoice:
 		value = strings.ToLower(value)
-		if value == valueOn {
-			return valueRepeatAll, nil
+		if alias, isAlias := spec.aliases[value]; isAlias {
+			value = alias
 		}
-		if !slices.Contains(repeatValues, value) {
+		if spec.hasDefault && value == defaultChoiceValue {
+			return value, nil
+		}
+		if !slices.Contains(spec.options(), value) {
 			return "", errUnknownValue
 		}
 		return value, nil

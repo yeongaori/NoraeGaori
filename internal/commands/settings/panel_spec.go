@@ -19,23 +19,25 @@ type settingKind int
 
 const (
 	settingToggle settingKind = iota
-	settingCycle
 	settingText
 	settingNumber
 	settingChoice
 )
 
 type settingSpec struct {
-	key       string
-	category  string
-	kind      settingKind
-	adminOnly bool
-	isInteger bool
-	min       float64
-	max       float64
-	options   func() []string
-	read      func(guildID string) (string, error)
-	write     func(guildID, value string) error
+	key         string
+	category    string
+	kind        settingKind
+	adminOnly   bool
+	isInteger   bool
+	hasDefault  bool
+	min         float64
+	max         float64
+	options     func() []string
+	aliases     map[string]string
+	formatValue func(guildID, raw string) string
+	read        func(guildID string) (string, error)
+	write       func(guildID, value string) error
 }
 
 var settingSpecs = []settingSpec{
@@ -49,13 +51,14 @@ var settingSpecs = []settingSpec{
 		write:     writePrefix,
 	},
 	{
-		key:       "language",
-		category:  categoryGeneral,
-		kind:      settingChoice,
-		adminOnly: true,
-		options:   messages.AvailableLocales,
-		read:      readLanguage,
-		write:     writeLanguage,
+		key:        "language",
+		category:   categoryGeneral,
+		kind:       settingChoice,
+		adminOnly:  true,
+		hasDefault: true,
+		options:    messages.AvailableLocales,
+		read:       readLanguage,
+		write:      writeLanguage,
 	},
 	{
 		key:      "volume",
@@ -66,11 +69,14 @@ var settingSpecs = []settingSpec{
 		write:    writeVolume,
 	},
 	{
-		key:      "repeat",
-		category: categoryPlayback,
-		kind:     settingCycle,
-		read:     readRepeat,
-		write:    writeRepeat,
+		key:         "repeat",
+		category:    categoryPlayback,
+		kind:        settingChoice,
+		options:     repeatOptions,
+		aliases:     map[string]string{valueOn: valueRepeatAll},
+		formatValue: repeatDisplay,
+		read:        readRepeat,
+		write:       writeRepeat,
 	},
 	{
 		key:      "sponsorblock",
@@ -187,13 +193,9 @@ func settingsInCategory(category string, isAdmin bool) []*settingSpec {
 	visible := make([]*settingSpec, 0, len(settingSpecs))
 	for index := range settingSpecs {
 		spec := &settingSpecs[index]
-		if spec.category != category {
-			continue
+		if spec.isVisibleIn(category, isAdmin) {
+			visible = append(visible, spec)
 		}
-		if spec.adminOnly && !isAdmin {
-			continue
-		}
-		visible = append(visible, spec)
 	}
 	return visible
 }
@@ -205,4 +207,21 @@ func isKnownCategory(category string) bool {
 		}
 	}
 	return false
+}
+
+func (spec *settingSpec) isVisibleIn(category string, isAdmin bool) bool {
+	return spec.category == category && (isAdmin || !spec.adminOnly)
+}
+
+func hasVisibleSetting(category string, isAdmin bool) bool {
+	for index := range settingSpecs {
+		if settingSpecs[index].isVisibleIn(category, isAdmin) {
+			return true
+		}
+	}
+	return false
+}
+
+func isVisibleCategory(category string, isAdmin bool) bool {
+	return isKnownCategory(category) && hasVisibleSetting(category, isAdmin)
 }

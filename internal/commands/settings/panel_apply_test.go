@@ -133,44 +133,6 @@ func TestTogglesFlipBetweenOnAndOff(t *testing.T) {
 	}
 }
 
-func TestRepeatCyclesThroughEveryMode(t *testing.T) {
-	spec := specFor(t, "repeat")
-
-	value := valueRepeatOff
-	seen := []string{value}
-	for range repeatValues {
-		value = nextValue(spec, value)
-		seen = append(seen, value)
-	}
-
-	want := []string{valueRepeatOff, valueRepeatAll, valueRepeatSingle, valueRepeatOff}
-	for index, expected := range want {
-		if seen[index] != expected {
-			t.Errorf("step %d is %q, want %q", index, seen[index], expected)
-		}
-	}
-}
-
-func TestRepeatCycleRecoversFromAnUnknownMode(t *testing.T) {
-	spec := specFor(t, "repeat")
-
-	if next := nextValue(spec, "nonsense"); next != valueRepeatOff {
-		t.Errorf("got %q, want %q", next, valueRepeatOff)
-	}
-}
-
-func TestSettingKeysSurviveACustomIDRoundTrip(t *testing.T) {
-	token := "abc123"
-
-	for index := range settingSpecs {
-		spec := &settingSpecs[index]
-		id := customID(modalPrefix, spec.key, token)
-		if parsed := settingKeyFrom(id, modalPrefix, token); parsed != spec.key {
-			t.Errorf("%q round-tripped to %q", spec.key, parsed)
-		}
-	}
-}
-
 func TestEverySettingIsLocalized(t *testing.T) {
 	panel := panelStrings("")
 

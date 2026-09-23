@@ -1,75 +1,56 @@
 package settings
 
-import "testing"
+import (
+	"testing"
 
-const checkToken = "abc123"
+	"noraegaori/internal/discord"
+	"noraegaori/internal/testutil/dbtest"
+)
 
-func TestComponentRoutingRecognisesEverySelect(t *testing.T) {
+func TestPanelArgumentsCarryTheViewCategoryAndKey(t *testing.T) {
 	checks := []struct {
-		id     string
-		action panelAction
-		key    string
+		arguments []string
+		want      panelTarget
 	}{
-		{categoryPrefix + checkToken, actionSwitchCategory, ""},
-		{pickPrefix + checkToken, actionPickSetting, ""},
-		{customID(choicePrefix, "language", checkToken), actionChooseValue, "language"},
+		{[]string{"admin"}, panelTarget{isAdmin: true}},
+		{[]string{"member", categoryMixing}, panelTarget{category: categoryMixing}},
+		{[]string{"admin", categoryGeneral, "language"}, panelTarget{isAdmin: true, category: categoryGeneral, key: "language"}},
 	}
 
 	for _, check := range checks {
-		action, key := routeComponent(check.id, checkToken)
-		if action != check.action {
-			t.Errorf("%q routed to action %d, want %d", check.id, action, check.action)
-		}
-		if key != check.key {
-			t.Errorf("%q yielded key %q, want %q", check.id, key, check.key)
+		got, isValid := parsePanelArguments(check.arguments)
+		if !isValid || got != check.want {
+			t.Errorf("parsePanelArguments(%v) = (%+v, %v), want %+v", check.arguments, got, isValid, check.want)
 		}
 	}
 }
 
-func TestComponentRoutingIgnoresAnotherPanelsToken(t *testing.T) {
-	for _, id := range []string{
-		categoryPrefix + "other-token",
-		pickPrefix + "other-token",
-		customID(choicePrefix, "language", "other-token"),
+func TestPanelArgumentsRejectUnknownViewsAndHiddenCategories(t *testing.T) {
+	for name, arguments := range map[string][]string{
+		"nothing":             nil,
+		"an unknown view":     {"owner", categoryMixing},
+		"an unknown category": {"admin", "nonsense"},
+		"a hidden category":   {"member", categoryGeneral},
+		"too many parts":      {"admin", categoryMixing, "fadein", "extra"},
 	} {
-		if action, _ := routeComponent(id, checkToken); action != actionNone {
-			t.Errorf("%q with a foreign token routed to action %d, want actionNone", id, action)
+		if _, isValid := parsePanelArguments(arguments); isValid {
+			t.Errorf("%s was accepted", name)
 		}
 	}
 }
 
-func TestComponentRoutingIgnoresUnrelatedCustomIDs(t *testing.T) {
-	for _, id := range []string{"automix_pick_" + checkToken, "help_next", checkToken, ""} {
-		if action, _ := routeComponent(id, checkToken); action != actionNone {
-			t.Errorf("%q routed to action %d, want actionNone", id, action)
-		}
-	}
-}
+func TestPanelComponentsRouteBackToTheirView(t *testing.T) {
+	dbtest.Setup(t)
 
-func TestModalRoutingRecognisesEveryEditableSetting(t *testing.T) {
-	for index := range settingSpecs {
-		spec := &settingSpecs[index]
-		if spec.kind != settingText && spec.kind != settingNumber {
-			continue
-		}
+	for _, isAdmin := range []bool{true, false} {
+		view := newPanelView(checkGuildID, defaultCategory(isAdmin), isAdmin)
+		components := buildSettingsComponents(view)
 
-		id := customID(modalPrefix, spec.key, checkToken)
-		action, key := routeModal(id, checkToken)
-
-		if action != actionSubmitModal {
-			t.Errorf("%q routed to action %d, want actionSubmitModal", id, action)
+		if got := rowMenu(t, components[0]).CustomID; got != discord.ComponentID(categoryRoute, discord.ViewArgument(isAdmin)) {
+			t.Errorf("admin=%v category select routes to %q", isAdmin, got)
 		}
-		if key != spec.key {
-			t.Errorf("%q yielded key %q, want %q", id, key, spec.key)
+		if got := rowMenu(t, components[1]).CustomID; got != discord.ComponentID(pickRoute, discord.ViewArgument(isAdmin), view.category) {
+			t.Errorf("admin=%v setting select routes to %q", isAdmin, got)
 		}
-	}
-}
-
-func TestModalRoutingRejectsForeignTokensAndPrefixes(t *testing.T) {
-	if action, _ := routeModal(customID(modalPrefix, "volume", "other-token"), checkToken); action != actionNone {
-		t.Errorf("a foreign token routed to action %d, want actionNone", action)
-	}
-	if action, _ := routeModal(pickPrefix+checkToken, checkToken); action != actionNone {
-		t.Errorf("a select id routed to action %d, want actionNone", action)
 	}
 }

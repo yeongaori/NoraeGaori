@@ -721,11 +721,10 @@
   },
   "settings_panel": {
     "title": "Server Settings",
-    "description": "Pick a category, then choose a setting from the list. Toggles change as soon as you choose them, and text or number settings open a form.",
+    "description": "Pick a category, then choose a setting from the list. Toggles change as soon as you choose them, and every other setting opens a form.",
     "category_placeholder": "Choose a category",
     "setting_placeholder": "Choose a setting to change",
     "choice_placeholder": "Choose a value for %s",
-    "back_option": "Back to the setting list",
     "default_value": "default (%s)",
     "default_option": "Use the default",
     "modal_title": "Edit %s",

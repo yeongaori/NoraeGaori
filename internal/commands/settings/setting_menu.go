@@ -19,12 +19,12 @@ func registerSettingMenus() {
 }
 
 func hasSettingMenu(spec *settingSpec) bool {
-	return !spec.adminOnly && (spec.kind == settingToggle || spec.kind == settingCycle)
+	return !spec.adminOnly && (spec.kind == settingToggle || spec.kind == settingChoice)
 }
 
 func settingMenuValues(spec *settingSpec) []string {
-	if spec.kind == settingCycle {
-		return repeatValues
+	if spec.kind == settingChoice {
+		return spec.options()
 	}
 	return toggleValues
 }

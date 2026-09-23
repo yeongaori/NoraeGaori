@@ -268,7 +268,6 @@ type SettingsPanelMessages struct {
 	CategoryPlaceholder string            `json:"category_placeholder"`
 	SettingPlaceholder  string            `json:"setting_placeholder"`
 	ChoicePlaceholder   string            `json:"choice_placeholder"`
-	BackOption          string            `json:"back_option"`
 	DefaultValue        string            `json:"default_value"`
 	DefaultOption       string            `json:"default_option"`
 	ModalTitle          string            `json:"modal_title"`

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
+	"noraegaori/internal/discord"
 	"noraegaori/internal/testutil/dbtest"
 	"noraegaori/internal/testutil/discordtest"
 )
@@ -39,6 +40,10 @@ func memberWithRoles(userID string, roles ...string) *discordgo.Member {
 	}
 }
 
+func componentInteraction(customID string, member *discordgo.Member, values ...string) *discordgo.InteractionCreate {
+	return discordtest.ComponentInteraction(checkGuildID, customID, member, values...)
+}
+
 func TestAServerAdministratorMayEditAdminSettings(t *testing.T) {
 	session := guildSession(t)
 
@@ -60,37 +65,17 @@ func TestAPlainMemberMayNotEditAdminSettings(t *testing.T) {
 
 func TestNonAdminSettingsAreOpenToEveryone(t *testing.T) {
 	session := guildSession(t)
-	interaction := componentInteraction("", memberWithRoles("regular", memberRoleID))
-	panelSess := &panelSession{guildID: checkGuildID, token: checkToken}
 
-	if !allowedToEdit(session, interaction, panelSess, specFor(t, "sponsorblock")) {
+	if !allowedToEdit(session, componentInteraction("", memberWithRoles("regular", memberRoleID)), specFor(t, "sponsorblock")) {
 		t.Error("a plain member was refused a non-admin setting")
 	}
 }
 
 func TestAdminOnlySettingsStayOpenToAdmins(t *testing.T) {
 	session := guildSession(t)
-	interaction := componentInteraction("", memberWithRoles("boss", adminRoleID))
-	panelSess := &panelSession{guildID: checkGuildID, token: checkToken}
 
-	if !allowedToEdit(session, interaction, panelSess, specFor(t, "prefix")) {
+	if !allowedToEdit(session, componentInteraction("", memberWithRoles("boss", adminRoleID)), specFor(t, "prefix")) {
 		t.Error("an administrator was refused an admin-only setting")
-	}
-}
-
-func componentInteraction(customID string, member *discordgo.Member, values ...string) *discordgo.InteractionCreate {
-	return guildComponentInteraction(checkGuildID, customID, member, values...)
-}
-
-func guildComponentInteraction(guildID, customID string, member *discordgo.Member, values ...string) *discordgo.InteractionCreate {
-	return &discordgo.InteractionCreate{
-		Interaction: &discordgo.Interaction{
-			Type:    discordgo.InteractionMessageComponent,
-			GuildID: guildID,
-			Member:  member,
-			Message: &discordgo.Message{ID: "panel-message"},
-			Data:    discordgo.MessageComponentInteractionData{CustomID: customID, Values: values},
-		},
 	}
 }
 
@@ -113,84 +98,42 @@ func assertSponsorBlockUnchanged(t *testing.T, fire func()) {
 	}
 }
 
-func TestThePanelIgnoresInteractionsFromAnotherGuild(t *testing.T) {
+func TestThePanelIgnoresMalformedCustomIDs(t *testing.T) {
 	dbtest.Setup(t)
-
-	panelSess := &panelSession{guildID: checkGuildID, token: checkToken}
-	pick := pickPrefix + checkToken
-
-	assertSponsorBlockUnchanged(t, func() {
-		handlePanelInteraction(nil, guildComponentInteraction("another-guild", pick, nil, "sponsorblock"), panelSess)
-
-		foreignModal := &discordgo.InteractionCreate{
-			Interaction: &discordgo.Interaction{
-				Type:    discordgo.InteractionModalSubmit,
-				GuildID: "another-guild",
-				Data: discordgo.ModalSubmitInteractionData{
-					CustomID: customID(modalPrefix, "sponsorblock", checkToken),
-				},
-			},
-		}
-		handlePanelInteraction(nil, foreignModal, panelSess)
-	})
-}
-
-func TestThePanelIgnoresUnrelatedComponents(t *testing.T) {
-	dbtest.Setup(t)
-
-	panelSess := &panelSession{guildID: checkGuildID, token: checkToken}
+	registerPanelRoutes()
 
 	assertSponsorBlockUnchanged(t, func() {
 		for _, id := range []string{
-			"automix_pick_" + checkToken,
-			"help_next",
-			pickPrefix + "other-token",
+			pickRoute + ":owner:" + categoryPlayback,
+			pickRoute + ":admin",
+			pickRoute + ":admin:nonsense",
+			pickRoute + ":member:" + categoryGeneral,
+			pickRoute + ":admin:" + categoryPlayback + ":extra",
 		} {
-			handlePanelInteraction(nil, componentInteraction(id, nil, "sponsorblock"), panelSess)
+			discord.HandleComponentRoute(nil, componentInteraction(id, nil, "sponsorblock"))
 		}
+		discord.HandleComponentRoute(nil, modalInteraction(modalRoute+":admin:"+categoryPlayback, nil, choiceInput(valueOff)))
 	})
 }
 
-func TestThePanelIgnoresModalSubmitsFromAnotherPanel(t *testing.T) {
+func TestThePanelIgnoresEmptyUnknownAndMismatchedSelections(t *testing.T) {
 	dbtest.Setup(t)
-
-	panelSess := &panelSession{guildID: checkGuildID, token: checkToken}
+	registerPanelRoutes()
+	pick := pickID(categoryPlayback)
 
 	assertSponsorBlockUnchanged(t, func() {
-		foreign := &discordgo.InteractionCreate{
-			Interaction: &discordgo.Interaction{
-				Type:    discordgo.InteractionModalSubmit,
-				GuildID: checkGuildID,
-				Data: discordgo.ModalSubmitInteractionData{
-					CustomID: customID(modalPrefix, "sponsorblock", "other-token"),
-				},
-			},
+		for _, ic := range []*discordgo.InteractionCreate{
+			componentInteraction(pick, nil),
+			componentInteraction(pick, nil, "no-such-setting"),
+			componentInteraction(categoryID(true), nil),
+			componentInteraction(categoryID(true), nil, "no-such-category"),
+			componentInteraction(categoryID(false), nil, categoryGeneral),
+			componentInteraction(modalID(categoryPlayback, "sponsorblock"), nil, valueOff),
+			modalInteraction(pick, nil, choiceInput("sponsorblock")),
+		} {
+			discord.HandleComponentRoute(nil, ic)
 		}
-		handlePanelInteraction(nil, foreign, panelSess)
 	})
-}
-
-func TestThePickerIgnoresEmptyAndUnknownSelections(t *testing.T) {
-	dbtest.Setup(t)
-
-	panelSess := &panelSession{guildID: checkGuildID, token: checkToken}
-	pick := pickPrefix + checkToken
-
-	assertSponsorBlockUnchanged(t, func() {
-		handlePanelInteraction(nil, componentInteraction(pick, nil), panelSess)
-		handlePanelInteraction(nil, componentInteraction(pick, nil, "no-such-setting"), panelSess)
-
-		choice := customID(choicePrefix, "language", checkToken)
-		handlePanelInteraction(nil, componentInteraction(choice, nil), panelSess)
-
-		category := categoryPrefix + checkToken
-		handlePanelInteraction(nil, componentInteraction(category, nil), panelSess)
-		handlePanelInteraction(nil, componentInteraction(category, nil, "no-such-category"), panelSess)
-	})
-
-	if got := panelSess.currentCategory(); got != "" {
-		t.Errorf("an unknown category selection set the panel to %q", got)
-	}
 }
 
 func TestLanguageChoicesCoverEveryAvailableLocale(t *testing.T) {

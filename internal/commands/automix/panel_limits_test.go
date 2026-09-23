@@ -2,12 +2,12 @@ package automix
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/audio/transition"
-	"noraegaori/internal/discord"
 	"noraegaori/internal/queue"
 )
 
@@ -46,12 +46,12 @@ func checkPanelState(songs []*queue.Song, guildOverrides transition.StyleOverrid
 
 func checkRowsFor(songs []*queue.Song) []transitionRow {
 	state := checkPanelState(songs, transition.StyleOverrides{}, true)
-	return hydrateTransitionRows("check-guild", state, state.pairs)
+	return hydrateTransitionRows("check-guild", &state, state.pairs)
 }
 
 func checkRowsWithGuild(songs []*queue.Song, guildOverrides transition.StyleOverrides) []transitionRow {
 	state := checkPanelState(songs, guildOverrides, true)
-	return hydrateTransitionRows("check-guild", state, state.pairs)
+	return hydrateTransitionRows("check-guild", &state, state.pairs)
 }
 
 func inspectComponents(components []discordgo.MessageComponent) (rows int, selects []discordgo.SelectMenu, buttons []discordgo.Button) {
@@ -135,12 +135,12 @@ func TestPanelAndEditorStayInsideDiscordLimits(t *testing.T) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			state := checkPanelState(testCase.songs, transition.StyleOverrides{}, true)
-			rows := hydrateTransitionRows("check-guild", state, state.pairs)
+			rows := hydrateTransitionRows("check-guild", &state, state.pairs)
 			totalPages := transitionPageCount(state.pairs)
 
 			for page := 1; page <= totalPages; page++ {
-				pageRows := hydrateTransitionRows("check-guild", state, transitionPageSlice(state.pairs, page))
-				components := createTransitionPanelComponents("check-guild", pageRows, page, totalPages, discord.NewComponentToken())
+				pageRows := hydrateTransitionRows("check-guild", &state, transitionPageSlice(state.pairs, page))
+				components := createTransitionPanelComponents("check-guild", pageRows, page, totalPages)
 				rowCount, selects, buttons := inspectComponents(components)
 
 				if rowCount > 5 {
@@ -157,7 +157,7 @@ func TestPanelAndEditorStayInsideDiscordLimits(t *testing.T) {
 					}
 				}
 
-				embed := createTransitionPanelEmbed("check-guild", state, pageRows, page, totalPages)
+				embed := createTransitionPanelEmbed("check-guild", &state, pageRows, page, totalPages)
 				if size := len([]rune(embed.Description)); size > 4096 {
 					t.Errorf("page %d description is %d chars, want at most 4096", page, size)
 				}
@@ -167,7 +167,7 @@ func TestPanelAndEditorStayInsideDiscordLimits(t *testing.T) {
 			}
 
 			for _, row := range rows {
-				components := createTransitionEditorComponents("check-guild", state, row, discord.NewComponentToken())
+				components := createTransitionEditorComponents("check-guild", &state, row, checkLocation)
 				rowCount, selects, _ := inspectComponents(components)
 
 				if rowCount != len(transitionCategories) {
@@ -179,7 +179,7 @@ func TestPanelAndEditorStayInsideDiscordLimits(t *testing.T) {
 					}
 				}
 
-				embed := createTransitionEditorEmbed("check-guild", state, row, "")
+				embed := createTransitionEditorEmbed("check-guild", &state, row, "")
 				if size := len([]rune(embed.Title)); size > 256 {
 					t.Errorf("editor title is %d chars, want at most 256", size)
 				}
@@ -203,17 +203,18 @@ func fourSongPanel(t *testing.T) (panelState, []transitionRow) {
 	t.Helper()
 
 	state := checkPanelState(checkSongs(4, "Track"), transition.StyleOverrides{}, true)
-	rows := hydrateTransitionRows("check-guild", state, state.pairs)
+	rows := hydrateTransitionRows("check-guild", &state, state.pairs)
 	if len(rows) < 2 {
 		t.Fatalf("a four song queue produced %d rows, want at least 2", len(rows))
 	}
 	return state, rows
 }
 
+var checkLocation = &panelLocation{messageID: "123456789012345678", page: 2}
+
 func TestPanelCustomIDsAreUnique(t *testing.T) {
 	state, rows := fourSongPanel(t)
-	token := discord.NewComponentToken()
-	components := createTransitionPanelComponents("check-guild", rows, 1, transitionPageCount(state.pairs), token)
+	components := createTransitionPanelComponents("check-guild", rows, 1, transitionPageCount(state.pairs))
 	_, selects, buttons := inspectComponents(components)
 
 	seen := map[string]bool{}
@@ -231,20 +232,20 @@ func TestPanelCustomIDsAreUnique(t *testing.T) {
 	}
 }
 
-func TestPanelCustomIDsCarryThePanelToken(t *testing.T) {
-	state, rows := fourSongPanel(t)
-	token := discord.NewComponentToken()
-	components := createTransitionPanelComponents("check-guild", rows, 1, transitionPageCount(state.pairs), token)
-	_, selects, buttons := inspectComponents(components)
+func TestPanelCustomIDsRouteToTheirPages(t *testing.T) {
+	_, rows := fourSongPanel(t)
+	_, selects, buttons := inspectComponents(createTransitionPanelComponents("check-guild", rows, 2, 3))
 
-	for _, menu := range selects {
-		if !strings.HasSuffix(menu.CustomID, token) {
-			t.Errorf("select custom id %q does not end with token %q", menu.CustomID, token)
-		}
+	if len(selects) != 1 || selects[0].CustomID != transitionPickRoute+":2" {
+		t.Errorf("selects = %+v, want one picker routed to page 2", selects)
 	}
-	for _, button := range buttons {
-		if !strings.HasSuffix(button.CustomID, token) {
-			t.Errorf("button custom id %q does not end with token %q", button.CustomID, token)
+	want := []string{transitionPageRoute + ":1", transitionPageRoute + ":3", transitionPageRoute + ":2"}
+	if len(buttons) != len(want) {
+		t.Fatalf("built %d buttons, want %d", len(buttons), len(want))
+	}
+	for index, button := range buttons {
+		if button.CustomID != want[index] {
+			t.Errorf("button %d routes to %q, want %q", index, button.CustomID, want[index])
 		}
 	}
 }
@@ -252,10 +253,8 @@ func TestPanelCustomIDsCarryThePanelToken(t *testing.T) {
 func TestTwoEditorsProduceDisjointCustomIDs(t *testing.T) {
 	state, rows := fourSongPanel(t)
 
-	firstToken := discord.NewComponentToken()
-	secondToken := firstToken + "b"
-	_, firstSelects, _ := inspectComponents(createTransitionEditorComponents("check-guild", state, rows[0], firstToken))
-	_, secondSelects, _ := inspectComponents(createTransitionEditorComponents("check-guild", state, rows[1], secondToken))
+	_, firstSelects, _ := inspectComponents(createTransitionEditorComponents("check-guild", &state, rows[0], checkLocation))
+	_, secondSelects, _ := inspectComponents(createTransitionEditorComponents("check-guild", &state, rows[1], checkLocation))
 
 	firstIDs := map[string]bool{}
 	for _, menu := range firstSelects {
@@ -271,18 +270,19 @@ func TestTwoEditorsProduceDisjointCustomIDs(t *testing.T) {
 func TestEditorCustomIDsRoundTripToTheirCategory(t *testing.T) {
 	state, rows := fourSongPanel(t)
 
-	token := discord.NewComponentToken()
-	_, selects, _ := inspectComponents(createTransitionEditorComponents("check-guild", state, rows[0], token))
-	suffix := fmt.Sprintf("_%s_%d", token, rows[0].fromSong.ID)
+	_, selects, _ := inspectComponents(createTransitionEditorComponents("check-guild", &state, rows[0], checkLocation))
+	songArgument := strconv.Itoa(rows[0].fromSong.ID)
+	pageArgument := strconv.Itoa(checkLocation.page)
 
 	categoriesSeen := map[string]bool{}
 	for _, menu := range selects {
-		if !strings.HasPrefix(menu.CustomID, "automix_style_") || !strings.HasSuffix(menu.CustomID, suffix) {
-			t.Errorf("custom id %q does not match automix_style_<category>%s", menu.CustomID, suffix)
+		parts := strings.Split(menu.CustomID, ":")
+		if len(parts) != 5 || parts[0] != transitionStyleRoute || parts[2] != songArgument || parts[3] != checkLocation.messageID || parts[4] != pageArgument {
+			t.Errorf("custom id %q does not match %s:<category>:%s:%s:%s", menu.CustomID, transitionStyleRoute, songArgument, checkLocation.messageID, pageArgument)
 			continue
 		}
 
-		category := strings.TrimSuffix(strings.TrimPrefix(menu.CustomID, "automix_style_"), suffix)
+		category := parts[1]
 		if !transition.ValidStyle(category, queue.AutoMixStyleAuto) {
 			t.Errorf("custom id %q yielded invalid category %q", menu.CustomID, category)
 			continue

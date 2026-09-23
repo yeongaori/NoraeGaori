@@ -186,51 +186,34 @@ func TestRespondDropdownMenuSendsTheMenuForASlashCommand(t *testing.T) {
 	}
 }
 
-func TestRespondEmbedWithComponentsStillFetchesTheSentMessage(t *testing.T) {
+func TestSendEmbedWithComponentsRepliesWithoutFetchingTheMessage(t *testing.T) {
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 	ic := interactionWithToken(&discordgo.InteractionCreate{
 		Interaction: &discordgo.Interaction{Type: discordgo.InteractionApplicationCommand, GuildID: menuGuildID},
 	})
 
-	message, err := RespondEmbedWithComponents(session, ic, &discordgo.MessageEmbed{}, nil)
-	if err != nil || message == nil || message.ID != "333" {
-		t.Fatalf("RespondEmbedWithComponents = (%v, %v), want the fetched message", message, err)
+	if message, err := SendEmbedWithComponents(session, ic, &discordgo.MessageEmbed{}, nil); err != nil || message != nil {
+		t.Fatalf("SendEmbedWithComponents = (%v, %v), want no message and no error", message, err)
 	}
 
 	sent := requests()
-	if len(sent) != 2 || sent[1].Method != "GET" || sent[1].Path != "/webhooks/app/token/messages/@original" {
-		t.Errorf("sent %v, want the reply followed by the original-message lookup", sent)
+	if len(sent) != 1 || sent[0].Path != "/api/interactions/111/token/callback" {
+		t.Errorf("sent %v, want only the interaction callback", sent)
 	}
 }
 
-func TestRespondEmbedWithComponentsToleratesAFailedMessageLookup(t *testing.T) {
-	session, _ := discordtest.StubAPI(t, func(r *http.Request) int {
-		if r.Method == "GET" {
-			return http.StatusNotFound
-		}
-		return http.StatusOK
-	})
-	ic := interactionWithToken(&discordgo.InteractionCreate{
-		Interaction: &discordgo.Interaction{Type: discordgo.InteractionApplicationCommand, GuildID: menuGuildID},
-	})
-
-	if message, err := RespondEmbedWithComponents(session, ic, &discordgo.MessageEmbed{}, nil); err != nil || message != nil {
-		t.Errorf("RespondEmbedWithComponents = (%v, %v), want no message and no error when only the lookup fails", message, err)
-	}
-}
-
-func TestRespondEmbedWithComponentsSendsTextCommandRepliesToTheChannel(t *testing.T) {
+func TestSendEmbedWithComponentsSendsTextCommandRepliesToTheChannel(t *testing.T) {
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 	ic := &discordgo.InteractionCreate{Interaction: &discordgo.Interaction{GuildID: menuGuildID, Token: "message_111_222"}}
 
-	if _, err := RespondEmbedWithComponents(session, ic, &discordgo.MessageEmbed{}, nil); err == nil {
+	if _, err := SendEmbedWithComponents(session, ic, &discordgo.MessageEmbed{}, nil); err == nil {
 		t.Error("a text command without a responder returned no error")
 	}
 
 	defer RegisterResponder(ic.Token, &MessageResponse{Session: session, ChannelID: "222", OriginalMsgID: "111"})()
-	message, err := RespondEmbedWithComponents(session, ic, &discordgo.MessageEmbed{}, nil)
+	message, err := SendEmbedWithComponents(session, ic, &discordgo.MessageEmbed{}, nil)
 	if err != nil || message == nil || message.ID != "333" {
-		t.Fatalf("RespondEmbedWithComponents = (%v, %v), want the sent channel message", message, err)
+		t.Fatalf("SendEmbedWithComponents = (%v, %v), want the sent channel message", message, err)
 	}
 
 	sent := requests()

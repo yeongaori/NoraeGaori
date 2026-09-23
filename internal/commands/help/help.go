@@ -4,10 +4,9 @@ import (
 	"fmt"
 	"noraegaori/internal/discord"
 	"noraegaori/internal/discord/command"
+	"slices"
 	"sort"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/config"
@@ -17,10 +16,8 @@ import (
 )
 
 const (
-	helpPanelExpiry = 5 * time.Minute
-
-	helpPrevPrefix = "help_prev_"
-	helpNextPrefix = "help_next_"
+	helpPageRoute   = "help_page"
+	commandsPerPage = 5
 )
 
 type CommandInfo struct {
@@ -33,85 +30,89 @@ type CommandInfo struct {
 }
 
 func HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-
 	page := 1
-	options := i.ApplicationCommandData().Options
-	if len(options) > 0 {
+	if options := i.ApplicationCommandData().Options; len(options) > 0 {
 		page = int(options[0].IntValue())
 	}
 
-	prefix := config.GetConfig().Prefix
-	if i.GuildID != "" {
-		if guildPrefix, err := guild.GetPrefix(i.GuildID); err != nil {
-			logger.Debugf("failed to get guild prefix for %s: %v", i.GuildID, err)
-		} else if guildPrefix != "" {
-			prefix = guildPrefix
-		}
-	}
-
-	commandList := getAllCommands(i.GuildID)
-
-	isAdmin := config.IsAdmin(i.Member.User.ID)
-	filteredCommands := make([]CommandInfo, 0, len(commandList))
-	for _, cmd := range commandList {
-		if !cmd.AdminOnly || isAdmin {
-			filteredCommands = append(filteredCommands, cmd)
-		}
-	}
-
-	if len(filteredCommands) == 0 {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Help.NoCommandsTitle, messages.T(i.GuildID).Help.NoCommandsDesc))
-		return nil
-	}
-
-	const commandsPerPage = 5
-	totalPages := (len(filteredCommands) + commandsPerPage - 1) / commandsPerPage
-
-	if page < 1 {
-		page = 1
-	}
-	if page > totalPages {
-		page = totalPages
-	}
-
-	start := (page - 1) * commandsPerPage
-	end := start + commandsPerPage
-	if end > len(filteredCommands) {
-		end = len(filteredCommands)
-	}
-	pageCommands := filteredCommands[start:end]
-
-	embed := buildHelpEmbed(i.GuildID, pageCommands, page, totalPages, start, len(filteredCommands), prefix)
-
-	if totalPages == 1 {
+	embed, components, hasCommands := buildHelpPage(i.GuildID, config.IsAdmin(i.Member.User.ID), page)
+	switch {
+	case !hasCommands:
+		t := messages.T(i.GuildID)
+		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(t.Help.NoCommandsTitle, t.Help.NoCommandsDesc))
+	case components == nil:
 		discord.RespondEmbed(s, i, embed)
-		return nil
+	default:
+		if _, err := discord.SendEmbedWithComponents(s, i, embed, components); err != nil {
+			logger.Errorf("Failed to send response: %v", err)
+			return err
+		}
 	}
-
-	panel := &helpPanel{
-		guildID:    i.GuildID,
-		token:      discord.NewComponentToken(),
-		totalPages: totalPages,
-		perPage:    commandsPerPage,
-		prefix:     prefix,
-		commands:   filteredCommands,
-		page:       page,
-	}
-
-	components := createHelpButtons(i.GuildID, page, totalPages, panel.token)
-
-	removeHandler := s.AddHandler(panel.handleInteraction)
-
-	panelMsg, err := discord.RespondEmbedWithComponents(s, i, embed, components)
-	if err != nil {
-		removeHandler()
-		logger.Errorf("Failed to send response: %v", err)
-		return err
-	}
-
-	go expireHelpPanel(s, i, panelMsg, panel, removeHandler)
-
 	return nil
+}
+
+func turnHelpPage(s *discordgo.Session, ic *discordgo.InteractionCreate, arguments []string) {
+	page, hasPage := discord.PageArgument(ic, arguments, 2)
+	if !hasPage {
+		return
+	}
+	isAdmin, isValidView := discord.ParseViewArgument(arguments[0])
+	if !isValidView {
+		return
+	}
+
+	embed, components, hasCommands := buildHelpPage(ic.GuildID, isAdmin, page)
+	if !hasCommands {
+		return
+	}
+	if err := discord.UpdateComponentMessage(s, ic, embed, components); err != nil {
+		logger.Errorf("Failed to turn the help page: %v", err)
+	}
+}
+
+func buildHelpPage(guildID string, isAdmin bool, page int) (*discordgo.MessageEmbed, []discordgo.MessageComponent, bool) {
+	commands := visibleCommands(guildID, isAdmin)
+	if len(commands) == 0 {
+		return nil, nil, false
+	}
+
+	totalPages := discord.PageCount(len(commands), commandsPerPage)
+	page = discord.ClampPage(page, totalPages)
+	start, end := discord.PageBounds(page, commandsPerPage, len(commands))
+
+	embed := buildHelpEmbed(guildID, commands[start:end], page, totalPages, start, len(commands), guildPrefix(guildID))
+	if totalPages == 1 {
+		return embed, nil, true
+	}
+
+	t := messages.T(guildID)
+	row := discord.PageButtonRow(helpPageRoute, page, totalPages, t.Buttons.Previous, t.Buttons.Next, []string{discord.ViewArgument(isAdmin)})
+	return embed, []discordgo.MessageComponent{row}, true
+}
+
+func visibleCommands(guildID string, isAdmin bool) []CommandInfo {
+	commands := getAllCommands(guildID)
+	if isAdmin {
+		return commands
+	}
+	return slices.DeleteFunc(commands, func(cmd CommandInfo) bool { return cmd.AdminOnly })
+}
+
+func guildPrefix(guildID string) string {
+	prefix := config.GetConfig().Prefix
+	if guildID == "" {
+		return prefix
+	}
+
+	stored, err := guild.GetPrefix(guildID)
+	if err != nil {
+		logger.Debugf("failed to get guild prefix for %s: %v", guildID, err)
+		return prefix
+	}
+	if stored != "" {
+		return stored
+	}
+	return prefix
 }
 
 func buildHelpEmbed(guildID string, commands []CommandInfo, page, totalPages, startIndex, totalCommands int, prefix string) *discordgo.MessageEmbed {
@@ -125,15 +126,13 @@ func buildHelpEmbed(guildID string, commands []CommandInfo, page, totalPages, st
 			adminBadge = "🔴 "
 		}
 
-		aliasesStr := strings.Join(cmd.Aliases, ", ")
-
-		description.WriteString(fmt.Sprintf("**%d. %s%s**\n", position, adminBadge, cmd.Name))
-		description.WriteString(fmt.Sprintf("%s\n", cmd.Description))
-		description.WriteString(fmt.Sprintf(t.Help.MessageLabel+"\n", prefix, cmd.Usage))
-		description.WriteString(fmt.Sprintf(t.Help.AliasLabel+"\n", aliasesStr))
-		description.WriteString(fmt.Sprintf(t.Help.SlashLabel+"\n", cmd.Name))
+		fmt.Fprintf(&description, "**%d. %s%s**\n", position, adminBadge, cmd.Name)
+		fmt.Fprintf(&description, "%s\n", cmd.Description)
+		fmt.Fprintf(&description, t.Help.MessageLabel+"\n", prefix, cmd.Usage)
+		fmt.Fprintf(&description, t.Help.AliasLabel+"\n", strings.Join(cmd.Aliases, ", "))
+		fmt.Fprintf(&description, t.Help.SlashLabel+"\n", cmd.Name)
 		if cmd.Example != "" {
-			description.WriteString(fmt.Sprintf(t.Help.ExampleLabel+"\n", prefix, cmd.Example))
+			fmt.Fprintf(&description, t.Help.ExampleLabel+"\n", prefix, cmd.Example)
 		}
 		description.WriteString("\n")
 	}
@@ -149,107 +148,6 @@ func buildHelpEmbed(guildID string, commands []CommandInfo, page, totalPages, st
 		Footer: &discordgo.MessageEmbedFooter{
 			Text: fmt.Sprintf(t.Footers.HelpPagination, page, totalPages),
 		},
-	}
-}
-
-func createHelpButtons(guildID string, page, totalPages int, token string) []discordgo.MessageComponent {
-	t := messages.T(guildID)
-	return []discordgo.MessageComponent{
-		discordgo.ActionsRow{
-			Components: []discordgo.MessageComponent{
-				discordgo.Button{
-					Label:    t.Buttons.Previous,
-					Style:    discordgo.PrimaryButton,
-					CustomID: helpPrevPrefix + token,
-					Disabled: page == 1,
-				},
-				discordgo.Button{
-					Label:    t.Buttons.Next,
-					Style:    discordgo.PrimaryButton,
-					CustomID: helpNextPrefix + token,
-					Disabled: page == totalPages,
-				},
-			},
-		},
-	}
-}
-
-type helpPanel struct {
-	guildID    string
-	token      string
-	totalPages int
-	perPage    int
-	prefix     string
-	commands   []CommandInfo
-
-	pageMu sync.Mutex
-	page   int
-}
-
-func (panel *helpPanel) turnPage(customID string) (int, bool) {
-	panel.pageMu.Lock()
-	defer panel.pageMu.Unlock()
-
-	switch customID {
-	case helpPrevPrefix + panel.token:
-		if panel.page > 1 {
-			panel.page--
-		}
-	case helpNextPrefix + panel.token:
-		if panel.page < panel.totalPages {
-			panel.page++
-		}
-	default:
-		return 0, false
-	}
-	return panel.page, true
-}
-
-func (panel *helpPanel) render(page int) (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
-	start := (page - 1) * panel.perPage
-	end := start + panel.perPage
-	if end > len(panel.commands) {
-		end = len(panel.commands)
-	}
-
-	embed := buildHelpEmbed(panel.guildID, panel.commands[start:end], page, panel.totalPages, start, len(panel.commands), panel.prefix)
-	return embed, createHelpButtons(panel.guildID, page, panel.totalPages, panel.token)
-}
-
-func (panel *helpPanel) handleInteraction(s *discordgo.Session, ic *discordgo.InteractionCreate) {
-	if ic.Type != discordgo.InteractionMessageComponent || ic.GuildID != panel.guildID {
-		return
-	}
-
-	page, turned := panel.turnPage(ic.MessageComponentData().CustomID)
-	if !turned {
-		return
-	}
-
-	embed, components := panel.render(page)
-	if err := s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseUpdateMessage,
-		Data: &discordgo.InteractionResponseData{
-			Embeds:     []*discordgo.MessageEmbed{embed},
-			Components: components,
-		},
-	}); err != nil {
-		logger.Errorf("Failed to turn the help page: %v", err)
-	}
-}
-
-func expireHelpPanel(s *discordgo.Session, i *discordgo.InteractionCreate, panelMsg *discordgo.Message, panel *helpPanel, removeHandler func()) {
-	defer removeHandler()
-
-	<-time.After(helpPanelExpiry)
-
-	panel.pageMu.Lock()
-	page := panel.page
-	panel.pageMu.Unlock()
-
-	embed, _ := panel.render(page)
-	if err := discord.CloseComponentMessage(s, i, panelMsg, embed); err != nil {
-		logger.Errorf("Failed to close the help panel: %v", err)
 	}
 }
 
@@ -286,7 +184,8 @@ func getAllCommands(guildID string) []CommandInfo {
 			example = name
 		}
 
-		cmdAliases := []string{name}
+		cmdAliases := make([]string, 0, len(cs.Aliases)+1)
+		cmdAliases = append(cmdAliases, name)
 		cmdAliases = append(cmdAliases, cs.Aliases...)
 
 		commandList = append(commandList, CommandInfo{

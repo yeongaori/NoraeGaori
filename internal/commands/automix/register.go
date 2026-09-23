@@ -215,4 +215,5 @@ func Register(cmd func(string) messages.CommandStrings) {
 		Example:  cmd("trimsilence").Example,
 	})
 	command.RegisterAliases("trimsilence", cmd("trimsilence"))
+	registerPanelRoutes()
 }

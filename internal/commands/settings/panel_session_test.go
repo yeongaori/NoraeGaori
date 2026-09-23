@@ -2,13 +2,16 @@ package settings
 
 import (
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
+	"noraegaori/internal/discord"
 	"noraegaori/internal/guild"
 	"noraegaori/internal/queue"
 	"noraegaori/internal/testutil/dbtest"
+	"noraegaori/internal/testutil/discordtest"
 )
 
 func commandInteraction(category string) *discordgo.InteractionCreate {
@@ -60,17 +63,10 @@ func TestRequestedCategoryFallsBackWhenUnknownOrHidden(t *testing.T) {
 	}
 }
 
-func TestSessionRendersWhicheverCategoryIsCurrent(t *testing.T) {
+func TestAPanelRendersTheCategoryItWasBuiltFor(t *testing.T) {
 	dbtest.Setup(t)
 
-	session := &panelSession{guildID: checkGuildID, token: "token", panelAdmin: true, category: categoryPlayback}
-
-	if got := session.currentCategory(); got != categoryPlayback {
-		t.Fatalf("got %q, want %q", got, categoryPlayback)
-	}
-
-	session.setCategory(categoryMixing)
-	embed, components := session.render()
+	embed, components := renderPanel(checkGuildID, &panelTarget{isAdmin: true, category: categoryMixing})
 
 	if !strings.Contains(embed.Title, categoryLabel(checkGuildID, categoryMixing)) {
 		t.Errorf("embed title %q does not name the mixing category", embed.Title)
@@ -78,30 +74,28 @@ func TestSessionRendersWhicheverCategoryIsCurrent(t *testing.T) {
 	if len(embed.Fields) != len(settingsInCategory(categoryMixing, true)) {
 		t.Errorf("embed shows %d fields, want %d", len(embed.Fields), len(settingsInCategory(categoryMixing, true)))
 	}
-	if len(components) == 0 {
-		t.Error("the rendered panel has no components")
+	if len(components) != 2 {
+		t.Errorf("the rendered panel has %d rows, want 2", len(components))
 	}
 }
 
-func TestSwitchingCategoryClosesAnOpenValueList(t *testing.T) {
+func TestTheSettingsPanelIsSentWithoutFetchingTheMessage(t *testing.T) {
 	dbtest.Setup(t)
+	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
+	ic := commandInteraction(categoryMixing)
+	ic.ID, ic.AppID, ic.Token = "111", "app", "token"
 
-	session := &panelSession{guildID: checkGuildID, token: "token", panelAdmin: true, category: categoryGeneral}
-	session.setOpenSetting("language")
-
-	if got := session.currentOpenSetting(); got != "language" {
-		t.Fatalf("got %q, want \"language\"", got)
+	if err := HandleSettingsPanel(session, ic); err != nil {
+		t.Fatalf("HandleSettingsPanel returned %v", err)
 	}
 
-	session.setCategory(categoryPlayback)
-
-	if got := session.currentOpenSetting(); got != "" {
-		t.Errorf("the language list stayed open as %q after a category switch", got)
+	sent := requests()
+	if len(sent) != 1 {
+		t.Fatalf("sent %d requests, want only the interaction reply", len(sent))
 	}
-
-	_, components := session.render()
-	if menu := rowMenu(t, components[1]); menu.CustomID != pickPrefix+"token" {
-		t.Errorf("the second row is %q, want the picker", menu.CustomID)
+	want := discord.ComponentID(pickRoute, discord.ViewArgument(false), categoryMixing)
+	if got := discordtest.JSONAt(t, sent[0].Body, "data", "components", 1, "components", 0, "custom_id"); got != want {
+		t.Errorf("the picker routes to %v, want %q", got, want)
 	}
 }
 
@@ -181,6 +175,30 @@ func TestRepeatWritesMapOntoEveryQueueMode(t *testing.T) {
 		}
 		if back, _ := currentValue(checkGuildID, spec); back != value {
 			t.Errorf("repeat %q read back as %q", value, back)
+		}
+	}
+}
+
+func TestChoiceValuesMustBeOnOffer(t *testing.T) {
+	language := specFor(t, "language")
+	repeat := specFor(t, "repeat")
+
+	for _, check := range []struct {
+		spec  *settingSpec
+		input string
+		want  string
+		err   error
+	}{
+		{language, " KO ", "ko", nil},
+		{language, defaultChoiceValue, defaultChoiceValue, nil},
+		{language, "xx", "", errUnknownValue},
+		{repeat, "on", valueRepeatAll, nil},
+		{repeat, "Single", valueRepeatSingle, nil},
+		{repeat, defaultChoiceValue, "", errUnknownValue},
+	} {
+		got, err := normalizeValue(check.spec, check.input)
+		if got != check.want || !errors.Is(err, check.err) {
+			t.Errorf("%s %q normalized to (%q, %v), want (%q, %v)", check.spec.key, check.input, got, err, check.want, check.err)
 		}
 	}
 }

@@ -721,11 +721,10 @@
   },
   "settings_panel": {
     "title": "서버 설정",
-    "description": "분류를 고른 뒤 목록에서 설정을 선택하세요. 켜고 끄는 설정은 선택하면 바로 바뀌고, 값을 입력하는 설정은 입력창이 열립니다.",
+    "description": "분류를 고른 뒤 목록에서 설정을 선택하세요. 켜고 끄는 설정은 선택하면 바로 바뀌고, 나머지 설정은 입력창이 열립니다.",
     "category_placeholder": "분류를 선택하세요",
     "setting_placeholder": "변경할 설정을 선택하세요",
     "choice_placeholder": "%s의 값을 선택하세요",
-    "back_option": "설정 목록으로 돌아가기",
     "default_value": "기본값 (%s)",
     "default_option": "기본값 사용",
     "modal_title": "%s 수정",

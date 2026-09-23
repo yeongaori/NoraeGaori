@@ -18,13 +18,16 @@ const (
 	valueRepeatSingle = "single"
 
 	defaultChoiceValue = "__default__"
-	backValue          = "__back__"
 )
 
 var (
 	toggleValues = []string{valueOn, valueOff}
 	repeatValues = []string{valueRepeatOff, valueRepeatAll, valueRepeatSingle}
 )
+
+func repeatOptions() []string {
+	return repeatValues
+}
 
 func writeNormalization(guildID, value string) error {
 	if err := queue.SetNormalization(guildID, value == valueOn); err != nil {

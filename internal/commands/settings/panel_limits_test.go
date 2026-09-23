@@ -15,12 +15,12 @@ func readOn(string) (string, error) {
 
 func TestThePickerStopsAtDiscordsOptionLimit(t *testing.T) {
 	specs := make([]settingSpec, 0, 30)
-	for index := 0; index < 30; index++ {
+	for index := range 30 {
 		specs = append(specs, settingSpec{key: fmt.Sprintf("toggle%d", index), category: categoryPlayback, kind: settingToggle, read: readOn})
 	}
 	testutil.Swap(t, &settingSpecs, specs)
 
-	menu := rowMenu(t, settingRow(newPanelView(checkGuildID, categoryPlayback, "", checkToken, true)))
+	menu := rowMenu(t, settingRow(newPanelView(checkGuildID, categoryPlayback, true)))
 
 	if len(menu.Options) != selectOptionLimit {
 		t.Errorf("the picker offers %d options, want %d", len(menu.Options), selectOptionLimit)
@@ -30,24 +30,23 @@ func TestThePickerStopsAtDiscordsOptionLimit(t *testing.T) {
 	}
 }
 
-func TestTheValueListStopsAtDiscordsOptionLimit(t *testing.T) {
+func TestTheChoiceListStopsAtDiscordsOptionLimit(t *testing.T) {
 	values := make([]string, 0, 30)
-	for index := 0; index < 30; index++ {
+	for index := range 30 {
 		values = append(values, fmt.Sprintf("value%d", index))
 	}
-	testutil.Swap(t, &settingSpecs, []settingSpec{{
-		key:      "manychoices",
-		category: categoryGeneral,
-		kind:     settingChoice,
-		options:  func() []string { return values },
-		read:     func(string) (string, error) { return "", nil },
-	}})
+	spec := &settingSpec{key: "manychoices", kind: settingChoice, hasDefault: true, options: func() []string { return values }}
 
-	components := buildSettingsComponents(newPanelView(checkGuildID, categoryGeneral, "manychoices", checkToken, true))
-	menu := rowMenu(t, components[len(components)-1])
+	options := choiceOptions(checkGuildID, spec, "value3")
 
-	if len(menu.Options) != selectOptionLimit {
-		t.Errorf("the value list offers %d options, want %d", len(menu.Options), selectOptionLimit)
+	if len(options) != selectOptionLimit {
+		t.Errorf("the choice list offers %d options, want %d", len(options), selectOptionLimit)
+	}
+	if options[0].Value != defaultChoiceValue || options[0].Default {
+		t.Errorf("the first option is %+v, want an unselected default", options[0])
+	}
+	if !options[4].Default || options[4].Value != "value3" {
+		t.Errorf("option 4 is %+v, want the preselected current value", options[4])
 	}
 }
 
@@ -68,9 +67,15 @@ func TestLabelsFallBackToTheirKey(t *testing.T) {
 	}
 }
 
-func TestNextValueLeavesTextSettingsUnchanged(t *testing.T) {
+func TestNextValueOnlyFlipsToggles(t *testing.T) {
 	if got := nextValue(specFor(t, "prefix"), "abc"); got != "abc" {
 		t.Errorf("nextValue = %q for a text setting, want it unchanged", got)
+	}
+	if got := nextValue(specFor(t, "repeat"), valueRepeatAll); got != valueRepeatAll {
+		t.Errorf("nextValue = %q for a choice setting, want it unchanged", got)
+	}
+	if got := nextValue(specFor(t, "sponsorblock"), valueOn); got != valueOff {
+		t.Errorf("nextValue = %q for a toggle that was on, want off", got)
 	}
 }
 

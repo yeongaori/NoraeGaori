@@ -4,18 +4,9 @@ import (
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
-	"noraegaori/internal/database"
 	"noraegaori/internal/testutil/dbtest"
 	"noraegaori/internal/testutil/discordtest"
 )
-
-func stringOption(name, value string) *discordgo.ApplicationCommandInteractionDataOption {
-	return &discordgo.ApplicationCommandInteractionDataOption{Name: name, Type: discordgo.ApplicationCommandOptionString, Value: value}
-}
-
-func integerOption(name string, value float64) *discordgo.ApplicationCommandInteractionDataOption {
-	return &discordgo.ApplicationCommandInteractionDataOption{Name: name, Type: discordgo.ApplicationCommandOptionInteger, Value: value}
-}
 
 func textSettingInteraction(name string, options ...*discordgo.ApplicationCommandInteractionDataOption) *discordgo.InteractionCreate {
 	return &discordgo.InteractionCreate{
@@ -62,13 +53,13 @@ func TestParseSettingArgumentsReadsValuesAndNumbers(t *testing.T) {
 		numberKey   string
 		numberValue string
 	}{
-		{"a toggle value", "sponsorblock", []*discordgo.ApplicationCommandInteractionDataOption{stringOption("setting", "on")}, valueOn, "", ""},
-		{"unknown text", "sponsorblock", []*discordgo.ApplicationCommandInteractionDataOption{stringOption("setting", "maybe")}, "", "", ""},
-		{"the repeat on alias", "repeat", []*discordgo.ApplicationCommandInteractionDataOption{stringOption("mode", "on")}, valueRepeatAll, "", ""},
-		{"an uppercase mode", "repeat", []*discordgo.ApplicationCommandInteractionDataOption{stringOption("mode", "SINGLE")}, valueRepeatSingle, "", ""},
-		{"a bare number", "fadein", []*discordgo.ApplicationCommandInteractionDataOption{stringOption("setting", "5")}, valueOn, "fadein_duration", "5"},
-		{"a state and a number", "fadein", []*discordgo.ApplicationCommandInteractionDataOption{stringOption("setting", "on"), integerOption("duration", 7)}, valueOn, "fadein_duration", "7"},
-		{"only a number", "automix", []*discordgo.ApplicationCommandInteractionDataOption{integerOption("beats", 16)}, "", "automix_beats", "16"},
+		{"a toggle value", "sponsorblock", []*discordgo.ApplicationCommandInteractionDataOption{discordtest.StringOption("setting", "on")}, valueOn, "", ""},
+		{"unknown text", "sponsorblock", []*discordgo.ApplicationCommandInteractionDataOption{discordtest.StringOption("setting", "maybe")}, "", "", ""},
+		{"the repeat on alias", "repeat", []*discordgo.ApplicationCommandInteractionDataOption{discordtest.StringOption("mode", "on")}, valueRepeatAll, "", ""},
+		{"an uppercase mode", "repeat", []*discordgo.ApplicationCommandInteractionDataOption{discordtest.StringOption("mode", "SINGLE")}, valueRepeatSingle, "", ""},
+		{"a bare number", "fadein", []*discordgo.ApplicationCommandInteractionDataOption{discordtest.StringOption("setting", "5")}, valueOn, "fadein_duration", "5"},
+		{"a state and a number", "fadein", []*discordgo.ApplicationCommandInteractionDataOption{discordtest.StringOption("setting", "on"), discordtest.IntegerOption("duration", 7)}, valueOn, "fadein_duration", "7"},
+		{"only a number", "automix", []*discordgo.ApplicationCommandInteractionDataOption{discordtest.IntegerOption("beats", 16)}, "", "automix_beats", "16"},
 		{"no options", "fadeonstop", nil, "", "", ""},
 	}
 
@@ -114,7 +105,7 @@ func TestSettingCommandsStoreTheGivenValue(t *testing.T) {
 	for _, key := range dropdownSettingKeys {
 		spec := specFor(t, key)
 		for _, value := range settingMenuValues(spec) {
-			_ = HandleSetting(key)(session, textSettingInteraction(key, stringOption(settingOptionName(key), value)))
+			_ = HandleSetting(key)(session, textSettingInteraction(key, discordtest.StringOption(settingOptionName(key), value)))
 
 			if got := storedSetting(t, key); got != value {
 				t.Errorf("%s %s stored %q", key, value, got)
@@ -129,7 +120,7 @@ func TestSettingCommandsRejectOutOfRangeNumbers(t *testing.T) {
 
 	seedSetting(t, "fadein", valueOff)
 	seedSetting(t, "fadein_duration", "3")
-	if err := HandleSetting("fadein")(session, textSettingInteraction("fadein", stringOption("setting", "99"))); err != nil {
+	if err := HandleSetting("fadein")(session, textSettingInteraction("fadein", discordtest.StringOption("setting", "99"))); err != nil {
 		t.Errorf("a rejected number returned %v, want the rejection handled", err)
 	}
 	if got := storedSetting(t, "fadein"); got != valueOff {
@@ -141,7 +132,7 @@ func TestSettingCommandsRejectOutOfRangeNumbers(t *testing.T) {
 
 	seedSetting(t, "automix", valueOff)
 	seedSetting(t, "automix_beats", "16")
-	_ = HandleSetting("automix")(session, textSettingInteraction("automix", stringOption("setting", "on"), integerOption("beats", 2)))
+	_ = HandleSetting("automix")(session, textSettingInteraction("automix", discordtest.StringOption("setting", "on"), discordtest.IntegerOption("beats", 2)))
 	if got := storedSetting(t, "automix"); got != valueOff {
 		t.Errorf("automix on 2 changed AutoMix to %q", got)
 	}
@@ -156,7 +147,7 @@ func TestABareNumberTurnsTheSettingOnWithThatNumber(t *testing.T) {
 
 	seedSetting(t, "fadein", valueOff)
 	seedSetting(t, "fadein_duration", "3")
-	_ = HandleSetting("fadein")(session, textSettingInteraction("fadein", stringOption("setting", "5")))
+	_ = HandleSetting("fadein")(session, textSettingInteraction("fadein", discordtest.StringOption("setting", "5")))
 
 	if got := storedSetting(t, "fadein"); got != valueOn {
 		t.Errorf("fadein 5 left fade-in %q", got)
@@ -176,35 +167,22 @@ func TestHandleSettingWithEmbedUsesTheCustomEmbedOnlyOnSuccess(t *testing.T) {
 		return &discordgo.MessageEmbed{Title: guildID}
 	})
 
-	if err := handle(session, textSettingInteraction("fadein", stringOption("setting", "on"))); err != nil {
+	if err := handle(session, textSettingInteraction("fadein", discordtest.StringOption("setting", "on"))); err != nil {
 		t.Fatalf("fadein on failed: %v", err)
 	}
 	if calls != 1 {
 		t.Errorf("the custom embed was built %d times after a success, want 1", calls)
 	}
 
-	_ = handle(session, textSettingInteraction("fadein", stringOption("setting", "99")))
+	_ = handle(session, textSettingInteraction("fadein", discordtest.StringOption("setting", "99")))
 	if calls != 1 {
 		t.Errorf("the custom embed was built after a rejected number")
 	}
 }
 
-func closeDatabaseUntilCleanup(t *testing.T) {
-	t.Helper()
-
-	if err := database.Close(); err != nil {
-		t.Fatalf("failed to close the test database: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := database.Initialize(); err != nil {
-			t.Errorf("failed to reopen the test database: %v", err)
-		}
-	})
-}
-
 func TestApplySettingArgumentsNamesTheSettingThatFailedToSave(t *testing.T) {
 	dbtest.Setup(t)
-	closeDatabaseUntilCleanup(t)
+	dbtest.CloseUntilCleanup(t)
 	spec := specFor(t, "automix")
 
 	if failed, err := applySettingArguments(checkGuildID, spec, &settingArguments{value: valueOn, hasValue: true}); err == nil || failed != spec {
@@ -220,16 +198,16 @@ func TestApplySettingArgumentsNamesTheSettingThatFailedToSave(t *testing.T) {
 func TestSettingCommandsReportSaveFailuresInsteadOfReturningThem(t *testing.T) {
 	dbtest.Setup(t)
 	session := discordtest.Session(t, "bot")
-	closeDatabaseUntilCleanup(t)
+	dbtest.CloseUntilCleanup(t)
 
-	if err := HandleSetting("sponsorblock")(session, textSettingInteraction("sponsorblock", stringOption("setting", valueOn))); err != nil {
+	if err := HandleSetting("sponsorblock")(session, textSettingInteraction("sponsorblock", discordtest.StringOption("setting", valueOn))); err != nil {
 		t.Errorf("a save failure returned %v, want it reported in the reply", err)
 	}
 }
 
 func TestNormalizationWriteFailureIsReturned(t *testing.T) {
 	dbtest.Setup(t)
-	closeDatabaseUntilCleanup(t)
+	dbtest.CloseUntilCleanup(t)
 
 	if err := writeNormalization(checkGuildID, valueOn); err == nil {
 		t.Error("writing normalization to a closed database succeeded")

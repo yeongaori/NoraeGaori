@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"noraegaori/internal/discord"
 	"noraegaori/internal/discord/command"
 	"noraegaori/internal/messages"
 
@@ -26,6 +27,8 @@ func Register(cmd func(string) messages.CommandStrings) {
 		Example:  cmd("queue").Example,
 	})
 	command.RegisterAliases("queue", cmd("queue"))
+	discord.RegisterComponentRoute(queuePageRoute, turnQueuePage)
+	discord.RegisterComponentRoute(queueMixRoute, openMixPanel)
 	command.RegisterCommand(&command.Command{
 		Name:        "remove",
 		Description: cmd("remove").Description,

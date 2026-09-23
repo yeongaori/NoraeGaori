@@ -1,68 +1,105 @@
 package help
 
 import (
-	"strings"
+	"fmt"
+	"net/http"
+	"strconv"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
+	"noraegaori/internal/discord"
+	"noraegaori/internal/discord/command"
+	"noraegaori/internal/messages"
+	"noraegaori/internal/testutil/configtest"
+	"noraegaori/internal/testutil/dbtest"
+	"noraegaori/internal/testutil/discordtest"
 )
 
-func TestHelpButtonsCarryThePanelToken(t *testing.T) {
-	components := createHelpButtons("guild", 1, 3, "tok")
+const helpCheckGuildID = "help-guild"
 
+func setupHelpCommands(t *testing.T) {
+	t.Helper()
+
+	configtest.Setup(t)
+	dbtest.Setup(t)
+	for index := range 11 {
+		command.RegisterCommand(&command.Command{Name: fmt.Sprintf("helpcheck%02d", index), Description: "d", AdminOnly: index == 0})
+	}
+}
+
+func helpButtons(t *testing.T, components []discordgo.MessageComponent) []discordgo.Button {
+	t.Helper()
+
+	if len(components) != 1 {
+		t.Fatalf("built %d rows, want one button row", len(components))
+	}
 	row, ok := components[0].(discordgo.ActionsRow)
 	if !ok {
-		t.Fatalf("the first component is %T, want an action row", components[0])
+		t.Fatalf("the row is %T, want an action row", components[0])
 	}
+	buttons := make([]discordgo.Button, 0, len(row.Components))
 	for _, component := range row.Components {
 		button, ok := component.(discordgo.Button)
 		if !ok {
 			t.Fatalf("component %T is not a button", component)
 		}
-		if !strings.HasSuffix(button.CustomID, "_tok") {
-			t.Errorf("button custom id %q does not carry the panel token", button.CustomID)
+		buttons = append(buttons, button)
+	}
+	return buttons
+}
+
+func paginationFooter(page, totalPages int) string {
+	return fmt.Sprintf(messages.T(helpCheckGuildID).Footers.HelpPagination, page, totalPages)
+}
+
+func TestHelpPagesClampAndKeepTheOpenersView(t *testing.T) {
+	setupHelpCommands(t)
+
+	for _, check := range []struct {
+		isAdmin    bool
+		totalPages int
+	}{{true, 3}, {false, 2}} {
+		embed, components, hasCommands := buildHelpPage(helpCheckGuildID, check.isAdmin, 99)
+		if !hasCommands {
+			t.Fatalf("admin=%v found no commands", check.isAdmin)
+		}
+		if embed.Footer.Text != paginationFooter(check.totalPages, check.totalPages) {
+			t.Errorf("admin=%v footer = %q, want the clamped last page", check.isAdmin, embed.Footer.Text)
+		}
+
+		buttons := helpButtons(t, components)
+		wantPrevious := discord.ComponentID(helpPageRoute, discord.ViewArgument(check.isAdmin), strconv.Itoa(check.totalPages-1))
+		if len(buttons) != 2 || buttons[0].CustomID != wantPrevious || !buttons[1].Disabled {
+			t.Errorf("admin=%v buttons = %+v, want previous %q and a disabled next", check.isAdmin, buttons, wantPrevious)
 		}
 	}
 }
 
-func TestTheHelpPanelOnlyTurnsOnItsOwnButtons(t *testing.T) {
-	panel := &helpPanel{guildID: "guild", token: "tok", totalPages: 3, page: 2}
+func TestTurningAHelpPageRedrawsTheMessage(t *testing.T) {
+	setupHelpCommands(t)
+	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
+	ic := &discordgo.InteractionCreate{Interaction: &discordgo.Interaction{
+		ID:      "111",
+		AppID:   "app",
+		Token:   "token",
+		Type:    discordgo.InteractionMessageComponent,
+		GuildID: helpCheckGuildID,
+		Data:    discordgo.MessageComponentInteractionData{CustomID: helpPageRoute},
+	}}
 
-	for _, customID := range []string{
-		helpNextPrefix + "other-token",
-		helpPrevPrefix + "other-token",
-		"help_next",
-		"queue_next_tok",
-		"",
-	} {
-		if _, turned := panel.turnPage(customID); turned {
-			t.Errorf("the panel turned on a foreign custom id %q", customID)
-		}
+	for _, ignored := range [][]string{{"2"}, {"owner", "2"}, {"admin", "two"}} {
+		turnHelpPage(session, ic, ignored)
 	}
+	turnHelpPage(session, ic, []string{discord.ViewArgument(true), "2"})
 
-	if page, turned := panel.turnPage(helpNextPrefix + "tok"); !turned || page != 3 {
-		t.Errorf("its own next button gave page %d turned=%v, want page 3", page, turned)
+	sent := requests()
+	if len(sent) != 1 {
+		t.Fatalf("sent %d requests, want one redraw", len(sent))
 	}
-	if page, turned := panel.turnPage(helpNextPrefix + "tok"); !turned || page != 3 {
-		t.Errorf("next past the last page gave %d, want it clamped to 3", page)
+	if got := discordtest.JSONAt(t, sent[0].Body, "type"); got != float64(discordgo.InteractionResponseUpdateMessage) {
+		t.Errorf("reply type = %v, want an in-place update", got)
 	}
-	if page, turned := panel.turnPage(helpPrevPrefix + "tok"); !turned || page != 2 {
-		t.Errorf("its own previous button gave page %d turned=%v, want page 2", page, turned)
-	}
-}
-
-func TestTheHelpPanelRendersOnlyItsOwnPage(t *testing.T) {
-	commands := make([]CommandInfo, 7)
-	for index := range commands {
-		commands[index] = CommandInfo{Name: "cmd", Description: "d", Usage: "u", Example: "e"}
-	}
-	panel := &helpPanel{guildID: "guild", token: "tok", totalPages: 2, perPage: 5, commands: commands, page: 2}
-
-	embed, components := panel.render(2)
-	if embed == nil {
-		t.Fatal("the last page rendered no embed")
-	}
-	if len(components) == 0 {
-		t.Fatal("the last page rendered no components")
+	if got := discordtest.JSONAt(t, sent[0].Body, "data", "embeds", 0, "footer", "text"); got != paginationFooter(2, 3) {
+		t.Errorf("footer = %v, want page 2 of 3", got)
 	}
 }
