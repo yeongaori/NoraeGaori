@@ -56,11 +56,8 @@ func normalizeValue(spec *settingSpec, value string) (string, error) {
 		}
 		return value, nil
 	case settingNumber:
-		if value == "" {
-			return "", errNotNumber
-		}
-		number, err := strconv.ParseFloat(value, 64)
-		if err != nil {
+		number, isNumber := parseNumber(value)
+		if !isNumber {
 			return "", errNotNumber
 		}
 		if number < spec.min || number > spec.max {
@@ -73,6 +70,14 @@ func normalizeValue(spec *settingSpec, value string) (string, error) {
 	default:
 		return value, nil
 	}
+}
+
+func parseNumber(text string) (float64, bool) {
+	number, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
+	if err != nil || math.IsNaN(number) || math.IsInf(number, 0) {
+		return 0, false
+	}
+	return number, true
 }
 
 func applySetting(guildID string, spec *settingSpec, value string) error {

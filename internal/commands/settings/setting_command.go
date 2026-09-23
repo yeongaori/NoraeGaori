@@ -3,7 +3,6 @@ package settings
 import (
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -123,8 +122,8 @@ func optionText(option *discordgo.ApplicationCommandInteractionDataOption) strin
 }
 
 func isNumber(text string) bool {
-	_, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
-	return err == nil
+	_, isParsed := parseNumber(text)
+	return isParsed
 }
 
 func isValidationError(err error) bool {

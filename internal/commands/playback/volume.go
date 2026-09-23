@@ -2,6 +2,7 @@ package playback
 
 import (
 	"fmt"
+	"math"
 	"noraegaori/internal/discord"
 	"strconv"
 
@@ -31,7 +32,7 @@ func HandleVolume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	case string:
 		var err error
 		volume, err = strconv.ParseFloat(v, 64)
-		if err != nil {
+		if err != nil || math.IsNaN(volume) {
 			discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.VolumeNotNumber))
 			return nil
 		}

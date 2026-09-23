@@ -546,7 +546,7 @@
     "songs_removed_all": "%s님이 추가한 %d곡이 제거되었습니다.",
     "invalid_range": "올바른 범위를 입력해주세요. (예: 1-5)",
     "range_includes_current": "범위에 현재 재생 중인 노래가 포함되어 있습니다. 2번부터 시작하거나 `skip` 명령어를 사용해주세요.",
-    "range_removed": "범위 %d-%d에서 %d곡이 제거되었습니다.",
+    "range_removed": "범위 %[2]d-%[3]d에서 %[1]d곡이 제거되었습니다.",
     "enter_valid_range": "1부터 %d 사이의 숫자를 입력해주세요.",
     "cannot_remove_current": "현재 재생 중인 노래는 제거할 수 없습니다. `skip` 명령어를 사용해주세요.",
     "remove_vote_desc": "**%s**을(를) 대기열에서 삭제할까요?",

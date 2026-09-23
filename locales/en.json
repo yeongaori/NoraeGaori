@@ -543,7 +543,7 @@
     "no_songs_to_remove_title": "No Songs to Remove",
     "remove_failed": "Remove failed: %v",
     "songs_removed_title": "Songs Removed",
-    "songs_removed_all": "%d songs by %s have been removed.",
+    "songs_removed_all": "%[2]d songs by %[1]s have been removed.",
     "invalid_range": "Please enter a valid range. (e.g., 1-5)",
     "range_includes_current": "The range includes the currently playing song. Start from #2 or use the `skip` command.",
     "range_removed": "%d songs removed from range %d-%d.",
