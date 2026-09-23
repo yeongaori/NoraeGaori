@@ -62,8 +62,10 @@ func TestOpeningTheMixPanelFromTheQueue(t *testing.T) {
 
 		openMixPanel(fixture.Session, fixture.Component(queueMixRoute), nil)
 
-		if reply := commandtest.WantSingleResponse(t, fixture.Requests(), discordgo.InteractionResponseChannelMessageWithSource); !discordtest.IsEphemeral(reply) {
+		sent := fixture.Requests()
+		if reply := commandtest.WantSingleResponse(t, sent, discordgo.InteractionResponseChannelMessageWithSource); !discordtest.IsEphemeral(reply) {
 			t.Error("the empty-queue notice was not private")
 		}
+		commandtest.WantReplyText(t, sent, messages.T(commandtest.GuildID).AutoMixPanel.EmptyTitle)
 	})
 }

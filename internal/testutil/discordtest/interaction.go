@@ -74,7 +74,7 @@ func ResponseType(request *Request) discordgo.InteractionResponseType {
 func IsEphemeral(request *Request) bool {
 	data, _ := request.Body["data"].(map[string]any)
 	flags, _ := data["flags"].(float64)
-	return discordgo.MessageFlags(flags) == discordgo.MessageFlagsEphemeral
+	return discordgo.MessageFlags(flags)&discordgo.MessageFlagsEphemeral != 0
 }
 
 func ReplyEmbed(t *testing.T, request *Request) map[string]any {

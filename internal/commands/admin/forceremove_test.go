@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
-	"noraegaori/internal/discord/command"
 	"noraegaori/internal/messages"
 	"noraegaori/internal/queue"
 	"noraegaori/internal/testutil/commandtest"
@@ -15,7 +14,11 @@ import (
 	"noraegaori/internal/testutil/queuetest"
 )
 
-const targetUserID = "123456789012345678"
+const (
+	targetUserID   = "12345678901234567"
+	sixteenDigitID = "1234567890123456"
+	stubUsername   = "fetched-user"
+)
 
 func targetOption(target string) []*discordgo.ApplicationCommandInteractionDataOption {
 	return []*discordgo.ApplicationCommandInteractionDataOption{discordtest.StringOption("target", target)}
@@ -39,6 +42,9 @@ func longTitledSongs(count int, requesterID string) []*queue.Song {
 func TestForceRemove(t *testing.T) {
 	caller := commandtest.CallerID
 	mention := "<@" + targetUserID + ">"
+	validRange := func(count int) func(*messages.Locale) string {
+		return func(locale *messages.Locale) string { return fmt.Sprintf(locale.Admin.EnterValidRange, count) }
+	}
 
 	commandtest.Run(t, "forceremove", HandleForceRemove, []commandtest.Case{
 		{
@@ -55,25 +61,42 @@ func TestForceRemove(t *testing.T) {
 			Songs:    queuetest.SongsBy(caller, 2),
 			Options:  targetOption("abc"),
 			WantText: func(locale *messages.Locale) string { return locale.Admin.InvalidMention },
+			Check:    commandtest.WantTitles("Song 1", "Song 2"),
 		},
 		{
-			Name:     "a position past the queue",
+			Name:     "position zero",
 			Songs:    queuetest.SongsBy(caller, 2),
-			Options:  targetOption("9"),
-			WantText: func(locale *messages.Locale) string { return fmt.Sprintf(locale.Admin.EnterValidRange, 2) },
+			Options:  targetOption("0"),
+			WantText: validRange(2),
+			Check:    commandtest.WantTitles("Song 1", "Song 2"),
+		},
+		{
+			Name:     "the position just past the queue",
+			Songs:    queuetest.SongsBy(caller, 2),
+			Options:  targetOption("3"),
+			WantText: validRange(2),
+			Check:    commandtest.WantTitles("Song 1", "Song 2"),
+		},
+		{
+			Name:     "sixteen digits read as a position",
+			Songs:    queuetest.Songs(caller, sixteenDigitID),
+			Options:  targetOption(sixteenDigitID),
+			WantText: validRange(2),
+			Check:    commandtest.WantTitles("Song 1", "Song 2"),
 		},
 		{
 			Name:     "a position",
-			Songs:    queuetest.SongsBy(caller, 2),
+			Songs:    queuetest.SongsBy(caller, 3),
 			Options:  targetOption("2"),
 			WantText: func(locale *messages.Locale) string { return fmt.Sprintf(locale.Queue.SongRemoved, "Song 2") },
-			Check:    commandtest.WantTitles("Song 1"),
+			Check:    commandtest.WantTitles("Song 1", "Song 3"),
 		},
 		{
 			Name:     "a user with a single queued song",
 			Songs:    queuetest.Songs(targetUserID),
 			Options:  targetOption(targetUserID),
 			WantText: func(locale *messages.Locale) string { return locale.Admin.NoSongsToDelete },
+			Check:    commandtest.WantTitles("Song 1"),
 		},
 		{
 			Name:          "a user Discord cannot find",
@@ -87,21 +110,31 @@ func TestForceRemove(t *testing.T) {
 			Name:     "a user with no songs",
 			Songs:    queuetest.SongsBy(caller, 2),
 			Options:  targetOption(mention),
-			WantText: func(locale *messages.Locale) string { return fmt.Sprintf(locale.Admin.UserNoSongs, "") },
+			WantText: func(locale *messages.Locale) string { return fmt.Sprintf(locale.Admin.UserNoSongs, stubUsername) },
+			Check:    commandtest.ReplyLacks(messages.T(commandtest.GuildID).Admin.ExcludingCurrent),
 		},
 		{
-			Name:     "a user with no songs while playing",
-			Songs:    queuetest.SongsBy(caller, 2),
-			Options:  targetOption(mention),
-			Prepare:  commandtest.Playing,
-			WantText: func(locale *messages.Locale) string { return locale.Admin.ExcludingCurrent },
+			Name:    "a user whose only song is playing",
+			Songs:   queuetest.Songs(targetUserID, caller),
+			Options: targetOption("<@!" + targetUserID + ">"),
+			Prepare: commandtest.Playing,
+			WantText: func(locale *messages.Locale) string {
+				return fmt.Sprintf(locale.Admin.UserNoSongs, stubUsername) + locale.Admin.ExcludingCurrent
+			},
+			Check: commandtest.WantTitles("Song 1", "Song 2"),
 		},
 		{
-			Name:     "a user's songs",
-			Songs:    queuetest.Songs(caller, targetUserID, caller, targetUserID),
-			Options:  targetOption(mention),
-			WantText: func(locale *messages.Locale) string { return locale.Admin.DeleteCompleteTitle },
-			Check:    commandtest.WantTitles("Song 1", "Song 3"),
+			Name:    "a user's songs while one of them plays",
+			Songs:   queuetest.Songs(targetUserID, caller, targetUserID, targetUserID),
+			Options: targetOption(mention),
+			Prepare: commandtest.Playing,
+			WantText: func(locale *messages.Locale) string {
+				return fmt.Sprintf(locale.Admin.DeleteCompleteDesc, stubUsername, 2)
+			},
+			Check: func(t *testing.T, reply map[string]any) {
+				commandtest.ReplyContains("Song 3", "Song 4")(t, reply)
+				commandtest.WantTitles("Song 1", "Song 2")(t, reply)
+			},
 		},
 	})
 }
@@ -115,16 +148,30 @@ func TestForceRemoveSplitsALongSummary(t *testing.T) {
 		t.Fatalf("HandleForceRemove returned %v", err)
 	}
 
-	followUps := 0
+	var sent []discordtest.Request
 	for _, request := range fixture.Requests() {
-		if request.Method == http.MethodPost && strings.HasPrefix(request.Path, "/webhooks/") {
-			followUps++
+		if request.Method == http.MethodPost {
+			sent = append(sent, request)
 		}
 	}
-	if followUps == 0 {
-		t.Error("a summary of 30 long titles sent no follow-up message")
+	if len(sent) < 2 {
+		t.Fatalf("sent %d messages, want the summary split over several", len(sent))
 	}
-	if titles := commandtest.QueueTitles(t); len(titles) != 1 {
+	var summary strings.Builder
+	for index := range sent {
+		description, _ := discordtest.ReplyEmbed(t, &sent[index])["description"].(string)
+		if length := len([]rune(description)); length > 4096 {
+			t.Errorf("message %d carries %d characters, over the embed limit", index, length)
+		}
+		summary.WriteString(description)
+		summary.WriteByte('\n')
+	}
+	for _, song := range longTitledSongs(30, targetUserID) {
+		if count := strings.Count(summary.String(), "["+song.Title+"]"); count != 1 {
+			t.Errorf("%q is listed %d times, want once", song.Title, count)
+		}
+	}
+	if titles := commandtest.QueueTitles(t); len(titles) != 1 || titles[0] != "Song 1" {
 		t.Errorf("queue = %v, want only the caller's song", titles)
 	}
 }
@@ -132,10 +179,10 @@ func TestForceRemoveSplitsALongSummary(t *testing.T) {
 func TestRegisterAddsTheAdminCommands(t *testing.T) {
 	Register(func(string) messages.CommandStrings { return messages.CommandStrings{} })
 
-	registered := command.Snapshot()
-	for _, name := range []string{"forceskip", "forceremove", "forcestop", "status"} {
-		if _, found := registered[name]; !found {
-			t.Errorf("command %q was not registered", name)
-		}
-	}
+	commandtest.WantRegistered(t, map[string]commandtest.Registration{
+		"forceskip":   {Handler: HandleForceSkip, IsAdminOnly: true},
+		"forceremove": {Handler: HandleForceRemove, IsAdminOnly: true},
+		"forcestop":   {Handler: HandleForceStop, IsAdminOnly: true},
+		"status":      {Handler: HandleStatus, IsAdminOnly: true},
+	})
 }

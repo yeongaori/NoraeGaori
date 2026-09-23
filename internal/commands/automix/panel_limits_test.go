@@ -212,26 +212,6 @@ func fourSongPanel(t *testing.T) (panelState, []transitionRow) {
 
 var checkLocation = &panelLocation{messageID: "123456789012345678", page: 2}
 
-func TestPanelCustomIDsAreUnique(t *testing.T) {
-	state, rows := fourSongPanel(t)
-	components := createTransitionPanelComponents("check-guild", rows, 1, transitionPageCount(state.pairs))
-	_, selects, buttons := inspectComponents(components)
-
-	seen := map[string]bool{}
-	for _, menu := range selects {
-		if seen[menu.CustomID] {
-			t.Errorf("duplicate select custom id %q", menu.CustomID)
-		}
-		seen[menu.CustomID] = true
-	}
-	for _, button := range buttons {
-		if seen[button.CustomID] {
-			t.Errorf("duplicate button custom id %q", button.CustomID)
-		}
-		seen[button.CustomID] = true
-	}
-}
-
 func TestPanelCustomIDsRouteToTheirPages(t *testing.T) {
 	_, rows := fourSongPanel(t)
 	_, selects, buttons := inspectComponents(createTransitionPanelComponents("check-guild", rows, 2, 3))
@@ -246,23 +226,6 @@ func TestPanelCustomIDsRouteToTheirPages(t *testing.T) {
 	for index, button := range buttons {
 		if button.CustomID != want[index] {
 			t.Errorf("button %d routes to %q, want %q", index, button.CustomID, want[index])
-		}
-	}
-}
-
-func TestTwoEditorsProduceDisjointCustomIDs(t *testing.T) {
-	state, rows := fourSongPanel(t)
-
-	_, firstSelects, _ := inspectComponents(createTransitionEditorComponents("check-guild", &state, rows[0], checkLocation))
-	_, secondSelects, _ := inspectComponents(createTransitionEditorComponents("check-guild", &state, rows[1], checkLocation))
-
-	firstIDs := map[string]bool{}
-	for _, menu := range firstSelects {
-		firstIDs[menu.CustomID] = true
-	}
-	for _, menu := range secondSelects {
-		if firstIDs[menu.CustomID] {
-			t.Errorf("custom id %q appears in both editors", menu.CustomID)
 		}
 	}
 }

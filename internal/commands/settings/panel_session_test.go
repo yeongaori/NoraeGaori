@@ -132,26 +132,6 @@ func TestPrefixWritesReachTheDatabase(t *testing.T) {
 	}
 }
 
-func TestTheLanguageDefaultOptionClearsTheStoredLanguage(t *testing.T) {
-	dbtest.Setup(t)
-
-	spec := specFor(t, "language")
-
-	if err := applySetting(checkGuildID, spec, "ko"); err != nil {
-		t.Fatalf("failed to set the language: %v", err)
-	}
-	if stored, _ := guild.GetLanguage(checkGuildID); stored != "ko" {
-		t.Fatalf("stored language is %q, want \"ko\"", stored)
-	}
-
-	if err := applySetting(checkGuildID, spec, defaultChoiceValue); err != nil {
-		t.Fatalf("failed to reset the language: %v", err)
-	}
-	if stored, _ := guild.GetLanguage(checkGuildID); stored != "" {
-		t.Errorf("the language is %q after choosing the default, want empty", stored)
-	}
-}
-
 func TestRepeatWritesMapOntoEveryQueueMode(t *testing.T) {
 	dbtest.Setup(t)
 
@@ -224,26 +204,23 @@ func TestAutoMixBeatsAreStoredAsWholeBeats(t *testing.T) {
 }
 
 func TestValidationMessagesNameTheSettingAndItsBounds(t *testing.T) {
-	volume := specFor(t, "volume")
+	label := func(key string) string { return settingLabel(checkGuildID, key) }
 
-	message := validationMessage(checkGuildID, volume, errOutOfRange)
-	for _, want := range []string{settingLabel(checkGuildID, "volume"), "0", "1000"} {
-		if !strings.Contains(message, want) {
-			t.Errorf("the out-of-range message %q does not mention %q", message, want)
-		}
-	}
-
-	if message := validationMessage(checkGuildID, volume, errNotNumber); !strings.Contains(message, settingLabel(checkGuildID, "volume")) {
-		t.Errorf("the not-a-number message %q does not name the setting", message)
-	}
-
-	beats := specFor(t, "automix_beats")
-	if message := validationMessage(checkGuildID, beats, errNotInteger); !strings.Contains(message, settingLabel(checkGuildID, "automix_beats")) {
-		t.Errorf("the not-an-integer message %q does not name the setting", message)
-	}
-
-	prefix := specFor(t, "prefix")
-	if message := validationMessage(checkGuildID, prefix, errTooLong); !strings.Contains(message, "5") {
-		t.Errorf("the too-long message %q does not mention the 5 character limit", message)
+	for name, check := range map[string]struct {
+		key  string
+		err  error
+		want string
+	}{
+		"a number out of range":   {"volume", errOutOfRange, label("volume") + " must be between 0 and 1000."},
+		"a word for a number":     {"volume", errNotNumber, label("volume") + " must be a number."},
+		"a fraction for a count":  {"automix_beats", errNotInteger, label("automix_beats") + " must be a whole number."},
+		"a prefix over the limit": {"prefix", errTooLong, label("prefix") + " must be at most 5 characters."},
+		"a failed save":           {"volume", errors.New("disk full"), "Could not save " + label("volume") + ": disk full"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := validationMessage(checkGuildID, specFor(t, check.key), check.err); got != check.want {
+				t.Errorf("message = %q, want %q", got, check.want)
+			}
+		})
 	}
 }

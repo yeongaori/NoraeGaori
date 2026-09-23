@@ -11,7 +11,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-const defaultResponseBody = `{"id":"333","channel_id":"222","user":{"id":"fetched"},"roles":["fetched-role"]}`
+const defaultResponseBody = `{"id":"333","username":"fetched-user","channel_id":"222","user":{"id":"fetched"},"roles":["fetched-role"]}`
 
 type Request struct {
 	Method  string

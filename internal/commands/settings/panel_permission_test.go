@@ -1,10 +1,13 @@
 package settings
 
 import (
+	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/discord"
+	"noraegaori/internal/messages"
 	"noraegaori/internal/testutil/dbtest"
 	"noraegaori/internal/testutil/discordtest"
 )
@@ -118,7 +121,7 @@ func TestThePanelIgnoresMalformedCustomIDs(t *testing.T) {
 
 func TestThePanelIgnoresEmptyUnknownAndMismatchedSelections(t *testing.T) {
 	dbtest.Setup(t)
-	registerPanelRoutes()
+	session, requests := panelActionSession(t, http.StatusOK)
 	pick := pickID(categoryPlayback)
 
 	assertSponsorBlockUnchanged(t, func() {
@@ -131,20 +134,24 @@ func TestThePanelIgnoresEmptyUnknownAndMismatchedSelections(t *testing.T) {
 			componentInteraction(modalID(categoryPlayback, "sponsorblock"), nil, valueOff),
 			modalInteraction(pick, nil, choiceInput("sponsorblock")),
 		} {
-			discord.HandleComponentRoute(nil, ic)
+			discord.HandleComponentRoute(session, ic)
 		}
 	})
+	if sent := requests(); len(sent) != 0 {
+		t.Errorf("sent %d replies to empty, unknown or mismatched selections, want none", len(sent))
+	}
 }
 
 func TestLanguageChoicesCoverEveryAvailableLocale(t *testing.T) {
-	choices := BuildLanguageChoices()
-
-	if len(choices) == 0 {
-		t.Fatal("no language choices were built")
-	}
-	for _, choice := range choices {
-		if choice.Name == "" || choice.Value == "" {
-			t.Errorf("choice %+v has an empty name or value", choice)
+	var values []string
+	for _, choice := range BuildLanguageChoices() {
+		value, _ := choice.Value.(string)
+		if choice.Name != value {
+			t.Errorf("choice %q is labelled %q, want its code", value, choice.Name)
 		}
+		values = append(values, value)
+	}
+	if want := messages.AvailableLocales(); !slices.Equal(values, want) || !slices.Contains(values, "ko") {
+		t.Errorf("language choices = %v, want every locale file %v including ko", values, want)
 	}
 }

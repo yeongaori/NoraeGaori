@@ -2,11 +2,13 @@ package commandtest
 
 import (
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
+	"noraegaori/internal/discord/command"
 	"noraegaori/internal/messages"
 	"noraegaori/internal/queue"
 	"noraegaori/internal/testutil/discordtest"
@@ -29,8 +31,15 @@ type Case struct {
 	Options       []*discordgo.ApplicationCommandInteractionDataOption
 	DiscordStatus func(*http.Request) int
 	Prepare       func(t *testing.T)
+	WantErr       bool
 	WantText      func(locale *messages.Locale) string
 	Check         func(t *testing.T, reply map[string]any)
+}
+
+type Registration struct {
+	Handler     Handler
+	IsAdminOnly bool
+	SettingKey  string
 }
 
 type Fixture struct {
@@ -77,7 +86,10 @@ func Run(t *testing.T, command string, handle Handler, cases []Case) {
 				testCase.Prepare(t)
 			}
 
-			_ = handle(fixture.Session, discordtest.SlashInteraction(GuildID, command, discordtest.Member(GuildID, CallerID), testCase.Options...))
+			err := handle(fixture.Session, discordtest.SlashInteraction(GuildID, command, discordtest.Member(GuildID, CallerID), testCase.Options...))
+			if isErr := err != nil; isErr != testCase.WantErr {
+				t.Errorf("the handler returned %v, want error = %v", err, testCase.WantErr)
+			}
 
 			reply := WantReplyText(t, fixture.Requests(), testCase.WantText(messages.T(GuildID)))
 			if testCase.Check != nil {
@@ -87,13 +99,26 @@ func Run(t *testing.T, command string, handle Handler, cases []Case) {
 	}
 }
 
-func LastReply(t *testing.T, requests []discordtest.Request) map[string]any {
+func (fixture *Fixture) WantNoRequests(t *testing.T) {
+	t.Helper()
+
+	if sent := fixture.Requests(); len(sent) != 0 {
+		t.Errorf("sent %d requests, want none", len(sent))
+	}
+}
+
+func LastRequest(t *testing.T, requests []discordtest.Request) *discordtest.Request {
 	t.Helper()
 
 	if len(requests) == 0 {
 		t.Fatal("no reply was sent")
 	}
-	return discordtest.ReplyEmbed(t, &requests[len(requests)-1])
+	return &requests[len(requests)-1]
+}
+
+func LastReply(t *testing.T, requests []discordtest.Request) map[string]any {
+	t.Helper()
+	return discordtest.ReplyEmbed(t, LastRequest(t, requests))
 }
 
 func WantReplyText(t *testing.T, requests []discordtest.Request, want string) map[string]any {
@@ -190,4 +215,41 @@ func markQueue(t *testing.T, set func(guildID string, isSet bool) error) {
 func FormatPrefix(format string) string {
 	prefix, _, _ := strings.Cut(format, "%")
 	return prefix
+}
+
+func WantRegistered(t *testing.T, want map[string]Registration) {
+	t.Helper()
+
+	registered := command.Snapshot()
+	for name, expected := range want {
+		cmd, found := registered[name]
+		if !found {
+			t.Errorf("command %q was not registered", name)
+			continue
+		}
+		if cmd.AdminOnly != expected.IsAdminOnly {
+			t.Errorf("command %q admin only = %v, want %v", name, cmd.AdminOnly, expected.IsAdminOnly)
+		}
+		if expected.Handler != nil && reflect.ValueOf(cmd.Handler).Pointer() != reflect.ValueOf(expected.Handler).Pointer() {
+			t.Errorf("command %q runs the wrong handler", name)
+		}
+		if expected.SettingKey != "" {
+			wantSettingMenu(t, name, cmd.Handler, expected.SettingKey)
+		}
+	}
+}
+
+func wantSettingMenu(t *testing.T, name string, handle Handler, key string) {
+	t.Helper()
+
+	fixture := NewFixture(t, nil)
+	if err := handle(fixture.Session, discordtest.SlashInteraction(GuildID, name, discordtest.Member(GuildID, CallerID))); err != nil {
+		t.Errorf("command %q returned %v", name, err)
+		return
+	}
+	reply := LastRequest(t, fixture.Requests())
+	customID, _ := discordtest.JSONAt(t, reply.Body, "data", "components", 0, "components", 0, "custom_id").(string)
+	if !strings.HasSuffix(customID, "_"+key) {
+		t.Errorf("command %q opened the menu %q, want the %s setting", name, customID, key)
+	}
 }

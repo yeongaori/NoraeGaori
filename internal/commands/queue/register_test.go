@@ -5,7 +5,6 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/discord"
-	"noraegaori/internal/discord/command"
 	"noraegaori/internal/messages"
 	"noraegaori/internal/testutil/commandtest"
 	"noraegaori/internal/testutil/discordtest"
@@ -14,12 +13,13 @@ import (
 func TestRegisterAddsTheQueueCommandsAndRoutes(t *testing.T) {
 	Register(func(string) messages.CommandStrings { return messages.CommandStrings{} })
 
-	registered := command.Snapshot()
-	for _, name := range []string{"queue", "remove", "swap", "skipto", "movetrack"} {
-		if _, found := registered[name]; !found {
-			t.Errorf("command %q was not registered", name)
-		}
-	}
+	commandtest.WantRegistered(t, map[string]commandtest.Registration{
+		"queue":     {Handler: HandleQueue},
+		"remove":    {Handler: HandleRemove},
+		"swap":      {Handler: HandleSwap},
+		"skipto":    {Handler: HandleSkipTo},
+		"movetrack": {Handler: HandleMoveTrack, IsAdminOnly: true},
+	})
 
 	page := discordtest.ComponentInteraction(commandtest.GuildID, queuePageRoute+":not-a-page", nil)
 	mix := &discordgo.InteractionCreate{Interaction: &discordgo.Interaction{

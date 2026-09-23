@@ -1,6 +1,8 @@
 package settings
 
 import (
+	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
@@ -197,11 +199,20 @@ func TestApplySettingArgumentsNamesTheSettingThatFailedToSave(t *testing.T) {
 
 func TestSettingCommandsReportSaveFailuresInsteadOfReturningThem(t *testing.T) {
 	dbtest.Setup(t)
-	session := discordtest.Session(t, "bot")
+	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 	dbtest.CloseUntilCleanup(t)
+	ic := discordtest.SlashInteraction(checkGuildID, "sponsorblock", nil, discordtest.StringOption("setting", valueOn))
 
-	if err := HandleSetting("sponsorblock")(session, textSettingInteraction("sponsorblock", discordtest.StringOption("setting", valueOn))); err != nil {
+	if err := HandleSetting("sponsorblock")(session, ic); err != nil {
 		t.Errorf("a save failure returned %v, want it reported in the reply", err)
+	}
+	sent := requests()
+	if len(sent) != 1 {
+		t.Fatalf("sent %d replies, want one", len(sent))
+	}
+	want := "Could not save " + settingLabel(checkGuildID, "sponsorblock") + ": "
+	if text := discordtest.EmbedText(discordtest.ReplyEmbed(t, &sent[0])); !strings.Contains(text, want) {
+		t.Errorf("the reply %q does not contain %q", text, want)
 	}
 }
 

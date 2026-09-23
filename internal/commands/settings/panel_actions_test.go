@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -100,6 +101,14 @@ func assertReplies(t *testing.T, sent []discordtest.Request, types ...discordgo.
 	}
 }
 
+func wantReplyText(t *testing.T, request *discordtest.Request, want string) {
+	t.Helper()
+
+	if text := discordtest.EmbedText(discordtest.ReplyEmbed(t, request)); !strings.Contains(text, want) {
+		t.Errorf("the reply %q does not contain %q", text, want)
+	}
+}
+
 func storedValue(t *testing.T, key string) string {
 	t.Helper()
 
@@ -161,6 +170,7 @@ func TestPickingSettingsOpensTheRightControl(t *testing.T) {
 	if got := storedValue(t, "sponsorblock"); got != valueOn {
 		t.Errorf("picking sponsorblock left it %q, want it toggled on", got)
 	}
+	wantReplyText(t, &sent[4], panelStrings(checkGuildID).NotAdmin)
 }
 
 func TestChoosingFromASelectModal(t *testing.T) {
@@ -190,13 +200,16 @@ func TestChoosingFromASelectModal(t *testing.T) {
 		t.Errorf("choosing the default stored language %q", got)
 	}
 
-	assertReplies(t, requests(),
+	sent := requests()
+	assertReplies(t, sent,
 		discordgo.InteractionResponseUpdateMessage,
 		discordgo.InteractionResponseUpdateMessage,
 		discordgo.InteractionResponseChannelMessageWithSource,
 		discordgo.InteractionResponseChannelMessageWithSource,
 		discordgo.InteractionResponseUpdateMessage,
 	)
+	wantReplyText(t, &sent[2], panelStrings(checkGuildID).NotAdmin)
+	wantReplyText(t, &sent[3], validationMessage(checkGuildID, specFor(t, "language"), errUnknownValue))
 }
 
 func TestTogglingAnUnreadableSettingReportsIt(t *testing.T) {
@@ -206,7 +219,9 @@ func TestTogglingAnUnreadableSettingReportsIt(t *testing.T) {
 
 	firePanel(t, session, componentInteraction(pickID(categoryPlayback), adminMember(), "sponsorblock"))
 
-	assertReplies(t, requests(), discordgo.InteractionResponseChannelMessageWithSource)
+	sent := requests()
+	assertReplies(t, sent, discordgo.InteractionResponseChannelMessageWithSource)
+	wantReplyText(t, &sent[0], panelStrings(checkGuildID).ReadFailed)
 }
 
 func TestARejectedFormFallsBackToAnErrorReply(t *testing.T) {
@@ -215,9 +230,14 @@ func TestARejectedFormFallsBackToAnErrorReply(t *testing.T) {
 
 	firePanel(t, session, componentInteraction(pickID(categoryPlayback), adminMember(), "volume"))
 
-	if got := len(requests()); got != 2 {
-		t.Errorf("sent %d requests, want the form and the fallback error reply", got)
+	sent := requests()
+	if len(sent) != 2 {
+		t.Fatalf("sent %d requests, want the form and the fallback error reply", len(sent))
 	}
+	if !discordtest.IsEphemeral(&sent[1]) {
+		t.Error("the fallback error reply was not private")
+	}
+	wantReplyText(t, &sent[1], fmt.Sprintf(panelStrings(checkGuildID).ModalFailed, settingLabel(checkGuildID, "volume")))
 }
 
 func TestModalSubmissions(t *testing.T) {
@@ -231,11 +251,14 @@ func TestModalSubmissions(t *testing.T) {
 	firePanel(t, session, modalInteraction(volume, adminMember(), textInput("80")))
 	firePanel(t, session, modalInteraction(volume, adminMember(), textInput("5000")))
 
-	assertReplies(t, requests(),
+	sent := requests()
+	assertReplies(t, sent,
 		discordgo.InteractionResponseChannelMessageWithSource,
 		discordgo.InteractionResponseUpdateMessage,
 		discordgo.InteractionResponseChannelMessageWithSource,
 	)
+	wantReplyText(t, &sent[0], panelStrings(checkGuildID).NotAdmin)
+	wantReplyText(t, &sent[2], validationMessage(checkGuildID, specFor(t, "volume"), errOutOfRange))
 	if got := storedValue(t, "volume"); got != "80" {
 		t.Errorf("volume = %q after the submissions, want 80", got)
 	}
@@ -248,7 +271,9 @@ func TestPanelRepliesSurviveDiscordRejectingThem(t *testing.T) {
 	firePanel(t, session, componentInteraction(categoryID(true), adminMember(), categoryMixing))
 	firePanel(t, session, componentInteraction(pickID(categoryGeneral), plainMember(), "prefix"))
 
-	if got := len(requests()); got != 2 {
-		t.Errorf("sent %d requests, want one redraw and one error reply attempt", got)
+	sent := requests()
+	if len(sent) != 2 {
+		t.Fatalf("sent %d requests, want one redraw and one error reply attempt", len(sent))
 	}
+	wantReplyText(t, &sent[1], panelStrings(checkGuildID).NotAdmin)
 }

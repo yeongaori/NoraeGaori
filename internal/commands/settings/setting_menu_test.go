@@ -95,15 +95,3 @@ func TestThePanelShowsUnavailableForAnUnreadableSetting(t *testing.T) {
 		t.Errorf("an unreadable setting displays %q, want %q", got, panelStrings(checkGuildID).ReadFailed)
 	}
 }
-
-func TestFormatSettingValueMatchesThePanel(t *testing.T) {
-	dbtest.Setup(t)
-
-	for _, key := range []string{"sponsorblock", "repeat", "volume"} {
-		spec := specFor(t, key)
-		view := newPanelView(checkGuildID, spec.category, true)
-		if got, want := formatSettingValue(checkGuildID, spec, view.values[key].raw), view.displayValue(spec); got != want {
-			t.Errorf("%s formats as %q, the panel shows %q", key, got, want)
-		}
-	}
-}

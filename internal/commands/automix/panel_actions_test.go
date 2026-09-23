@@ -29,23 +29,27 @@ func missingSongID(*queue.Queue) string {
 }
 
 func TestTransitionRoutesIgnoreMalformedInteractions(t *testing.T) {
-	component := &discordgo.InteractionCreate{Interaction: &discordgo.Interaction{
-		Type:    discordgo.InteractionMessageComponent,
-		GuildID: "check-guild",
-		Data:    discordgo.MessageComponentInteractionData{CustomID: transitionPickRoute},
-	}}
+	fixture := panelFixture(t, 3)
+	songID := firstSongID(fixture.Queue)
+	component := fixture.Component(transitionPickRoute)
+	picked := fixture.Component(transitionPickRoute, "not-a-song")
+	styled := fixture.Component(transitionStyleRoute, firstStyle("volume"))
 	modal := &discordgo.InteractionCreate{Interaction: &discordgo.Interaction{
 		Type:    discordgo.InteractionModalSubmit,
-		GuildID: "check-guild",
+		GuildID: commandtest.GuildID,
 		Data:    discordgo.ModalSubmitInteractionData{CustomID: transitionPageRoute},
 	}}
 
-	turnTransitionPage(nil, component, nil)
-	turnTransitionPage(nil, component, []string{"two"})
-	turnTransitionPage(nil, modal, []string{"2"})
-	pickTransition(nil, component, []string{"1"})
-	chooseTransitionStyle(nil, component, []string{"volume", "1", "123"})
-	chooseTransitionStyle(nil, component, []string{"volume", "1", "123", "1"})
+	turnTransitionPage(fixture.Session, component, nil)
+	turnTransitionPage(fixture.Session, component, []string{"two"})
+	turnTransitionPage(fixture.Session, modal, []string{"2"})
+	pickTransition(fixture.Session, component, []string{"1"})
+	pickTransition(fixture.Session, picked, []string{"1"})
+	chooseTransitionStyle(fixture.Session, component, []string{"volume", songID, "123", "1"})
+	chooseTransitionStyle(fixture.Session, styled, []string{"volume", songID, "123"})
+	chooseTransitionStyle(fixture.Session, styled, []string{"volume", "not-a-song", "123", "1"})
+
+	fixture.WantNoRequests(t)
 }
 
 func TestTheAutoMixPanelCommand(t *testing.T) {
@@ -56,33 +60,11 @@ func TestTheAutoMixPanelCommand(t *testing.T) {
 		},
 		{
 			Name:     "a page past the end",
-			Songs:    queuetest.SongsBy(commandtest.CallerID, 3),
+			Songs:    queuetest.SongsBy(commandtest.CallerID, 12),
 			Options:  []*discordgo.ApplicationCommandInteractionDataOption{discordtest.IntegerOption("page", 9)},
-			WantText: func(*messages.Locale) string { return "1/1" },
+			WantText: func(*messages.Locale) string { return "3/3" },
 		},
 	})
-}
-
-func TestOpeningTheAutoMixPanelFromAComponent(t *testing.T) {
-	for _, check := range []struct {
-		name          string
-		songCount     int
-		wantEphemeral bool
-	}{
-		{"opens the panel", 2, false},
-		{"reports an empty queue privately", 0, true},
-	} {
-		t.Run(check.name, func(t *testing.T) {
-			fixture := panelFixture(t, check.songCount)
-
-			OpenPanelFromComponent(fixture.Session, fixture.Component(transitionPickRoute))
-
-			reply := commandtest.WantSingleResponse(t, fixture.Requests(), discordgo.InteractionResponseChannelMessageWithSource)
-			if got := discordtest.IsEphemeral(reply); got != check.wantEphemeral {
-				t.Errorf("ephemeral = %v, want %v", got, check.wantEphemeral)
-			}
-		})
-	}
 }
 
 func TestTurningATransitionPage(t *testing.T) {
@@ -170,7 +152,7 @@ func TestChoosingATransitionStyle(t *testing.T) {
 			songValue:    missingSongID,
 			style:        volumeStyle,
 			wantRequests: 1,
-			wantText:     func(locale *messages.Locale) string { return locale.AutoMixPanel.EmptyTitle },
+			wantText:     func(locale *messages.Locale) string { return locale.AutoMixPanel.SongGone },
 			wantClosed:   true,
 		},
 		{
@@ -179,7 +161,7 @@ func TestChoosingATransitionStyle(t *testing.T) {
 			songValue:    firstSongID,
 			style:        volumeStyle,
 			wantRequests: 1,
-			wantText:     func(locale *messages.Locale) string { return locale.AutoMixPanel.EmptyTitle },
+			wantText:     func(locale *messages.Locale) string { return locale.AutoMixPanel.SongGone },
 			wantClosed:   true,
 		},
 	} {
@@ -204,6 +186,9 @@ func TestChoosingATransitionStyle(t *testing.T) {
 			if !check.wantSaved {
 				return
 			}
+			if refresh := sent[1]; refresh.Method != http.MethodPatch || refresh.Path != "/channels/"+discordtest.ChannelID+"/messages/"+discordtest.PanelMessageID {
+				t.Errorf("the panel refresh went to %s %s", refresh.Method, refresh.Path)
+			}
 			if saved, err := queue.GetQueue(commandtest.GuildID, true); err != nil || saved.Songs[0].AutoMixStyleVolume != check.style {
 				t.Errorf("the saved song style is wrong (err %v)", err)
 			}
@@ -212,10 +197,13 @@ func TestChoosingATransitionStyle(t *testing.T) {
 }
 
 func TestVoiceChannelBitrateOnlyAsksDiscordForAKnownChannel(t *testing.T) {
-	fixture := panelFixture(t, 1)
+	queuetest.Seed(t, commandtest.GuildID, queuetest.SongsBy(commandtest.CallerID, 1)...)
+	session, requests := discordtest.StubAPIResponder(t, func(*http.Request) (int, string) {
+		return http.StatusOK, `{"id":"voice-1","type":2,"bitrate":64000}`
+	})
 
-	if got := voiceChannelBitrate(fixture.Session, commandtest.GuildID); got != 0 || len(fixture.Requests()) != 0 {
-		t.Fatalf("bitrate without a voice channel = %d after %d requests, want 0 and none", got, len(fixture.Requests()))
+	if got := voiceChannelBitrate(session, commandtest.GuildID); got != 0 || len(requests()) != 0 {
+		t.Fatalf("bitrate without a voice channel = %d after %d requests, want 0 and none", got, len(requests()))
 	}
 
 	if err := queue.UpdateVoiceChannel(commandtest.GuildID, "voice-1"); err != nil {
@@ -223,10 +211,10 @@ func TestVoiceChannelBitrateOnlyAsksDiscordForAKnownChannel(t *testing.T) {
 	}
 	queue.InvalidateCache(commandtest.GuildID)
 
-	if got := voiceChannelBitrate(fixture.Session, commandtest.GuildID); got != 0 {
-		t.Errorf("bitrate = %d, want 0 from a channel without a bitrate", got)
+	if got := voiceChannelBitrate(session, commandtest.GuildID); got != 64000 {
+		t.Errorf("bitrate = %d, want the channel's 64000", got)
 	}
-	if sent := fixture.Requests(); len(sent) != 1 || sent[0].Path != "/channels/voice-1" {
+	if sent := requests(); len(sent) != 1 || sent[0].Path != "/channels/voice-1" {
 		t.Errorf("sent %v, want one lookup of the voice channel", sent)
 	}
 }

@@ -1,10 +1,12 @@
 package settings
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/discord"
+	"noraegaori/internal/messages"
 	"noraegaori/internal/testutil/dbtest"
 )
 
@@ -147,6 +149,9 @@ func TestNonAdminPanelDefaultsToAVisibleCategory(t *testing.T) {
 
 func TestEmbedListsEveryVisibleSettingInTheCategory(t *testing.T) {
 	dbtest.Setup(t)
+	seedSetting(t, "volume", "120")
+	seedSetting(t, "sponsorblock", valueOn)
+	wantValues := map[string]string{"volume": "120", "sponsorblock": messages.T(checkGuildID).Settings.StatusOn}
 
 	for _, category := range settingCategories {
 		embed := buildSettingsEmbed(newPanelView(checkGuildID, category, true))
@@ -161,8 +166,8 @@ func TestEmbedListsEveryVisibleSettingInTheCategory(t *testing.T) {
 			if embed.Fields[index].Name != want {
 				t.Errorf("category %q field %d is %q, want %q", category, index, embed.Fields[index].Name, want)
 			}
-			if embed.Fields[index].Value == "" {
-				t.Errorf("setting %q renders an empty value", spec.key)
+			if want, isSeeded := wantValues[spec.key]; isSeeded && !strings.Contains(embed.Fields[index].Value, want) {
+				t.Errorf("setting %q renders %q, want it to show %q", spec.key, embed.Fields[index].Value, want)
 			}
 		}
 	}
@@ -190,8 +195,12 @@ func TestTogglingASettingPersistsAndShowsTheNewValue(t *testing.T) {
 		t.Errorf("sponsorblock stayed %q after a toggle", before)
 	}
 	view := newPanelView(checkGuildID, spec.category, true)
-	if view.displayValue(spec) == "" {
-		t.Error("sponsorblock renders an empty value after a toggle")
+	want := messages.T(checkGuildID).Settings.StatusOff
+	if after == valueOn {
+		want = messages.T(checkGuildID).Settings.StatusOn
+	}
+	if got := view.displayValue(spec); got != want {
+		t.Errorf("sponsorblock renders %q after a toggle to %q, want %q", got, after, want)
 	}
 }
 

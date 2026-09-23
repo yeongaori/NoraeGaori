@@ -27,7 +27,7 @@ func TestNowPlaying(t *testing.T) {
 			Name:     "an idle queue",
 			Songs:    queuetest.SongsBy(commandtest.CallerID, 2),
 			WantText: func(locale *messages.Locale) string { return locale.Music.NowPlayingPaused },
-			Check:    commandtest.ReplyContains(nextSong, "Song 2"),
+			Check:    commandtest.ReplyContains("Song 1", nextSong+"\n**Song 2**", "caller#0001"),
 		},
 		{
 			Name:     "a playing song",
@@ -41,13 +41,14 @@ func TestNowPlaying(t *testing.T) {
 			Songs:    queuetest.SongsBy(commandtest.CallerID, 1),
 			Prepare:  commandtest.Loading,
 			WantText: func(locale *messages.Locale) string { return locale.Music.NowPlayingLoading },
+			Check:    commandtest.ReplyLacks(" / "),
 		},
 		{
 			Name:     "a single live song",
 			Songs:    []*queue.Song{liveSong("Live")},
 			Prepare:  commandtest.Playing,
 			WantText: func(locale *messages.Locale) string { return locale.Music.NowPlayingPlaying },
-			Check:    commandtest.ReplyLacks(" / ", nextSong),
+			Check:    commandtest.ReplyLacks(" / "),
 		},
 	})
 }

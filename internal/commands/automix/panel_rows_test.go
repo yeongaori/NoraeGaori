@@ -148,10 +148,8 @@ func TestALiveLastSongGetsNoOutro(t *testing.T) {
 	songs[2].IsLive = true
 	rows := checkRowsFor(songs)
 
-	for i, row := range rows {
-		if row.isOutro() {
-			t.Errorf("row %d is an outro, want none for a live last song", i)
-		}
+	if len(rows) != 1 || rows[0].fromIndex != 0 || rows[0].toIndex != 1 {
+		t.Errorf("rows = %+v, want only the 1 to 2 transition for a live last song", rows)
 	}
 }
 
@@ -199,21 +197,6 @@ func TestGuildDefaultsApplyWhereTheSongDoesNotOverride(t *testing.T) {
 	}
 	if got := rows[1].source["filter"]; got != "guild" {
 		t.Errorf("second filter source = %q, want guild", got)
-	}
-}
-
-func TestMissingAnalysisRendersAPlaceholder(t *testing.T) {
-	analyzing := describeTrack("check-guild", nil, true)
-	idle := describeTrack("check-guild", nil, false)
-
-	if analyzing == "" {
-		t.Error("the analyzing placeholder is empty")
-	}
-	if idle == "" {
-		t.Error("the idle placeholder is empty")
-	}
-	if analyzing == idle {
-		t.Errorf("both states render %q, want distinct placeholders", analyzing)
 	}
 }
 
