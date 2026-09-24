@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"noraegaori/internal/queue"
-	"noraegaori/internal/testutil/discordtest"
+	"noraegaori/tests/testutil/discordtest"
 )
 
 func playingPlayerWithVoice(t *testing.T, guildID string) (*GuildPlayer, *mockVoiceConn) {

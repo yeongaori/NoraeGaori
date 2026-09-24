@@ -9,8 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"noraegaori/internal/testutil"
 	ytdlpUpdater "noraegaori/internal/ytdlp"
+	"noraegaori/tests/testutil"
 )
 
 func useVersionManager(t *testing.T) {

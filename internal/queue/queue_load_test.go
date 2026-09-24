@@ -9,7 +9,6 @@ import (
 
 func TestLoadQueueFromDBAppliesEveryDefault(t *testing.T) {
 	setupTestDB(t)
-	defer teardownTestDB(t)
 
 	q, err := loadQueueFromDB("guild1")
 	if err != nil {
@@ -90,7 +89,6 @@ func TestLoadQueueFromDBAppliesEveryDefault(t *testing.T) {
 
 func TestLoadQueueFromDBMapsEveryColumnToItsOwnField(t *testing.T) {
 	setupTestDB(t)
-	defer teardownTestDB(t)
 
 	_, err := database.DB.Exec(`INSERT INTO guild_settings (
 		guild_id, volume, repeat, sponsorblock, show_started_track, normalization,
@@ -187,7 +185,6 @@ func TestLoadQueueFromDBMapsEveryColumnToItsOwnField(t *testing.T) {
 
 func TestLoadQueueFromDBReturnsNilForAnUnknownGuild(t *testing.T) {
 	setupTestDB(t)
-	defer teardownTestDB(t)
 
 	q, err := loadQueueFromDB("no-such-guild")
 	if err != nil {
@@ -200,7 +197,6 @@ func TestLoadQueueFromDBReturnsNilForAnUnknownGuild(t *testing.T) {
 
 func TestLoadQueueFromDBOrdersSongsByPosition(t *testing.T) {
 	setupTestDB(t)
-	defer teardownTestDB(t)
 
 	for i := 0; i < 4; i++ {
 		song := &Song{

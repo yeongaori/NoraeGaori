@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"noraegaori/internal/testutil"
+	"noraegaori/tests/testutil"
 	"os"
 	"path/filepath"
 	"strings"

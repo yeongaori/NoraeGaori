@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"noraegaori/internal/queue"
-	"noraegaori/internal/testutil"
+	"noraegaori/tests/testutil"
 )
 
 func captureStreamFailures(t *testing.T) *[]string {

@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"noraegaori/internal/testutil"
+	"noraegaori/tests/testutil"
 )
 
 func TestGetInnertubeClientInitializesExactlyOnce(t *testing.T) {

@@ -2,7 +2,7 @@ package vote
 
 import (
 	"noraegaori/internal/discord"
-	"noraegaori/internal/testutil"
+	"noraegaori/tests/testutil"
 	"sync"
 	"testing"
 	"time"

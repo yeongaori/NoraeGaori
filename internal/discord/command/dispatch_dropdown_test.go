@@ -7,7 +7,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/discord"
-	"noraegaori/internal/testutil/discordtest"
+	"noraegaori/tests/testutil/discordtest"
 )
 
 func TestHandleInteractionRoutesComponentsAndModalsByPrefix(t *testing.T) {

@@ -9,7 +9,7 @@ import (
 
 	"noraegaori/internal/audio/ffmpeg"
 	"noraegaori/internal/queue"
-	"noraegaori/internal/testutil"
+	"noraegaori/tests/testutil"
 )
 
 func boundedAudioStream(frames int) audioStream {

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"noraegaori/internal/testutil/dbtest"
+	"noraegaori/tests/testutil/dbtest"
 )
 
 func specFor(t *testing.T, key string) *settingSpec {

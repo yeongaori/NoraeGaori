@@ -5,7 +5,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
-	"noraegaori/internal/testutil/discordtest"
+	"noraegaori/tests/testutil/discordtest"
 )
 
 func TestVoteForReactionRoutesOnlyItsOwnMessage(t *testing.T) {

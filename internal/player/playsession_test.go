@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"noraegaori/internal/testutil"
+	"noraegaori/tests/testutil"
 
 	"github.com/bwmarrin/discordgo"
 )

@@ -11,7 +11,6 @@ import (
 
 func TestSettingGettersServeRepeatReadsFromTheCache(t *testing.T) {
 	setupTestDB(t)
-	defer teardownTestDB(t)
 
 	if err := SetSponsorBlock("guild1", true); err != nil {
 		t.Fatalf("failed to enable sponsorblock: %v", err)
@@ -31,7 +30,6 @@ func TestSettingGettersServeRepeatReadsFromTheCache(t *testing.T) {
 
 func TestSettersRefreshTheCachedSettings(t *testing.T) {
 	setupTestDB(t)
-	defer teardownTestDB(t)
 
 	if enabled, err := GetFadeIn("guild1"); err != nil || enabled {
 		t.Fatalf("GetFadeIn = (%v, %v), want (false, nil) before any write", enabled, err)
@@ -46,7 +44,6 @@ func TestSettersRefreshTheCachedSettings(t *testing.T) {
 
 func TestAStaleLoadIsNotCachedAfterAnInvalidation(t *testing.T) {
 	setupTestDB(t)
-	defer teardownTestDB(t)
 
 	generation := settingsGeneration("guild1")
 	InvalidateCache("guild1")
@@ -62,7 +59,6 @@ func TestAStaleLoadIsNotCachedAfterAnInvalidation(t *testing.T) {
 
 func TestCachedSettingsFromAnotherDatabaseAreReloaded(t *testing.T) {
 	setupTestDB(t)
-	defer teardownTestDB(t)
 
 	if err := SetVolume("guild1", 42); err != nil {
 		t.Fatalf("failed to set the volume: %v", err)
@@ -85,7 +81,6 @@ func TestCachedSettingsFromAnotherDatabaseAreReloaded(t *testing.T) {
 
 func TestGetQueueReloadsAQueueCachedFromAnotherDatabase(t *testing.T) {
 	setupTestDB(t)
-	defer teardownTestDB(t)
 
 	first, err := GetQueue("guild1", false)
 	if err != nil || first == nil {
@@ -106,7 +101,6 @@ func TestGetQueueReloadsAQueueCachedFromAnotherDatabase(t *testing.T) {
 
 func TestSettingGettersReadEveryDefault(t *testing.T) {
 	setupTestDB(t)
-	defer teardownTestDB(t)
 
 	defaults := defaultGuildSettingsRow()
 	guildID := "guild-without-settings"
@@ -141,7 +135,6 @@ func TestSettingGettersReadEveryDefault(t *testing.T) {
 
 func TestGetQueueReportsAFailedSettingsLoad(t *testing.T) {
 	setupTestDB(t)
-	defer teardownTestDB(t)
 
 	if _, err := database.DB.Exec(`DROP TABLE guild_settings`); err != nil {
 		t.Fatalf("failed to drop guild_settings: %v", err)
@@ -154,7 +147,6 @@ func TestGetQueueReportsAFailedSettingsLoad(t *testing.T) {
 
 func TestLoadQueueFromDBReportsAFailedSongsLoad(t *testing.T) {
 	setupTestDB(t)
-	defer teardownTestDB(t)
 
 	if _, err := database.DB.Exec(`DROP TABLE songs`); err != nil {
 		t.Fatalf("failed to drop songs: %v", err)
@@ -167,7 +159,6 @@ func TestLoadQueueFromDBReportsAFailedSongsLoad(t *testing.T) {
 
 func TestSettersKeepAnExistingRowsVolume(t *testing.T) {
 	setupTestDB(t)
-	defer teardownTestDB(t)
 
 	if err := SetVolume("guild1", 70); err != nil {
 		t.Fatalf("failed to set the volume: %v", err)
@@ -183,7 +174,6 @@ func TestSettersKeepAnExistingRowsVolume(t *testing.T) {
 
 func TestSettersReportInvalidInputAndSaveFailures(t *testing.T) {
 	setupTestDB(t)
-	defer teardownTestDB(t)
 	defer func() {
 		if err := database.Initialize(); err != nil {
 			t.Errorf("failed to reopen the test database: %v", err)
@@ -207,7 +197,6 @@ func TestSettersReportInvalidInputAndSaveFailures(t *testing.T) {
 
 func TestSetSongAutoMixStyle(t *testing.T) {
 	setupTestDB(t)
-	defer teardownTestDB(t)
 
 	song := &Song{
 		URL:            "https://youtube.com/watch?v=style",
@@ -257,7 +246,6 @@ func must[T any](value T, err error) T {
 
 func TestGetAutoMixStyleReadsEveryCategory(t *testing.T) {
 	setupTestDB(t)
-	defer teardownTestDB(t)
 
 	for _, category := range AutoMixStyleCategories() {
 		if err := SetAutoMixStyle("guild1", category, category+"-style"); err != nil {
@@ -277,7 +265,6 @@ func TestGetAutoMixStyleReadsEveryCategory(t *testing.T) {
 
 func TestSettingGettersReturnTheirFallbackWhenTheDatabaseFails(t *testing.T) {
 	setupTestDB(t)
-	defer teardownTestDB(t)
 	defer func() {
 		if err := database.Initialize(); err != nil {
 			t.Errorf("failed to reopen the test database: %v", err)

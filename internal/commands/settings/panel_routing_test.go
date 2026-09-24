@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"noraegaori/internal/discord"
-	"noraegaori/internal/testutil/dbtest"
+	"noraegaori/tests/testutil/dbtest"
 )
 
 func TestPanelArgumentsCarryTheViewCategoryAndKey(t *testing.T) {

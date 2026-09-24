@@ -9,7 +9,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"noraegaori/internal/queue"
-	"noraegaori/internal/testutil"
+	"noraegaori/tests/testutil"
 )
 
 var errNoStreamURL = errors.New("stream url unavailable")

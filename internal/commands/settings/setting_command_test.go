@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
-	"noraegaori/internal/testutil/dbtest"
-	"noraegaori/internal/testutil/discordtest"
+	"noraegaori/tests/testutil/dbtest"
+	"noraegaori/tests/testutil/discordtest"
 )
 
 func textSettingInteraction(name string, options ...*discordgo.ApplicationCommandInteractionDataOption) *discordgo.InteractionCreate {

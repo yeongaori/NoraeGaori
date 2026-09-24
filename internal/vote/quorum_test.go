@@ -5,7 +5,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
-	"noraegaori/internal/testutil/discordtest"
+	"noraegaori/tests/testutil/discordtest"
 )
 
 func voiceStateWithMember(userID, channelID string, isBot bool) *discordgo.VoiceState {

@@ -2,13 +2,13 @@ package play
 
 import (
 	"noraegaori/internal/discord"
-	"noraegaori/internal/testutil"
+	"noraegaori/tests/testutil"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
 
-	"noraegaori/internal/testutil/discordtest"
 	"noraegaori/internal/youtube"
+	"noraegaori/tests/testutil/discordtest"
 )
 
 func newConfirmationFixture(t *testing.T) (*discordgo.Session, *discordgo.Message, *discordgo.InteractionCreate) {

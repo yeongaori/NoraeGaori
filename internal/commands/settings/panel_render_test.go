@@ -7,7 +7,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/discord"
 	"noraegaori/internal/messages"
-	"noraegaori/internal/testutil/dbtest"
+	"noraegaori/tests/testutil/dbtest"
 )
 
 const checkGuildID = "settings-panel-guild"

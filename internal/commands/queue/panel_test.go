@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
-	"noraegaori/internal/testutil/commandtest"
-	"noraegaori/internal/testutil/queuetest"
+	"noraegaori/tests/testutil/commandtest"
+	"noraegaori/tests/testutil/queuetest"
 )
 
 func queueButtons(t *testing.T, page, totalPages int) []discordgo.Button {

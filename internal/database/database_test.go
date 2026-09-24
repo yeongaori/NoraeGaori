@@ -3,7 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
-	"noraegaori/internal/testutil"
+	"noraegaori/tests/testutil"
 	"os"
 	"path/filepath"
 	"strings"

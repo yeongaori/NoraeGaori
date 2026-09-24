@@ -10,9 +10,9 @@ import (
 	"noraegaori/internal/discord"
 	"noraegaori/internal/messages"
 	"noraegaori/internal/queue"
-	"noraegaori/internal/testutil/commandtest"
-	"noraegaori/internal/testutil/discordtest"
-	"noraegaori/internal/testutil/queuetest"
+	"noraegaori/tests/testutil/commandtest"
+	"noraegaori/tests/testutil/discordtest"
+	"noraegaori/tests/testutil/queuetest"
 )
 
 func panelFixture(t *testing.T, songCount int) *commandtest.Fixture {

@@ -6,8 +6,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/discord"
 	"noraegaori/internal/messages"
-	"noraegaori/internal/testutil/commandtest"
-	"noraegaori/internal/testutil/discordtest"
+	"noraegaori/tests/testutil/commandtest"
+	"noraegaori/tests/testutil/discordtest"
 )
 
 func TestRegisterAddsTheQueueCommandsAndRoutes(t *testing.T) {

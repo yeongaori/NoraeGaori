@@ -1,0 +1,55 @@
+package playback_test
+
+import (
+	"testing"
+
+	"noraegaori/internal/commands/playback"
+	"noraegaori/internal/messages"
+	"noraegaori/internal/queue"
+	"noraegaori/tests/testutil/commandtest"
+	"noraegaori/tests/testutil/queuetest"
+)
+
+func liveSong(title string) *queue.Song {
+	song := queuetest.Song(title, commandtest.CallerID)
+	song.IsLive = true
+	return song
+}
+
+func TestNowPlaying(t *testing.T) {
+	nextSong := messages.T(commandtest.GuildID).Fields.NextSong
+
+	commandtest.Run(t, "nowplaying", playback.HandleNowPlaying, []commandtest.Case{
+		{
+			Name:     "an empty queue",
+			WantText: func(locale *messages.Locale) string { return locale.Errors.EmptyQueue },
+		},
+		{
+			Name:     "an idle queue",
+			Songs:    queuetest.SongsBy(commandtest.CallerID, 2),
+			WantText: func(locale *messages.Locale) string { return locale.Music.NowPlayingPaused },
+			Check:    commandtest.ReplyContains("Song 1", nextSong+"\n**Song 2**", "caller#0001"),
+		},
+		{
+			Name:     "a playing song",
+			Songs:    queuetest.SongsBy(commandtest.CallerID, 1),
+			Prepare:  commandtest.Playing,
+			WantText: func(locale *messages.Locale) string { return locale.Music.NowPlayingPlaying },
+			Check:    commandtest.ReplyContains("0:00 / 3:00"),
+		},
+		{
+			Name:     "a loading song",
+			Songs:    queuetest.SongsBy(commandtest.CallerID, 1),
+			Prepare:  commandtest.Loading,
+			WantText: func(locale *messages.Locale) string { return locale.Music.NowPlayingLoading },
+			Check:    commandtest.ReplyLacks(" / "),
+		},
+		{
+			Name:     "a single live song",
+			Songs:    []*queue.Song{liveSong("Live")},
+			Prepare:  commandtest.Playing,
+			WantText: func(locale *messages.Locale) string { return locale.Music.NowPlayingPlaying },
+			Check:    commandtest.ReplyLacks(" / "),
+		},
+	})
+}

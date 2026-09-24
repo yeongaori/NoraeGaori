@@ -9,9 +9,9 @@ import (
 	"noraegaori/internal/audio/transition"
 	"noraegaori/internal/messages"
 	"noraegaori/internal/queue"
-	"noraegaori/internal/testutil/commandtest"
-	"noraegaori/internal/testutil/dbtest"
-	"noraegaori/internal/testutil/discordtest"
+	"noraegaori/tests/testutil/commandtest"
+	"noraegaori/tests/testutil/dbtest"
+	"noraegaori/tests/testutil/discordtest"
 )
 
 func styleOptions(category, style string) []*discordgo.ApplicationCommandInteractionDataOption {

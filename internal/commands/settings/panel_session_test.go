@@ -10,8 +10,8 @@ import (
 	"noraegaori/internal/discord"
 	"noraegaori/internal/guild"
 	"noraegaori/internal/queue"
-	"noraegaori/internal/testutil/dbtest"
-	"noraegaori/internal/testutil/discordtest"
+	"noraegaori/tests/testutil/dbtest"
+	"noraegaori/tests/testutil/discordtest"
 )
 
 func commandInteraction(category string) *discordgo.InteractionCreate {

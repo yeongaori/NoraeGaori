@@ -8,8 +8,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/discord"
 	"noraegaori/internal/messages"
-	"noraegaori/internal/testutil/dbtest"
-	"noraegaori/internal/testutil/discordtest"
+	"noraegaori/tests/testutil/dbtest"
+	"noraegaori/tests/testutil/discordtest"
 )
 
 const (

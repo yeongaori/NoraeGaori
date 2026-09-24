@@ -11,7 +11,7 @@ import (
 	"noraegaori/internal/audio/ffmpeg"
 	"noraegaori/internal/audio/transition"
 	"noraegaori/internal/queue"
-	"noraegaori/internal/testutil/audiotest"
+	"noraegaori/tests/testutil/audiotest"
 )
 
 var styleCategories = []string{"volume", "eq", "filter", "effect", "loop"}

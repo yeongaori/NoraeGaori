@@ -9,8 +9,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/discord"
 	"noraegaori/internal/guild"
-	"noraegaori/internal/testutil/dbtest"
-	"noraegaori/internal/testutil/discordtest"
+	"noraegaori/tests/testutil/dbtest"
+	"noraegaori/tests/testutil/discordtest"
 )
 
 func panelActionSession(t *testing.T, status int) (*discordgo.Session, func() []discordtest.Request) {

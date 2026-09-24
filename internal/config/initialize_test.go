@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/fsnotify/fsnotify"
-	"noraegaori/internal/testutil"
+	"noraegaori/tests/testutil"
 )
 
 func assertInitializeFails(t *testing.T, want string) {

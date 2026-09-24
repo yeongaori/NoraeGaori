@@ -3,7 +3,7 @@ package guild
 import (
 	"testing"
 
-	"noraegaori/internal/testutil/dbtest"
+	"noraegaori/tests/testutil/dbtest"
 )
 
 func TestLanguageRoundTrip(t *testing.T) {

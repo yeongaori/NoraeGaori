@@ -8,15 +8,8 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/messages"
-	"noraegaori/internal/testutil/discordtest"
+	"noraegaori/tests/testutil/discordtest"
 )
-
-func interactionWithToken(ic *discordgo.InteractionCreate) *discordgo.InteractionCreate {
-	ic.ID = "111"
-	ic.AppID = "app"
-	ic.Token = "token"
-	return ic
-}
 
 const menuGuildID = "dropdown-menu-guild"
 
@@ -170,7 +163,7 @@ func TestRespondDropdownMenuSendsTheMenuForASlashCommand(t *testing.T) {
 	var picked []string
 	registerTestMenu(t, "test_send", trackingApply(&picked))
 
-	ic := interactionWithToken(&discordgo.InteractionCreate{
+	ic := discordtest.WithToken(&discordgo.InteractionCreate{
 		Interaction: &discordgo.Interaction{Type: discordgo.InteractionApplicationCommand, GuildID: menuGuildID},
 	})
 	if err := RespondDropdownMenu(session, ic, "test_send"); err != nil {
@@ -194,7 +187,7 @@ func TestRespondDropdownMenuSendsTheMenuForASlashCommand(t *testing.T) {
 
 func TestSendEmbedWithComponentsRepliesWithoutFetchingTheMessage(t *testing.T) {
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
-	ic := interactionWithToken(&discordgo.InteractionCreate{
+	ic := discordtest.WithToken(&discordgo.InteractionCreate{
 		Interaction: &discordgo.Interaction{Type: discordgo.InteractionApplicationCommand, GuildID: menuGuildID},
 	})
 
@@ -255,7 +248,7 @@ func TestHandleDropdownMenuPickRedrawsTheMenuInPlace(t *testing.T) {
 	})
 	t.Cleanup(func() { dropdownMenus.Delete("test_redraw") })
 
-	HandleDropdownMenuPick(session, interactionWithToken(pickInteraction(menuGuildID, dropdownMenuPrefix+"test_redraw", "all")))
+	HandleDropdownMenuPick(session, discordtest.WithToken(pickInteraction(menuGuildID, dropdownMenuPrefix+"test_redraw", "all")))
 
 	sent := requests()
 	if len(sent) != 1 || sent[0].Path != "/api/interactions/111/token/callback" {
@@ -278,7 +271,7 @@ func TestHandleDropdownMenuPickRepliesPrivatelyWhenApplyFails(t *testing.T) {
 		return &discordgo.MessageEmbed{Title: "failed"}, errors.New("database is locked")
 	})
 
-	HandleDropdownMenuPick(session, interactionWithToken(pickInteraction(menuGuildID, dropdownMenuPrefix+"test_private_failure", "all")))
+	HandleDropdownMenuPick(session, discordtest.WithToken(pickInteraction(menuGuildID, dropdownMenuPrefix+"test_private_failure", "all")))
 
 	sent := requests()
 	if len(sent) != 1 {
@@ -303,15 +296,15 @@ func TestDropdownRepliesSurviveDiscordRejectingThem(t *testing.T) {
 		return &discordgo.MessageEmbed{Title: "failed"}, errors.New("database is locked")
 	})
 
-	command := interactionWithToken(&discordgo.InteractionCreate{
+	command := discordtest.WithToken(&discordgo.InteractionCreate{
 		Interaction: &discordgo.Interaction{Type: discordgo.InteractionApplicationCommand, GuildID: menuGuildID},
 	})
 	if err := RespondDropdownMenu(session, command, "test_rejected"); err == nil {
 		t.Error("a rejected menu reply returned no error")
 	}
 
-	HandleDropdownMenuPick(session, interactionWithToken(pickInteraction(menuGuildID, dropdownMenuPrefix+"test_rejected", "all")))
-	HandleDropdownMenuPick(session, interactionWithToken(pickInteraction(menuGuildID, dropdownMenuPrefix+"test_rejected_failure", "all")))
+	HandleDropdownMenuPick(session, discordtest.WithToken(pickInteraction(menuGuildID, dropdownMenuPrefix+"test_rejected", "all")))
+	HandleDropdownMenuPick(session, discordtest.WithToken(pickInteraction(menuGuildID, dropdownMenuPrefix+"test_rejected_failure", "all")))
 
 	if got := len(requests()); got != 3 {
 		t.Errorf("sent %d requests, want one attempt per reply", got)

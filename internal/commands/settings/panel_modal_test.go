@@ -6,7 +6,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/discord"
 	"noraegaori/internal/messages"
-	"noraegaori/internal/testutil/dbtest"
+	"noraegaori/tests/testutil/dbtest"
 )
 
 func TestModalValuesAreFoundInEverySubmittedShape(t *testing.T) {

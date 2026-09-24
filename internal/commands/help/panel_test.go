@@ -10,9 +10,9 @@ import (
 	"noraegaori/internal/discord"
 	"noraegaori/internal/discord/command"
 	"noraegaori/internal/messages"
-	"noraegaori/internal/testutil/configtest"
-	"noraegaori/internal/testutil/dbtest"
-	"noraegaori/internal/testutil/discordtest"
+	"noraegaori/tests/testutil/configtest"
+	"noraegaori/tests/testutil/dbtest"
+	"noraegaori/tests/testutil/discordtest"
 )
 
 const helpCheckGuildID = "help-guild"

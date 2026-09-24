@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
-	"noraegaori/internal/testutil/discordtest"
+	"noraegaori/tests/testutil/discordtest"
 )
 
 func routeInteraction(interactionType discordgo.InteractionType, guildID, customID string, values ...string) *discordgo.InteractionCreate {
@@ -186,7 +186,7 @@ func TestSelectedValueAndPageArgumentOnlyReadComponents(t *testing.T) {
 
 func TestUpdateComponentMessageClearsMissingComponents(t *testing.T) {
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
-	ic := interactionWithToken(routeInteraction(discordgo.InteractionMessageComponent, menuGuildID, "test_route:1"))
+	ic := discordtest.WithToken(routeInteraction(discordgo.InteractionMessageComponent, menuGuildID, "test_route:1"))
 
 	if err := UpdateComponentMessage(session, ic, &discordgo.MessageEmbed{Title: "page"}, nil); err != nil {
 		t.Fatalf("UpdateComponentMessage returned %v", err)

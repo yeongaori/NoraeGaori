@@ -3,7 +3,7 @@ package settings
 import (
 	"testing"
 
-	"noraegaori/internal/testutil/localetest"
+	"noraegaori/tests/testutil/localetest"
 )
 
 func TestMain(m *testing.M) {

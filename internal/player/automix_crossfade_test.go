@@ -8,7 +8,7 @@ import (
 
 	"noraegaori/internal/audio/ffmpeg"
 	"noraegaori/internal/queue"
-	"noraegaori/internal/testutil"
+	"noraegaori/tests/testutil"
 )
 
 var errFakeStream = errors.New("fake stream failure")

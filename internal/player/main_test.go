@@ -7,8 +7,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"noraegaori/internal/queue"
-	"noraegaori/internal/testutil/localetest"
-	"noraegaori/internal/testutil/queuetest"
+	"noraegaori/tests/testutil/localetest"
+	"noraegaori/tests/testutil/queuetest"
 )
 
 func TestMain(m *testing.M) {

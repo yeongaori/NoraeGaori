@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"noraegaori/internal/queue"
-	"noraegaori/internal/testutil/queuetest"
+	"noraegaori/tests/testutil/queuetest"
 )
 
 func requestersOf(songs []*queue.Song) []string {

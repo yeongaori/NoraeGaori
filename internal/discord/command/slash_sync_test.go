@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
-	"noraegaori/internal/testutil/discordtest"
+	"noraegaori/tests/testutil/discordtest"
 )
 
 const syncAppID = "sync-app"

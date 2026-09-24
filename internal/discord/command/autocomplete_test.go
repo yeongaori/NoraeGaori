@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
-	"noraegaori/internal/testutil/discordtest"
+	"noraegaori/tests/testutil/discordtest"
 )
 
 func autocompleteInteraction(name string, member *discordgo.Member, user *discordgo.User, options ...*discordgo.ApplicationCommandInteractionDataOption) *discordgo.InteractionCreate {

@@ -6,9 +6,9 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/messages"
-	"noraegaori/internal/testutil/commandtest"
-	"noraegaori/internal/testutil/discordtest"
-	"noraegaori/internal/testutil/queuetest"
+	"noraegaori/tests/testutil/commandtest"
+	"noraegaori/tests/testutil/discordtest"
+	"noraegaori/tests/testutil/queuetest"
 )
 
 func paginationText(page, totalPages, songs int) string {
@@ -19,7 +19,7 @@ func TestQueueCommand(t *testing.T) {
 	commandtest.Run(t, "queue", HandleQueue, []commandtest.Case{
 		{
 			Name:     "an empty queue",
-			WantText: emptyQueueText,
+			WantText: func(locale *messages.Locale) string { return locale.Descriptions.EmptyQueue },
 		},
 		{
 			Name:     "a page past the end",

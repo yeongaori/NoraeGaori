@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"noraegaori/internal/testutil"
+	"noraegaori/tests/testutil"
 )
 
 func captureOutput(t *testing.T) *bytes.Buffer {

@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"noraegaori/internal/config"
-	"noraegaori/internal/testutil"
-	"noraegaori/internal/testutil/configtest"
+	"noraegaori/tests/testutil"
+	"noraegaori/tests/testutil/configtest"
 )
 
 func readOn(string) (string, error) {
