@@ -652,6 +652,7 @@
     "select_placeholder": "수정할 전환을 선택하세요",
     "refresh_button": "새로고침",
     "mix_button": "믹스",
+    "open_button": "패널 열기",
     "analyzing": "분석 중…",
     "unknown": "—",
     "now_marker": "▶",

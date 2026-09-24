@@ -21,8 +21,14 @@ type DropdownMenu struct {
 
 var dropdownMenus sync.Map
 
+var dropdownButtons sync.Map
+
 func RegisterDropdownMenu(key string, build func(guildID string) DropdownMenu) {
 	dropdownMenus.Store(key, build)
+}
+
+func AttachDropdownButtons(key string, build func(guildID string) []discordgo.MessageComponent) {
+	dropdownButtons.Store(key, build)
 }
 
 func lookupDropdownMenu(key string) (func(string) DropdownMenu, bool) {
@@ -111,6 +117,11 @@ func renderDropdownMenu(guildID, key string, menu *DropdownMenu) (*discordgo.Mes
 				},
 			},
 		},
+	}
+	if build, ok := dropdownButtons.Load(key); ok {
+		if buttons := build.(func(string) []discordgo.MessageComponent)(guildID); len(buttons) > 0 {
+			components = append(components, discordgo.ActionsRow{Components: buttons})
+		}
 	}
 	return embed, components
 }

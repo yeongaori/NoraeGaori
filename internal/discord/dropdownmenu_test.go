@@ -334,3 +334,34 @@ func TestDropdownMenuStringsAreLocalized(t *testing.T) {
 		}
 	}
 }
+
+func TestAttachedDropdownButtonsFollowTheMenuThroughRedraws(t *testing.T) {
+	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
+	var picked []string
+	registerTestMenu(t, "test_buttons", trackingApply(&picked))
+	AttachDropdownButtons("test_buttons", func(string) []discordgo.MessageComponent {
+		return []discordgo.MessageComponent{discordgo.Button{Label: "Open", CustomID: "test_open"}}
+	})
+	t.Cleanup(func() { dropdownButtons.Delete("test_buttons") })
+
+	command := discordtest.WithToken(&discordgo.InteractionCreate{
+		Interaction: &discordgo.Interaction{Type: discordgo.InteractionApplicationCommand, GuildID: menuGuildID},
+	})
+	if err := RespondDropdownMenu(session, command, "test_buttons"); err != nil {
+		t.Fatalf("RespondDropdownMenu returned %v, want nil", err)
+	}
+	HandleDropdownMenuPick(session, discordtest.WithToken(pickInteraction(menuGuildID, dropdownMenuPrefix+"test_buttons", "all")))
+
+	sent := requests()
+	if len(sent) != 2 {
+		t.Fatalf("sent %d requests, want the reply and the redraw", len(sent))
+	}
+	for index, request := range sent {
+		if got := discordtest.JSONAt(t, request.Body, "data", "components", 0, "components", 0, "custom_id"); got != dropdownMenuPrefix+"test_buttons" {
+			t.Errorf("request %d first row holds %v, want the dropdown", index, got)
+		}
+		if got := discordtest.JSONAt(t, request.Body, "data", "components", 1, "components", 0, "custom_id"); got != "test_open" {
+			t.Errorf("request %d second row holds %v, want the attached button", index, got)
+		}
+	}
+}

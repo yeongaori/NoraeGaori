@@ -58,6 +58,7 @@ type AutoMixPanelMessages struct {
 	SelectPlaceholder    string            `json:"select_placeholder"`
 	RefreshButton        string            `json:"refresh_button"`
 	MixButton            string            `json:"mix_button"`
+	OpenButton           string            `json:"open_button"`
 	Analyzing            string            `json:"analyzing"`
 	Unknown              string            `json:"unknown"`
 	NowMarker            string            `json:"now_marker"`

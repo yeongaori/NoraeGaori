@@ -18,6 +18,7 @@ const (
 	transitionPickRoute  = "automix_pick"
 	transitionPageRoute  = "automix_page"
 	transitionStyleRoute = "automix_style"
+	panelOpenRoute       = "automix_open"
 )
 
 type panelLocation struct {
@@ -29,6 +30,20 @@ func registerPanelRoutes() {
 	discord.RegisterComponentRoute(transitionPageRoute, turnTransitionPage)
 	discord.RegisterComponentRoute(transitionPickRoute, pickTransition)
 	discord.RegisterComponentRoute(transitionStyleRoute, chooseTransitionStyle)
+	discord.RegisterComponentRoute(panelOpenRoute, openPanel)
+	discord.AttachDropdownButtons("automix", panelOpenButtons)
+}
+
+func panelOpenButtons(guildID string) []discordgo.MessageComponent {
+	return []discordgo.MessageComponent{discordgo.Button{
+		Label:    messages.T(guildID).AutoMixPanel.OpenButton,
+		Style:    discordgo.SecondaryButton,
+		CustomID: panelOpenRoute,
+	}}
+}
+
+func openPanel(s *discordgo.Session, ic *discordgo.InteractionCreate, _ []string) {
+	OpenPanelFromComponent(s, ic)
 }
 
 func HandleAutoMixPanel(s *discordgo.Session, i *discordgo.InteractionCreate) error {

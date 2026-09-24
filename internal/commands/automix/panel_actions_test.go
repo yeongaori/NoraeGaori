@@ -218,3 +218,43 @@ func TestVoiceChannelBitrateOnlyAsksDiscordForAKnownChannel(t *testing.T) {
 		t.Errorf("sent %v, want one lookup of the voice channel", sent)
 	}
 }
+
+func TestTheAutoMixMenuButtonOpensThePanel(t *testing.T) {
+	registerPanelRoutes()
+	buttons := panelOpenButtons(commandtest.GuildID)
+	if len(buttons) != 1 {
+		t.Fatalf("built %d buttons, want one", len(buttons))
+	}
+	button, ok := buttons[0].(discordgo.Button)
+	if !ok {
+		t.Fatalf("built %T, want a discordgo.Button", buttons[0])
+	}
+	if want := messages.T(commandtest.GuildID).AutoMixPanel.OpenButton; button.Label != want {
+		t.Errorf("button label = %q, want %q", button.Label, want)
+	}
+
+	for _, check := range []struct {
+		name          string
+		songCount     int
+		wantEphemeral bool
+		wantText      func(locale *messages.Locale) string
+	}{
+		{"an empty queue", 0, true, func(locale *messages.Locale) string { return locale.AutoMixPanel.EmptyTitle }},
+		{"a queue with transitions", 3, false, func(locale *messages.Locale) string { return locale.AutoMixPanel.Title }},
+	} {
+		t.Run(check.name, func(t *testing.T) {
+			fixture := panelFixture(t, check.songCount)
+
+			if !discord.HandleComponentRoute(fixture.Session, fixture.Component(button.CustomID)) {
+				t.Fatalf("the button custom ID %q is not routed", button.CustomID)
+			}
+
+			sent := fixture.Requests()
+			commandtest.WantSingleResponse(t, sent, discordgo.InteractionResponseChannelMessageWithSource)
+			if discordtest.IsEphemeral(&sent[0]) != check.wantEphemeral {
+				t.Errorf("reply ephemeral = %v, want %v", !check.wantEphemeral, check.wantEphemeral)
+			}
+			commandtest.WantReplyText(t, sent, check.wantText(messages.T(commandtest.GuildID)))
+		})
+	}
+}

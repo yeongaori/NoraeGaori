@@ -652,6 +652,7 @@
     "select_placeholder": "Select a transition to edit",
     "refresh_button": "Refresh",
     "mix_button": "Mix",
+    "open_button": "Open Panel",
     "analyzing": "analyzing…",
     "unknown": "—",
     "now_marker": "▶",
