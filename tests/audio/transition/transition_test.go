@@ -728,6 +728,55 @@ func TestTailHandsTheNextSongBackUntouched(t *testing.T) {
 	}
 }
 
+func TestOnlyDryCutEffectsSkipTheCutOut(t *testing.T) {
+	cases := []struct {
+		effect      transition.EffectStyle
+		outgoingEnd float64
+	}{
+		{transition.EffectReverbCutEnd, 1},
+		{transition.EffectEchoHalfCutEnd, 1},
+		{transition.EffectNone, 0},
+		{transition.EffectReverbOutEnd, 0},
+		{transition.EffectReverbOutCenter, 0},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.effect.String(), func(t *testing.T) {
+			recipe := transition.DefaultRecipe()
+			recipe.Volume = transition.VolumeFadeInCutOut
+			recipe.Effect = testCase.effect
+			processor := transition.NewProcessor(recipe, 200, 0.5)
+
+			if aGain, _ := processor.Gains(1); math.Abs(aGain-testCase.outgoingEnd) > 1e-9 {
+				t.Errorf("outgoing gain at the handoff = %.3f, want %.0f", aGain, testCase.outgoingEnd)
+			}
+		})
+	}
+}
+
+func TestFlatGainsKeepCutEndTails(t *testing.T) {
+	cases := []struct {
+		effect      transition.EffectStyle
+		outgoingEnd float64
+	}{
+		{transition.EffectEchoHalfCutEnd, 1},
+		{transition.EffectNone, 0},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.effect.String(), func(t *testing.T) {
+			recipe := transition.DefaultRecipe()
+			recipe.Effect = testCase.effect
+			processor := transition.NewProcessor(recipe, 200, 0.5)
+			processor.SetFlatGains(true)
+
+			if aGain, _ := processor.Gains(1); math.Abs(aGain-testCase.outgoingEnd) > 1e-9 {
+				t.Errorf("flat outgoing gain at the handoff = %.3f, want %.0f", aGain, testCase.outgoingEnd)
+			}
+		})
+	}
+}
+
 func TestCutEndEffectsLeaveTheirTailAudible(t *testing.T) {
 	for _, effect := range []transition.EffectStyle{transition.EffectReverbCutEnd, transition.EffectEchoHalfCutEnd} {
 		t.Run(effect.String(), func(t *testing.T) {
@@ -766,12 +815,15 @@ func TestHandoffTailFadesAlongAQuarterSine(t *testing.T) {
 	handoff := echoTailPeaks(1.0, true, 16)
 	outro := echoTailPeaks(1.0, false, 16)
 
+	if handoff[0] != outro[0] {
+		t.Errorf("first frame: handoff %.0f vs outro %.0f, want identical: both start the fade at the full given gain", handoff[0], outro[0])
+	}
 	if outro[15] == 0 {
 		t.Fatal("the outro tail was silent at frame 15, want the echo still ringing")
 	}
 	ratio := handoff[15] / outro[15]
-	if ratio < 0.87 || ratio > 0.93 {
-		t.Errorf("handoff/outro level at frame 15 = %.3f, want about 0.900 (cos(pi/2*15/50) / cos(pi/2*15/170))", ratio)
+	if ratio < 0.892 || ratio > 0.908 {
+		t.Errorf("handoff/outro level at frame 15 = %.3f, want 0.900 (cos(pi/2*15/50) / cos(pi/2*15/170))", ratio)
 	}
 }
 

@@ -128,24 +128,26 @@ func TestLimiterDoesNotStepTheGainAtAFrameBoundary(t *testing.T) {
 }
 
 func TestLimiterSoftClipsWhatTheRampCannotCatch(t *testing.T) {
-	var limiter dsp.Limiter
-	limiter.ProcessStereo(constantFrame(20000), dsp.FullScale)
-	frame := constantFrame(20000)
-	for i := 5 * dsp.Channels; i < len(frame); i++ {
-		frame[i] = 2 * dsp.FullScale
-	}
-
-	limiter.ProcessStereo(frame, dsp.FullScale)
-
-	knee := 0.9 * dsp.FullScale
-	for pair := 5; pair < 23; pair++ {
-		if sample := frame[pair*dsp.Channels]; sample <= knee || sample >= dsp.FullScale {
-			t.Fatalf("sample %d = %.1f, want soft-clipped between %.1f and %.1f while the gain ramp catches up", pair, sample, knee, dsp.FullScale)
+	for _, sign := range []float64{1, -1} {
+		var limiter dsp.Limiter
+		limiter.ProcessStereo(constantFrame(sign*20000), dsp.FullScale)
+		frame := constantFrame(sign * 20000)
+		for i := 5 * dsp.Channels; i < len(frame); i++ {
+			frame[i] = sign * 2 * dsp.FullScale
 		}
-	}
-	for pair := 30; pair < dsp.FrameSize; pair++ {
-		if sample := frame[pair*dsp.Channels]; math.Abs(sample-dsp.FullScale) > 1 {
-			t.Fatalf("sample %d = %.1f, want %.1f once the gain has settled at 0.5", pair, sample, dsp.FullScale)
+
+		limiter.ProcessStereo(frame, dsp.FullScale)
+
+		knee := 0.9 * dsp.FullScale
+		for pair := 5; pair < 23; pair++ {
+			if sample := sign * frame[pair*dsp.Channels]; sample <= knee || sample >= dsp.FullScale {
+				t.Fatalf("sign %+.0f: sample %d = %.1f, want soft-clipped with the input's sign, magnitude between %.1f and %.1f", sign, pair, frame[pair*dsp.Channels], knee, dsp.FullScale)
+			}
+		}
+		for pair := 25; pair < dsp.FrameSize; pair++ {
+			if sample := sign * frame[pair*dsp.Channels]; math.Abs(sample-dsp.FullScale) > 0.01 {
+				t.Fatalf("sign %+.0f: sample %d = %.3f, want exactly %.1f once the gain has settled at 0.5", sign, pair, frame[pair*dsp.Channels], sign*dsp.FullScale)
+			}
 		}
 	}
 }
