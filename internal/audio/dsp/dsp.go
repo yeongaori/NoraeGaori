@@ -6,6 +6,7 @@ const (
 	Channels   = 2
 	SampleRate = 48000
 	FrameSize  = 960
+	FullScale  = 32767.0
 
 	FramesPerSecond = float64(SampleRate) / float64(FrameSize)
 

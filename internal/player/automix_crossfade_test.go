@@ -127,9 +127,6 @@ func TestCrossfadePlanArmsWithTheExpectedFrameMath(t *testing.T) {
 	if cs.bStream != stream {
 		t.Error("the planned state does not hold the stream that was started")
 	}
-	if !cs.fadeGains {
-		t.Error("fadeGains was not taken from fade.crossfade")
-	}
 	if cs.guildID != guildID {
 		t.Errorf("got guild ID %q, want %q", cs.guildID, guildID)
 	}
@@ -137,7 +134,10 @@ func TestCrossfadePlanArmsWithTheExpectedFrameMath(t *testing.T) {
 		t.Errorf("got bitrate %d, want 128000", cs.bitrate)
 	}
 	if cs.processor == nil {
-		t.Error("no transition processor was built")
+		t.Fatal("no transition processor was built")
+	}
+	if aGain, bGain := cs.processor.Gains(0.5); aGain == 1 && bGain == 1 {
+		t.Error("crossfade gains were flat, want fade.crossfade to shape them")
 	}
 	if cs.loopBuffer != nil || cs.loopIndex != 0 {
 		t.Error("the loop buffer was not reset")

@@ -531,8 +531,9 @@ func TestEveryVolumeStyleGivesTheOutroADistinctShape(t *testing.T) {
 		processor := transition.NewProcessor(recipe, 500, 60.0/128)
 		start, _ := processor.Gains(0)
 		mid, _ := processor.Gains(0.5)
+		lastHalfBeat, _ := processor.Gains(1 - 60.0/128*dsp.FramesPerSecond/500/2)
 		end, _ := processor.Gains(1)
-		distinct[fmt.Sprintf("%.3f/%.3f/%.3f", start, mid, end)] = true
+		distinct[fmt.Sprintf("%.3f/%.3f/%.3f/%.3f", start, mid, lastHalfBeat, end)] = true
 	}
 
 	if len(distinct) != 5 {

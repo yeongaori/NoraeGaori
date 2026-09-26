@@ -58,31 +58,34 @@ const (
 )
 
 const (
-	StyleAuto           = "auto"
-	EQKillDB            = -40.0
-	EQLowFreq           = 250.0
-	EQMidFreq           = 1000.0
-	EQHighFreq          = 4000.0
-	EQShelfQ            = 0.707
-	EQMidQ              = 0.9
-	filterQ             = 0.9
-	filterOpenFreq      = 20000.0
-	filterClosedFreq    = 200.0
-	highPassRestFreq    = 25.0
-	highPassPeakFreq    = 3000.0
-	filterOpenThreshold = 18000.0
-	filterRestThreshold = 30.0
-	overlapHeadroom     = 0.85
-	ReverbTailFrames    = 140
-	EchoTailFrames      = 170
-	echoFeedback        = 0.55
-	echoWet             = 0.85
-	reverbMaxWet        = 0.9
-	minBeatFraction     = 0.02
-	maxBeatFraction     = 0.5
-	defaultBeatFraction = 0.1
-	bpmMatchTolerance   = 0.03
-	bpmLooseTolerance   = 0.08
+	StyleAuto               = "auto"
+	EQKillDB                = -40.0
+	EQLowFreq               = 250.0
+	EQMidFreq               = 1000.0
+	EQHighFreq              = 4000.0
+	EQShelfQ                = 0.707
+	EQMidQ                  = 0.9
+	filterQ                 = 0.9
+	filterOpenFreq          = 20000.0
+	filterClosedFreq        = 200.0
+	highPassRestFreq        = 25.0
+	highPassPeakFreq        = 3000.0
+	filterOpenThreshold     = 18000.0
+	filterRestThreshold     = 30.0
+	overlapHeadroom         = 0.85
+	cutBeatFraction         = 0.25
+	ReverbTailFrames        = 140
+	EchoTailFrames          = 170
+	HandoffReverbTailFrames = 55
+	HandoffEchoTailFrames   = 50
+	echoFeedback            = 0.55
+	echoWet                 = 0.85
+	reverbMaxWet            = 0.9
+	minBeatFraction         = 0.02
+	maxBeatFraction         = 0.5
+	defaultBeatFraction     = 0.1
+	bpmMatchTolerance       = 0.03
+	bpmLooseTolerance       = 0.08
 )
 
 var volumeStyleNames = map[string]VolumeStyle{

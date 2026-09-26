@@ -103,6 +103,72 @@ func TestAutoMixWithoutCrossfadeKeepsFlatGains(t *testing.T) {
 	}
 }
 
+func TestOutroGainStartsAtThePlayingLevelAndEndsSilent(t *testing.T) {
+	recipe := transition.DefaultRecipe()
+	recipe.Volume = transition.VolumeOverlap
+	processor := transition.NewProcessor(recipe, 200, 0.5)
+	buf := make([]float64, dsp.FrameSize*dsp.Channels)
+
+	var first, last float64
+	for frame := 0; frame < 200; frame++ {
+		for i := range buf {
+			buf[i] = 10000
+		}
+		processor.ApplyGainA(buf, float64(frame)/200, 0.5)
+		if frame == 0 {
+			first = buf[0]
+		}
+		last = buf[len(buf)-1]
+	}
+
+	if math.Abs(first-5000) > 1 {
+		t.Errorf("first outro sample = %.1f, want 5000 (the 50%% volume already playing)", first)
+	}
+	if last > 500 {
+		t.Errorf("last outro sample = %.1f, want under 500 (10%% of the starting level) as it reaches silence", last)
+	}
+}
+
+func TestCutInRampsTheIncomingSongUpOverAQuarterBeat(t *testing.T) {
+	recipe := transition.DefaultRecipe()
+	recipe.Volume = transition.VolumeCutInFadeOut
+	processor := transition.NewProcessor(recipe, 200, 0.5)
+	aBuf := make([]float64, dsp.FrameSize*dsp.Channels)
+	bBuf := make([]float64, dsp.FrameSize*dsp.Channels)
+
+	ends := []float64{}
+	for frame := 0; frame < 10; frame++ {
+		for i := range bBuf {
+			bBuf[i] = 10000
+		}
+		processor.ApplyGains(aBuf, bBuf, float64(frame)/200, 1.0)
+		if frame == 0 && bBuf[0] > 100 {
+			t.Errorf("first incoming sample = %.0f, want under 100 so the cut-in starts from silence", bBuf[0])
+		}
+		ends = append(ends, bBuf[len(bBuf)-1])
+	}
+
+	if ends[0] > 1000 {
+		t.Errorf("incoming level after one frame = %.0f, want under 1000: the cut takes a quarter beat, not one frame", ends[0])
+	}
+	if ends[9] < 8000 {
+		t.Errorf("incoming level after ten frames = %.0f, want at least 8000 once the quarter-beat cut is done", ends[9])
+	}
+}
+
+func TestCutOutHoldsTheOutgoingSongUntilTheFinalQuarterBeat(t *testing.T) {
+	recipe := transition.DefaultRecipe()
+	recipe.Volume = transition.VolumeFadeInCutOut
+	processor := transition.NewProcessor(recipe, 200, 0.5)
+
+	if held, _ := processor.Gains(0.95); held < 0.9 {
+		t.Errorf("outgoing gain at 95%% = %.3f, want at least 0.9 before the cut", held)
+	}
+	if cut, _ := processor.Gains(1); cut != 0 {
+		t.Errorf("outgoing gain at the handoff = %.3f, want 0 so the cut does not click", cut)
+	}
+}
+
 func runTransitionWindow(recipe transition.Recipe, crossfadeFrames int, periodSec float64) (bool, float64, float64, int) {
 	processor := transition.NewProcessor(recipe, crossfadeFrames, periodSec)
 	aTone := &audiotest.ToneGenerator{Frequency: 220, Amplitude: 8000}
@@ -334,12 +400,12 @@ func TestEffectTailsDecayAfterHandoff(t *testing.T) {
 				processor.ApplyGains(aBuf, bBuf, progress, 1.0)
 			}
 
-			tail := processor.MakeTail(1.0)
+			tail := processor.MakeHandoffTail(1.0)
 			if tail == nil {
 				t.Fatal("produced no tail")
 			}
 
-			budget := transition.EchoTailFrames + transition.ReverbTailFrames + 10
+			budget := max(transition.HandoffEchoTailFrames, transition.HandoffReverbTailFrames)
 			silent := make([]int16, dsp.FrameSize*dsp.Channels)
 			frames := 0
 			for {
@@ -367,6 +433,106 @@ func TestEffectTailsDecayAfterHandoff(t *testing.T) {
 				t.Errorf("tail ended at peak %d, want at most 1500", lastPeak)
 			}
 		})
+	}
+}
+
+func countTailFrames(tail *transition.Tail) int {
+	frame := make([]int16, dsp.FrameSize*dsp.Channels)
+	frames := 1
+	for tail.Apply(frame) {
+		frames++
+	}
+	return frames
+}
+
+func TestOutroTailRingsOutLongerThanTheHandoffTail(t *testing.T) {
+	cases := []struct {
+		effect        transition.EffectStyle
+		outroFrames   int
+		handoffFrames int
+	}{
+		{transition.EffectReverbOutEnd, transition.ReverbTailFrames, transition.HandoffReverbTailFrames},
+		{transition.EffectEchoHalfCutEnd, transition.EchoTailFrames, transition.HandoffEchoTailFrames},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.effect.String(), func(t *testing.T) {
+			recipe := transition.DefaultRecipe()
+			recipe.Effect = testCase.effect
+			processor := transition.NewProcessor(recipe, 100, 0.5)
+			frame := make([]int16, dsp.FrameSize*dsp.Channels)
+			for i := 0; i < 100; i++ {
+				processor.ProcessA(frame, float64(i)/100)
+			}
+
+			if got := countTailFrames(processor.MakeTail(1.0)); got != testCase.outroFrames {
+				t.Errorf("outro tail lasted %d frames, want %d", got, testCase.outroFrames)
+			}
+			if got := countTailFrames(processor.MakeHandoffTail(1.0)); got != testCase.handoffFrames {
+				t.Errorf("handoff tail lasted %d frames, want %d", got, testCase.handoffFrames)
+			}
+		})
+	}
+}
+
+func TestHandoffAndOutroTailsStartAtTheSameLevel(t *testing.T) {
+	firstPeak := func(makeTail func(*transition.Processor) *transition.Tail) float64 {
+		recipe := transition.DefaultRecipe()
+		recipe.Effect = transition.EffectReverbCutEnd
+		processor := transition.NewProcessor(recipe, 100, 0.5)
+		tone := &audiotest.ToneGenerator{Frequency: 220, Amplitude: 9000}
+		frame := make([]int16, dsp.FrameSize*dsp.Channels)
+		for i := 0; i < 100; i++ {
+			tone.Fill(frame)
+			processor.ProcessA(frame, float64(i)/100)
+		}
+		silent := make([]int16, dsp.FrameSize*dsp.Channels)
+		makeTail(processor).Apply(silent)
+		peak := 0.0
+		for _, sample := range silent {
+			peak = math.Max(peak, math.Abs(float64(sample)))
+		}
+		return peak
+	}
+
+	outro := firstPeak(func(p *transition.Processor) *transition.Tail { return p.MakeTail(1.0) })
+	handoff := firstPeak(func(p *transition.Processor) *transition.Tail { return p.MakeHandoffTail(1.0) })
+	if outro == 0 || math.Abs(handoff-outro) > 1 {
+		t.Errorf("first handoff tail frame peaked at %.0f, outro at %.0f, want the same starting level", handoff, outro)
+	}
+}
+
+func TestTailStartsAtItsGainAndFadesSmoothly(t *testing.T) {
+	recipe := transition.DefaultRecipe()
+	recipe.Effect = transition.EffectReverbCutEnd
+	processor := transition.NewProcessor(recipe, 100, 0.5)
+	tone := &audiotest.ToneGenerator{Frequency: 220, Amplitude: 9000}
+	frame := make([]int16, dsp.FrameSize*dsp.Channels)
+	for i := 0; i < 100; i++ {
+		tone.Fill(frame)
+		processor.ProcessA(frame, float64(i)/100)
+	}
+
+	tail := processor.MakeHandoffTail(1.0)
+	levels := []float64{}
+	for {
+		silent := make([]int16, dsp.FrameSize*dsp.Channels)
+		more := tail.Apply(silent)
+		peak := 0.0
+		for _, sample := range silent {
+			peak = math.Max(peak, math.Abs(float64(sample)))
+		}
+		levels = append(levels, peak)
+		if !more {
+			break
+		}
+	}
+
+	if levels[0] == 0 {
+		t.Fatal("the tail was silent from its first frame, want it to continue the reverb")
+	}
+	if last := levels[len(levels)-1]; last > levels[0]*0.05 {
+		t.Errorf("last tail frame peak %.0f, want under 5%% of the first (%.0f)", last, levels[0])
 	}
 }
 

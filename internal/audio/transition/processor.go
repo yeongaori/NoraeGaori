@@ -77,7 +77,7 @@ func (t *Processor) Gains(progress float64) (float64, float64) {
 	beat := t.beatFraction
 
 	if t.flatGains && t.recipe.Volume == VolumeSmoothCrossfade {
-		return 1, 1
+		return t.cutOutGain(progress), t.cutInGain(progress)
 	}
 
 	switch t.recipe.Volume {
@@ -87,18 +87,41 @@ func (t *Processor) Gains(progress float64) (float64, float64) {
 			aGain = dsp.QSinOut((progress - (1 - beat)) / beat)
 		}
 		bGain := dsp.QSinIn(progress / beat)
-		return aGain * overlapHeadroom, bGain * overlapHeadroom
+		headroom := t.headroom(progress)
+		return aGain * headroom, bGain * headroom
 	case VolumeFadeInFadeOut:
 		aGain := dsp.QSinOut(dsp.ClampUnit(progress / 0.45))
 		bGain := dsp.QSinIn(dsp.ClampUnit((progress - 0.55) / 0.45))
 		return aGain, bGain
 	case VolumeCutInFadeOut:
-		return dsp.QSinOut(progress) * overlapHeadroom, overlapHeadroom
+		headroom := t.headroom(progress)
+		return dsp.QSinOut(progress) * headroom, t.cutInGain(progress) * headroom
 	case VolumeFadeInCutOut:
-		return overlapHeadroom, dsp.QSinIn(progress) * overlapHeadroom
+		headroom := t.headroom(progress)
+		return t.cutOutGain(progress) * headroom, dsp.QSinIn(progress) * headroom
 	}
 
 	return dsp.QSinOut(progress), dsp.QSinIn(progress)
+}
+
+func (t *Processor) headroom(progress float64) float64 {
+	beat := t.beatFraction
+	duck := dsp.SmoothStep(progress/beat) * (1 - dsp.SmoothStep((progress-(1-beat))/beat))
+	return 1 - (1-overlapHeadroom)*duck
+}
+
+func (t *Processor) cutWidth() float64 {
+	return t.beatFraction * cutBeatFraction
+}
+
+func (t *Processor) cutInGain(progress float64) float64 {
+	width := t.cutWidth()
+	return dsp.RampAt(progress, width/2, width)
+}
+
+func (t *Processor) cutOutGain(progress float64) float64 {
+	width := t.cutWidth()
+	return 1 - dsp.RampAt(progress, 1-width/2, width)
 }
 
 func (t *Processor) eqGains(progress float64, isA bool) (float64, float64, float64) {
@@ -321,17 +344,26 @@ func (t *Processor) hasTail() bool {
 type Tail struct {
 	processor *Processor
 	remaining int
+	total     int
 	gain      float64
 	buffer    []float64
 }
 
 func (t *Processor) MakeTail(gain float64) *Tail {
+	return t.makeTail(gain, ReverbTailFrames, EchoTailFrames)
+}
+
+func (t *Processor) MakeHandoffTail(gain float64) *Tail {
+	return t.makeTail(gain, HandoffReverbTailFrames, HandoffEchoTailFrames)
+}
+
+func (t *Processor) makeTail(gain float64, reverbFrames, echoFrames int) *Tail {
 	if !t.hasTail() {
 		return nil
 	}
-	frames := ReverbTailFrames
+	frames := reverbFrames
 	if t.recipe.Effect == EffectEchoHalfCutEnd {
-		frames = EchoTailFrames
+		frames = echoFrames
 	}
 	if t.tailBuffer == nil {
 		t.tailBuffer = make([]float64, dsp.FrameSize*dsp.Channels)
@@ -339,6 +371,7 @@ func (t *Processor) MakeTail(gain float64) *Tail {
 	return &Tail{
 		processor: t,
 		remaining: frames,
+		total:     frames,
 		gain:      gain,
 		buffer:    t.tailBuffer,
 	}
@@ -366,11 +399,8 @@ func (tail *Tail) Apply(frame []int16) bool {
 		return false
 	}
 
-	decay := float64(tail.remaining) / float64(ReverbTailFrames)
-	if tail.processor.recipe.Effect == EffectEchoHalfCutEnd {
-		decay = float64(tail.remaining) / float64(EchoTailFrames)
-	}
-	scale := tail.gain * dsp.ClampUnit(decay)
+	decay := dsp.QSinOut(1 - float64(tail.remaining)/float64(tail.total))
+	scale := tail.gain * decay
 
 	for i := range frame {
 		sample := float64(frame[i]) + tail.buffer[i]*scale

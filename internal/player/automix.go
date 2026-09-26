@@ -39,7 +39,6 @@ type crossfadeState struct {
 	cancelled       bool
 	trimSilence     bool
 	bLoudSeen       bool
-	fadeGains       bool
 	autoMix         bool
 	scope           *logger.Scoped
 	bStream         audioStream
@@ -54,6 +53,8 @@ type crossfadeState struct {
 	bFramesConsumed int
 	bLeadSkipFrames int
 	mixBuf          []int16
+	mixFloat        []float64
+	limiter         dsp.Limiter
 	opusScratch     []byte
 	recipe          transition.Recipe
 	processor       *transition.Processor
@@ -75,6 +76,7 @@ func newCrossfadeState() *crossfadeState {
 		autoMix:     true,
 		scope:       logger.Scope("AutoMix"),
 		mixBuf:      make([]int16, frameSize*channels),
+		mixFloat:    make([]float64, frameSize*channels),
 		opusScratch: make([]byte, maxOpusFrameBytes),
 		recipe:      transition.DefaultRecipe(),
 	}
@@ -177,7 +179,6 @@ type crossfadePlan struct {
 	normalization   bool
 	bitrate         int
 	trimSilence     bool
-	fadeGains       bool
 	bStream         audioStream
 	nextSongID      int
 	startOffsetSec  float64
@@ -272,7 +273,6 @@ func (cs *crossfadeState) buildPlan(player *GuildPlayer, es *ffmpeg.EndState, se
 		normalization:   normalization,
 		bitrate:         bitrate,
 		trimSilence:     fade.trimSilence,
-		fadeGains:       fade.crossfade,
 		bStream:         bStream,
 		nextSongID:      next.ID,
 		startOffsetSec:  startOffsetSec,
@@ -297,7 +297,6 @@ func (cs *crossfadeState) commit(p *crossfadePlan) {
 	cs.normalization = p.normalization
 	cs.bitrate = p.bitrate
 	cs.trimSilence = p.trimSilence
-	cs.fadeGains = p.fadeGains
 	cs.bStream = p.bStream
 	cs.nextSongID = p.nextSongID
 	cs.startOffsetSec = p.startOffsetSec
@@ -311,6 +310,7 @@ func (cs *crossfadeState) commit(p *crossfadePlan) {
 	cs.loopBuffer = nil
 	cs.loopBacking = nil
 	cs.loopIndex = 0
+	cs.limiter = dsp.Limiter{}
 	cs.processor = transition.NewProcessor(p.recipe, p.crossfadeFrames, p.periodSec)
 	cs.processor.SetFlatGains(p.flatGains)
 }
@@ -477,46 +477,15 @@ func (cs *crossfadeState) mixAndSend(player *GuildPlayer, conn voiceConnection, 
 		progress = float64(cs.mixedFrames) / float64(cs.crossfadeFrames)
 	}
 
-	if cs.processor != nil {
-		aBuf := cs.processor.ProcessA(aFrame, progress)
-		bBuf := cs.processor.ProcessB(bFrame, progress)
-		cs.processor.ApplyGains(aBuf, bBuf, progress, volume)
+	aBuf := cs.processor.ProcessA(aFrame, progress)
+	bBuf := cs.processor.ProcessB(bFrame, progress)
+	cs.processor.ApplyGains(aBuf, bBuf, progress, volume)
 
-		for i := 0; i < len(cs.mixBuf); i++ {
-			sample := aBuf[i] + bBuf[i]
-			if sample > 32767 {
-				cs.mixBuf[i] = 32767
-			} else if sample < -32768 {
-				cs.mixBuf[i] = -32768
-			} else {
-				cs.mixBuf[i] = int16(sample)
-			}
-		}
-	} else {
-		aGain := volume
-		bGain := volume
-		if cs.fadeGains {
-			aGain = volume * dsp.QSinOut(progress)
-			bGain = volume * dsp.QSinIn(progress)
-		}
-
-		for i := 0; i < len(cs.mixBuf); i++ {
-			var sample float64
-			if i < len(aFrame) {
-				sample += float64(aFrame[i]) * aGain
-			}
-			if i < len(bFrame) {
-				sample += float64(bFrame[i]) * bGain
-			}
-			if sample > 32767 {
-				cs.mixBuf[i] = 32767
-			} else if sample < -32768 {
-				cs.mixBuf[i] = -32768
-			} else {
-				cs.mixBuf[i] = int16(sample)
-			}
-		}
+	for i := range cs.mixFloat {
+		cs.mixFloat[i] = aBuf[i] + bBuf[i]
 	}
+	cs.limiter.ProcessStereo(cs.mixFloat, dsp.FullScale*max(1, volume))
+	dsp.FloatToFrame(cs.mixFloat, cs.mixBuf)
 
 	opusLen, err := enc.Encode(cs.mixBuf, cs.opusScratch)
 	if err != nil {
@@ -539,7 +508,7 @@ func (cs *crossfadeState) mixAndSend(player *GuildPlayer, conn voiceConnection, 
 func (cs *crossfadeState) handoff(player *GuildPlayer, enc *opus.Encoder) {
 	var tail *transition.Tail
 	if cs.processor != nil {
-		tail = cs.processor.MakeTail(cs.processor.LastGain())
+		tail = cs.processor.MakeHandoffTail(cs.processor.LastGain())
 	}
 
 	player.mu.Lock()
