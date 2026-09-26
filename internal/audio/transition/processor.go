@@ -6,6 +6,7 @@ type Processor struct {
 	recipe          Recipe
 	crossfadeFrames int
 	beatFraction    float64
+	frameStep       float64
 	periodSec       float64
 	aBuffer         []float64
 	bBuffer         []float64
@@ -39,9 +40,15 @@ func NewProcessor(recipe Recipe, crossfadeFrames int, periodSec float64) *Proces
 		beatFraction = maxBeatFraction
 	}
 
+	frameStep := 0.0
+	if crossfadeFrames > 0 {
+		frameStep = 1 / float64(crossfadeFrames)
+	}
+
 	processor := &Processor{
 		recipe:          recipe,
 		crossfadeFrames: crossfadeFrames,
+		frameStep:       frameStep,
 		beatFraction:    beatFraction,
 		periodSec:       periodSec,
 		aBuffer:         make([]float64, dsp.FrameSize*dsp.Channels),
@@ -152,12 +159,12 @@ func (t *Processor) eqGains(progress float64, isA bool) (float64, float64, float
 		}
 	case EQThreeBandFade:
 		if isA {
-			highDB = EQKillDB * dsp.RampAt(progress, 0.25, 0.5)
-			midDB = EQKillDB * dsp.RampAt(progress, 0.5, 0.6)
+			highDB = EQCutDB * dsp.RampAt(progress, 0.25, 0.5)
+			midDB = EQCutDB * dsp.RampAt(progress, 0.5, 0.6)
 			lowDB = EQKillDB * dsp.RampAt(progress, 0.75, 0.5)
 		} else {
-			highDB = EQKillDB * (1 - dsp.RampAt(progress, 0.25, 0.5))
-			midDB = EQKillDB * (1 - dsp.RampAt(progress, 0.5, 0.6))
+			highDB = EQCutDB * (1 - dsp.RampAt(progress, 0.25, 0.5))
+			midDB = EQCutDB * (1 - dsp.RampAt(progress, 0.5, 0.6))
 			lowDB = EQKillDB * (1 - dsp.RampAt(progress, 0.75, 0.5))
 		}
 	case EQQuickBass:
@@ -206,13 +213,13 @@ func (t *Processor) applyFilter(buf []float64, progress float64, isA bool) {
 	if isA {
 		switch t.recipe.Filter {
 		case FilterLowPassOut, FilterLowPassInOut:
-			freq := dsp.SweepFrequency(filterOpenFreq, filterClosedFreq, progress)
+			freq := dsp.SweepFrequency(filterOpenFreq, filterClosedFreq, easeIn(progress))
 			if freq < filterOpenThreshold {
 				t.aSweep.SetLowpass(freq, filterQ)
 				t.aSweep.ProcessStereo(buf)
 			}
 		case FilterLowPassInHighPassOut:
-			freq := dsp.SweepFrequency(highPassRestFreq, highPassPeakFreq, progress)
+			freq := dsp.SweepFrequency(highPassRestFreq, highPassPeakFreq, easeIn(progress))
 			if freq > filterRestThreshold {
 				t.aSweep.SetHighpass(freq, filterQ)
 				t.aSweep.ProcessStereo(buf)
@@ -223,12 +230,22 @@ func (t *Processor) applyFilter(buf []float64, progress float64, isA bool) {
 
 	switch t.recipe.Filter {
 	case FilterLowPassIn, FilterLowPassInOut, FilterLowPassInHighPassOut:
-		freq := dsp.SweepFrequency(filterClosedFreq, filterOpenFreq, progress)
+		freq := dsp.SweepFrequency(filterClosedFreq, filterOpenFreq, easeOut(progress))
 		if freq < filterOpenThreshold {
 			t.bSweep.SetLowpass(freq, filterQ)
 			t.bSweep.ProcessStereo(buf)
 		}
 	}
+}
+
+func easeIn(progress float64) float64 {
+	progress = dsp.ClampUnit(progress)
+	return progress * progress
+}
+
+func easeOut(progress float64) float64 {
+	remaining := 1 - dsp.ClampUnit(progress)
+	return 1 - remaining*remaining
 }
 
 func (t *Processor) effectMix(progress float64) (float64, float64) {
@@ -279,17 +296,28 @@ func (t *Processor) applyEffect(buf []float64, progress float64) {
 
 func (t *Processor) ProcessA(frame []int16, progress float64) []float64 {
 	dsp.FrameToFloat(frame, t.aBuffer)
-	t.applyEQ(t.aBuffer, progress, true)
-	t.applyFilter(t.aBuffer, progress, true)
-	t.applyEffect(t.aBuffer, progress)
+	t.processBlocks(t.aBuffer, progress, true)
 	return t.aBuffer
 }
 
 func (t *Processor) ProcessB(frame []int16, progress float64) []float64 {
 	dsp.FrameToFloat(frame, t.bBuffer)
-	t.applyEQ(t.bBuffer, progress, false)
-	t.applyFilter(t.bBuffer, progress, false)
+	t.processBlocks(t.bBuffer, progress, false)
 	return t.bBuffer
+}
+
+func (t *Processor) processBlocks(buf []float64, progress float64, isA bool) {
+	blockLength := paramBlockSamples * dsp.Channels
+	blocks := (len(buf) + blockLength - 1) / blockLength
+	for k := 0; k < blocks; k++ {
+		block := buf[k*blockLength : min((k+1)*blockLength, len(buf))]
+		blockProgress := progress + (float64(k)+0.5)/float64(blocks)*t.frameStep
+		t.applyEQ(block, blockProgress, isA)
+		t.applyFilter(block, blockProgress, isA)
+		if isA {
+			t.applyEffect(block, blockProgress)
+		}
+	}
 }
 
 func (t *Processor) SetFlatGains(flat bool) {
@@ -403,14 +431,7 @@ func (tail *Tail) Apply(frame []int16) bool {
 	scale := tail.gain * decay
 
 	for i := range frame {
-		sample := float64(frame[i]) + tail.buffer[i]*scale
-		if sample > 32767 {
-			frame[i] = 32767
-		} else if sample < -32768 {
-			frame[i] = -32768
-		} else {
-			frame[i] = int16(sample)
-		}
+		frame[i] = dsp.ClampToInt16(float64(frame[i]) + tail.buffer[i]*scale)
 	}
 
 	tail.remaining--

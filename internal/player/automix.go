@@ -58,10 +58,7 @@ type crossfadeState struct {
 	opusScratch     []byte
 	recipe          transition.Recipe
 	processor       *transition.Processor
-	loopFrames      int
-	loopBuffer      [][]int16
-	loopBacking     []int16
-	loopIndex       int
+	beatLoop        *transition.BeatLoop
 	guildID         string
 	normalization   bool
 	bitrate         int
@@ -188,7 +185,7 @@ type crossfadePlan struct {
 	totalFrames     int
 	slideFrames     int
 	recipe          transition.Recipe
-	loopFrames      int
+	loopSamples     int
 	periodSec       float64
 	flatGains       bool
 	description     string
@@ -239,7 +236,7 @@ func (cs *crossfadeState) buildPlan(player *GuildPlayer, es *ffmpeg.EndState, se
 
 	periodSec := analysisPeriodSec(aAnal)
 
-	loopStyle, loopFrames := transition.ClampLoopStyle(recipe.Loop, periodSec, crossfadeFrames)
+	loopStyle, loopSamples := transition.ClampLoopStyle(recipe.Loop, periodSec, crossfadeFrames)
 	recipe.Loop = loopStyle
 	loopBeats := transition.LoopBeatCount(recipe.Loop)
 
@@ -282,7 +279,7 @@ func (cs *crossfadeState) buildPlan(player *GuildPlayer, es *ffmpeg.EndState, se
 		totalFrames:     effectiveEnd,
 		slideFrames:     slideFrames,
 		recipe:          recipe,
-		loopFrames:      loopFrames,
+		loopSamples:     loopSamples,
 		periodSec:       periodSec,
 		flatGains:       !fade.crossfade,
 		description:     fmt.Sprintf("recipe %s (%s) [%s]", recipe, describeTransitionInputs(aAnal, bAnal), describeStyleSources(styleSource)),
@@ -306,10 +303,10 @@ func (cs *crossfadeState) commit(p *crossfadePlan) {
 	cs.totalFrames = p.totalFrames
 	cs.slideFrames = p.slideFrames
 	cs.recipe = p.recipe
-	cs.loopFrames = p.loopFrames
-	cs.loopBuffer = nil
-	cs.loopBacking = nil
-	cs.loopIndex = 0
+	cs.beatLoop = nil
+	if p.loopSamples > 0 {
+		cs.beatLoop = transition.CaptureBeatLoop(p.loopSamples)
+	}
 	cs.limiter = dsp.Limiter{}
 	cs.processor = transition.NewProcessor(p.recipe, p.crossfadeFrames, p.periodSec)
 	cs.processor.SetFlatGains(p.flatGains)
@@ -559,8 +556,8 @@ func (cs *crossfadeState) consume(player *GuildPlayer, conn voiceConnection, sto
 	}
 
 	aFrame := pcmData
-	if cs.loopFrames > 0 {
-		aFrame = cs.loopFrame(pcmData)
+	if cs.beatLoop != nil {
+		aFrame = cs.beatLoop.Next(pcmData)
 	}
 
 	bFrame := cs.pullBFrame()
@@ -593,8 +590,8 @@ func (cs *crossfadeState) finishOnDrain(player *GuildPlayer, conn voiceConnectio
 
 	for cs.mixedFrames < cs.crossfadeFrames {
 		var aFrame []int16
-		if cs.loopFrames > 0 && len(cs.loopBuffer) >= cs.loopFrames {
-			aFrame = cs.loopFrame(nil)
+		if cs.beatLoop != nil && cs.beatLoop.IsReady() {
+			aFrame = cs.beatLoop.Next(nil)
 		}
 
 		bFrame := cs.pullBFrame()
@@ -608,31 +605,6 @@ func (cs *crossfadeState) finishOnDrain(player *GuildPlayer, conn voiceConnectio
 
 	cs.handoff(player, enc)
 	return true, nil
-}
-
-func (cs *crossfadeState) loopFrame(pcmData []int16) []int16 {
-	if len(cs.loopBuffer) < cs.loopFrames {
-		if pcmData == nil {
-			return nil
-		}
-		if cs.loopBacking == nil {
-			cs.loopBacking = make([]int16, cs.loopFrames*frameSize*channels)
-			cs.loopBuffer = make([][]int16, 0, cs.loopFrames)
-		}
-		start := len(cs.loopBuffer) * frameSize * channels
-		end := start + frameSize*channels
-		stored := cs.loopBacking[start:end:end]
-		copy(stored, pcmData)
-		cs.loopBuffer = append(cs.loopBuffer, stored)
-		return stored
-	}
-
-	frame := cs.loopBuffer[cs.loopIndex]
-	cs.loopIndex++
-	if cs.loopIndex >= len(cs.loopBuffer) {
-		cs.loopIndex = 0
-	}
-	return frame
 }
 
 func (cs *crossfadeState) abort() {

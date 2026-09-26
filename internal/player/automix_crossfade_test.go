@@ -139,8 +139,8 @@ func TestCrossfadePlanArmsWithTheExpectedFrameMath(t *testing.T) {
 	if aGain, bGain := cs.processor.Gains(0.5); aGain == 1 && bGain == 1 {
 		t.Error("crossfade gains were flat, want fade.crossfade to shape them")
 	}
-	if cs.loopBuffer != nil || cs.loopIndex != 0 {
-		t.Error("the loop buffer was not reset")
+	if cs.beatLoop != nil {
+		t.Error("a loop-free recipe armed a beat loop")
 	}
 }
 

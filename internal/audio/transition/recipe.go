@@ -167,7 +167,7 @@ func ClampLoopStyle(loop LoopStyle, periodSec float64, crossfadeFrames int) (Loo
 	if frames < 1 || frames*2 > crossfadeFrames {
 		return LoopNone, 0
 	}
-	return loop, frames
+	return loop, int(math.Round(float64(beats) * periodSec * dsp.SampleRate))
 }
 
 func layerTransitionStyles(base Recipe, guild, song StyleOverrides) (Recipe, map[string]string, map[string]string) {

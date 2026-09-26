@@ -60,20 +60,22 @@ const (
 const (
 	StyleAuto               = "auto"
 	EQKillDB                = -40.0
-	EQLowFreq               = 250.0
+	EQCutDB                 = -15.0
+	EQLowFreq               = 160.0
 	EQMidFreq               = 1000.0
 	EQHighFreq              = 4000.0
 	EQShelfQ                = 0.707
 	EQMidQ                  = 0.9
-	filterQ                 = 0.9
+	filterQ                 = 0.707
 	filterOpenFreq          = 20000.0
-	filterClosedFreq        = 200.0
+	filterClosedFreq        = 400.0
 	highPassRestFreq        = 25.0
-	highPassPeakFreq        = 3000.0
+	highPassPeakFreq        = 1200.0
 	filterOpenThreshold     = 18000.0
 	filterRestThreshold     = 30.0
 	overlapHeadroom         = 0.85
 	cutBeatFraction         = 0.25
+	paramBlockSamples       = 64
 	ReverbTailFrames        = 140
 	EchoTailFrames          = 170
 	HandoffReverbTailFrames = 55

@@ -1,8 +1,11 @@
 package player
 
 import (
+	"noraegaori/internal/audio/analysis"
+	"noraegaori/internal/audio/ffmpeg"
 	"noraegaori/internal/audio/opus"
 	"noraegaori/internal/audio/transition"
+	"noraegaori/internal/queue"
 	"noraegaori/tests/testutil/audiotest"
 	"testing"
 )
@@ -72,5 +75,61 @@ func TestOverlapOfTwoQuietSongsKeepsItsLevel(t *testing.T) {
 
 	if last := peaks[len(peaks)-1]; last < 10000 || last > 10300 {
 		t.Errorf("mid-mix peak = %d, want the unlimited 0.85+0.85 sum of about 10200", last)
+	}
+}
+
+func armLoopTransition(t *testing.T, guildID string, periodSec float64) (*GuildPlayer, *crossfadeState) {
+	t.Helper()
+
+	q := seedCrossfadeQueue(t, guildID)
+	cacheNextStreamURL(t, guildID, q.Songs[1].ID, "https://example.invalid/next")
+	next := stubAudioStream(t).(*fakeStream)
+	next.setEndState(&ffmpeg.EndState{TotalFrames: 1})
+
+	fade := fadeSettings{
+		autoMix:      true,
+		crossfade:    true,
+		autoMixBeats: 16,
+		repeatMode:   queue.RepeatOff,
+		styleOverrides: transition.StyleOverrides{
+			Volume: "fadein_cutout", EQ: "none", Filter: "none", Effect: "none", Loop: "four_beats",
+		},
+	}
+	endState := &ffmpeg.EndState{
+		TotalFrames:    20000,
+		TailStartFrame: 18000,
+		Analysis:       &analysis.TrackAnalysis{BPM: 60 / periodSec, PeriodSec: periodSec},
+	}
+
+	player := GetPlayer(guildID)
+	cs := newCrossfadeState()
+	if !cs.plan(player, endState, 100, fade, false, 128000) {
+		t.Fatal("plan returned false, want an armed loop transition")
+	}
+	defer func() {
+		player.mu.Lock()
+		player.PendingStream = nil
+		player.mu.Unlock()
+	}()
+
+	return player, cs
+}
+
+func TestLoopStyleArmsABeatLoopOfTheExactLength(t *testing.T) {
+	_, cs := armLoopTransition(t, "looparms", 60.0/128)
+
+	if cs.beatLoop == nil {
+		t.Fatal("the four_beats style armed no beat loop")
+	}
+	frame := make([]int16, frameSize*channels)
+	for i := 0; i < 93; i++ {
+		cs.beatLoop.Next(frame)
+	}
+	if cs.beatLoop.IsReady() {
+		t.Error("ready after 89280 samples, want 90000 plus the seam before the loop can replay")
+	}
+	cs.beatLoop.Next(frame)
+	if !cs.beatLoop.IsReady() {
+		t.Error("not ready after 90240 samples, want ready once 90000 plus the 240-sample seam are captured")
 	}
 }

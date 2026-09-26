@@ -665,12 +665,12 @@ func TestLoopSurvivesWhenItFitsInsideTheCrossfade(t *testing.T) {
 	track := timingTrack()
 	crossfadeFrames, _ := transition.CrossfadeFrames(true, 16, 8, track)
 
-	style, loopFrames := transition.ClampLoopStyle(transition.LoopFourBeats, track.PeriodSec, crossfadeFrames)
+	style, loopSamples := transition.ClampLoopStyle(transition.LoopFourBeats, track.PeriodSec, crossfadeFrames)
 	if style != transition.LoopFourBeats {
 		t.Errorf("style = %s, want four_beats", style)
 	}
-	if loopFrames <= 0 {
-		t.Errorf("loopFrames = %d of %d, want positive", loopFrames, crossfadeFrames)
+	if loopSamples != 90000 {
+		t.Errorf("loopSamples = %d, want 90000 (four beats at 128 BPM, not rounded to whole frames)", loopSamples)
 	}
 }
 
@@ -678,24 +678,24 @@ func TestLoopIsDroppedWhenItNeedsMoreThanHalfTheCrossfade(t *testing.T) {
 	track := timingTrack()
 	crossfadeFrames, _ := transition.CrossfadeFrames(true, 16, 8, track)
 
-	style, loopFrames := transition.ClampLoopStyle(transition.LoopEightBeats, track.PeriodSec, crossfadeFrames)
+	style, loopSamples := transition.ClampLoopStyle(transition.LoopEightBeats, track.PeriodSec, crossfadeFrames)
 	if style != transition.LoopNone {
 		t.Errorf("style = %s, want none", style)
 	}
-	if loopFrames != 0 {
-		t.Errorf("loopFrames = %d of %d, want 0", loopFrames, crossfadeFrames)
+	if loopSamples != 0 {
+		t.Errorf("loopSamples = %d of %d, want 0", loopSamples, crossfadeFrames)
 	}
 }
 
 func TestLoopIsDroppedWithoutABeatGrid(t *testing.T) {
 	crossfadeFrames, _ := transition.CrossfadeFrames(true, 16, 8, timingTrack())
 
-	style, loopFrames := transition.ClampLoopStyle(transition.LoopFourBeats, 0, crossfadeFrames)
+	style, loopSamples := transition.ClampLoopStyle(transition.LoopFourBeats, 0, crossfadeFrames)
 	if style != transition.LoopNone {
 		t.Errorf("style = %s, want none", style)
 	}
-	if loopFrames != 0 {
-		t.Errorf("loopFrames = %d, want 0", loopFrames)
+	if loopSamples != 0 {
+		t.Errorf("loopSamples = %d, want 0", loopSamples)
 	}
 }
 
@@ -703,12 +703,12 @@ func TestLoopNoneStaysNone(t *testing.T) {
 	track := timingTrack()
 	crossfadeFrames, _ := transition.CrossfadeFrames(true, 16, 8, track)
 
-	style, loopFrames := transition.ClampLoopStyle(transition.LoopNone, track.PeriodSec, crossfadeFrames)
+	style, loopSamples := transition.ClampLoopStyle(transition.LoopNone, track.PeriodSec, crossfadeFrames)
 	if style != transition.LoopNone {
 		t.Errorf("style = %s, want none", style)
 	}
-	if loopFrames != 0 {
-		t.Errorf("loopFrames = %d, want 0", loopFrames)
+	if loopSamples != 0 {
+		t.Errorf("loopSamples = %d, want 0", loopSamples)
 	}
 }
 
@@ -827,104 +827,5 @@ func TestBarSnapIsWithinOneBarOfBeatSnap(t *testing.T) {
 
 	if distance := math.Abs(float64(bar - grid)); distance > barFrames {
 		t.Errorf("bar snap %d is %.1f frames from beat snap %d, want at most one bar (%.1f frames)", bar, distance, grid, barFrames)
-	}
-}
-
-func TestLoopBufferRepeatsCapturedFrames(t *testing.T) {
-	state := newCrossfadeState()
-	state.loopFrames = 3
-
-	frames := make([][]int16, 5)
-	for i := range frames {
-		frames[i] = make([]int16, 4)
-		for j := range frames[i] {
-			frames[i][j] = int16(i*10 + j)
-		}
-	}
-
-	for i := 0; i < 3; i++ {
-		state.loopFrame(frames[i])
-	}
-
-	want := []int16{0, 10, 20, 0, 10, 20, 0}
-	for i, expected := range want {
-		out := state.loopFrame(frames[4])
-		if out[0] != expected {
-			t.Errorf("replay %d = %d, want %d", i, out[0], expected)
-		}
-	}
-}
-
-func TestLoopBufferCopiesSourceFrames(t *testing.T) {
-	state := newCrossfadeState()
-	state.loopFrames = 3
-
-	source := []int16{1, 2, 3, 4}
-	state.loopFrame(source)
-	source[0] = 999
-
-	if state.loopBuffer[0][0] == 999 {
-		t.Error("mutating the source frame leaked into the loop buffer")
-	}
-}
-
-func TestLoopBufferToleratesNilInputBeforeFill(t *testing.T) {
-	state := newCrossfadeState()
-	state.loopFrames = 2
-
-	if out := state.loopFrame(nil); out != nil {
-		t.Errorf("got %v, want nil", out)
-	}
-}
-
-func TestLoopBufferFramesDoNotAlias(t *testing.T) {
-	state := newCrossfadeState()
-	state.loopFrames = 3
-
-	width := frameSize * channels
-	for i := 0; i < 3; i++ {
-		frame := make([]int16, width)
-		for j := range frame {
-			frame[j] = int16(i + 1)
-		}
-		state.loopFrame(frame)
-	}
-
-	for i := range state.loopBuffer[1] {
-		state.loopBuffer[1][i] = 999
-	}
-
-	for index, want := range []int16{1, 999, 3} {
-		for _, value := range state.loopBuffer[index] {
-			if value != want {
-				t.Fatalf("frame %d holds %d, want %d", index, value, want)
-			}
-		}
-	}
-}
-
-func TestLoopBufferFrameCannotGrowIntoItsNeighbour(t *testing.T) {
-	state := newCrossfadeState()
-	state.loopFrames = 2
-
-	width := frameSize * channels
-	for i := 0; i < 2; i++ {
-		frame := make([]int16, width)
-		for j := range frame {
-			frame[j] = int16(i + 1)
-		}
-		state.loopFrame(frame)
-	}
-
-	if capacity := cap(state.loopBuffer[0]); capacity != width {
-		t.Fatalf("frame 0 cap = %d, want %d", capacity, width)
-	}
-
-	state.loopBuffer[0] = append(state.loopBuffer[0], 42)
-
-	for _, value := range state.loopBuffer[1] {
-		if value != 2 {
-			t.Fatal("appending past frame 0 wrote into frame 1")
-		}
 	}
 }

@@ -129,6 +129,43 @@ func TestOutroGainStartsAtThePlayingLevelAndEndsSilent(t *testing.T) {
 	}
 }
 
+func sideLossDB(filter transition.FilterStyle, frequency, progress float64, isOutgoing bool) float64 {
+	recipe := transition.DefaultRecipe()
+	recipe.Filter = filter
+	return recipeLossDB(recipe, frequency, progress, isOutgoing)
+}
+
+func recipeLossDB(recipe transition.Recipe, frequency, progress float64, isOutgoing bool) float64 {
+	processor := transition.NewProcessor(recipe, 1000000, 0.5)
+	tone := &audiotest.ToneGenerator{Frequency: frequency, Amplitude: 10000}
+	frame := make([]int16, dsp.FrameSize*dsp.Channels)
+	input := make([]float64, len(frame))
+
+	var output []float64
+	for i := 0; i < 20; i++ {
+		tone.Fill(frame)
+		if isOutgoing {
+			output = processor.ProcessA(frame, progress)
+		} else {
+			output = processor.ProcessB(frame, progress)
+		}
+	}
+	dsp.FrameToFloat(frame, input)
+	return -20 * math.Log10(audiotest.BufferRMS(output)/audiotest.BufferRMS(input))
+}
+
+func TestLowPassOpensEarlyOnTheWayInAndClosesLateOnTheWayOut(t *testing.T) {
+	if loss := sideLossDB(transition.FilterLowPassIn, 8000, 0.5, false); loss > 6 {
+		t.Errorf("incoming 8 kHz lost %.2f dB halfway, want at most 6 dB", loss)
+	}
+	if loss := sideLossDB(transition.FilterLowPassOut, 8000, 0.5, true); loss > 6 {
+		t.Errorf("outgoing 8 kHz lost %.2f dB halfway, want at most 6 dB", loss)
+	}
+	if loss := sideLossDB(transition.FilterLowPassIn, 8000, 0.1, false); loss < 20 {
+		t.Errorf("incoming 8 kHz lost %.2f dB at 10%%, want at least 20 dB while it is still closed", loss)
+	}
+}
+
 func TestCutInRampsTheIncomingSongUpOverAQuarterBeat(t *testing.T) {
 	recipe := transition.DefaultRecipe()
 	recipe.Volume = transition.VolumeCutInFadeOut
@@ -166,6 +203,38 @@ func TestCutOutHoldsTheOutgoingSongUntilTheFinalQuarterBeat(t *testing.T) {
 	}
 	if cut, _ := processor.Gains(1); cut != 0 {
 		t.Errorf("outgoing gain at the handoff = %.3f, want 0 so the cut does not click", cut)
+	}
+}
+
+func TestThreeBandFadeCutsHighsWithoutKillingThem(t *testing.T) {
+	recipe := transition.DefaultRecipe()
+	recipe.EQ = transition.EQThreeBandFade
+
+	loss := recipeLossDB(recipe, 8000, 0.75, true)
+	if loss < 10 || loss > 16 {
+		t.Errorf("outgoing 8 kHz lost %.2f dB after the highs swap, want a 10-16 dB cut rather than a -40 dB kill", loss)
+	}
+}
+
+func TestFilterSweepMovesWithinEachFrame(t *testing.T) {
+	recipe := transition.DefaultRecipe()
+	recipe.Filter = transition.FilterLowPassOut
+	processor := transition.NewProcessor(recipe, 50, 0.5)
+	tone := &audiotest.ToneGenerator{Frequency: 3000, Amplitude: 10000}
+	frame := make([]int16, dsp.FrameSize*dsp.Channels)
+	window := 64 * dsp.Channels
+
+	for i := 0; i < 45; i++ {
+		tone.Fill(frame)
+		processor.ProcessA(frame, float64(i)/50)
+	}
+	tone.Fill(frame)
+	buf := processor.ProcessA(frame, 45.0/50)
+
+	early := audiotest.BufferRMS(buf[window : 2*window])
+	late := audiotest.BufferRMS(buf[len(buf)-window:])
+	if late >= early*0.97 {
+		t.Errorf("late-frame level %.0f vs early %.0f, want the closing filter to lower it within the frame", late, early)
 	}
 }
 

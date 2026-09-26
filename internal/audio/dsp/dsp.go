@@ -374,14 +374,18 @@ func FloatToFrame(src []float64, dst []int16) {
 		if i < len(src) {
 			sample = src[i]
 		}
-		if sample > 32767 {
-			dst[i] = 32767
-		} else if sample < -32768 {
-			dst[i] = -32768
-		} else {
-			dst[i] = int16(sample)
-		}
+		dst[i] = ClampToInt16(sample)
 	}
+}
+
+func ClampToInt16(sample float64) int16 {
+	if sample > 32767 {
+		return 32767
+	}
+	if sample < -32768 {
+		return -32768
+	}
+	return int16(sample)
 }
 
 func ApplyGainRamp(buf []float64, from, to float64) {
