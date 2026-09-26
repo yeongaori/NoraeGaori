@@ -674,6 +674,15 @@ func TestLoopSurvivesWhenItFitsInsideTheCrossfade(t *testing.T) {
 	}
 }
 
+func TestLoopLengthRoundsToTheNearestSample(t *testing.T) {
+	track := &analysis.TrackAnalysis{BPM: 123, PeriodSec: 60.0 / 123, Duration: 240}
+	crossfadeFrames, _ := transition.CrossfadeFrames(true, 16, 8, track)
+
+	if _, loopSamples := transition.ClampLoopStyle(transition.LoopFourBeats, track.PeriodSec, crossfadeFrames); loopSamples != 93659 {
+		t.Errorf("loopSamples = %d, want 93659 (four beats at 123 BPM is 93658.5 samples, rounded)", loopSamples)
+	}
+}
+
 func TestLoopIsDroppedWhenItNeedsMoreThanHalfTheCrossfade(t *testing.T) {
 	track := timingTrack()
 	crossfadeFrames, _ := transition.CrossfadeFrames(true, 16, 8, track)

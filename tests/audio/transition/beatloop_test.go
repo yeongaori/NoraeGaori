@@ -88,6 +88,46 @@ func TestBeatLoopSeamBlendsTheContinuationIntoTheLoopStart(t *testing.T) {
 	}
 }
 
+func TestBeatLoopKeepsLeftAndRightApart(t *testing.T) {
+	loop := transition.CaptureBeatLoop(1000)
+	var frame []int16
+	for i := 0; i < 3; i++ {
+		live := make([]int16, dsp.FrameSize*dsp.Channels)
+		for pair := 0; pair < dsp.FrameSize; pair++ {
+			position := i*dsp.FrameSize + pair
+			live[pair*dsp.Channels] = int16(position)
+			live[pair*dsp.Channels+1] = int16(-position)
+		}
+		frame = loop.Next(live)
+	}
+
+	pair := 700
+	if left, right := frame[pair*dsp.Channels], frame[pair*dsp.Channels+1]; left != 620 || right != -620 {
+		t.Errorf("sample 2620 = %d/%d, want 620/-620 (loop position (2620-1000) mod 1000, each channel repeating its own audio)", left, right)
+	}
+}
+
+func TestBeatLoopSeamClampsLoudAudio(t *testing.T) {
+	loop := transition.CaptureBeatLoop(1000)
+	loud := func(int) []int16 {
+		frame := make([]int16, dsp.FrameSize*dsp.Channels)
+		for i := range frame {
+			frame[i] = 30000
+		}
+		return frame
+	}
+	output := runBeatLoop(loop, 2, loud)
+
+	for position, sample := range output {
+		if sample < 0 {
+			t.Fatalf("sample %d = %d, want a clamped positive value instead of a wrapped one", position, sample)
+		}
+	}
+	if middle := output[1120]; middle != 32767 {
+		t.Errorf("mid-seam sample = %d, want 32767 (two 30000 signals blended at equal power, clamped)", middle)
+	}
+}
+
 func TestBeatLoopReturnsNilWithoutLiveAudioBeforeItIsReady(t *testing.T) {
 	loop := transition.CaptureBeatLoop(1000)
 

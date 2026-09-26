@@ -210,9 +210,46 @@ func TestThreeBandFadeCutsHighsWithoutKillingThem(t *testing.T) {
 	recipe := transition.DefaultRecipe()
 	recipe.EQ = transition.EQThreeBandFade
 
-	loss := recipeLossDB(recipe, 8000, 0.75, true)
-	if loss < 10 || loss > 16 {
+	if loss := recipeLossDB(recipe, 8000, 0.75, true); loss < 10 || loss > 16 {
 		t.Errorf("outgoing 8 kHz lost %.2f dB after the highs swap, want a 10-16 dB cut rather than a -40 dB kill", loss)
+	}
+	if loss := recipeLossDB(recipe, 8000, 0.25, false); loss < 4 || loss > 12 {
+		t.Errorf("incoming 8 kHz lost %.2f dB halfway through the highs swap, want 4-12 dB (half of the -15 dB cut)", loss)
+	}
+}
+
+func TestHighPassKeepsTheOutgoingBodyUntilLate(t *testing.T) {
+	if loss := sideLossDB(transition.FilterLowPassInHighPassOut, 400, 0.75, true); loss > 3 {
+		t.Errorf("outgoing 400 Hz lost %.2f dB at 75%% of the mix, want at most 3 dB", loss)
+	}
+	if loss := sideLossDB(transition.FilterLowPassInHighPassOut, 400, 1, true); loss < 12 {
+		t.Errorf("outgoing 400 Hz lost %.2f dB at the end, want at least 12 dB once the high-pass has risen", loss)
+	}
+}
+
+func TestLowPassHasNoResonantBump(t *testing.T) {
+	for frequency := 300.0; frequency <= 3000; frequency += 100 {
+		if loss := sideLossDB(transition.FilterLowPassOut, frequency, 0.75, true); loss < -0.1 {
+			t.Errorf("%.0f Hz gained %.2f dB below the 2.2 kHz cutoff, want a flat passband with no resonant bump", frequency, -loss)
+		}
+	}
+}
+
+func TestIncomingSideNeverGetsTheEffect(t *testing.T) {
+	recipe := transition.DefaultRecipe()
+	recipe.Effect = transition.EffectReverbCutEnd
+	processor := transition.NewProcessor(recipe, 100, 0.5)
+	tone := &audiotest.ToneGenerator{Frequency: 220, Amplitude: 9000}
+	frame := make([]int16, dsp.FrameSize*dsp.Channels)
+
+	for i := 0; i < 100; i++ {
+		tone.Fill(frame)
+		buf := processor.ProcessB(frame, float64(i)/100)
+		for j, sample := range buf {
+			if sample != float64(frame[j]) {
+				t.Fatalf("frame %d sample %d = %.1f, want the dry %d: the effect belongs to the outgoing song only", i, j, sample, frame[j])
+			}
+		}
 	}
 }
 
@@ -568,6 +605,59 @@ func TestHandoffAndOutroTailsStartAtTheSameLevel(t *testing.T) {
 	handoff := firstPeak(func(p *transition.Processor) *transition.Tail { return p.MakeHandoffTail(1.0) })
 	if outro == 0 || math.Abs(handoff-outro) > 1 {
 		t.Errorf("first handoff tail frame peaked at %.0f, outro at %.0f, want the same starting level", handoff, outro)
+	}
+}
+
+func echoTailPeaks(gain float64, isHandoff bool, frames int) []float64 {
+	recipe := transition.DefaultRecipe()
+	recipe.Effect = transition.EffectEchoHalfCutEnd
+	processor := transition.NewProcessor(recipe, 100, 0.5)
+	tone := &audiotest.ToneGenerator{Frequency: 220, Amplitude: 5000}
+	frame := make([]int16, dsp.FrameSize*dsp.Channels)
+	for i := 0; i < 100; i++ {
+		tone.Fill(frame)
+		processor.ProcessA(frame, float64(i)/100)
+	}
+
+	tail := processor.MakeTail(gain)
+	if isHandoff {
+		tail = processor.MakeHandoffTail(gain)
+	}
+	peaks := make([]float64, 0, frames)
+	for i := 0; i < frames; i++ {
+		silent := make([]int16, dsp.FrameSize*dsp.Channels)
+		tail.Apply(silent)
+		peak := 0.0
+		for _, sample := range silent {
+			peak = math.Max(peak, math.Abs(float64(sample)))
+		}
+		peaks = append(peaks, peak)
+	}
+	return peaks
+}
+
+func TestHandoffTailFadesAlongAQuarterSine(t *testing.T) {
+	handoff := echoTailPeaks(1.0, true, 16)
+	outro := echoTailPeaks(1.0, false, 16)
+
+	if outro[15] == 0 {
+		t.Fatal("the outro tail was silent at frame 15, want the echo still ringing")
+	}
+	ratio := handoff[15] / outro[15]
+	if ratio < 0.87 || ratio > 0.93 {
+		t.Errorf("handoff/outro level at frame 15 = %.3f, want about 0.900 (cos(pi/2*15/50) / cos(pi/2*15/170))", ratio)
+	}
+}
+
+func TestTailFollowsTheGainItWasGiven(t *testing.T) {
+	full := echoTailPeaks(1.0, true, 1)[0]
+	half := echoTailPeaks(0.5, true, 1)[0]
+
+	if full == 0 {
+		t.Fatal("the tail was silent, want the echo to continue")
+	}
+	if math.Abs(half-full/2) > 1 {
+		t.Errorf("tail peak at gain 0.5 = %.0f, want half of %.0f at gain 1", half, full)
 	}
 }
 

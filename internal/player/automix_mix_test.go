@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func mixInPhaseTones(t *testing.T, amplitude float64, frames int) []int16 {
+func mixInPhaseTones(t *testing.T, amplitude, volume float64, frames int) []int16 {
 	t.Helper()
 
 	encoder, err := opus.NewEncoder(frameRate, channels)
@@ -34,7 +34,7 @@ func mixInPhaseTones(t *testing.T, amplitude float64, frames int) []int16 {
 	for i := 0; i < frames; i++ {
 		aTone.Fill(aFrame)
 		bTone.Fill(bFrame)
-		if err := cs.mixAndSend(nil, conn, make(chan struct{}), aFrame, bFrame, 1.0, encoder); err != nil {
+		if err := cs.mixAndSend(nil, conn, make(chan struct{}), aFrame, bFrame, volume, encoder); err != nil {
 			t.Fatalf("mixAndSend: %v", err)
 		}
 		<-conn.opusSend
@@ -63,7 +63,7 @@ func mixInPhaseTones(t *testing.T, amplitude float64, frames int) []int16 {
 }
 
 func TestLoudOverlapIsLimitedJustBelowFullScale(t *testing.T) {
-	peaks := mixInPhaseTones(t, 30000, 60)
+	peaks := mixInPhaseTones(t, 30000, 1.0, 60)
 
 	if last := peaks[len(peaks)-1]; last < 32000 {
 		t.Errorf("mid-mix peak = %d, want the limiter to hold the level near full scale", last)
@@ -71,10 +71,18 @@ func TestLoudOverlapIsLimitedJustBelowFullScale(t *testing.T) {
 }
 
 func TestOverlapOfTwoQuietSongsKeepsItsLevel(t *testing.T) {
-	peaks := mixInPhaseTones(t, 6000, 60)
+	peaks := mixInPhaseTones(t, 6000, 1.0, 60)
 
 	if last := peaks[len(peaks)-1]; last < 10000 || last > 10300 {
 		t.Errorf("mid-mix peak = %d, want the unlimited 0.85+0.85 sum of about 10200", last)
+	}
+}
+
+func TestHalfVolumeMixIsNotLimited(t *testing.T) {
+	peaks := mixInPhaseTones(t, 24000, 0.5, 60)
+
+	if last := peaks[len(peaks)-1]; last < 20200 || last > 20600 {
+		t.Errorf("mid-mix peak at 50%% volume = %d, want the unlimited 0.85*2*24000*0.5 = 20400", last)
 	}
 }
 

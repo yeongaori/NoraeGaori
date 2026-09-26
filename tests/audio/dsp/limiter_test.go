@@ -84,14 +84,40 @@ func TestLimiterReleasesAfterTheLoudPart(t *testing.T) {
 	var limiter dsp.Limiter
 	limiter.ProcessStereo(constantFrame(2*dsp.FullScale), dsp.FullScale)
 
+	first := constantFrame(10000)
+	limiter.ProcessStereo(first, dsp.FullScale)
+	if start := first[0]; start > 5100 {
+		t.Errorf("right after the loud part the level is %.1f, want at most 5100 (gain still near 0.5)", start)
+	}
+	if end := first[len(first)-1]; end <= first[0]+1000 {
+		t.Errorf("the first quiet frame rose from %.1f to %.1f, want a steady release", first[0], end)
+	}
+
 	var frame []float64
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 19; i++ {
 		frame = constantFrame(10000)
 		limiter.ProcessStereo(frame, dsp.FullScale)
 	}
 
 	if level := frame[len(frame)-1]; level < 9900 {
 		t.Errorf("0.4s after the loud part the level is %.1f, want above 9900", level)
+	}
+}
+
+func TestLimiterWatchesBothChannels(t *testing.T) {
+	var limiter dsp.Limiter
+	frame := make([]float64, dsp.FrameSize*dsp.Channels)
+	for i := 0; i < len(frame); i += dsp.Channels {
+		frame[i] = 1000
+		frame[i+1] = 2 * dsp.FullScale
+	}
+
+	limiter.ProcessStereo(frame, dsp.FullScale)
+
+	for i := 1; i < len(frame); i += dsp.Channels {
+		if frame[i] > dsp.FullScale+1e-9 {
+			t.Fatalf("right sample %d = %.1f, want at most %.1f even when the left channel is quiet", i, frame[i], dsp.FullScale)
+		}
 	}
 }
 
