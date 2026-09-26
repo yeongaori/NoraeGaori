@@ -104,6 +104,78 @@ func TestLimiterReleasesAfterTheLoudPart(t *testing.T) {
 	}
 }
 
+func TestLimiterDoesNotStepTheGainAtAFrameBoundary(t *testing.T) {
+	var limiter dsp.Limiter
+	limiter.ProcessStereo(constantFrame(20000), dsp.FullScale)
+	frame := constantFrame(20000)
+	for i := 24 * dsp.Channels; i < len(frame); i++ {
+		frame[i] = 2 * dsp.FullScale
+	}
+
+	limiter.ProcessStereo(frame, dsp.FullScale)
+
+	previous := 20000.0
+	for pair := 0; pair < 24; pair++ {
+		sample := frame[pair*dsp.Channels]
+		if drop := previous - sample; drop > 20000.0/48+1 {
+			t.Fatalf("sample %d dropped by %.1f on a steady 20000 signal, want at most %.1f (a 1/48 gain ramp, not a step)", pair, drop, 20000.0/48+1)
+		}
+		previous = sample
+	}
+	if peak := audiotest.BufferPeak(frame); peak > dsp.FullScale {
+		t.Errorf("peak %.1f, want at most %.1f", peak, dsp.FullScale)
+	}
+}
+
+func TestLimiterSoftClipsWhatTheRampCannotCatch(t *testing.T) {
+	var limiter dsp.Limiter
+	limiter.ProcessStereo(constantFrame(20000), dsp.FullScale)
+	frame := constantFrame(20000)
+	for i := 5 * dsp.Channels; i < len(frame); i++ {
+		frame[i] = 2 * dsp.FullScale
+	}
+
+	limiter.ProcessStereo(frame, dsp.FullScale)
+
+	knee := 0.9 * dsp.FullScale
+	for pair := 5; pair < 23; pair++ {
+		if sample := frame[pair*dsp.Channels]; sample <= knee || sample >= dsp.FullScale {
+			t.Fatalf("sample %d = %.1f, want soft-clipped between %.1f and %.1f while the gain ramp catches up", pair, sample, knee, dsp.FullScale)
+		}
+	}
+	for pair := 30; pair < dsp.FrameSize; pair++ {
+		if sample := frame[pair*dsp.Channels]; math.Abs(sample-dsp.FullScale) > 1 {
+			t.Fatalf("sample %d = %.1f, want %.1f once the gain has settled at 0.5", pair, sample, dsp.FullScale)
+		}
+	}
+}
+
+func TestLimiterBecomesIdleAfterRelease(t *testing.T) {
+	var limiter dsp.Limiter
+	if !limiter.IsIdle() {
+		t.Fatal("a fresh limiter is not idle")
+	}
+
+	limiter.ProcessStereo(constantFrame(2*dsp.FullScale), dsp.FullScale)
+	if limiter.IsIdle() {
+		t.Fatal("idle right after a 2x full-scale frame, want it still reducing")
+	}
+
+	var frame []float64
+	for i := 0; i < 40; i++ {
+		frame = constantFrame(10000)
+		limiter.ProcessStereo(frame, dsp.FullScale)
+	}
+	if !limiter.IsIdle() {
+		t.Fatal("still reducing 0.8s after the loud part, want idle")
+	}
+	for i, sample := range frame {
+		if sample != 10000 {
+			t.Fatalf("sample %d = %v once idle, want the untouched 10000", i, sample)
+		}
+	}
+}
+
 func TestLimiterWatchesBothChannels(t *testing.T) {
 	var limiter dsp.Limiter
 	frame := make([]float64, dsp.FrameSize*dsp.Channels)

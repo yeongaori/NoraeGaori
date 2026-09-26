@@ -608,17 +608,21 @@ func TestHandoffAndOutroTailsStartAtTheSameLevel(t *testing.T) {
 	}
 }
 
-func echoTailPeaks(gain float64, isHandoff bool, frames int) []float64 {
+func echoAfterMix(amplitude float64) *transition.Processor {
 	recipe := transition.DefaultRecipe()
 	recipe.Effect = transition.EffectEchoHalfCutEnd
 	processor := transition.NewProcessor(recipe, 100, 0.5)
-	tone := &audiotest.ToneGenerator{Frequency: 220, Amplitude: 5000}
+	tone := &audiotest.ToneGenerator{Frequency: 220, Amplitude: amplitude}
 	frame := make([]int16, dsp.FrameSize*dsp.Channels)
 	for i := 0; i < 100; i++ {
 		tone.Fill(frame)
 		processor.ProcessA(frame, float64(i)/100)
 	}
+	return processor
+}
 
+func echoTailPeaks(gain float64, isHandoff bool, frames int) []float64 {
+	processor := echoAfterMix(5000)
 	tail := processor.MakeTail(gain)
 	if isHandoff {
 		tail = processor.MakeHandoffTail(gain)
@@ -634,6 +638,128 @@ func echoTailPeaks(gain float64, isHandoff bool, frames int) []float64 {
 		peaks = append(peaks, peak)
 	}
 	return peaks
+}
+
+func applyTailOverLoudSong(t *testing.T) (frames int, longestRail int, lastDeviation float64) {
+	t.Helper()
+	tail := echoAfterMix(20000).MakeHandoffTail(1.0)
+	song := &audiotest.ToneGenerator{Frequency: 440, Amplitude: 32000}
+	frame := make([]int16, dsp.FrameSize*dsp.Channels)
+	input := make([]int16, len(frame))
+
+	run := 0
+	for more := true; more; frames++ {
+		if frames > 200 {
+			t.Fatal("the tail never let go of the next song")
+		}
+		song.Fill(frame)
+		copy(input, frame)
+		more = tail.Apply(frame)
+
+		lastDeviation = 0
+		for i := 0; i < len(frame); i += dsp.Channels {
+			if frame[i] == 32767 || frame[i] <= -32767 {
+				run++
+				longestRail = max(longestRail, run)
+			} else {
+				run = 0
+			}
+			lastDeviation = math.Max(lastDeviation, math.Abs(float64(frame[i])-float64(input[i])))
+		}
+	}
+	return frames, longestRail, lastDeviation
+}
+
+func TestHandoffTailIsLimitedOverTheNextSong(t *testing.T) {
+	_, longestRail, _ := applyTailOverLoudSong(t)
+
+	if longestRail > 2 {
+		t.Errorf("the next song plus the echo held the rail for %d samples in a row, want a limited peak instead of clipping", longestRail)
+	}
+}
+
+func TestQuietTailLeavesTheNextSongUnlimited(t *testing.T) {
+	tail := echoAfterMix(5000).MakeHandoffTail(0.5)
+	song := &audiotest.ToneGenerator{Frequency: 440, Amplitude: 20000}
+	frame := make([]int16, dsp.FrameSize*dsp.Channels)
+	song.Fill(frame)
+
+	tail.Apply(frame)
+
+	peak := 0.0
+	for _, sample := range frame {
+		peak = math.Max(peak, math.Abs(float64(sample)))
+	}
+	if peak < 20000 {
+		t.Errorf("song plus a half-level tail peaked at %.0f, want at least the song's own 20000: nothing here reaches full scale", peak)
+	}
+}
+
+func TestFinishedTailLeavesFramesAlone(t *testing.T) {
+	tail := echoAfterMix(5000).MakeHandoffTail(1.0)
+	frame := make([]int16, dsp.FrameSize*dsp.Channels)
+	for tail.Apply(frame) {
+		for i := range frame {
+			frame[i] = 0
+		}
+	}
+
+	song := &audiotest.ToneGenerator{Frequency: 440, Amplitude: 20000}
+	song.Fill(frame)
+	want := append([]int16(nil), frame...)
+	if tail.Apply(frame) {
+		t.Error("a finished tail reported more audio to come")
+	}
+	for i := range frame {
+		if frame[i] != want[i] {
+			t.Fatalf("sample %d = %d after the tail finished, want the untouched %d", i, frame[i], want[i])
+		}
+	}
+}
+
+func TestTailHandsTheNextSongBackUntouched(t *testing.T) {
+	frames, _, lastDeviation := applyTailOverLoudSong(t)
+
+	if frames <= transition.HandoffEchoTailFrames {
+		t.Errorf("the tail stopped after %d frames, want it to keep limiting past the %d-frame ring-out until the limiter lets go", frames, transition.HandoffEchoTailFrames)
+	}
+	if lastDeviation > 32 {
+		t.Errorf("the last frame the tail touched differs from the song by %.0f, want at most 32 (0.1%%) so there is no level step when it ends", lastDeviation)
+	}
+}
+
+func TestCutEndEffectsLeaveTheirTailAudible(t *testing.T) {
+	for _, effect := range []transition.EffectStyle{transition.EffectReverbCutEnd, transition.EffectEchoHalfCutEnd} {
+		t.Run(effect.String(), func(t *testing.T) {
+			recipe := transition.DefaultRecipe()
+			recipe.Volume = transition.VolumeFadeInCutOut
+			recipe.Effect = effect
+			processor := transition.NewProcessor(recipe, 100, 0.5)
+			tone := &audiotest.ToneGenerator{Frequency: 220, Amplitude: 9000}
+			frame := make([]int16, dsp.FrameSize*dsp.Channels)
+			silent := make([]int16, dsp.FrameSize*dsp.Channels)
+			for i := 0; i < 100; i++ {
+				tone.Fill(frame)
+				progress := float64(i) / 100
+				aBuf := processor.ProcessA(frame, progress)
+				bBuf := processor.ProcessB(silent, progress)
+				processor.ApplyGains(aBuf, bBuf, progress, 1.0)
+			}
+
+			if gain := processor.LastGain(); gain < 0.95 {
+				t.Errorf("outgoing gain at the handoff = %.3f, want at least 0.95: the effect cuts the dry signal itself, so its tail must keep ringing", gain)
+			}
+			tailFrame := make([]int16, dsp.FrameSize*dsp.Channels)
+			processor.MakeHandoffTail(processor.LastGain()).Apply(tailFrame)
+			peak := 0.0
+			for _, sample := range tailFrame {
+				peak = math.Max(peak, math.Abs(float64(sample)))
+			}
+			if peak < 500 {
+				t.Errorf("first handoff tail frame peaked at %.0f, want at least 500 so the effect is heard over the next song", peak)
+			}
+		})
+	}
 }
 
 func TestHandoffTailFadesAlongAQuarterSine(t *testing.T) {

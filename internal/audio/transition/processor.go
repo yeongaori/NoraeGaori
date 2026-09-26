@@ -127,8 +127,15 @@ func (t *Processor) cutInGain(progress float64) float64 {
 }
 
 func (t *Processor) cutOutGain(progress float64) float64 {
+	if t.hasDryCutEffect() {
+		return 1
+	}
 	width := t.cutWidth()
 	return 1 - dsp.RampAt(progress, 1-width/2, width)
+}
+
+func (t *Processor) hasDryCutEffect() bool {
+	return t.recipe.Effect == EffectReverbCutEnd || t.recipe.Effect == EffectEchoHalfCutEnd
 }
 
 func (t *Processor) eqGains(progress float64, isA bool) (float64, float64, float64) {
@@ -375,6 +382,7 @@ type Tail struct {
 	total     int
 	gain      float64
 	buffer    []float64
+	limiter   dsp.Limiter
 }
 
 func (t *Processor) MakeTail(gain float64) *Tail {
@@ -406,34 +414,39 @@ func (t *Processor) makeTail(gain float64, reverbFrames, echoFrames int) *Tail {
 }
 
 func (tail *Tail) Apply(frame []int16) bool {
-	if tail == nil || tail.remaining <= 0 {
+	if tail == nil {
 		return false
 	}
+	if tail.remaining > 0 {
+		tail.fillRingOut()
+	} else if tail.limiter.IsIdle() {
+		return false
+	} else {
+		dsp.SilenceFloat(tail.buffer)
+	}
 
+	for i := range frame {
+		tail.buffer[i] += float64(frame[i])
+	}
+	tail.limiter.ProcessStereo(tail.buffer, dsp.FullScale)
+	dsp.FloatToFrame(tail.buffer, frame)
+	return tail.remaining > 0 || !tail.limiter.IsIdle()
+}
+
+func (tail *Tail) fillRingOut() {
 	dsp.SilenceFloat(tail.buffer)
-	switch tail.processor.recipe.Effect {
-	case EffectReverbOutCenter, EffectReverbCutEnd, EffectReverbOutEnd:
-		_, wet := tail.processor.effectMix(1)
-		if wet <= 0 {
-			wet = 0.6
-		}
-		tail.processor.reverbUnit.ProcessStereo(tail.buffer, 0, wet)
-	case EffectEchoHalfCutEnd:
+	if tail.processor.recipe.Effect == EffectEchoHalfCutEnd {
 		tail.processor.echoUnit.Dry = 0
 		tail.processor.echoUnit.Wet = echoWet
 		tail.processor.echoUnit.ProcessStereo(tail.buffer)
-	default:
-		tail.remaining = 0
-		return false
+	} else {
+		_, wet := tail.processor.effectMix(1)
+		tail.processor.reverbUnit.ProcessStereo(tail.buffer, 0, wet)
 	}
 
-	decay := dsp.QSinOut(1 - float64(tail.remaining)/float64(tail.total))
-	scale := tail.gain * decay
-
-	for i := range frame {
-		frame[i] = dsp.ClampToInt16(float64(frame[i]) + tail.buffer[i]*scale)
+	scale := tail.gain * dsp.QSinOut(1-float64(tail.remaining)/float64(tail.total))
+	for i := range tail.buffer {
+		tail.buffer[i] *= scale
 	}
-
 	tail.remaining--
-	return tail.remaining > 0
 }
