@@ -202,6 +202,8 @@ type VoiceMessages struct {
 	LeaveFailedDesc      string `json:"leave_failed_desc"`
 	LeaveSuccessTitle    string `json:"leave_success_title"`
 	LeaveSuccessDesc     string `json:"leave_success_desc"`
+	LeavePausedDesc      string `json:"leave_paused_desc"`
+	BotNotInVoice        string `json:"bot_not_in_voice"`
 	SwitchFailedTitle    string `json:"switch_failed_title"`
 	SwitchFailedChannel  string `json:"switch_failed_channel"`
 	SwitchFailedQueue    string `json:"switch_failed_queue"`
@@ -449,6 +451,7 @@ type PlayerMessages struct {
 	StreamReconnectFailedTitle string `json:"stream_reconnect_failed_title"`
 	StreamReconnectFailedDesc  string `json:"stream_reconnect_failed_desc"`
 	MaxRetriesSkipping         string `json:"max_retries_skipping"`
+	PlaybackCrashRetry         string `json:"playback_crash_retry"`
 	LeavingEmptyDesc           string `json:"leaving_empty_desc"`
 	LeavingEmptyFooter         string `json:"leaving_empty_footer"`
 	LeavingErrorDesc           string `json:"leaving_error_desc"`

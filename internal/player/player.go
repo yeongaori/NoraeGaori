@@ -24,12 +24,17 @@ var (
 	ErrPlaybackAlreadyActive = errors.New("playback is already active for this guild")
 	ErrCommandQueueFull      = errors.New("command queue is full")
 	ErrCommandTimeout        = errors.New("command timed out")
+	ErrNotPlaying            = errors.New("not playing")
+	errSessionHalted         = errors.New("playback session was halted")
 )
 
 var (
 	playLockWait         = 2 * time.Second
 	resumeCommandTimeout = 30 * time.Second
+	leaveCommandTimeout  = 15 * time.Second
 	voiceRejoinDelay     = 3 * time.Second
+	sessionExitWait      = 5 * time.Second
+	recentCommandWindow  = 10 * time.Second
 )
 
 const (
@@ -82,6 +87,10 @@ type GuildPlayer struct {
 	TrimStartMs      int
 	TrimEndMs        int
 	transitionArmed  atomic.Bool
+	halted           bool
+	sessionDone      chan struct{}
+	lastCommand      string
+	lastCommandAt    time.Time
 }
 
 type fadeSettings struct {
@@ -142,6 +151,7 @@ var (
 	lookupVoiceChannelBitrate func(session *discordgo.Session, channelID string) int
 	announceSongError         func(session *discordgo.Session, guildID string, song *queue.Song, reason string)
 	announceAutoPause         func(session *discordgo.Session, guildID, voiceChannelID string)
+	announcePlaybackCrash     func(session *discordgo.Session, guildID string, song *queue.Song)
 )
 
 func init() {
@@ -155,6 +165,7 @@ func init() {
 	lookupVoiceChannelBitrate = readVoiceChannelBitrate
 	announceSongError = sendSongErrorMessage
 	announceAutoPause = sendAutoPauseNotification
+	announcePlaybackCrash = sendPlaybackCrashMessage
 }
 
 func readVoiceChannelBitrate(session *discordgo.Session, channelID string) int {
@@ -191,11 +202,8 @@ type PreCache struct {
 }
 
 func IsPlaybackActive(guildID string) bool {
-	playersMu.RLock()
-	player, exists := players[guildID]
-	playersMu.RUnlock()
-
-	if !exists {
+	player := registeredPlayer(guildID)
+	if player == nil {
 		return false
 	}
 

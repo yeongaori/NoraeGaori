@@ -80,21 +80,8 @@ func cleanupForShutdown(guildID string) error {
 	player.mu.Lock()
 	wasPlaying := player.Playing
 	wasLoading := player.Loading
-
-	if wasPlaying || wasLoading {
-
-		select {
-		case <-player.StopChan:
-
-		default:
-			close(player.StopChan)
-			logger.Debugf("Stop signal sent for guild: %s", guildID)
-		}
-	}
-
-	player.Playing = false
+	player.haltLocked()
 	player.Paused = false
-	player.Loading = false
 	pending := player.PendingStream
 	player.PendingStream = nil
 	player.mu.Unlock()

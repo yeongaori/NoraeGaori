@@ -61,8 +61,9 @@ func onReady(s *discordgo.Session, r *discordgo.Ready) {
 
 	commands.InitializeCommands()
 
-	player.SetOnSongStartCallback(vote.CancelForNewSong)
+	player.SetOnSongStartCallback(vote.CancelSkipVotes)
 	player.SetOnPlaybackEndedCallback(vote.CancelForEndedPlayback)
+	command.SetBeforeCommand(player.ReconcileState)
 
 	vote.RegisterDispatcher(s)
 

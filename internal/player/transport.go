@@ -1,7 +1,6 @@
 package player
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -16,120 +15,90 @@ import (
 func Pause(guildID string) error {
 	logger.Debugf("Pause called for guild %s", guildID)
 	player := GetPlayer(guildID)
+	player.noteCommand("pause")
 
 	player.mu.Lock()
-
-	if !player.Playing {
-		player.mu.Unlock()
-		return fmt.Errorf("not playing")
-	}
-
-	elapsed := time.Since(player.PlaybackStart)
-	seekTime := int(elapsed.Milliseconds())
-
-	select {
-	case <-player.PlaybackDone:
-	default:
-	}
-
-	select {
-	case <-player.StopChan:
-		logger.Debugf("Stop signal already pending for guild: %s", guildID)
-	default:
-		close(player.StopChan)
-		logger.Debugf("Stop signal sent for guild: %s", guildID)
-	}
-
-	player.Playing = false
-	player.Paused = true
+	isActive := player.Playing || player.Loading
 	player.mu.Unlock()
-
-	select {
-	case <-player.PlaybackDone:
-		logger.Debugf("Playback terminated for guild: %s", guildID)
-	case <-time.After(5 * time.Second):
-		logger.Warnf("Timeout waiting for playback to terminate for guild: %s", guildID)
+	if !isActive {
+		return ErrNotPlaying
 	}
 
-	q, err := queue.GetQueue(guildID, false)
-	if err == nil && q != nil && len(q.Songs) > 0 {
-		currentSong := q.Songs[0]
-		_, err = queue.SaveSeekTime(guildID, currentSong.ID, seekTime)
-		if err != nil {
-			logger.Errorf("Failed to save seek time: %v", err)
-		}
-	}
-
-	if err := queue.SetPaused(guildID, true); err != nil {
-		logger.Errorf("Failed to set paused state in database: %v", err)
-	}
-	if err := queue.SetPlaying(guildID, false); err != nil {
-		logger.Errorf("Failed to clear playing state in database: %v", err)
-	}
-
-	player.mu.Lock()
-	if player.VoiceConn != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		player.VoiceConn.Disconnect(ctx)
-		cancel()
-		player.VoiceConn = nil
-		player.VoiceChannelID = ""
-	}
-	player.mu.Unlock()
-
-	logger.Debugf("Paused at %dms for guild: %s", seekTime, guildID)
-	return nil
+	return suspendPlayback(player)
 }
 
 func pauseInternal(guildID string) error {
-	player := GetPlayer(guildID)
+	return Pause(guildID)
+}
+
+func Leave(guildID string) error {
+	return sendCommandAndWait(PlayerCommand{Type: "leave", GuildID: guildID}, leaveCommandTimeout)
+}
+
+func leaveInternal(guildID string) error {
+	return suspendPlayback(GetPlayer(guildID))
+}
+
+func suspendPlayback(player *GuildPlayer) error {
+	guildID := player.GuildID
+
 	player.mu.Lock()
-
-	if !player.Playing {
-		player.mu.Unlock()
-		return fmt.Errorf("not playing")
+	wasPlaying := player.Playing
+	isActive := wasPlaying || player.Loading
+	seekTime := int(time.Since(player.PlaybackStart).Milliseconds())
+	player.haltLocked()
+	if isActive {
+		player.Paused = true
 	}
-
-	elapsed := time.Since(player.PlaybackStart)
-	seekTime := int(elapsed.Milliseconds())
-
-	select {
-	case <-player.StopChan:
-		logger.Debugf("Stop signal already pending for guild: %s", guildID)
-	default:
-		close(player.StopChan)
-		logger.Debugf("Stop signal sent for guild: %s", guildID)
-	}
-	player.Playing = false
-	player.Paused = true
-
-	if player.VoiceConn != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		player.VoiceConn.Disconnect(ctx)
-		cancel()
-		player.VoiceConn = nil
-		player.VoiceChannelID = ""
-	}
+	pending := player.PendingStream
+	player.PendingStream = nil
 	player.mu.Unlock()
 
-	q, err := queue.GetQueue(guildID, false)
-	if err == nil && q != nil && len(q.Songs) > 0 {
-		currentSong := q.Songs[0]
-		_, err = queue.SaveSeekTime(guildID, currentSong.ID, seekTime)
-		if err != nil {
-			logger.Errorf("Failed to save seek time: %v", err)
-		}
+	if pending != nil {
+		pending.Stream.Stop()
+	}
+	player.waitForSession(sessionExitWait)
+
+	if wasPlaying {
+		saveCurrentSeekTime(guildID, seekTime)
+	}
+	if isActive {
+		persistIdleState(guildID, true)
 	}
 
-	if err := queue.SetPaused(guildID, true); err != nil {
-		logger.Errorf("Failed to set paused state in database: %v", err)
-	}
-	if err := queue.SetPlaying(guildID, false); err != nil {
-		logger.Errorf("Failed to clear playing state in database: %v", err)
+	if err := LeaveVoice(guildID); err != nil {
+		return err
 	}
 
-	logger.Debugf("Paused at %dms for guild: %s", seekTime, guildID)
+	logger.Debugf("Suspended playback at %dms for guild: %s", seekTime, guildID)
 	return nil
+}
+
+func saveCurrentSeekTime(guildID string, seekTime int) {
+	q, err := queue.GetQueue(guildID, false)
+	if err != nil || q == nil || len(q.Songs) == 0 {
+		return
+	}
+	if _, err := queue.SaveSeekTime(guildID, q.Songs[0].ID, seekTime); err != nil {
+		logger.Errorf("Failed to save seek time: %v", err)
+	}
+}
+
+func sendCommandAndWait(cmd PlayerCommand, timeout time.Duration) error {
+	done := make(chan error, 1)
+	cmd.Done = done
+
+	if err := sendCommandToPlayer(cmd.GuildID, cmd); err != nil {
+		return err
+	}
+
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(timeout):
+		logger.Warnf("%s command timed out for guild %s", cmd.Type, cmd.GuildID)
+		return ErrCommandTimeout
+	}
 }
 
 func Seek(guildID string, positionMs int) error {
@@ -150,7 +119,7 @@ func Seek(guildID string, positionMs int) error {
 	player.mu.Lock()
 	if !player.Playing {
 		player.mu.Unlock()
-		return fmt.Errorf("not playing")
+		return ErrNotPlaying
 	}
 	fadingOut := player.FadingOut
 	player.mu.Unlock()
@@ -170,7 +139,7 @@ func Seek(guildID string, positionMs int) error {
 	player.mu.Lock()
 	if !player.Playing {
 		player.mu.Unlock()
-		return fmt.Errorf("not playing")
+		return ErrNotPlaying
 	}
 	song.SeekTime = positionMs
 	player.Seeking = true
@@ -211,25 +180,7 @@ func RestartForNormalization(guildID string) {
 }
 
 func Resume(session *discordgo.Session, guildID string) error {
-	done := make(chan error, 1)
-	cmd := PlayerCommand{
-		Type:    "resume",
-		Session: session,
-		GuildID: guildID,
-		Done:    done,
-	}
-
-	if err := sendCommandToPlayer(guildID, cmd); err != nil {
-		return err
-	}
-
-	select {
-	case err := <-done:
-		return err
-	case <-time.After(resumeCommandTimeout):
-		logger.Warnf("Resume command timed out for guild %s", guildID)
-		return ErrCommandTimeout
-	}
+	return sendCommandAndWait(PlayerCommand{Type: "resume", Session: session, GuildID: guildID}, resumeCommandTimeout)
 }
 
 func ResumeOrStart(session *discordgo.Session, guildID string) {
@@ -309,6 +260,7 @@ func resumeInternal(session *discordgo.Session, guildID string) error {
 func Skip(session *discordgo.Session, guildID string) error {
 	logger.Debugf("Skip called for guild %s", guildID)
 	player := GetPlayer(guildID)
+	player.noteCommand("skip")
 
 	player.mu.Lock()
 	fadingOut := player.FadingOut
@@ -331,13 +283,7 @@ func Skip(session *discordgo.Session, guildID string) error {
 		default:
 		}
 
-		select {
-		case <-player.StopChan:
-			logger.Debugf("Stop signal already pending for guild: %s", guildID)
-		default:
-			close(player.StopChan)
-			logger.Debugf("Stop signal sent for guild: %s", guildID)
-		}
+		player.signalStopLocked()
 	}
 	player.mu.Unlock()
 
@@ -389,6 +335,7 @@ func SkipTo(session *discordgo.Session, guildID string) error {
 	logger.Debugf("Called for guild %s", guildID)
 	rampVolumeBeforeStop(guildID)
 	player := GetPlayer(guildID)
+	player.noteCommand("skipto")
 
 	player.mu.Lock()
 	wasPlaying := player.Playing
@@ -401,13 +348,7 @@ func SkipTo(session *discordgo.Session, guildID string) error {
 		default:
 		}
 
-		select {
-		case <-player.StopChan:
-			logger.Debugf("Stop signal already pending for guild: %s", guildID)
-		default:
-			close(player.StopChan)
-			logger.Debugf("Stop signal sent for guild: %s", guildID)
-		}
+		player.signalStopLocked()
 	}
 	player.mu.Unlock()
 
@@ -455,13 +396,7 @@ func skipInternal(session *discordgo.Session, guildID string) error {
 		default:
 		}
 
-		select {
-		case <-player.StopChan:
-			logger.Debugf("Stop signal already pending for guild: %s", guildID)
-		default:
-			close(player.StopChan)
-			logger.Debugf("Stop signal sent for guild: %s", guildID)
-		}
+		player.signalStopLocked()
 	}
 
 	player.mu.Unlock()
@@ -516,30 +451,20 @@ func Stop(guildID string) error {
 	logger.Debugf("Stop called for guild %s", guildID)
 	rampVolumeBeforeStop(guildID)
 	player := GetPlayer(guildID)
+	player.noteCommand("stop")
 
 	player.mu.Lock()
 	wasPlaying := player.Playing
-	wasLoading := player.Loading
 
-	if wasPlaying || wasLoading {
-
+	if wasPlaying || player.Loading {
 		select {
 		case <-player.PlaybackDone:
 		default:
 		}
-
-		select {
-		case <-player.StopChan:
-			logger.Debugf("Stop signal already pending for guild: %s", guildID)
-		default:
-			close(player.StopChan)
-			logger.Debugf("Stop signal sent for guild: %s", guildID)
-		}
 	}
 
-	player.Playing = false
+	player.haltLocked()
 	player.Paused = false
-	player.Loading = false
 	player.mu.Unlock()
 
 	if wasPlaying {
@@ -573,21 +498,8 @@ func stopInternal(guildID string) error {
 
 	player := GetPlayer(guildID)
 	player.mu.Lock()
-
-	if player.Playing {
-
-		select {
-		case <-player.StopChan:
-			logger.Debugf("Stop signal already pending for guild: %s", guildID)
-		default:
-			close(player.StopChan)
-			logger.Debugf("Stop signal sent for guild: %s", guildID)
-		}
-	}
-
-	player.Playing = false
+	player.haltLocked()
 	player.Paused = false
-	player.Loading = false
 	pending := player.PendingStream
 	player.PendingStream = nil
 	player.mu.Unlock()

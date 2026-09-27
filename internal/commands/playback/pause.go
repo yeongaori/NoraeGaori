@@ -1,6 +1,8 @@
 package playback
 
 import (
+	"errors"
+
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/discord"
 	"noraegaori/internal/messages"
@@ -21,7 +23,10 @@ func HandlePause(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return nil
 	}
 
-	if err := player.Pause(i.GuildID); err != nil {
+	if err := player.Pause(i.GuildID); errors.Is(err, player.ErrNotPlaying) {
+		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.NotPlayingOrLoading))
+		return nil
+	} else if err != nil {
 		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.PauseFailed))
 		return err
 	}

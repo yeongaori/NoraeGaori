@@ -11,7 +11,7 @@ func CancelSuperseded(guildID string, passed Kind, queueEnded bool) {
 	}
 }
 
-func CancelForNewSong(guildID string) {
+func CancelSkipVotes(guildID string) {
 	activeVotes.cancel(guildID, voteEndCancelled, KindSkip)
 }
 

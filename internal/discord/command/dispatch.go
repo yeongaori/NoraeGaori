@@ -3,6 +3,7 @@ package command
 import (
 	"fmt"
 	"strings"
+	"sync/atomic"
 
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/config"
@@ -12,11 +13,27 @@ import (
 	"noraegaori/internal/messages"
 )
 
+var beforeCommand atomic.Pointer[func(guildID string)]
+
+func SetBeforeCommand(hook func(guildID string)) {
+	beforeCommand.Store(&hook)
+}
+
+func runBeforeCommand(guildID string) {
+	hook := beforeCommand.Load()
+	if hook == nil || *hook == nil || guildID == "" {
+		return
+	}
+	(*hook)(guildID)
+}
+
 func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if i.Type == discordgo.InteractionApplicationCommandAutocomplete {
 		HandleAutocomplete(s, i)
 		return
 	}
+
+	runBeforeCommand(i.GuildID)
 
 	if i.Type == discordgo.InteractionMessageComponent || i.Type == discordgo.InteractionModalSubmit {
 		if !discord.HandleComponentRoute(s, i) && i.Type == discordgo.InteractionMessageComponent {
@@ -116,6 +133,8 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	logger.Debugf("Executing text command: %s (user: %s, guild: %s)",
 		cmdName, m.Author.Username, m.GuildID)
+
+	runBeforeCommand(m.GuildID)
 
 	args := parts[1:]
 

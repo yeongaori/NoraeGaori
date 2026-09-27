@@ -2,6 +2,7 @@ package player
 
 import (
 	"fmt"
+	"runtime/debug"
 
 	"noraegaori/internal/logger"
 
@@ -12,7 +13,7 @@ func (player *GuildPlayer) processCommands() {
 	defer func() {
 
 		if r := recover(); r != nil {
-			logger.Errorf("Panic recovered for guild %s: %v", player.GuildID, r)
+			logger.Errorf("Panic recovered for guild %s: %v\n%s", player.GuildID, r, debug.Stack())
 		}
 
 		player.mu.Lock()
@@ -27,13 +28,14 @@ func (player *GuildPlayer) processCommands() {
 		select {
 		case cmd := <-player.CommandChan:
 			logger.Debugf("Received %s command for guild: %s", cmd.Type, player.GuildID)
+			player.noteCommand(cmd.Type)
 
 			func() {
 				var err error
 				defer func() {
 					if r := recover(); r != nil {
 						err = fmt.Errorf("command panic: %v", r)
-						logger.Errorf("Command %s panicked for guild %s: %v", cmd.Type, player.GuildID, r)
+						logger.Errorf("Command %s panicked for guild %s: %v\n%s", cmd.Type, player.GuildID, r, debug.Stack())
 					}
 
 					logger.Debugf("Command %s completed for guild %s with error: %v", cmd.Type, player.GuildID, err)
@@ -76,6 +78,8 @@ func (player *GuildPlayer) defaultDispatch(cmd PlayerCommand) error {
 		return pauseInternal(cmd.GuildID)
 	case "resume":
 		return resumeInternal(cmd.Session, cmd.GuildID)
+	case "leave":
+		return leaveInternal(cmd.GuildID)
 	default:
 		return fmt.Errorf("unknown command type: %s", cmd.Type)
 	}
@@ -97,30 +101,18 @@ func startPlaybackSession(session *discordgo.Session, guildID string) error {
 	}
 
 	logger.Debugf("Lock acquired for guild: %s", guildID)
-	go runPlaybackSession(session, guildID, release, playCurrentSong)
+	player := GetPlayer(guildID)
+	done := player.beginSession()
+	go runPlaybackSession(session, player, done, release, playCurrentSong)
 
 	return nil
 }
 
-func runPlaybackSession(session *discordgo.Session, guildID string, release func(), playSong func(*discordgo.Session, string) playResult) {
+func runPlaybackSession(session *discordgo.Session, player *GuildPlayer, done chan struct{}, release func(), playSong func(*discordgo.Session, string) playResult) {
 	defer release()
-	defer recoverPlaybackSession(guildID)
+	defer player.endSession(done)
+	defer recoverPlaybackSession(session, player)
 
-	for playSong(session, guildID) != playStop {
+	for !player.isHalted() && playSong(session, player.GuildID) != playStop {
 	}
-}
-
-func recoverPlaybackSession(guildID string) {
-	reason := recover()
-	if reason == nil {
-		return
-	}
-
-	logger.Errorf("Playback session panicked for guild %s: %v", guildID, reason)
-
-	player := GetPlayer(guildID)
-	player.mu.Lock()
-	player.Playing = false
-	player.Loading = false
-	player.mu.Unlock()
 }

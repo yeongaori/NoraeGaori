@@ -170,6 +170,10 @@ func sendSongErrorMessage(session *discordgo.Session, guildID string, song *queu
 	session.ChannelMessageSendEmbed(q.TextChannelID, embed)
 }
 
+func sendPlaybackCrashMessage(session *discordgo.Session, guildID string, song *queue.Song) {
+	sendSongErrorMessage(session, guildID, song, messages.T(guildID).Player.PlaybackCrashRetry)
+}
+
 func sendLeavingMessage(session *discordgo.Session, guildID, reason string) {
 	q, err := queue.GetQueue(guildID, false)
 	if err != nil || q == nil || q.TextChannelID == "" {

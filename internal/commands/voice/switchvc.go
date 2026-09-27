@@ -1,13 +1,13 @@
 package voice
 
 import (
+	"errors"
 	"fmt"
 	"noraegaori/internal/discord"
 
 	"github.com/bwmarrin/discordgo"
+	"noraegaori/internal/logger"
 	"noraegaori/internal/messages"
-	"noraegaori/internal/player"
-	"noraegaori/internal/queue"
 )
 
 func HandleSwitchVC(s *discordgo.Session, i *discordgo.InteractionCreate) error {
@@ -25,36 +25,24 @@ func HandleSwitchVC(s *discordgo.Session, i *discordgo.InteractionCreate) error 
 		targetChannelID = voiceState.ChannelID
 	}
 
-	wasPlaying := player.IsPlaybackActive(i.GuildID)
+	discord.DeferResponse(s, i)
 
-	q, _ := queue.GetQueue(i.GuildID, false)
-	hasSongs := q != nil && len(q.Songs) > 0
-
-	player.LeaveVoice(i.GuildID)
-
-	_, err := player.JoinVoice(s, i.GuildID, targetChannelID)
-	if err != nil {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Voice.SwitchFailedTitle, messages.T(i.GuildID).Voice.SwitchFailedChannel))
-		return err
-	}
-
-	if hasSongs {
-		if err := queue.UpdateVoiceChannel(i.GuildID, targetChannelID); err != nil {
-			discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Voice.SwitchFailedTitle, messages.T(i.GuildID).Voice.SwitchFailedQueue))
-			return err
+	if err := moveToChannel(s, i.GuildID, targetChannelID); err != nil {
+		reason := messages.T(i.GuildID).Voice.SwitchFailedChannel
+		if errors.Is(err, errQueueUpdate) {
+			reason = messages.T(i.GuildID).Voice.SwitchFailedQueue
 		}
-	}
-
-	if wasPlaying && hasSongs {
-		go player.Play(s, i.GuildID)
+		logger.Errorf("Failed to switch voice channel for guild %s: %v", i.GuildID, err)
+		discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Voice.SwitchFailedTitle, reason))
+		return nil
 	}
 
 	channel, err := s.Channel(targetChannelID)
 	if err != nil {
-		discord.RespondEmbed(s, i, messages.CreateSuccessEmbed(messages.T(i.GuildID).Voice.SwitchSuccessTitle, messages.T(i.GuildID).Voice.SwitchSuccessDesc))
+		discord.UpdateResponseEmbed(s, i, messages.CreateSuccessEmbed(messages.T(i.GuildID).Voice.SwitchSuccessTitle, messages.T(i.GuildID).Voice.SwitchSuccessDesc))
 		return nil
 	}
 
-	discord.RespondEmbed(s, i, messages.CreateSuccessEmbed(messages.T(i.GuildID).Voice.SwitchSuccessTitle, fmt.Sprintf(messages.T(i.GuildID).Voice.SwitchSuccessChannel, messages.EscapeMarkdown(channel.Name))))
+	discord.UpdateResponseEmbed(s, i, messages.CreateSuccessEmbed(messages.T(i.GuildID).Voice.SwitchSuccessTitle, fmt.Sprintf(messages.T(i.GuildID).Voice.SwitchSuccessChannel, messages.EscapeMarkdown(channel.Name))))
 	return nil
 }

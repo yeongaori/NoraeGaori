@@ -1,7 +1,6 @@
 package player
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -90,62 +89,18 @@ func pauseForEmptyChannel(session *discordgo.Session, guildID, channelID string)
 	}
 
 	player.mu.Lock()
-	if !player.Playing {
-		player.mu.Unlock()
+	isPlaying := player.Playing
+	player.mu.Unlock()
+	if !isPlaying {
 		return
 	}
 
-	elapsed := time.Since(player.PlaybackStart)
-	seekTime := int(elapsed.Milliseconds())
-
-	select {
-	case <-player.PlaybackDone:
-	default:
+	player.noteCommand("pause")
+	if err := suspendPlayback(player); err != nil {
+		logger.Errorf("Failed to leave voice during auto-pause: %v", err)
 	}
 
-	select {
-	case <-player.StopChan:
-		logger.Debugf("Stop signal already pending for auto-pause: %s", guildID)
-	default:
-		close(player.StopChan)
-		logger.Debugf("Stop signal sent for auto-pause: %s", guildID)
-	}
-
-	player.Playing = false
-	player.Paused = true
-	player.mu.Unlock()
-
-	select {
-	case <-player.PlaybackDone:
-		logger.Debugf("Playback terminated for auto-pause: %s", guildID)
-	case <-time.After(5 * time.Second):
-		logger.Warnf("Timeout waiting for playback to terminate for auto-pause: %s", guildID)
-	}
-
-	q, err := queue.GetQueue(guildID, false)
-	if err == nil && q != nil && len(q.Songs) > 0 {
-		currentSong := q.Songs[0]
-		_, err = queue.SaveSeekTime(guildID, currentSong.ID, seekTime)
-		if err != nil {
-			logger.Errorf("Failed to save seek time: %v", err)
-		}
-	}
-
-	if err := queue.SetPaused(guildID, true); err != nil {
-		logger.Errorf("Failed to set paused state: %v", err)
-	}
-	if err := queue.SetPlaying(guildID, false); err != nil {
-		logger.Errorf("Failed to clear playing state: %v", err)
-	}
-
-	if conn := player.currentVoice(); conn != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		conn.Disconnect(ctx)
-		cancel()
-		player.setVoice(nil, "")
-	}
-
-	logger.Debugf("Auto-paused at %dms for guild: %s", seekTime, guildID)
+	logger.Debugf("Auto-paused for guild: %s", guildID)
 
 	go announceAutoPause(session, guildID, channelID)
 

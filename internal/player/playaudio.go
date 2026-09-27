@@ -705,6 +705,23 @@ func (s *playbackSession) shapeFrame(pcmData []int16, volumeFactor, gain float64
 	}
 }
 
+func sendFrame(conn voiceConnection, packet []byte, stopCh <-chan struct{}) error {
+	select {
+	case <-conn.DeadChan():
+		return fmt.Errorf("voice connection died: %v", conn.Err())
+	default:
+	}
+
+	select {
+	case conn.OpusSendChan() <- packet:
+		return nil
+	case <-conn.DeadChan():
+		return fmt.Errorf("voice connection died: %v", conn.Err())
+	case <-stopCh:
+		return fmt.Errorf("playback stopped by user")
+	}
+}
+
 func (s *playbackSession) encodeAndSend(firstFrameCh chan<- struct{}) error {
 	opusLen, err := s.opusEncoder.Encode(s.volumeBuf, s.opusScratch)
 	if err != nil {
@@ -717,16 +734,10 @@ func (s *playbackSession) encodeAndSend(firstFrameCh chan<- struct{}) error {
 	copy(packet, s.opusScratch[:opusLen])
 
 	sendStart := time.Now()
-	select {
-	case s.voice.OpusSendChan() <- packet:
-	case <-s.voice.DeadChan():
+	if err := sendFrame(s.voice, packet, s.stopCh); err != nil {
 		s.stream.Stop()
 		s.crossfade.abort()
-		return fmt.Errorf("voice connection died: %v", s.voice.Err())
-	case <-s.stopCh:
-		s.stream.Stop()
-		s.crossfade.abort()
-		return fmt.Errorf("playback stopped by user")
+		return err
 	}
 
 	if blocked := time.Since(sendStart); blocked > framePacingWarnDelay {

@@ -39,21 +39,50 @@ func prepareVoiceConnection(session *discordgo.Session, player *GuildPlayer, gui
 		return nil
 	}
 
-	vc, err := joinVoiceWithGatewayRetry(session, guildID, voiceChannelID)
+	vc, err := joinVoiceWithGatewayRetry(session, player, voiceChannelID)
 	if err != nil {
 		return err
 	}
 
-	player.setVoice(vc, voiceChannelID)
+	if !player.adoptVoice(vc, voiceChannelID) {
+		logger.Debugf("Session halted while joining voice, dropping the new connection for guild: %s", guildID)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		vc.Disconnect(ctx)
+		cancel()
+		return errSessionHalted
+	}
+
 	logger.Debugf("Voice connection established for guild: %s", guildID)
 	return nil
 }
 
-func joinVoiceWithGatewayRetry(session *discordgo.Session, guildID, channelID string) (voiceConnection, error) {
+func (player *GuildPlayer) adoptVoice(conn voiceConnection, channelID string) bool {
+	player.mu.Lock()
+	defer player.mu.Unlock()
+
+	if player.halted {
+		if player.VoiceConn == conn {
+			player.VoiceConn = nil
+			player.VoiceChannelID = ""
+		}
+		return false
+	}
+
+	player.VoiceConn = conn
+	player.VoiceChannelID = channelID
+	return true
+}
+
+func joinVoiceWithGatewayRetry(session *discordgo.Session, player *GuildPlayer, channelID string) (voiceConnection, error) {
+	guildID := player.GuildID
 	var conn voiceConnection
 	var err error
 
 	for attempt := range voiceRejoinAttempts {
+		if player.isHalted() {
+			return nil, errSessionHalted
+		}
+
 		conn, err = joinVoiceChannel(session, guildID, channelID)
 		if err == nil || !errors.Is(err, discordgo.ErrWSNotFound) {
 			return conn, err
@@ -70,8 +99,12 @@ func joinVoiceWithGatewayRetry(session *discordgo.Session, guildID, channelID st
 	return conn, err
 }
 
-func markPlayerLoading(player *GuildPlayer, guildID string) {
+func markPlayerLoading(player *GuildPlayer, guildID string) bool {
 	player.mu.Lock()
+	if player.halted {
+		player.mu.Unlock()
+		return false
+	}
 	player.Loading = true
 	player.Playing = false
 	player.Paused = false
@@ -87,6 +120,7 @@ func markPlayerLoading(player *GuildPlayer, guildID string) {
 	if err := queue.SetPlaying(guildID, false); err != nil {
 		logger.Errorf("Failed to set playing state: %v", err)
 	}
+	return true
 }
 
 func resolveSongStreamURL(player *GuildPlayer, song *queue.Song, guildID string, sponsorBlock bool, bitrate int) (string, bool, error) {
@@ -244,6 +278,10 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 	song := q.Songs[0]
 
 	player.mu.Lock()
+	if player.halted {
+		player.mu.Unlock()
+		return playStop
+	}
 	player.Volume = float64(q.Volume) / 100.0
 
 	player.StopChan = make(chan struct{})
@@ -251,11 +289,16 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 	logger.Debugf("Set initial volume to %.0f%% (%.2f) for guild: %s", q.Volume, player.Volume, guildID)
 
 	if err := prepareVoiceConnection(session, player, guildID, q.VoiceChannelID); err != nil {
+		if errors.Is(err, errSessionHalted) {
+			return playStop
+		}
 		logger.Errorf("Failed to join voice: %v", err)
 		return playStop
 	}
 
-	markPlayerLoading(player, guildID)
+	if !markPlayerLoading(player, guildID) {
+		return playStop
+	}
 
 	logger.Infof("Starting playback: %s", song.Title)
 
@@ -292,6 +335,11 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 		}
 		clearAnnounced(guildID)
 		return playContinue
+	}
+
+	if player.isHalted() {
+		logger.Debugf("Session halted while loading, stopping: %s", song.Title)
+		return playStop
 	}
 
 	qRecheck, err := queue.GetQueue(guildID, false)
@@ -334,6 +382,13 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 		}
 
 		player.mu.Lock()
+		if player.halted {
+			player.TogglingNorm = false
+			player.Seeking = false
+			player.mu.Unlock()
+			logger.Debugf("Session halted during playback of: %s", song.Title)
+			return playStop
+		}
 		toggling := player.TogglingNorm
 		seeking := player.Seeking
 		if toggling {

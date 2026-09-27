@@ -8,13 +8,14 @@ import (
 	"noraegaori/tests/testutil/discordtest"
 )
 
-func playingPlayerWithVoice(t *testing.T, guildID string) (*GuildPlayer, *mockVoiceConn) {
+func playingPlayerWithVoice(t *testing.T, guildID string) (*GuildPlayer, *mockVoiceConn, chan struct{}) {
 	t.Helper()
 
 	setupPlayerDB(t, guildID, 1)
 
 	player := GetPlayer(guildID)
 	conn := newMockVoiceConn()
+	sessionDone := player.beginSession()
 
 	player.mu.Lock()
 	player.Playing = true
@@ -26,12 +27,12 @@ func playingPlayerWithVoice(t *testing.T, guildID string) (*GuildPlayer, *mockVo
 	player.mu.Unlock()
 
 	t.Cleanup(func() { DeletePlayer(guildID) })
-	return player, conn
+	return player, conn, sessionDone
 }
 
 func TestPauseForEmptyChannelWaitsForPlaybackBeforeDisconnecting(t *testing.T) {
 	guildID := "guild-autopause-wait"
-	player, conn := playingPlayerWithVoice(t, guildID)
+	player, conn, sessionDone := playingPlayerWithVoice(t, guildID)
 	session := discordtest.Session(t, "bot")
 
 	done := make(chan struct{})
@@ -54,12 +55,12 @@ func TestPauseForEmptyChannelWaitsForPlaybackBeforeDisconnecting(t *testing.T) {
 		t.Fatalf("got %d disconnects while playback was still running, want 0", got)
 	}
 
-	player.PlaybackDone <- struct{}{}
+	player.endSession(sessionDone)
 
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
-		t.Fatal("auto-pause did not finish after playback reported done")
+		t.Fatal("auto-pause did not finish after the playback session ended")
 	}
 
 	if player.currentVoice() != nil {
@@ -72,12 +73,12 @@ func TestPauseForEmptyChannelWaitsForPlaybackBeforeDisconnecting(t *testing.T) {
 
 func TestPauseForEmptyChannelMarksThePlayerPaused(t *testing.T) {
 	guildID := "guild-autopause-state"
-	player, _ := playingPlayerWithVoice(t, guildID)
+	player, _, sessionDone := playingPlayerWithVoice(t, guildID)
 	session := discordtest.Session(t, "bot")
 
 	go func() {
 		<-player.StopChan
-		player.PlaybackDone <- struct{}{}
+		player.endSession(sessionDone)
 	}()
 	pauseForEmptyChannel(session, guildID, "voice")
 
@@ -106,7 +107,7 @@ func TestPauseForEmptyChannelMarksThePlayerPaused(t *testing.T) {
 
 func TestPauseForEmptyChannelIgnoresAnIdlePlayer(t *testing.T) {
 	guildID := "guild-autopause-idle"
-	player, conn := playingPlayerWithVoice(t, guildID)
+	player, conn, _ := playingPlayerWithVoice(t, guildID)
 	session := discordtest.Session(t, "bot")
 
 	player.mu.Lock()

@@ -37,6 +37,18 @@ func (lockMap *Map) AcquireWithTimeout(key string, timeout time.Duration) (func(
 	}
 }
 
+func (lockMap *Map) TryAcquire(key string) (func(), bool) {
+	held := lockMap.retain(key)
+
+	select {
+	case held.semaphore <- struct{}{}:
+		return lockMap.createRelease(key, held), true
+	default:
+		lockMap.releaseReference(key, held)
+		return nil, false
+	}
+}
+
 func (lockMap *Map) CountKeys() int {
 	lockMap.mutex.Lock()
 	defer lockMap.mutex.Unlock()

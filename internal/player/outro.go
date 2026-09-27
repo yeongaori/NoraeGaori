@@ -189,11 +189,7 @@ func (os *outroState) flush(player *GuildPlayer, conn voiceConnection, stopCh ch
 		packet := make([]byte, opusLen)
 		copy(packet, os.opusScratch[:opusLen])
 
-		select {
-		case conn.OpusSendChan() <- packet:
-		case <-conn.DeadChan():
-			return
-		case <-stopCh:
+		if sendFrame(conn, packet, stopCh) != nil {
 			return
 		}
 

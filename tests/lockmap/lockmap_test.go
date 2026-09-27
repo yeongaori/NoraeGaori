@@ -104,6 +104,28 @@ func TestAcquireWithTimeoutDoesNotStrandTheLock(t *testing.T) {
 	}
 }
 
+func TestTryAcquireFailsWhileHeldWithoutStrandingTheLock(t *testing.T) {
+	var locks lockmap.Map
+
+	release := locks.Acquire("guild")
+
+	if blocked, isAcquired := locks.TryAcquire("guild"); isAcquired || blocked != nil {
+		t.Fatal("acquired a lock that was already held")
+	}
+
+	release()
+
+	next, isAcquired := locks.TryAcquire("guild")
+	if !isAcquired {
+		t.Fatal("could not take a free lock")
+	}
+	next()
+
+	if keys := locks.CountKeys(); keys != 0 {
+		t.Errorf("CountKeys() = %d, want 0", keys)
+	}
+}
+
 func TestReleaseIsIdempotent(t *testing.T) {
 	var locks lockmap.Map
 

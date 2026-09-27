@@ -492,14 +492,7 @@ func (cs *crossfadeState) mixAndSend(player *GuildPlayer, conn voiceConnection, 
 	opusData := make([]byte, opusLen)
 	copy(opusData, cs.opusScratch[:opusLen])
 
-	select {
-	case conn.OpusSendChan() <- opusData:
-		return nil
-	case <-conn.DeadChan():
-		return fmt.Errorf("voice connection died: %v", conn.Err())
-	case <-stopCh:
-		return fmt.Errorf("playback stopped by user")
-	}
+	return sendFrame(conn, opusData, stopCh)
 }
 
 func (cs *crossfadeState) handoff(player *GuildPlayer, enc *opus.Encoder) {

@@ -21,6 +21,7 @@ func TestMain(m *testing.M) {
 	lookupVoiceChannelBitrate = func(*discordgo.Session, string) int { return 128000 }
 	announceSongError = func(*discordgo.Session, string, *queue.Song, string) {}
 	announceAutoPause = func(*discordgo.Session, string, string) {}
+	announcePlaybackCrash = func(*discordgo.Session, string, *queue.Song) {}
 
 	localetest.Run(m)
 }

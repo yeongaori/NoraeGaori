@@ -54,18 +54,18 @@ func TestSkipVotePassingEndsTheStopVoteOnlyWhenTheQueueEmpties(t *testing.T) {
 	}
 }
 
-func TestCancelVotesForNewSongLeavesTheStopVoteAlone(t *testing.T) {
+func TestCancelSkipVotesLeavesTheStopVoteAlone(t *testing.T) {
 	skip := seedVote(t, "rules-new-song", KindSkip)
 	stop := seedVote(t, "rules-new-song", KindStop)
 
-	CancelForNewSong("rules-new-song")
+	CancelSkipVotes("rules-new-song")
 
 	reason, ended := endReasonOf(t, skip)
 	if !ended || reason != voteEndCancelled {
 		t.Errorf("skip vote ended=%v reason=%v, want voteEndCancelled", ended, reason)
 	}
 	if _, ended := endReasonOf(t, stop); ended {
-		t.Error("a new song ended the stop vote")
+		t.Error("cancelling skip votes ended the stop vote")
 	}
 }
 

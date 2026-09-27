@@ -1,6 +1,7 @@
 package playback
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"noraegaori/internal/discord"
@@ -96,7 +97,10 @@ func HandleSeek(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return nil
 	}
 
-	if err := player.Seek(i.GuildID, posMs); err != nil {
+	if err := player.Seek(i.GuildID, posMs); errors.Is(err, player.ErrNotPlaying) {
+		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.NotPlayingOrLoading))
+		return nil
+	} else if err != nil {
 		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, fmt.Sprintf(messages.T(i.GuildID).Music.SeekFailed, err)))
 		return err
 	}
