@@ -1,6 +1,8 @@
 package settings
 
 import (
+	"strings"
+
 	"noraegaori/internal/discord/command"
 	"noraegaori/internal/messages"
 
@@ -48,69 +50,9 @@ func Register(cmd func(string) messages.CommandStrings) {
 		})
 	}
 	command.RegisterAliases("setlanguage", cmd("setlanguage"))
-	command.RegisterCommand(&command.Command{
-		Name:        "sponsorblock",
-		Description: cmd("sponsorblock").Description,
-		Options: []*discordgo.ApplicationCommandOption{
-			{
-				Type:        discordgo.ApplicationCommandOptionString,
-				Name:        "setting",
-				Description: cmd("sponsorblock").Options["setting"],
-				Required:    false,
-				Choices: []*discordgo.ApplicationCommandOptionChoice{
-					{Name: "on", Value: "on"},
-					{Name: "off", Value: "off"},
-				},
-			},
-		},
-		Handler:  HandleSetting("sponsorblock"),
-		TextOnly: false,
-		Usage:    cmd("sponsorblock").Usage,
-		Example:  cmd("sponsorblock").Example,
-	})
-	command.RegisterAliases("sponsorblock", cmd("sponsorblock"))
-	command.RegisterCommand(&command.Command{
-		Name:        "showstartedtrack",
-		Description: cmd("showstartedtrack").Description,
-		Options: []*discordgo.ApplicationCommandOption{
-			{
-				Type:        discordgo.ApplicationCommandOptionString,
-				Name:        "setting",
-				Description: cmd("showstartedtrack").Options["setting"],
-				Required:    false,
-				Choices: []*discordgo.ApplicationCommandOptionChoice{
-					{Name: "on", Value: "on"},
-					{Name: "off", Value: "off"},
-				},
-			},
-		},
-		Handler:  HandleSetting("showstartedtrack"),
-		TextOnly: false,
-		Usage:    cmd("showstartedtrack").Usage,
-		Example:  cmd("showstartedtrack").Example,
-	})
-	command.RegisterAliases("showstartedtrack", cmd("showstartedtrack"))
-	command.RegisterCommand(&command.Command{
-		Name:        "normalization",
-		Description: cmd("normalization").Description,
-		Options: []*discordgo.ApplicationCommandOption{
-			{
-				Type:        discordgo.ApplicationCommandOptionString,
-				Name:        "setting",
-				Description: cmd("normalization").Options["setting"],
-				Required:    false,
-				Choices: []*discordgo.ApplicationCommandOptionChoice{
-					{Name: "on", Value: "on"},
-					{Name: "off", Value: "off"},
-				},
-			},
-		},
-		Handler:  HandleSetting("normalization"),
-		TextOnly: false,
-		Usage:    cmd("normalization").Usage,
-		Example:  cmd("normalization").Example,
-	})
-	command.RegisterAliases("normalization", cmd("normalization"))
+	for _, name := range []string{"sponsorblock", "showstartedtrack", "normalization"} {
+		RegisterToggleCommand(cmd, name)
+	}
 	command.RegisterCommand(&command.Command{
 		Name:        "settings",
 		Description: cmd("settings").Description,
@@ -131,4 +73,46 @@ func Register(cmd func(string) messages.CommandStrings) {
 	command.RegisterAliases("settings", cmd("settings"))
 	registerSettingMenus()
 	registerPanelRoutes()
+}
+
+func RegisterToggleCommand(cmd func(string) messages.CommandStrings, name string) {
+	commandStrings := cmd(name)
+	options := []*discordgo.ApplicationCommandOption{
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        "setting",
+			Description: commandStrings.Options["setting"],
+			Required:    false,
+			Choices: []*discordgo.ApplicationCommandOptionChoice{
+				{Name: valueOn, Value: valueOn},
+				{Name: valueOff, Value: valueOff},
+			},
+		},
+	}
+	if number := findNumberSetting(name, ""); number != nil {
+		options = append(options, numberOption(commandStrings, strings.TrimPrefix(number.key, name+"_"), number))
+	}
+
+	command.RegisterCommand(&command.Command{
+		Name:        name,
+		Description: commandStrings.Description,
+		Options:     options,
+		Handler:     HandleSetting(name),
+		TextOnly:    false,
+		Usage:       commandStrings.Usage,
+		Example:     commandStrings.Example,
+	})
+	command.RegisterAliases(name, commandStrings)
+}
+
+func numberOption(commandStrings messages.CommandStrings, name string, spec *settingSpec) *discordgo.ApplicationCommandOption {
+	minValue := spec.min
+	return &discordgo.ApplicationCommandOption{
+		Type:        discordgo.ApplicationCommandOptionInteger,
+		Name:        name,
+		Description: commandStrings.Options[name],
+		Required:    false,
+		MinValue:    &minValue,
+		MaxValue:    spec.max,
+	}
 }
