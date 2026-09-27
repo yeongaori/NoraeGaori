@@ -10,7 +10,7 @@ import (
 	"noraegaori/internal/messages"
 )
 
-var goldenCommands = []string{
+var expectedCommands = []string{
 	"automixpanel|admin=false|textonly=false|opts=1|handler=true|autocomplete=false",
 	"automixstyle|admin=false|textonly=false|opts=2|handler=true|autocomplete=false",
 	"automix|admin=false|textonly=false|opts=2|handler=true|autocomplete=false",
@@ -53,7 +53,7 @@ var goldenCommands = []string{
 	"volume|admin=false|textonly=false|opts=1|handler=true|autocomplete=false",
 }
 
-var goldenAliases = []string{
+var expectedAliases = []string{
 	"automix=automix",
 	"automixpanel=automixpanel",
 	"automixstyle=automixstyle",
@@ -155,28 +155,28 @@ func registeredCommandFingerprint(t *testing.T) ([]string, []string) {
 	return fingerprints, pairs
 }
 
-func TestRegisteredCommandsMatchTheGoldenSet(t *testing.T) {
+func TestRegisteredCommandsMatchTheExpectedList(t *testing.T) {
 	fingerprints, _ := registeredCommandFingerprint(t)
 
-	if len(fingerprints) != len(goldenCommands) {
-		t.Fatalf("got %d registered commands, want %d", len(fingerprints), len(goldenCommands))
+	if len(fingerprints) != len(expectedCommands) {
+		t.Fatalf("got %d registered commands, want %d", len(fingerprints), len(expectedCommands))
 	}
 	for i, got := range fingerprints {
-		if got != goldenCommands[i] {
-			t.Errorf("command %d: got %q, want %q", i, got, goldenCommands[i])
+		if got != expectedCommands[i] {
+			t.Errorf("command %d: got %q, want %q", i, got, expectedCommands[i])
 		}
 	}
 }
 
-func TestRegisteredAliasesMatchTheGoldenSet(t *testing.T) {
+func TestRegisteredAliasesMatchTheExpectedList(t *testing.T) {
 	_, pairs := registeredCommandFingerprint(t)
 
-	if len(pairs) != len(goldenAliases) {
-		t.Fatalf("got %d aliases, want %d", len(pairs), len(goldenAliases))
+	if len(pairs) != len(expectedAliases) {
+		t.Fatalf("got %d aliases, want %d", len(pairs), len(expectedAliases))
 	}
 	for i, got := range pairs {
-		if got != goldenAliases[i] {
-			t.Errorf("alias %d: got %q, want %q", i, got, goldenAliases[i])
+		if got != expectedAliases[i] {
+			t.Errorf("alias %d: got %q, want %q", i, got, expectedAliases[i])
 		}
 	}
 }
