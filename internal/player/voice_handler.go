@@ -12,16 +12,15 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-const (
-	autoPauseDelay = 3 * time.Second
-)
-
 var (
-	autoPauseTimers   = make(map[string]*time.Timer)
-	autoPauseTimersMu sync.Mutex
+	autoPauseDelay     = 3 * time.Second
+	autoPauseTimers    = make(map[string]*time.Timer)
+	autoPausedChannels = make(map[string]string)
+	autoPauseTimersMu  sync.Mutex
 )
 
 func HandleVoiceStateUpdate(session *discordgo.Session, vsu *discordgo.VoiceStateUpdate) {
+	resumeForReturningListener(session, vsu)
 
 	guild, err := session.State.Guild(vsu.GuildID)
 	if err != nil {
@@ -60,17 +59,16 @@ func HandleVoiceStateUpdate(session *discordgo.Session, vsu *discordgo.VoiceStat
 
 	humanCount := 0
 	for _, vs := range guild.VoiceStates {
-		if vs.ChannelID == botVoiceChannelID && vs.UserID != session.State.User.ID {
-
-			user, err := session.User(vs.UserID)
-			if err == nil && !user.Bot {
-				humanCount++
-			}
+		if vs.ChannelID == botVoiceChannelID && isHumanListener(session, vs.UserID) {
+			humanCount++
 		}
 	}
 
 	if humanCount == 0 {
-
+		if !shouldAutoPause(vsu.GuildID) {
+			logger.Debugf("Voice channel empty for guild: %s, auto-pause is off", vsu.GuildID)
+			return
+		}
 		logger.Debugf("Voice channel empty for guild: %s, starting auto-pause timer", vsu.GuildID)
 		startAutoPauseTimer(session, vsu.GuildID, botVoiceChannelID)
 	} else {
@@ -80,7 +78,74 @@ func HandleVoiceStateUpdate(session *discordgo.Session, vsu *discordgo.VoiceStat
 	}
 }
 
+func isHumanListener(session *discordgo.Session, userID string) bool {
+	if userID == session.State.User.ID {
+		return false
+	}
+	user, err := session.User(userID)
+	return err == nil && !user.Bot
+}
+
+func resumeForReturningListener(session *discordgo.Session, vsu *discordgo.VoiceStateUpdate) {
+	guildID := vsu.GuildID
+	if vsu.ChannelID == "" || autoPausedChannel(guildID) != vsu.ChannelID {
+		return
+	}
+	if !isHumanListener(session, vsu.UserID) || !shouldAutoResume(guildID) {
+		return
+	}
+	if !claimAutoPause(guildID, vsu.ChannelID) || !hasPausedSongs(guildID) {
+		return
+	}
+
+	if err := queue.UpdateVoiceChannel(guildID, vsu.ChannelID); err != nil {
+		logger.Errorf("Failed to update queue voice channel before auto-resume: %v", err)
+	}
+	logger.Infof("Auto-resuming playback for guild: %s", guildID)
+	resumeAutoPaused(session, guildID)
+}
+
+func hasPausedSongs(guildID string) bool {
+	player := GetPlayer(guildID)
+	player.mu.Lock()
+	isPaused := player.Paused && !player.Playing && !player.Loading
+	player.mu.Unlock()
+	if !isPaused {
+		return false
+	}
+
+	q, err := queue.GetQueue(guildID, false)
+	return err == nil && q != nil && len(q.Songs) > 0
+}
+
+func autoPausedChannel(guildID string) string {
+	autoPauseTimersMu.Lock()
+	defer autoPauseTimersMu.Unlock()
+	return autoPausedChannels[guildID]
+}
+
+func claimAutoPause(guildID, channelID string) bool {
+	autoPauseTimersMu.Lock()
+	defer autoPauseTimersMu.Unlock()
+
+	if autoPausedChannels[guildID] != channelID {
+		return false
+	}
+	delete(autoPausedChannels, guildID)
+	return true
+}
+
+func forgetAutoPause(guildID string) {
+	autoPauseTimersMu.Lock()
+	defer autoPauseTimersMu.Unlock()
+	delete(autoPausedChannels, guildID)
+}
+
 func pauseForEmptyChannel(session *discordgo.Session, guildID, channelID string) {
+	if !shouldAutoPause(guildID) {
+		logger.Debugf("Auto-pause was turned off before the timer fired for guild: %s", guildID)
+		return
+	}
 	logger.Infof("Auto-pausing playback for guild: %s", guildID)
 
 	player := GetPlayer(guildID)
@@ -96,7 +161,7 @@ func pauseForEmptyChannel(session *discordgo.Session, guildID, channelID string)
 	}
 
 	player.noteCommand("pause")
-	if err := suspendPlayback(player); err != nil {
+	if err := pausePlayback(player); err != nil {
 		logger.Errorf("Failed to leave voice during auto-pause: %v", err)
 	}
 
@@ -106,6 +171,7 @@ func pauseForEmptyChannel(session *discordgo.Session, guildID, channelID string)
 
 	autoPauseTimersMu.Lock()
 	delete(autoPauseTimers, guildID)
+	autoPausedChannels[guildID] = channelID
 	autoPauseTimersMu.Unlock()
 }
 
@@ -149,15 +215,25 @@ func sendAutoPauseNotification(session *discordgo.Session, guildID, voiceChannel
 		return
 	}
 
-	embed := &discordgo.MessageEmbed{
-		Color:       messages.ColorWarning,
-		Title:       messages.T(guildID).VoiceHandler.AutoPauseTitle,
-		Description: fmt.Sprintf(messages.T(guildID).VoiceHandler.AutoPauseDesc, channel.Name),
-		Timestamp:   time.Now().Format(time.RFC3339),
-	}
+	embed := autoPauseEmbed(guildID, channel.Name, shouldAutoResume(guildID))
 
 	if _, err := session.ChannelMessageSendEmbed(q.TextChannelID, embed); err != nil {
 		logger.Errorf("Failed to send auto-pause notification: %v", err)
+	}
+}
+
+func autoPauseEmbed(guildID, channelName string, isResumingAutomatically bool) *discordgo.MessageEmbed {
+	voiceStrings := messages.T(guildID).VoiceHandler
+	description := voiceStrings.AutoPauseDesc
+	if isResumingAutomatically {
+		description = voiceStrings.AutoPauseResumeDesc
+	}
+
+	return &discordgo.MessageEmbed{
+		Color:       messages.ColorWarning,
+		Title:       voiceStrings.AutoPauseTitle,
+		Description: fmt.Sprintf(description, channelName),
+		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 }
 

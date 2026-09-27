@@ -69,6 +69,30 @@ func SetNormalization(guildID string, enabled bool) error {
 	return saveGuildSetting(guildID, "normalization", boolToInt(enabled))
 }
 
+func GetAutoLeave(guildID string) (bool, error) {
+	return readSetting(guildID, "auto_leave", true, func(settings *guildSettingsRow) bool { return settings.autoLeave })
+}
+
+func SetAutoLeave(guildID string, enabled bool) error {
+	return saveGuildSetting(guildID, "auto_leave", boolToInt(enabled))
+}
+
+func GetAutoPause(guildID string) (bool, error) {
+	return readSetting(guildID, "auto_pause", true, func(settings *guildSettingsRow) bool { return settings.autoPause })
+}
+
+func SetAutoPause(guildID string, enabled bool) error {
+	return saveGuildSetting(guildID, "auto_pause", boolToInt(enabled))
+}
+
+func GetAutoResume(guildID string) (bool, error) {
+	return readSetting(guildID, "auto_resume", true, func(settings *guildSettingsRow) bool { return settings.autoResume })
+}
+
+func SetAutoResume(guildID string, enabled bool) error {
+	return saveGuildSetting(guildID, "auto_resume", boolToInt(enabled))
+}
+
 func boolToInt(enabled bool) int {
 	if enabled {
 		return 1

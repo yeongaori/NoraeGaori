@@ -15,13 +15,14 @@ func TestMain(m *testing.M) {
 	resumePlayback = func(*discordgo.Session, string) error { return nil }
 	preCacheNext = func(string, int) {}
 	announceNowPlaying = func(*discordgo.Session, string, *queue.Song, *queue.Queue) {}
-	announceLeaving = func(*discordgo.Session, string, string) {}
+	announcePlaybackEnd = func(*discordgo.Session, string, string, bool) {}
 	announceReconnect = func(*discordgo.Session, string, *queue.Song) {}
 	dismissLoadingMessage = func(*discordgo.Session, string) {}
 	lookupVoiceChannelBitrate = func(*discordgo.Session, string) int { return 128000 }
 	announceSongError = func(*discordgo.Session, string, *queue.Song, string) {}
 	announceAutoPause = func(*discordgo.Session, string, string) {}
 	announcePlaybackCrash = func(*discordgo.Session, string, *queue.Song) {}
+	resumeAutoPaused = func(*discordgo.Session, string) {}
 
 	localetest.Run(m)
 }

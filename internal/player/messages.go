@@ -174,46 +174,39 @@ func sendPlaybackCrashMessage(session *discordgo.Session, guildID string, song *
 	sendSongErrorMessage(session, guildID, song, messages.T(guildID).Player.PlaybackCrashRetry)
 }
 
-func sendLeavingMessage(session *discordgo.Session, guildID, reason string) {
+func sendPlaybackEndMessage(session *discordgo.Session, guildID, reason string, isLeaving bool) {
 	q, err := queue.GetQueue(guildID, false)
 	if err != nil || q == nil || q.TextChannelID == "" {
-		logger.Debugf("Cannot send leaving message: no queue or text channel")
+		logger.Debugf("Cannot send playback end message: no queue or text channel")
 		return
 	}
 
-	var embed *discordgo.MessageEmbed
+	if _, err := session.ChannelMessageSendEmbed(q.TextChannelID, playbackEndEmbed(guildID, reason, isLeaving)); err != nil {
+		logger.Debugf("Failed to send playback end message: %v", err)
+	}
+}
+
+func playbackEndEmbed(guildID, reason string, isLeaving bool) *discordgo.MessageEmbed {
+	playerStrings := messages.T(guildID).Player
+	description, footer, color := playerStrings.LeavingDefaultDesc, reason, messages.ColorInfo
 
 	switch reason {
 	case "empty":
-		embed = &discordgo.MessageEmbed{
-			Description: messages.T(guildID).Player.LeavingEmptyDesc,
-			Color:       messages.ColorInfo,
-			Footer: &discordgo.MessageEmbedFooter{
-				Text: messages.T(guildID).Player.LeavingEmptyFooter,
-			},
-			Timestamp: time.Now().Format(time.RFC3339),
+		description, footer = playerStrings.LeavingEmptyDesc, playerStrings.LeavingEmptyFooter
+		if !isLeaving {
+			description, footer = playerStrings.QueueFinishedDesc, playerStrings.StayingFooter
 		}
 	case "error":
-		embed = &discordgo.MessageEmbed{
-			Description: messages.T(guildID).Player.LeavingErrorDesc,
-			Color:       messages.ColorError,
-			Footer: &discordgo.MessageEmbedFooter{
-				Text: messages.T(guildID).Player.LeavingErrorFooter,
-			},
-			Timestamp: time.Now().Format(time.RFC3339),
-		}
-	default:
-		embed = &discordgo.MessageEmbed{
-			Description: messages.T(guildID).Player.LeavingDefaultDesc,
-			Color:       messages.ColorInfo,
-			Footer: &discordgo.MessageEmbedFooter{
-				Text: reason,
-			},
-			Timestamp: time.Now().Format(time.RFC3339),
+		description, footer, color = playerStrings.LeavingErrorDesc, playerStrings.LeavingErrorFooter, messages.ColorError
+		if !isLeaving {
+			footer = playerStrings.StayingFooter
 		}
 	}
 
-	if _, err := session.ChannelMessageSendEmbed(q.TextChannelID, embed); err != nil {
-		logger.Debugf("Failed to send leaving message: %v", err)
+	return &discordgo.MessageEmbed{
+		Description: description,
+		Color:       color,
+		Footer:      &discordgo.MessageEmbedFooter{Text: footer},
+		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 }

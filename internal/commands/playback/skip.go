@@ -12,17 +12,24 @@ import (
 	"noraegaori/internal/queue"
 )
 
-func skipResultEmbed(guildID string, song *queue.Song, queueEnded bool) *discordgo.MessageEmbed {
+func skipResultEmbed(guildID string, song *queue.Song, queueEnded, isStaying bool) *discordgo.MessageEmbed {
 	title := messages.T(guildID).Titles.Skipped
 	template := messages.T(guildID).Descriptions.Skipped
 	if queueEnded {
 		title = messages.T(guildID).Music.PlaybackEndedTitle
 		template = messages.T(guildID).Music.PlaybackEndedSkip
+		if isStaying {
+			template = messages.T(guildID).Music.PlaybackEndedSkipStay
+		}
 	}
 
 	embed := messages.CreateSuccessEmbed(title, fmt.Sprintf(template, messages.FormatMaskedLink(song.Title, song.URL)))
 	messages.SetThumbnail(embed, song.Thumbnail)
 	return embed
+}
+
+func isStayingAfterSkip(guildID string, queueEnded bool) bool {
+	return queueEnded && !player.ShouldLeaveVoice(guildID)
 }
 
 func stopAfterEmptyQueue(guildID string) {
@@ -31,18 +38,26 @@ func stopAfterEmptyQueue(guildID string) {
 	}
 }
 
+func skipCurrentSong(s *discordgo.Session, guildID string, skipped *queue.Song) (*discordgo.MessageEmbed, bool, error) {
+	err := player.Skip(s, guildID)
+	if err != nil && err != player.ErrQueueEmpty {
+		return nil, false, err
+	}
+
+	queueEnded := err == player.ErrQueueEmpty
+	vote.CancelSuperseded(guildID, vote.KindSkip, queueEnded)
+	return skipResultEmbed(guildID, skipped, queueEnded, isStayingAfterSkip(guildID, queueEnded)), queueEnded, nil
+}
+
 func applySkipVote(guildID string, skipped *queue.Song) func(*discordgo.Session, *vote.Session, vote.Tally) {
 	return func(s *discordgo.Session, session *vote.Session, tally vote.Tally) {
-		skipErr := player.Skip(s, guildID)
-		if skipErr != nil && skipErr != player.ErrQueueEmpty {
+		embed, queueEnded, skipErr := skipCurrentSong(s, guildID, skipped)
+		if skipErr != nil {
 			vote.RenderFailure(s, session, messages.T(guildID).Music.SkipFailedTitle, fmt.Sprintf(messages.T(guildID).Music.SkipFailedDesc, skipErr))
 			return
 		}
 
-		queueEnded := skipErr == player.ErrQueueEmpty
-		vote.CancelSuperseded(guildID, vote.KindSkip, queueEnded)
-
-		vote.RenderResult(s, session, skipResultEmbed(guildID, skipped, queueEnded), tally)
+		vote.RenderResult(s, session, embed, tally)
 
 		if queueEnded {
 			stopAfterEmptyQueue(guildID)
@@ -89,18 +104,15 @@ func HandleSkip(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 }
 
 func skipImmediately(s *discordgo.Session, i *discordgo.InteractionCreate, skipped *queue.Song) error {
-	err := player.Skip(s, i.GuildID)
-	if err != nil && err != player.ErrQueueEmpty {
+	embed, queueEnded, err := skipCurrentSong(s, i.GuildID, skipped)
+	if err != nil {
 		logger.Errorf("Failed to skip: %v", err)
 		discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Music.SkipFailedTitle,
 			fmt.Sprintf(messages.T(i.GuildID).Music.SkipFailedDesc, err)))
 		return nil
 	}
 
-	queueEnded := err == player.ErrQueueEmpty
-	vote.CancelSuperseded(i.GuildID, vote.KindSkip, queueEnded)
-
-	discord.UpdateResponseEmbed(s, i, skipResultEmbed(i.GuildID, skipped, queueEnded))
+	discord.UpdateResponseEmbed(s, i, embed)
 
 	if queueEnded {
 		stopAfterEmptyQueue(i.GuildID)

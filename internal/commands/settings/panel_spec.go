@@ -100,6 +100,27 @@ var settingSpecs = []settingSpec{
 		write:    boolWriter(queue.SetShowStartedTrack),
 	},
 	{
+		key:      "autoleave",
+		category: categoryPlayback,
+		kind:     settingToggle,
+		read:     boolReader(queue.GetAutoLeave),
+		write:    boolWriter(queue.SetAutoLeave),
+	},
+	{
+		key:      "autopause",
+		category: categoryPlayback,
+		kind:     settingToggle,
+		read:     boolReader(queue.GetAutoPause),
+		write:    boolWriter(queue.SetAutoPause),
+	},
+	{
+		key:      "autoresume",
+		category: categoryPlayback,
+		kind:     settingToggle,
+		read:     boolReader(queue.GetAutoResume),
+		write:    boolWriter(queue.SetAutoResume),
+	},
+	{
 		key:      "fadein",
 		category: categoryMixing,
 		kind:     settingToggle,

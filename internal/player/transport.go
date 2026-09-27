@@ -24,7 +24,7 @@ func Pause(guildID string) error {
 		return ErrNotPlaying
 	}
 
-	return suspendPlayback(player)
+	return pausePlayback(player)
 }
 
 func pauseInternal(guildID string) error {
@@ -36,10 +36,31 @@ func Leave(guildID string) error {
 }
 
 func leaveInternal(guildID string) error {
+	forgetAutoPause(guildID)
 	return suspendPlayback(GetPlayer(guildID))
 }
 
 func suspendPlayback(player *GuildPlayer) error {
+	seekTime := haltPlayback(player)
+	if err := LeaveVoice(player.GuildID); err != nil {
+		return err
+	}
+
+	logger.Debugf("Suspended playback at %dms for guild: %s", seekTime, player.GuildID)
+	return nil
+}
+
+func pausePlayback(player *GuildPlayer) error {
+	if ShouldLeaveVoice(player.GuildID) {
+		return suspendPlayback(player)
+	}
+
+	seekTime := haltPlayback(player)
+	logger.Debugf("Paused playback at %dms in voice for guild: %s", seekTime, player.GuildID)
+	return nil
+}
+
+func haltPlayback(player *GuildPlayer) int {
 	guildID := player.GuildID
 
 	player.mu.Lock()
@@ -65,13 +86,7 @@ func suspendPlayback(player *GuildPlayer) error {
 	if isActive {
 		persistIdleState(guildID, true)
 	}
-
-	if err := LeaveVoice(guildID); err != nil {
-		return err
-	}
-
-	logger.Debugf("Suspended playback at %dms for guild: %s", seekTime, guildID)
-	return nil
+	return seekTime
 }
 
 func saveCurrentSeekTime(guildID string, seekTime int) {
@@ -446,6 +461,14 @@ func skipInternal(session *discordgo.Session, guildID string) error {
 }
 
 func Stop(guildID string) error {
+	return stopPlayback(guildID, ShouldLeaveVoice(guildID))
+}
+
+func Teardown(guildID string) error {
+	return stopPlayback(guildID, true)
+}
+
+func stopPlayback(guildID string, isLeaving bool) error {
 	defer callOnPlaybackEnded(guildID)
 
 	logger.Debugf("Stop called for guild %s", guildID)
@@ -476,24 +499,13 @@ func Stop(guildID string) error {
 		}
 	}
 
-	if err := LeaveVoice(guildID); err != nil {
-		logger.Errorf("Failed to leave voice: %v", err)
+	if err := releasePlayback(guildID, isLeaving); err != nil {
+		logger.Errorf("Failed to release playback: %v", err)
 	}
-
-	if err := queue.DeleteQueue(guildID); err != nil {
-		logger.Errorf("Failed to delete queue: %v", err)
-	}
-
-	ClearPreCache(guildID)
-	StopAnalysisBackfill(guildID)
-
-	DeletePlayer(guildID)
-
-	logger.Debugf("Stopped playback for guild: %s", guildID)
 	return nil
 }
 
-func stopInternal(guildID string) error {
+func stopInternal(guildID string, isLeaving bool) error {
 	defer callOnPlaybackEnded(guildID)
 
 	player := GetPlayer(guildID)
@@ -508,19 +520,30 @@ func stopInternal(guildID string) error {
 		pending.Stream.Stop()
 	}
 
-	if err := LeaveVoice(guildID); err != nil {
-		logger.Errorf("Failed to leave voice: %v", err)
+	return releasePlayback(guildID, isLeaving)
+}
+
+func releasePlayback(guildID string, isLeaving bool) error {
+	if isLeaving {
+		if err := LeaveVoice(guildID); err != nil {
+			logger.Errorf("Failed to leave voice: %v", err)
+		}
 	}
 
-	if err := queue.DeleteQueue(guildID); err != nil {
-		return fmt.Errorf("failed to delete queue: %w", err)
-	}
+	deleteErr := queue.DeleteQueue(guildID)
 
 	ClearPreCache(guildID)
 	StopAnalysisBackfill(guildID)
+	forgetAutoPause(guildID)
 
-	DeletePlayer(guildID)
-	logger.Debugf("Stopped playback for guild: %s", guildID)
+	if isLeaving {
+		DeletePlayer(guildID)
+	}
+	logger.Debugf("Stopped playback for guild: %s (left voice: %t)", guildID, isLeaving)
+
+	if deleteErr != nil {
+		return fmt.Errorf("failed to delete queue: %w", deleteErr)
+	}
 	return nil
 }
 

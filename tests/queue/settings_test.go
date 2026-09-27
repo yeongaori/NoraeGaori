@@ -54,6 +54,59 @@ func TestBoolSettingsRoundTrip(t *testing.T) {
 	}
 }
 
+var voicePolicySettings = []struct {
+	name string
+	set  func(string, bool) error
+	get  func(string) (bool, error)
+}{
+	{"AutoLeave", queue.SetAutoLeave, queue.GetAutoLeave},
+	{"AutoPause", queue.SetAutoPause, queue.GetAutoPause},
+	{"AutoResume", queue.SetAutoResume, queue.GetAutoResume},
+}
+
+func wantVoicePolicy(t *testing.T, guildID, off string) {
+	t.Helper()
+
+	for _, setting := range voicePolicySettings {
+		got, err := setting.get(guildID)
+		if err != nil {
+			t.Fatalf("get %s: %v", setting.name, err)
+		}
+		if want := setting.name != off; got != want {
+			t.Errorf("%s = %v with %q off, want %v", setting.name, got, off, want)
+		}
+	}
+}
+
+func TestVoicePolicySettingsDefaultToOn(t *testing.T) {
+	setupTestDB(t)
+
+	wantVoicePolicy(t, "no-settings-row", "")
+
+	if err := queue.SetSponsorBlock("guild1", true); err != nil {
+		t.Fatalf("failed to create the settings row: %v", err)
+	}
+	wantVoicePolicy(t, "guild1", "")
+}
+
+func TestVoicePolicySettingsRoundTripIndependently(t *testing.T) {
+	setupTestDB(t)
+
+	for _, setting := range voicePolicySettings {
+		t.Run(setting.name, func(t *testing.T) {
+			if err := setting.set("guild1", false); err != nil {
+				t.Fatalf("set off: %v", err)
+			}
+			wantVoicePolicy(t, "guild1", setting.name)
+
+			if err := setting.set("guild1", true); err != nil {
+				t.Fatalf("set on: %v", err)
+			}
+			wantVoicePolicy(t, "guild1", "")
+		})
+	}
+}
+
 func TestFloatSettingsRoundTrip(t *testing.T) {
 	setupTestDB(t)
 

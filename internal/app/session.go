@@ -91,7 +91,7 @@ func onVoiceStateUpdate(s *discordgo.Session, vsu *discordgo.VoiceStateUpdate) {
 func onGuildDelete(s *discordgo.Session, g *discordgo.GuildDelete) {
 	logger.Infof("Bot removed from guild: %s - cleaning up data", g.ID)
 
-	if err := player.Stop(g.ID); err != nil {
+	if err := player.Teardown(g.ID); err != nil {
 		logger.Debugf("Failed to stop player for guild %s: %v", g.ID, err)
 	}
 

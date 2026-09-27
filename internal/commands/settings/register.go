@@ -50,7 +50,7 @@ func Register(cmd func(string) messages.CommandStrings) {
 		})
 	}
 	command.RegisterAliases("setlanguage", cmd("setlanguage"))
-	for _, name := range []string{"sponsorblock", "showstartedtrack", "normalization"} {
+	for _, name := range []string{"sponsorblock", "showstartedtrack", "normalization", "autoleave", "autopause", "autoresume"} {
 		RegisterToggleCommand(cmd, name)
 	}
 	command.RegisterCommand(&command.Command{

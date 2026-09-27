@@ -148,6 +148,7 @@ type DescriptionMessages struct {
 	Loading    string `json:"loading"`
 	Skipped    string `json:"skipped"`
 	Paused     string `json:"paused"`
+	PausedStay string `json:"paused_stay"`
 	EmptyQueue string `json:"empty_queue"`
 }
 
@@ -351,8 +352,10 @@ type MusicMessages struct {
 	SeekFailed                 string `json:"seek_failed"`
 	PlaybackEndedTitle         string `json:"playback_ended_title"`
 	PlaybackEndedSkip          string `json:"playback_ended_skip"`
+	PlaybackEndedSkipStay      string `json:"playback_ended_skip_stay"`
 	ForceSkipped               string `json:"force_skipped"`
 	ForceSkippedEnded          string `json:"force_skipped_ended"`
+	ForceSkippedEndedStay      string `json:"force_skipped_ended_stay"`
 	StopFailedTitle            string `json:"stop_failed_title"`
 	StopFailedDesc             string `json:"stop_failed_desc"`
 	StopSuccessTitle           string `json:"stop_success_title"`
@@ -457,6 +460,8 @@ type PlayerMessages struct {
 	LeavingErrorDesc           string `json:"leaving_error_desc"`
 	LeavingErrorFooter         string `json:"leaving_error_footer"`
 	LeavingDefaultDesc         string `json:"leaving_default_desc"`
+	QueueFinishedDesc          string `json:"queue_finished_desc"`
+	StayingFooter              string `json:"staying_footer"`
 	ErrorPrivateVideo          string `json:"error_private_video"`
 	ErrorDeletedVideo          string `json:"error_deleted_video"`
 	ErrorAgeRestricted         string `json:"error_age_restricted"`
@@ -489,8 +494,9 @@ type YouTubeMessages struct {
 }
 
 type VoiceHandlerMessages struct {
-	AutoPauseTitle string `json:"auto_pause_title"`
-	AutoPauseDesc  string `json:"auto_pause_desc"`
+	AutoPauseTitle      string `json:"auto_pause_title"`
+	AutoPauseDesc       string `json:"auto_pause_desc"`
+	AutoPauseResumeDesc string `json:"auto_pause_resume_desc"`
 }
 
 type RPCMessages struct {

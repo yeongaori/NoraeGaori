@@ -57,6 +57,7 @@
     "loading": "오디오를 로드하고 있습니다...",
     "skipped": "**%s**이(가) 스킵되었습니다.",
     "paused": "노래를 일시 정지하고 채널에서 나갔습니다.\n대기열과 재생 위치는 보존됩니다.",
+    "paused_stay": "노래를 일시 정지했습니다.\n대기열과 재생 위치는 보존됩니다.",
     "empty_queue": "현재 대기열이 비어있습니다."
   },
 
@@ -290,6 +291,27 @@
       "example": "trimsilence, trimsilence on, trimsilence off",
       "aliases": ["trimsilence", "trim"]
     },
+    "autoleave": {
+      "description": "재생이 끝나면 음성 채널에서 나갑니다",
+      "options": { "setting": "설정 값" },
+      "usage": "autoleave [on|off]",
+      "example": "autoleave, autoleave on, autoleave off",
+      "aliases": ["autoleave", "al"]
+    },
+    "autopause": {
+      "description": "음성 채널이 비면 재생을 일시정지합니다",
+      "options": { "setting": "설정 값" },
+      "usage": "autopause [on|off]",
+      "example": "autopause, autopause on, autopause off",
+      "aliases": ["autopause", "ap"]
+    },
+    "autoresume": {
+      "description": "자동 일시정지 후 누군가 채널에 들어오면 재생을 재개합니다",
+      "options": { "setting": "설정 값" },
+      "usage": "autoresume [on|off]",
+      "example": "autoresume, autoresume on, autoresume off",
+      "aliases": ["autoresume", "ar"]
+    },
     "setprefix": {
       "description": "이 서버의 명령어 prefix를 설정합니다 (관리자 전용)",
       "options": { "prefix": "새로운 prefix (비워두면 기본값으로 초기화)" },
@@ -498,8 +520,10 @@
     "seek_failed": "이동에 실패했습니다: %v",
     "playback_ended_title": "재생 종료",
     "playback_ended_skip": "**%s**이(가) 스킵되었습니다.\n모든 노래 재생이 완료되어 음성 채널에서 나갑니다.",
+    "playback_ended_skip_stay": "**%s**이(가) 스킵되었습니다.\n모든 노래 재생이 완료되었습니다.",
     "force_skipped": "관리자에 의해 **%s**이(가) 강제로 스킵되었습니다.",
     "force_skipped_ended": "관리자에 의해 **%s**이(가) 강제로 스킵되었습니다.\n모든 노래 재생이 완료되어 음성 채널에서 나갑니다.",
+    "force_skipped_ended_stay": "관리자에 의해 **%s**이(가) 강제로 스킵되었습니다.\n모든 노래 재생이 완료되었습니다.",
     "stop_failed_title": "정지 실패",
     "stop_failed_desc": "정지 중 오류가 발생했습니다: %v",
     "stop_success_title": "재생 중지",
@@ -604,6 +628,8 @@
     "leaving_error_desc": "복구할 수 없는 오류 발생",
     "leaving_error_footer": "음성 채팅을 나갑니다",
     "leaving_default_desc": "음성 채팅을 나갑니다",
+    "queue_finished_desc": "모든 노래 재생이 완료되었습니다",
+    "staying_footer": "음성 채널에 계속 머뭅니다",
     "error_private_video": "비공개 동영상",
     "error_deleted_video": "삭제된 동영상",
     "error_age_restricted": "연령 제한 동영상",
@@ -637,7 +663,8 @@
 
   "voice_handler": {
     "auto_pause_title": "자동 일시정지",
-    "auto_pause_desc": "음성 채널 **%s**이(가) 비어있어 재생을 일시정지했습니다.\n\n다시 채널에 들어오시면 `/resume` 명령어로 재생을 재개할 수 있습니다."
+    "auto_pause_desc": "음성 채널 **%s**이(가) 비어있어 재생을 일시정지했습니다.\n\n`/resume` 명령어로 재생을 재개할 수 있습니다.",
+    "auto_pause_resume_desc": "음성 채널 **%s**이(가) 비어있어 재생을 일시정지했습니다.\n\n누군가 채널에 들어오면 재생이 자동으로 재개됩니다."
   },
 
   "rpc": {
@@ -756,6 +783,9 @@
       "sponsorblock": "SponsorBlock",
       "normalization": "음량 평준화",
       "showstartedtrack": "재생 알림",
+      "autoleave": "자동 퇴장",
+      "autopause": "자동 일시정지",
+      "autoresume": "자동 재개",
       "fadein": "페이드 인",
       "fadein_duration": "페이드 인 시간",
       "fadeout": "페이드 아웃",

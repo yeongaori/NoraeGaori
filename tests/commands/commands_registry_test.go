@@ -11,9 +11,12 @@ import (
 )
 
 var expectedCommands = []string{
+	"autoleave|admin=false|textonly=false|opts=1|handler=true|autocomplete=false",
 	"automixpanel|admin=false|textonly=false|opts=1|handler=true|autocomplete=false",
 	"automixstyle|admin=false|textonly=false|opts=2|handler=true|autocomplete=false",
 	"automix|admin=false|textonly=false|opts=2|handler=true|autocomplete=false",
+	"autopause|admin=false|textonly=false|opts=1|handler=true|autocomplete=false",
+	"autoresume|admin=false|textonly=false|opts=1|handler=true|autocomplete=false",
 	"crossfade|admin=false|textonly=false|opts=2|handler=true|autocomplete=false",
 	"fadein|admin=false|textonly=false|opts=2|handler=true|autocomplete=false",
 	"fadeonstop|admin=false|textonly=false|opts=1|handler=true|autocomplete=false",
@@ -54,9 +57,15 @@ var expectedCommands = []string{
 }
 
 var expectedAliases = []string{
+	"al=autoleave",
+	"ap=autopause",
+	"ar=autoresume",
+	"autoleave=autoleave",
 	"automix=automix",
 	"automixpanel=automixpanel",
 	"automixstyle=automixstyle",
+	"autopause=autopause",
+	"autoresume=autoresume",
 	"cf=crossfade",
 	"config=settings",
 	"crossfade=crossfade",

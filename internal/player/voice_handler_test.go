@@ -114,6 +114,8 @@ func TestPauseForEmptyChannelIgnoresAnIdlePlayer(t *testing.T) {
 	player.Playing = false
 	player.mu.Unlock()
 
+	t.Cleanup(func() { forgetAutoPause(guildID) })
+
 	pauseForEmptyChannel(session, guildID, "voice")
 
 	if got := conn.disconnectCount(); got != 0 {
@@ -121,6 +123,9 @@ func TestPauseForEmptyChannelIgnoresAnIdlePlayer(t *testing.T) {
 	}
 	if player.currentVoice() == nil {
 		t.Error("auto-pause cleared the voice connection of an idle player")
+	}
+	if got := autoPausedChannel(guildID); got != "" {
+		t.Errorf("an idle player was remembered as auto-paused in %q", got)
 	}
 }
 

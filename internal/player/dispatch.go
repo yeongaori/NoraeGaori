@@ -73,7 +73,7 @@ func (player *GuildPlayer) defaultDispatch(cmd PlayerCommand) error {
 		logger.Debugf("Processing skip command for guild: %s", player.GuildID)
 		return skipInternal(cmd.Session, cmd.GuildID)
 	case "stop":
-		return stopInternal(cmd.GuildID)
+		return stopInternal(cmd.GuildID, ShouldLeaveVoice(cmd.GuildID))
 	case "pause":
 		return pauseInternal(cmd.GuildID)
 	case "resume":
@@ -101,6 +101,7 @@ func startPlaybackSession(session *discordgo.Session, guildID string) error {
 	}
 
 	logger.Debugf("Lock acquired for guild: %s", guildID)
+	forgetAutoPause(guildID)
 	player := GetPlayer(guildID)
 	done := player.beginSession()
 	go runPlaybackSession(session, player, done, release, playCurrentSong)

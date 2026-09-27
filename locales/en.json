@@ -57,6 +57,7 @@
     "loading": "Loading audio...",
     "skipped": "**%s** has been skipped.",
     "paused": "Playback paused and left the channel.\nQueue and playback position are preserved.",
+    "paused_stay": "Playback paused.\nQueue and playback position are preserved.",
     "empty_queue": "The queue is currently empty."
   },
 
@@ -290,6 +291,27 @@
       "example": "trimsilence, trimsilence on, trimsilence off",
       "aliases": ["trimsilence", "trim"]
     },
+    "autoleave": {
+      "description": "Leave the voice channel when playback ends",
+      "options": { "setting": "Setting value" },
+      "usage": "autoleave [on|off]",
+      "example": "autoleave, autoleave on, autoleave off",
+      "aliases": ["autoleave", "al"]
+    },
+    "autopause": {
+      "description": "Pause playback when the voice channel is empty",
+      "options": { "setting": "Setting value" },
+      "usage": "autopause [on|off]",
+      "example": "autopause, autopause on, autopause off",
+      "aliases": ["autopause", "ap"]
+    },
+    "autoresume": {
+      "description": "Resume auto-paused playback when someone joins the channel",
+      "options": { "setting": "Setting value" },
+      "usage": "autoresume [on|off]",
+      "example": "autoresume, autoresume on, autoresume off",
+      "aliases": ["autoresume", "ar"]
+    },
     "setprefix": {
       "description": "Sets this server's command prefix (admin only)",
       "options": { "prefix": "New prefix (leave empty to reset to default)" },
@@ -498,8 +520,10 @@
     "seek_failed": "Failed to seek: %v",
     "playback_ended_title": "Playback Ended",
     "playback_ended_skip": "**%s** has been skipped.\nAll songs have finished playing. Leaving the voice channel.",
+    "playback_ended_skip_stay": "**%s** has been skipped.\nAll songs have finished playing.",
     "force_skipped": "**%s** has been force skipped by an admin.",
     "force_skipped_ended": "**%s** has been force skipped by an admin.\nAll songs have finished playing. Leaving the voice channel.",
+    "force_skipped_ended_stay": "**%s** has been force skipped by an admin.\nAll songs have finished playing.",
     "stop_failed_title": "Stop Failed",
     "stop_failed_desc": "An error occurred while stopping: %v",
     "stop_success_title": "Playback Stopped",
@@ -604,6 +628,8 @@
     "leaving_error_desc": "An unrecoverable error occurred",
     "leaving_error_footer": "Leaving the voice channel",
     "leaving_default_desc": "Leaving the voice channel",
+    "queue_finished_desc": "All songs have finished playing",
+    "staying_footer": "Staying in the voice channel",
     "error_private_video": "Private video",
     "error_deleted_video": "Deleted video",
     "error_age_restricted": "Age-restricted video",
@@ -637,7 +663,8 @@
 
   "voice_handler": {
     "auto_pause_title": "Auto-Paused",
-    "auto_pause_desc": "Voice channel **%s** is empty, so playback has been paused.\n\nRejoin the channel and use `/resume` to continue playback."
+    "auto_pause_desc": "Voice channel **%s** is empty, so playback has been paused.\n\nUse `/resume` to continue playback.",
+    "auto_pause_resume_desc": "Voice channel **%s** is empty, so playback has been paused.\n\nPlayback resumes automatically when someone joins."
   },
 
   "rpc": {
@@ -756,6 +783,9 @@
       "sponsorblock": "SponsorBlock",
       "normalization": "Normalization",
       "showstartedtrack": "Announce Tracks",
+      "autoleave": "Auto Leave",
+      "autopause": "Auto Pause",
+      "autoresume": "Auto Resume",
       "fadein": "Fade In",
       "fadein_duration": "Fade In Seconds",
       "fadeout": "Fade Out",

@@ -160,6 +160,9 @@ func runMigrations() error {
 		{"songs", "automix_style_filter", "TEXT DEFAULT 'auto'"},
 		{"songs", "automix_style_effect", "TEXT DEFAULT 'auto'"},
 		{"songs", "automix_style_loop", "TEXT DEFAULT 'auto'"},
+		{"guild_settings", "auto_leave", "INTEGER DEFAULT 1"},
+		{"guild_settings", "auto_pause", "INTEGER DEFAULT 1"},
+		{"guild_settings", "auto_resume", "INTEGER DEFAULT 1"},
 	}
 
 	for _, m := range migrations {

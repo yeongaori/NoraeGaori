@@ -45,7 +45,7 @@ func probeRecovery(t *testing.T) *recoveryProbe {
 		probe.crashes = append(probe.crashes, song.Title)
 		probe.mu.Unlock()
 	})
-	testutil.Swap(t, &announceLeaving, func(_ *discordgo.Session, _ string, reason string) {
+	testutil.Swap(t, &announcePlaybackEnd, func(_ *discordgo.Session, _ string, reason string, _ bool) {
 		probe.mu.Lock()
 		probe.leavings = append(probe.leavings, reason)
 		probe.mu.Unlock()

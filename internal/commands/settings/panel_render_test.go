@@ -173,6 +173,26 @@ func TestEmbedListsEveryVisibleSettingInTheCategory(t *testing.T) {
 	}
 }
 
+func TestVoicePolicyTogglesShowInPlaybackForEveryoneAndStartOn(t *testing.T) {
+	dbtest.Setup(t)
+
+	visible := make(map[string]bool)
+	for _, spec := range settingsInCategory(categoryPlayback, false) {
+		visible[spec.key] = true
+	}
+
+	view := newPanelView(checkGuildID, categoryPlayback, false)
+	for _, key := range []string{"autoleave", "autopause", "autoresume"} {
+		if !visible[key] {
+			t.Errorf("%s is not in the Playback tab for non-admins", key)
+			continue
+		}
+		if got := view.displayValue(specFor(t, key)); got != messages.T(checkGuildID).Settings.StatusOn {
+			t.Errorf("%s renders %q on a new server, want on", key, got)
+		}
+	}
+}
+
 func TestTogglingASettingPersistsAndShowsTheNewValue(t *testing.T) {
 	dbtest.Setup(t)
 

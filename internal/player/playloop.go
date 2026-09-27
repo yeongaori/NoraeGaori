@@ -35,7 +35,7 @@ func prepareVoiceConnection(session *discordgo.Session, player *GuildPlayer, gui
 		}
 	}
 
-	if conn != nil {
+	if conn != nil && !player.isInOtherVoiceChannel(voiceChannelID) {
 		return nil
 	}
 
@@ -54,6 +54,12 @@ func prepareVoiceConnection(session *discordgo.Session, player *GuildPlayer, gui
 
 	logger.Debugf("Voice connection established for guild: %s", guildID)
 	return nil
+}
+
+func (player *GuildPlayer) isInOtherVoiceChannel(channelID string) bool {
+	player.mu.Lock()
+	defer player.mu.Unlock()
+	return channelID != "" && player.VoiceChannelID != "" && player.VoiceChannelID != channelID
 }
 
 func (player *GuildPlayer) adoptVoice(conn voiceConnection, channelID string) bool {
@@ -252,13 +258,18 @@ func reloadVolumeAndFade(player *GuildPlayer, guildID string, fade *fadeSettings
 	*fade = fadeSettingsFromQueue(q)
 }
 
+func endPlayback(session *discordgo.Session, guildID, reason string) error {
+	isLeaving := ShouldLeaveVoice(guildID)
+	announcePlaybackEnd(session, guildID, reason, isLeaving)
+	return stopInternal(guildID, isLeaving)
+}
+
 func playSingleSong(session *discordgo.Session, guildID string) playResult {
 
 	q, err := queue.GetQueue(guildID, true)
 	if err != nil {
 		logger.Errorf("Failed to get queue: %v", err)
-		announceLeaving(session, guildID, "error")
-		if stopErr := stopInternal(guildID); stopErr != nil {
+		if stopErr := endPlayback(session, guildID, "error"); stopErr != nil {
 			logger.Errorf("Failed to stop player for %s: %v", guildID, stopErr)
 		}
 		return playStop
@@ -266,9 +277,7 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 
 	if q == nil || len(q.Songs) == 0 {
 		logger.Debugf("Queue is empty for guild: %s", guildID)
-		announceLeaving(session, guildID, "empty")
-
-		if err := stopInternal(guildID); err != nil {
+		if err := endPlayback(session, guildID, "empty"); err != nil {
 			logger.Errorf("Failed to cleanup: %v", err)
 		}
 		return playStop

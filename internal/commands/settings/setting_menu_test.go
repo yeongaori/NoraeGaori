@@ -10,6 +10,7 @@ import (
 var dropdownSettingKeys = []string{
 	"repeat", "sponsorblock", "showstartedtrack", "normalization",
 	"fadein", "fadeout", "automix", "crossfade", "fadeonstop", "trimsilence",
+	"autoleave", "autopause", "autoresume",
 }
 
 func TestEverySettingCommandHasAMenuSpec(t *testing.T) {

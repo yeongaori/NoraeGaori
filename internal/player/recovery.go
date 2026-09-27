@@ -93,8 +93,7 @@ func retryAfterPanic(session *discordgo.Session, guildID string, reason any) {
 }
 
 func leaveAfterPanic(session *discordgo.Session, guildID string) {
-	announceLeaving(session, guildID, "error")
-	if err := stopInternal(guildID); err != nil {
+	if err := endPlayback(session, guildID, "error"); err != nil {
 		logger.Errorf("Failed to stop the player after a playback panic for guild %s: %v", guildID, err)
 	}
 }

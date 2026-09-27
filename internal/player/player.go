@@ -145,13 +145,14 @@ var (
 	joinVoiceChannel func(session *discordgo.Session, guildID, channelID string) (voiceConnection, error)
 
 	announceNowPlaying        func(session *discordgo.Session, guildID string, song *queue.Song, q *queue.Queue)
-	announceLeaving           func(session *discordgo.Session, guildID, reason string)
+	announcePlaybackEnd       func(session *discordgo.Session, guildID, reason string, isLeaving bool)
 	announceReconnect         func(session *discordgo.Session, guildID string, song *queue.Song)
 	dismissLoadingMessage     func(session *discordgo.Session, guildID string)
 	lookupVoiceChannelBitrate func(session *discordgo.Session, channelID string) int
 	announceSongError         func(session *discordgo.Session, guildID string, song *queue.Song, reason string)
 	announceAutoPause         func(session *discordgo.Session, guildID, voiceChannelID string)
 	announcePlaybackCrash     func(session *discordgo.Session, guildID string, song *queue.Song)
+	resumeAutoPaused          func(session *discordgo.Session, guildID string)
 )
 
 func init() {
@@ -159,13 +160,14 @@ func init() {
 	resumePlayback = startPlaybackSession
 	joinVoiceChannel = JoinVoice
 	announceNowPlaying = sendNowPlayingMessage
-	announceLeaving = sendLeavingMessage
+	announcePlaybackEnd = sendPlaybackEndMessage
 	announceReconnect = sendReconnectMessage
 	dismissLoadingMessage = deleteLoadingMessageFor
 	lookupVoiceChannelBitrate = readVoiceChannelBitrate
 	announceSongError = sendSongErrorMessage
 	announceAutoPause = sendAutoPauseNotification
 	announcePlaybackCrash = sendPlaybackCrashMessage
+	resumeAutoPaused = ResumeOrStart
 }
 
 func readVoiceChannelBitrate(session *discordgo.Session, channelID string) int {

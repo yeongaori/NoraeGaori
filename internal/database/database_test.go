@@ -84,6 +84,7 @@ var migratedColumns = map[string][]string{
 		"crossfade", "crossfade_duration", "trim_silence",
 		"automix_style_volume", "automix_style_eq", "automix_style_filter",
 		"automix_style_effect", "automix_style_loop",
+		"auto_leave", "auto_pause", "auto_resume",
 	},
 	"queues": {"paused", "playing", "loading"},
 	"songs": {
@@ -203,6 +204,16 @@ func TestMigrationsApplyColumnDefaults(t *testing.T) {
 	}
 	if beats != 16 {
 		t.Errorf("automix_beats defaulted to %d, want 16", beats)
+	}
+
+	for _, column := range []string{"auto_leave", "auto_pause", "auto_resume"} {
+		var enabled int
+		if err := db.QueryRow("SELECT "+column+" FROM guild_settings WHERE guild_id = ?", "guild").Scan(&enabled); err != nil {
+			t.Fatalf("failed to read %s: %v", column, err)
+		}
+		if enabled != 1 {
+			t.Errorf("%s defaulted to %d, want 1", column, enabled)
+		}
 	}
 }
 

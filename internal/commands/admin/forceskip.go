@@ -32,8 +32,12 @@ func HandleForceSkip(s *discordgo.Session, i *discordgo.InteractionCreate) error
 	}
 
 	if err == player.ErrQueueEmpty {
+		template := messages.T(i.GuildID).Music.ForceSkippedEnded
+		if !player.ShouldLeaveVoice(i.GuildID) {
+			template = messages.T(i.GuildID).Music.ForceSkippedEndedStay
+		}
 		embed := messages.CreateSuccessEmbed(messages.T(i.GuildID).Music.PlaybackEndedTitle,
-			fmt.Sprintf(messages.T(i.GuildID).Music.ForceSkippedEnded, messages.FormatMaskedLink(songTitle, songURL)))
+			fmt.Sprintf(template, messages.FormatMaskedLink(songTitle, songURL)))
 		messages.SetThumbnail(embed, songThumbnail)
 		discord.UpdateResponseEmbed(s, i, embed)
 

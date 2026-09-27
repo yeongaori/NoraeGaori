@@ -31,6 +31,13 @@ func HandlePause(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return err
 	}
 
-	discord.RespondEmbed(s, i, messages.CreateSuccessEmbed(messages.T(i.GuildID).Titles.Paused, messages.T(i.GuildID).Descriptions.Paused))
+	discord.RespondEmbed(s, i, messages.CreateSuccessEmbed(messages.T(i.GuildID).Titles.Paused, pausedDescription(i.GuildID)))
 	return nil
+}
+
+func pausedDescription(guildID string) string {
+	if player.ShouldLeaveVoice(guildID) {
+		return messages.T(guildID).Descriptions.Paused
+	}
+	return messages.T(guildID).Descriptions.PausedStay
 }

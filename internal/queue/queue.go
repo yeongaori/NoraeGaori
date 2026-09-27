@@ -125,6 +125,9 @@ type guildSettingsRow struct {
 	styleFilter       string
 	styleEffect       string
 	styleLoop         string
+	autoLeave         bool
+	autoPause         bool
+	autoResume        bool
 }
 
 func loadQueueRow(guildID string) (*queueRow, error) {
@@ -167,6 +170,9 @@ func defaultGuildSettingsRow() guildSettingsRow {
 		styleFilter:       AutoMixStyleAuto,
 		styleEffect:       AutoMixStyleAuto,
 		styleLoop:         AutoMixStyleAuto,
+		autoLeave:         true,
+		autoPause:         true,
+		autoResume:        true,
 	}
 }
 
@@ -176,6 +182,7 @@ func loadGuildSettingsRow(guildID string) (guildSettingsRow, error) {
 	var fadein, fadeout, automix, fadeOnStop, automixBeats, crossfade, trimSilence int
 	var fadeinDuration, fadeoutDuration, crossfadeDuration float64
 	var styleVolume, styleEQ, styleFilter, styleEffect, styleLoop string
+	var autoLeave, autoPause, autoResume int
 
 	err := database.DB.QueryRow(
 		`SELECT volume, repeat, sponsorblock, show_started_track, normalization,
@@ -185,13 +192,15 @@ func loadGuildSettingsRow(guildID string) (guildSettingsRow, error) {
 		 COALESCE(crossfade, 0), COALESCE(crossfade_duration, 8),
 		 COALESCE(trim_silence, 0), COALESCE(automix_style_volume, 'auto'),
 		 COALESCE(automix_style_eq, 'auto'), COALESCE(automix_style_filter, 'auto'),
-		 COALESCE(automix_style_effect, 'auto'), COALESCE(automix_style_loop, 'auto')
+		 COALESCE(automix_style_effect, 'auto'), COALESCE(automix_style_loop, 'auto'),
+		 COALESCE(auto_leave, 1), COALESCE(auto_pause, 1), COALESCE(auto_resume, 1)
 		 FROM guild_settings WHERE guild_id = ?`,
 		guildID,
 	).Scan(&volume, &repeat, &sponsorblock, &showStartedTrack, &normalization,
 		&fadein, &fadeout, &automix, &fadeOnStop, &fadeinDuration,
 		&fadeoutDuration, &automixBeats, &crossfade, &crossfadeDuration,
-		&trimSilence, &styleVolume, &styleEQ, &styleFilter, &styleEffect, &styleLoop)
+		&trimSilence, &styleVolume, &styleEQ, &styleFilter, &styleEffect, &styleLoop,
+		&autoLeave, &autoPause, &autoResume)
 
 	if err == sql.ErrNoRows {
 		settings := defaultGuildSettingsRow()
@@ -226,6 +235,9 @@ func loadGuildSettingsRow(guildID string) (guildSettingsRow, error) {
 		styleFilter:       styleFilter,
 		styleEffect:       styleEffect,
 		styleLoop:         styleLoop,
+		autoLeave:         autoLeave == 1,
+		autoPause:         autoPause == 1,
+		autoResume:        autoResume == 1,
 	}, nil
 }
 
