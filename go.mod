@@ -39,4 +39,4 @@ require (
 	modernc.org/memory v1.12.1 // indirect
 )
 
-replace github.com/bwmarrin/discordgo => github.com/yeongaori/discordgo-fork v0.0.0-20260913055947-94d3e03d65d1
+replace github.com/bwmarrin/discordgo => github.com/yeongaori/discordgo-fork v0.0.0-20260929102729-a10ba9c7ec13

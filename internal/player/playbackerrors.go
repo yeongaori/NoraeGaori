@@ -126,6 +126,10 @@ func clearRetryCountsForGuild(guildID string) {
 	playbackRetriesMu.Unlock()
 }
 
+func isVoiceConnectionError(errMsg string) bool {
+	return strings.Contains(errMsg, "voice connection")
+}
+
 func isStreamFetchFailure(errMsg string) bool {
 	errorLower := strings.ToLower(errMsg)
 	return strings.Contains(errorLower, "produced no audio") || strings.Contains(errorLower, "403")
@@ -184,6 +188,11 @@ func handlePlaybackError(session *discordgo.Session, guildID string, song *queue
 	if youtube.IsRateLimitError(err) {
 		logger.Warnf("YouTube is rate limiting, keeping %s queued in guild: %s", song.Title, guildID)
 		announceRateLimit(session, guildID, song)
+		return true
+	}
+
+	if isVoiceConnectionError(errMsg) {
+		logger.Warnf("Voice connection dropped, keeping %s queued in guild: %s", song.Title, guildID)
 		return true
 	}
 

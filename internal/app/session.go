@@ -6,6 +6,8 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync/atomic"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/commands"
@@ -14,10 +16,19 @@ import (
 	"noraegaori/internal/player"
 	"noraegaori/internal/queue"
 	"noraegaori/internal/rpc"
+	"noraegaori/internal/shutdown"
 	"noraegaori/internal/vote"
 )
 
-var session *discordgo.Session
+var (
+	session *discordgo.Session
+
+	isDisconnected       atomic.Bool
+	isShuttingDown       = shutdown.IsShuttingDown
+	resumeAfterReconnect = resumePlayersAfterReconnect
+	resumeWaitingPlayers = player.ResumeAfterReconnect
+	reconnectResumeDelay = 2 * time.Second
+)
 
 func Start(token string) error {
 	var err error
@@ -43,6 +54,8 @@ func Start(token string) error {
 	}
 
 	session.AddHandler(onReady)
+	session.AddHandler(onDisconnect)
+	session.AddHandler(onConnect)
 	session.AddHandler(onInteractionCreate)
 	session.AddHandler(onMessageCreate)
 	session.AddHandler(onVoiceStateUpdate)
@@ -90,6 +103,28 @@ func onReady(s *discordgo.Session, r *discordgo.Ready) {
 	go rpc.UpdateRPC(s)
 
 	logger.Info("Bot is ready and operational")
+}
+
+func onDisconnect(_ *discordgo.Session, _ *discordgo.Disconnect) {
+	if isShuttingDown() || isDisconnected.Swap(true) {
+		return
+	}
+	logger.Warn("Lost the connection to Discord, reconnecting")
+}
+
+func onConnect(s *discordgo.Session, _ *discordgo.Connect) {
+	if isDisconnected.Swap(false) {
+		logger.Info("Reconnected to Discord")
+		go resumeAfterReconnect(s)
+	}
+}
+
+func resumePlayersAfterReconnect(s *discordgo.Session) {
+	time.Sleep(reconnectResumeDelay)
+	if isShuttingDown() {
+		return
+	}
+	resumeWaitingPlayers(s)
 }
 
 func onInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreate) {

@@ -295,6 +295,7 @@ func DeletePlayer(guildID string) {
 	playersMu.Unlock()
 
 	clearRetryCountsForGuild(guildID)
+	forgetAwaitingDiscord(guildID)
 
 	logger.Debugf("Stopped command processor for guild: %s", guildID)
 }

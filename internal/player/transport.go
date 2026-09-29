@@ -535,6 +535,7 @@ func releasePlayback(guildID string, isLeaving bool) error {
 	ClearPreCache(guildID)
 	StopAnalysisBackfill(guildID)
 	forgetAutoPause(guildID)
+	forgetAwaitingDiscord(guildID)
 
 	if isLeaving {
 		DeletePlayer(guildID)

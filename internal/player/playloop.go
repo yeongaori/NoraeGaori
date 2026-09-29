@@ -116,6 +116,7 @@ func markPlayerLoading(player *GuildPlayer, guildID string) bool {
 	player.Paused = false
 	player.AutoMixAdvanced = false
 	player.mu.Unlock()
+	forgetAwaitingDiscord(guildID)
 
 	if err := queue.SetPaused(guildID, false); err != nil {
 		logger.Errorf("Failed to clear paused state: %v", err)
@@ -301,6 +302,11 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 		if errors.Is(err, errSessionHalted) {
 			return playStop
 		}
+		if isDiscordUnreachable(err) {
+			logger.Warnf("Voice is unreachable, playback resumes once Discord reconnects: %v", err)
+			markAwaitingDiscord(guildID)
+			return playStop
+		}
 		logger.Errorf("Failed to join voice: %v", err)
 		return playStop
 	}
@@ -463,7 +469,7 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 			announceReconnect(session, guildID, song)
 		}
 
-		isVoiceError := strings.Contains(err.Error(), "voice connection")
+		isVoiceError := isVoiceConnectionError(err.Error())
 		if isVoiceError {
 			logger.Warnf("Voice connection error detected, clearing dead connection for guild: %s", guildID)
 			if conn := player.currentVoice(); conn != nil {
