@@ -18,7 +18,6 @@ import (
 	"testing"
 
 	"noraegaori/internal/dependency/mirror"
-	"noraegaori/internal/logger"
 	"noraegaori/tests/testutil"
 
 	"github.com/ulikunitz/xz"
@@ -87,22 +86,6 @@ func resetState(t *testing.T) {
 		retiredBinaries = previousRetired
 		retiredMu.Unlock()
 	})
-}
-
-func captureLog(t *testing.T) func() string {
-	t.Helper()
-
-	path := filepath.Join(t.TempDir(), "test.log")
-	logger.SetLogFile(path)
-	t.Cleanup(func() { logger.SetLogFile("") })
-
-	return func() string {
-		content, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("failed to read the captured log: %v", err)
-		}
-		return string(content)
-	}
 }
 
 type stubMirror struct {

@@ -3,8 +3,6 @@ package app
 import (
 	"bytes"
 	"log"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -12,8 +10,8 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
-	"noraegaori/internal/logger"
 	"noraegaori/tests/testutil"
+	"noraegaori/tests/testutil/logtest"
 
 	"noraegaori/internal/player"
 	"noraegaori/internal/queue"
@@ -68,22 +66,6 @@ func TestDiscordDebugLogsHideTheToken(t *testing.T) {
 	}
 }
 
-func captureBotLog(t *testing.T) func() string {
-	t.Helper()
-
-	path := filepath.Join(t.TempDir(), "bot.log")
-	logger.SetLogFile(path)
-	t.Cleanup(func() { logger.SetLogFile("") })
-
-	return func() string {
-		content, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("failed to read the captured log: %v", err)
-		}
-		return string(content)
-	}
-}
-
 func useConnectionState(t *testing.T, isStopping bool) *atomic.Int32 {
 	t.Helper()
 
@@ -114,7 +96,7 @@ const (
 )
 
 func TestLosingDiscordWarnsOnceUntilReconnected(t *testing.T) {
-	read := captureBotLog(t)
+	read := logtest.Capture(t)
 	resumes := useConnectionState(t, false)
 
 	onConnect(nil, &discordgo.Connect{})
@@ -138,7 +120,7 @@ func TestLosingDiscordWarnsOnceUntilReconnected(t *testing.T) {
 }
 
 func TestClosingTheSessionOnShutdownIsNotAWarning(t *testing.T) {
-	read := captureBotLog(t)
+	read := logtest.Capture(t)
 	resumes := useConnectionState(t, true)
 
 	onDisconnect(nil, &discordgo.Disconnect{})

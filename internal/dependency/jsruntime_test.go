@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"noraegaori/internal/dependency/mirror"
+	"noraegaori/tests/testutil/logtest"
 )
 
 func installableRuntime(t *testing.T, executable, version string) *stubMirror {
@@ -42,7 +43,7 @@ func TestJsRuntimeArgNamesTheActiveRuntime(t *testing.T) {
 func TestPrepareJsRuntimePrefersTheSystemRuntime(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
-	read := captureLog(t)
+	read := logtest.Capture(t)
 	deno := installableRuntime(t, "deno", "2.9.7")
 	useJsRuntimes(t, stubTool("deno", deno), stubTool("node"))
 	jsRuntimes[1].displayName = "Node.js"
@@ -63,7 +64,7 @@ func TestPrepareJsRuntimePrefersTheSystemRuntime(t *testing.T) {
 
 func TestPrepareJsRuntimeIsQuietAboutASystemDeno(t *testing.T) {
 	resetState(t)
-	read := captureLog(t)
+	read := logtest.Capture(t)
 	usePath(t, fakeRuntimes(t, map[string]string{"deno": "deno 2.9.7"}))
 
 	prepareJsRuntime(linuxAmd64)
@@ -79,7 +80,7 @@ func TestPrepareJsRuntimeIsQuietAboutASystemDeno(t *testing.T) {
 func TestPrepareJsRuntimeDownloadsDeno(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
-	read := captureLog(t)
+	read := logtest.Capture(t)
 	usePath(t)
 	useJsRuntimes(t, stubTool("deno", installableRuntime(t, "deno", "2.9.7")))
 
@@ -97,7 +98,7 @@ func TestPrepareJsRuntimeDownloadsDeno(t *testing.T) {
 func TestPrepareJsRuntimeWarnsWhenDenoHasNoBuild(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
-	read := captureLog(t)
+	read := logtest.Capture(t)
 	usePath(t)
 	useJsRuntimes(t, &tool{name: "deno", displayName: "Deno", mirrors: []mirror.Mirror{noBuildMirror("deno-github")}},
 		&tool{name: "node", displayName: "Node.js", versionFlag: "--version", mirrors: []mirror.Mirror{installableRuntime(t, "node.exe", "22.23.3")}})
@@ -120,7 +121,7 @@ func TestPrepareJsRuntimeWarnsWhenDenoHasNoBuild(t *testing.T) {
 func TestPrepareJsRuntimeWarnsWhenDenoIsUnreachable(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
-	read := captureLog(t)
+	read := logtest.Capture(t)
 	usePath(t)
 	useJsRuntimes(t, &tool{name: "deno", displayName: "Deno", mirrors: []mirror.Mirror{unreachableMirror("deno-github")}},
 		&tool{name: "node", displayName: "Node.js", versionFlag: "--version", mirrors: []mirror.Mirror{installableRuntime(t, "node", "24.14.1")}})
@@ -150,7 +151,7 @@ func TestPrepareJsRuntimeUsesAnInstalledRuntimeWhenOffline(t *testing.T) {
 func TestPrepareJsRuntimeWarnsWhenNothingIsAvailable(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
-	read := captureLog(t)
+	read := logtest.Capture(t)
 	usePath(t)
 	useJsRuntimes(t, stubTool("deno", noBuildMirror("deno-github")), stubTool("node", noBuildMirror("nodejs")))
 

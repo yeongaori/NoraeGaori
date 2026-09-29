@@ -8,7 +8,10 @@ import (
 	"noraegaori/internal/download"
 )
 
-const GitHubAPI = "https://api.github.com"
+const (
+	GitHubAPI = "https://api.github.com"
+	GitHubWeb = "https://github.com"
+)
 
 var ErrNoBuild = errors.New("no build for this platform")
 

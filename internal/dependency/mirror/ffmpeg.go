@@ -20,6 +20,7 @@ var ffmpegPlatforms = map[string]string{
 
 type FFmpegGitHub struct {
 	APIURL string
+	WebURL string
 	Repo   string
 }
 
@@ -28,7 +29,7 @@ func (m FFmpegGitHub) Name() string {
 }
 
 func (m FFmpegGitHub) Find(target Platform, accepts func(string) bool) (*Candidate, error) {
-	release, err := download.FetchRelease(fmt.Sprintf("%s/repos/%s/releases/latest", m.APIURL, m.Repo))
+	release, err := download.GitHubRepo{APIURL: m.APIURL, WebURL: m.WebURL, Repo: m.Repo}.FetchLatest("checksums.sha256")
 	if err != nil {
 		return nil, err
 	}

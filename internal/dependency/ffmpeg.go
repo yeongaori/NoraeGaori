@@ -13,8 +13,8 @@ var ffmpegTool = &tool{
 	displayName: "ffmpeg",
 	versionFlag: "-version",
 	mirrors: []mirror.Mirror{
-		mirror.FFmpegGitHub{APIURL: mirror.GitHubAPI, Repo: "yt-dlp/FFmpeg-Builds"},
-		mirror.FFmpegGitHub{APIURL: mirror.GitHubAPI, Repo: "BtbN/FFmpeg-Builds"},
+		mirror.FFmpegGitHub{APIURL: mirror.GitHubAPI, WebURL: mirror.GitHubWeb, Repo: "yt-dlp/FFmpeg-Builds"},
+		mirror.FFmpegGitHub{APIURL: mirror.GitHubAPI, WebURL: mirror.GitHubWeb, Repo: "BtbN/FFmpeg-Builds"},
 	},
 }
 

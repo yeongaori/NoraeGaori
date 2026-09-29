@@ -37,15 +37,15 @@ func TestChannelOfClassifiesByTagShape(t *testing.T) {
 }
 
 func TestReleaseURLsFollowTheRequestedChannel(t *testing.T) {
-	if !strings.Contains(latestReleaseURL(config.YtDlpChannelNightly), "yt-dlp-nightly-builds") {
-		t.Errorf("got %q, want the nightly repo", latestReleaseURL(config.YtDlpChannelNightly))
+	if repo := latestReleaseRepo(config.YtDlpChannelNightly); repo.Repo != nightlyRepo || repo.APIURL != githubAPI || repo.WebURL != githubWeb {
+		t.Errorf("got %+v, want the nightly repo on api.github.com and github.com", repo)
 	}
 	if !strings.Contains(releasesURL(config.YtDlpChannelNightly), "yt-dlp-nightly-builds") {
 		t.Errorf("got %q, want the nightly repo", releasesURL(config.YtDlpChannelNightly))
 	}
 
-	if strings.Contains(latestReleaseURL(config.YtDlpChannelStable), "nightly") {
-		t.Errorf("got %q, want the stable repo", latestReleaseURL(config.YtDlpChannelStable))
+	if repo := latestReleaseRepo(config.YtDlpChannelStable); repo.Repo != stableRepo {
+		t.Errorf("got %+v, want the stable repo", repo)
 	}
 	if !strings.HasSuffix(releasesURL(config.YtDlpChannelStable), "/repos/yt-dlp/yt-dlp/releases") {
 		t.Errorf("got %q, want the stable releases endpoint", releasesURL(config.YtDlpChannelStable))

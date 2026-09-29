@@ -11,6 +11,7 @@ import (
 
 	"noraegaori/internal/dependency/mirror"
 	"noraegaori/tests/testutil"
+	"noraegaori/tests/testutil/logtest"
 )
 
 func ignoreProgress(int) {}
@@ -171,7 +172,7 @@ func stubExtractionProgress(t *testing.T) (*[]string, *int) {
 
 func TestExtractWithProgressAnnouncesEachStep(t *testing.T) {
 	useWorkingDirectory(t)
-	read := captureLog(t)
+	read := logtest.Capture(t)
 	messages, ended := stubExtractionProgress(t)
 	archive := writeArchive(t, buildZip(t, map[string]string{"deno": strings.Repeat("d", 2000)}))
 	found := &mirror.Candidate{Archive: mirror.ZipArchive, Members: []string{"deno"}}
@@ -194,7 +195,7 @@ func TestExtractWithProgressAnnouncesEachStep(t *testing.T) {
 
 func TestExtractWithProgressEndsTheLineOnFailure(t *testing.T) {
 	useWorkingDirectory(t)
-	read := captureLog(t)
+	read := logtest.Capture(t)
 	_, ended := stubExtractionProgress(t)
 	archive := writeArchive(t, buildZip(t, map[string]string{"denort": "binary"}))
 	found := &mirror.Candidate{Archive: mirror.ZipArchive, Members: []string{"deno"}}

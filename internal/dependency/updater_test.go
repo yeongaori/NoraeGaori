@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"noraegaori/internal/dependency/mirror"
+	"noraegaori/tests/testutil/logtest"
 )
 
 func installableFFmpeg(t *testing.T, version string) *stubMirror {
@@ -80,7 +81,7 @@ func TestPrepareUsesAnInstalledFFmpegWhenOffline(t *testing.T) {
 func TestPrepareUsesTheSystemFFmpegAndContinuesWithoutAJsRuntime(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
-	read := captureLog(t)
+	read := logtest.Capture(t)
 	usePath(t, fakeRuntimes(t, map[string]string{"ffmpeg": "ffmpeg version 7.1.1"}))
 	useFFmpegTool(t, unreachableMirror("ffmpeg-github"))
 	useJsRuntimes(t, stubTool("deno", noBuildMirror("deno-github")))
@@ -190,7 +191,7 @@ func TestCheckUpdatesLeavesSystemBinariesAlone(t *testing.T) {
 func TestCheckUpdatesMovesUpToDenoOnceItIsAvailable(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
-	read := captureLog(t)
+	read := logtest.Capture(t)
 	node := activateDownloaded(t, &jsRuntimeSlot, "node", "22.23.3")
 	useJsRuntimes(t, stubTool("deno", installableRuntime(t, "deno", "2.9.7")), stubTool("node", installableRuntime(t, "node", "22.23.3")))
 

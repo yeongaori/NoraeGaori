@@ -29,6 +29,8 @@ var signingKeyArmor = ytdlpSigningKey
 const (
 	stableRepo           = "yt-dlp/yt-dlp"
 	nightlyRepo          = "yt-dlp/yt-dlp-nightly-builds"
+	githubAPI            = "https://api.github.com"
+	githubWeb            = "https://github.com"
 	updateCheckInterval  = 6 * time.Hour
 	minCheckInterval     = 1 * time.Hour
 	maxFallbackAttempts  = 5
@@ -84,16 +86,16 @@ func releaseRepo(channel string) string {
 	return stableRepo
 }
 
-func latestReleaseURL(channel string) string {
-	return fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", releaseRepo(channel))
+func latestReleaseRepo(channel string) download.GitHubRepo {
+	return download.GitHubRepo{APIURL: githubAPI, WebURL: githubWeb, Repo: releaseRepo(channel)}
 }
 
 func releasesURL(channel string) string {
-	return fmt.Sprintf("https://api.github.com/repos/%s/releases", releaseRepo(channel))
+	return fmt.Sprintf("%s/repos/%s/releases", githubAPI, releaseRepo(channel))
 }
 
 func GetLatestRelease(channel string) (*GitHubRelease, error) {
-	return download.FetchRelease(latestReleaseURL(channel))
+	return latestReleaseRepo(channel).FetchLatest(checksumAssetName, checksumSigAssetName)
 }
 
 func GetReleases(channel string, perPage int) ([]*GitHubRelease, error) {

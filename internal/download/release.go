@@ -2,6 +2,7 @@ package download
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -67,18 +68,34 @@ func request(url string) (*http.Response, error) {
 	}
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
-		return nil, &StatusError{URL: url, Code: resp.StatusCode}
+		return nil, &StatusError{URL: url, Code: resp.StatusCode, RateLimited: isRateLimitReply(resp)}
 	}
 	return resp, nil
 }
 
+func isRateLimitReply(resp *http.Response) bool {
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return true
+	}
+	return resp.StatusCode == http.StatusForbidden && resp.Header.Get("X-RateLimit-Remaining") == "0"
+}
+
 type StatusError struct {
-	URL  string
-	Code int
+	URL         string
+	Code        int
+	RateLimited bool
 }
 
 func (err *StatusError) Error() string {
+	if err.RateLimited {
+		return fmt.Sprintf("%s returned status %d (GitHub API rate limit reached)", err.URL, err.Code)
+	}
 	return fmt.Sprintf("%s returned status %d", err.URL, err.Code)
+}
+
+func IsRateLimited(err error) bool {
+	var statusErr *StatusError
+	return errors.As(err, &statusErr) && statusErr.RateLimited
 }
 
 func FetchJSON(url string, target any) error {
