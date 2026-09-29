@@ -150,22 +150,29 @@ func TestUpdateResponseEmbedOnEveryPath(t *testing.T) {
 		}
 	})
 
-	for name, hasResponder := range map[string]bool{"a text command before its reply": true, "a text command without responder": false} {
-		t.Run(name, func(t *testing.T) {
-			session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
-			ic := replyInteraction(true)
-			if hasResponder {
-				defer discord.RegisterResponder(ic.Token, newResponder(session, nil))()
-			}
+	t.Run("a text command before its reply", func(t *testing.T) {
+		session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
+		ic := replyInteraction(true)
+		defer discord.RegisterResponder(ic.Token, newResponder(session, nil))()
 
-			if err := discord.UpdateResponseEmbed(session, ic, embed); err == nil {
-				t.Error("UpdateResponseEmbed returned no error without a reply to edit")
-			}
-			if sent := requests(); len(sent) != 0 {
-				t.Errorf("sent %v, want nothing", sent)
-			}
-		})
-	}
+		if err := discord.UpdateResponseEmbed(session, ic, embed); err != nil {
+			t.Fatalf("UpdateResponseEmbed returned %v", err)
+		}
+		if sent := requests(); len(sent) != 1 || sent[0].Method != http.MethodPost || sent[0].Path != channelMessagePath || !strings.Contains(string(sent[0].RawBody), `"title":"final"`) || !strings.Contains(string(sent[0].RawBody), replyingToCommand) {
+			t.Errorf("sent %v, want the embed posted as a fresh reply to the command", sent)
+		}
+	})
+
+	t.Run("a text command without responder", func(t *testing.T) {
+		session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
+
+		if err := discord.UpdateResponseEmbed(session, replyInteraction(true), embed); err == nil {
+			t.Error("UpdateResponseEmbed returned no error without a responder")
+		}
+		if sent := requests(); len(sent) != 0 {
+			t.Errorf("sent %v, want nothing", sent)
+		}
+	})
 }
 
 func TestUpdateResponseEmbedWithComponentsOnEveryPath(t *testing.T) {
@@ -196,28 +203,29 @@ func TestUpdateResponseEmbedWithComponentsOnEveryPath(t *testing.T) {
 		}
 	})
 
-	for name, check := range map[string]struct {
-		hasResponder bool
-		want         string
-	}{
-		"a text command before its reply":  {true, "message is nil"},
-		"a text command without responder": {false, "message responder not found"},
-	} {
-		t.Run(name, func(t *testing.T) {
-			session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
-			ic := replyInteraction(true)
-			if check.hasResponder {
-				defer discord.RegisterResponder(ic.Token, newResponder(session, nil))()
-			}
+	t.Run("a text command before its reply", func(t *testing.T) {
+		session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
+		ic := replyInteraction(true)
+		defer discord.RegisterResponder(ic.Token, newResponder(session, nil))()
 
-			if err := discord.UpdateResponseEmbedWithComponents(session, ic, embed, components); err == nil || err.Error() != check.want {
-				t.Errorf("UpdateResponseEmbedWithComponents returned %v, want %q", err, check.want)
-			}
-			if sent := requests(); len(sent) != 0 {
-				t.Errorf("sent %v, want nothing", sent)
-			}
-		})
-	}
+		if err := discord.UpdateResponseEmbedWithComponents(session, ic, embed, components); err != nil {
+			t.Fatalf("UpdateResponseEmbedWithComponents returned %v", err)
+		}
+		if sent := requests(); len(sent) != 1 || sent[0].Method != http.MethodPost || sent[0].Path != channelMessagePath || !strings.Contains(string(sent[0].RawBody), `"custom_id":"next"`) || !strings.Contains(string(sent[0].RawBody), replyingToCommand) {
+			t.Errorf("sent %v, want the embed and button posted as a fresh reply to the command", sent)
+		}
+	})
+
+	t.Run("a text command without responder", func(t *testing.T) {
+		session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
+
+		if err := discord.UpdateResponseEmbedWithComponents(session, replyInteraction(true), embed, components); err == nil || err.Error() != "message responder not found" {
+			t.Errorf("UpdateResponseEmbedWithComponents returned %v, want %q", err, "message responder not found")
+		}
+		if sent := requests(); len(sent) != 0 {
+			t.Errorf("sent %v, want nothing", sent)
+		}
+	})
 }
 
 func TestGetResponseMessageOnEveryPath(t *testing.T) {

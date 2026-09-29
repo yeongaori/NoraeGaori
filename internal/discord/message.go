@@ -153,6 +153,40 @@ func (mr *MessageResponse) SendEmbed(embed *discordgo.MessageEmbed) {
 	}
 }
 
+func (mr *MessageResponse) resolveReply() *discordgo.Message {
+	if mr.Message != nil {
+		return mr.Message
+	}
+	if mr.OriginalMsgID == "" || mr.Session.State == nil || mr.Session.State.User == nil {
+		return nil
+	}
+
+	recent, err := mr.Session.ChannelMessages(mr.ChannelID, 10, "", mr.OriginalMsgID, "")
+	if err != nil {
+		logger.Debugf("Failed to look up the reply to message %s: %v", mr.OriginalMsgID, err)
+		return nil
+	}
+
+	var newestID uint64
+	for _, msg := range recent {
+		if !mr.isOwnReply(msg) {
+			continue
+		}
+		id, err := strconv.ParseUint(msg.ID, 10, 64)
+		if err != nil || id <= newestID {
+			continue
+		}
+		newestID = id
+		mr.Message = msg
+	}
+	return mr.Message
+}
+
+func (mr *MessageResponse) isOwnReply(msg *discordgo.Message) bool {
+	return msg.Author != nil && msg.Author.ID == mr.Session.State.User.ID &&
+		msg.MessageReference != nil && msg.MessageReference.MessageID == mr.OriginalMsgID
+}
+
 func (mr *MessageResponse) SendMessage(content string) {
 
 	msg, err := mr.Session.ChannelMessageSendComplex(mr.ChannelID, &discordgo.MessageSend{

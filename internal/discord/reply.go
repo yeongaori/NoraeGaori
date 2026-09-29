@@ -146,9 +146,13 @@ func UpdateResponseEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, e
 
 		if mr, ok := messageResponders.Load(i.Token); ok {
 			responder := mr.(*MessageResponse)
-			if responder.Message != nil {
-				_, err := s.ChannelMessageEditEmbed(responder.ChannelID, responder.Message.ID, embed)
+			if reply := responder.resolveReply(); reply != nil {
+				_, err := s.ChannelMessageEditEmbed(responder.ChannelID, reply.ID, embed)
 				return err
+			}
+			responder.SendEmbed(embed)
+			if responder.Message != nil {
+				return nil
 			}
 		}
 		return fmt.Errorf("message responder or message not found")
@@ -165,11 +169,11 @@ func UpdateResponseEmbedWithComponents(s *discordgo.Session, i *discordgo.Intera
 
 		if mr, ok := messageResponders.Load(i.Token); ok {
 			responder := mr.(*MessageResponse)
-			if responder.Message != nil {
-				logger.Debugf("Editing message %s in channel %s", responder.Message.ID, responder.ChannelID)
+			if reply := responder.resolveReply(); reply != nil {
+				logger.Debugf("Editing message %s in channel %s", reply.ID, responder.ChannelID)
 				_, err := s.ChannelMessageEditComplex(&discordgo.MessageEdit{
 					Channel:    responder.ChannelID,
-					ID:         responder.Message.ID,
+					ID:         reply.ID,
 					Embeds:     &[]*discordgo.MessageEmbed{embed},
 					Components: &components,
 				})
@@ -178,8 +182,8 @@ func UpdateResponseEmbedWithComponents(s *discordgo.Session, i *discordgo.Intera
 				}
 				return err
 			}
-			logger.Errorf("Message is nil in responder")
-			return fmt.Errorf("message is nil")
+			_, err := responder.SendEmbedWithComponents(embed, components)
+			return err
 		}
 		logger.Errorf("Message responder not found for token: %s", i.Token)
 		return fmt.Errorf("message responder not found")
@@ -195,9 +199,8 @@ func UpdateResponseEmbedWithComponents(s *discordgo.Session, i *discordgo.Intera
 func GetResponseMessage(s *discordgo.Session, i *discordgo.InteractionCreate) (*discordgo.Message, error) {
 	if IsMessageCommand(i) {
 		if mr, ok := messageResponders.Load(i.Token); ok {
-			responder := mr.(*MessageResponse)
-			if responder.Message != nil {
-				return responder.Message, nil
+			if reply := mr.(*MessageResponse).resolveReply(); reply != nil {
+				return reply, nil
 			}
 			return nil, fmt.Errorf("message not found in responder")
 		}
