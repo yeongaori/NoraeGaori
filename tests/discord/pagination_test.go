@@ -1,6 +1,7 @@
 package discord_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
@@ -29,7 +30,7 @@ func TestClampPageKeepsPagesInRange(t *testing.T) {
 
 func TestPageBoundsStayInsideTheItems(t *testing.T) {
 	for _, check := range []struct{ page, items, start, end int }{
-		{1, 12, 0, 5}, {3, 12, 10, 12}, {4, 12, 0, 0}, {0, 12, 0, 0}, {1, 0, 0, 0}, {1 << 62, 12, 0, 0},
+		{1, 12, 0, 5}, {3, 12, 10, 12}, {4, 12, 0, 0}, {0, 12, 0, 0}, {1, 0, 0, 0}, {math.MaxInt, 12, 0, 0},
 	} {
 		start, end := discord.PageBounds(check.page, 5, check.items)
 		if start != check.start || end != check.end {
