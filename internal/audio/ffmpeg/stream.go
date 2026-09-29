@@ -43,6 +43,9 @@ type Stream struct {
 	stdin    io.Closer
 	endState atomic.Pointer[EndState]
 	diag     *stderrTail
+	onExit   func()
+	waited   bool
+	waitErr  error
 }
 
 type stderrTail struct {
@@ -146,21 +149,33 @@ func PipeArgs(normalization bool) []string {
 	return args
 }
 
-func StartPipe(args []string, stdin io.ReadCloser, collectTail bool) (*Stream, error) {
-	ffmpeg := exec.Command("ffmpeg", args...)
-	ffmpeg.Stdin = stdin
+func StartPipe(binary string, args []string, stdin io.ReadCloser, collectTail bool, onExit func()) (*Stream, error) {
+	return start(binary, args, stdin, collectTail, onExit)
+}
+
+func Start(binary string, args []string, collectTail bool, onExit func()) (*Stream, error) {
+	return start(binary, args, nil, collectTail, onExit)
+}
+
+func start(binary string, args []string, stdin io.ReadCloser, collectTail bool, onExit func()) (*Stream, error) {
+	ffmpeg := exec.Command(binary, args...)
+	closeStdin := func() {}
+	if stdin != nil {
+		ffmpeg.Stdin = stdin
+		closeStdin = func() { stdin.Close() }
+	}
 
 	diag := &stderrTail{}
 	ffmpeg.Stderr = diag
 
 	stdout, err := ffmpeg.StdoutPipe()
 	if err != nil {
-		stdin.Close()
+		closeStdin()
 		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
 
 	if err := ffmpeg.Start(); err != nil {
-		stdin.Close()
+		closeStdin()
 		return nil, fmt.Errorf("failed to start ffmpeg: %w", err)
 	}
 
@@ -171,33 +186,7 @@ func StartPipe(args []string, stdin io.ReadCloser, collectTail bool) (*Stream, e
 		ffmpeg:   ffmpeg,
 		stdin:    stdin,
 		diag:     diag,
-	}
-
-	go s.produce(stdout, collectTail)
-	return s, nil
-}
-
-func Start(args []string, collectTail bool) (*Stream, error) {
-	ffmpeg := exec.Command("ffmpeg", args...)
-
-	diag := &stderrTail{}
-	ffmpeg.Stderr = diag
-
-	stdout, err := ffmpeg.StdoutPipe()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
-	}
-
-	if err := ffmpeg.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start ffmpeg: %w", err)
-	}
-
-	s := &Stream{
-		pcmChan:  make(chan []int16, BufSize),
-		errChan:  make(chan error, 1),
-		stopChan: make(chan struct{}),
-		ffmpeg:   ffmpeg,
-		diag:     diag,
+		onExit:   onExit,
 	}
 
 	go s.produce(stdout, collectTail)
@@ -249,8 +238,26 @@ func (s *Stream) Stop() {
 	})
 }
 
+func (s *Stream) wait() error {
+	if !s.waited {
+		s.waited = true
+		s.waitErr = s.ffmpeg.Wait()
+	}
+	return s.waitErr
+}
+
+func (s *Stream) reap() {
+	if err := s.wait(); err != nil {
+		logger.Debugf("ffmpeg exited: %v", err)
+	}
+	if s.onExit != nil {
+		s.onExit()
+	}
+}
+
 func (s *Stream) produce(stdout io.Reader, collectTail bool) {
 	defer close(s.pcmChan)
+	defer s.reap()
 	defer func() {
 		if s.stdin != nil {
 			s.stdin.Close()
@@ -298,7 +305,7 @@ func (s *Stream) produce(stdout io.Reader, collectTail bool) {
 		}
 
 		if err == io.EOF || err == io.ErrUnexpectedEOF {
-			waitErr := s.ffmpeg.Wait()
+			waitErr := s.wait()
 			if waitErr != nil && frameCount == 0 {
 				s.errChan <- fmt.Errorf("ffmpeg produced no audio: %w%s", waitErr, s.Diagnostics())
 				return

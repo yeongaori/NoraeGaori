@@ -7,8 +7,10 @@ import (
 	"net/http/httptest"
 	"noraegaori/tests/testutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -291,11 +293,112 @@ func TestRunCanaryAndActivateBlacklistsRealFailures(t *testing.T) {
 
 func TestResolveCurrentVersionPrefersTheActiveVersion(t *testing.T) {
 	versionmanager := newTestVersionManager(t)
-	addVersion(versionmanager, "2026.07.04", &VersionEntry{Path: "lib/a/yt-dlp", State: StateActive})
+	path := writeFakeBinary(t, filepath.Join("lib", "a"), "echo 2026.07.03")
+	addVersion(versionmanager, "2026.07.04", &VersionEntry{Path: path, State: StateActive})
 	versionmanager.state.ActiveVersion = "2026.07.04"
 
 	if got := resolveCurrentVersion(versionmanager); got != "2026.07.04" {
 		t.Errorf("got %q, want %q", got, "2026.07.04")
+	}
+}
+
+func TestResolveCurrentVersionIgnoresAnUnregisteredActiveVersion(t *testing.T) {
+	versionmanager := newTestVersionManager(t)
+	versionmanager.state.ActiveVersion = "2026.07.04"
+
+	if got := resolveCurrentVersion(versionmanager); got != "" {
+		t.Errorf("got %q, want an empty version because nothing is registered", got)
+	}
+}
+
+func TestResolveCurrentVersionIgnoresAnActiveVersionWhoseBinaryIsGone(t *testing.T) {
+	versionmanager := newTestVersionManager(t)
+	addVersion(versionmanager, "2026.07.04", &VersionEntry{Path: VersionedBinaryPath("2026.07.04"), State: StateActive})
+	versionmanager.state.ActiveVersion = "2026.07.04"
+
+	if got := resolveCurrentVersion(versionmanager); got != "" {
+		t.Errorf("got %q, want an empty version because the active binary is gone", got)
+	}
+}
+
+func TestUpdateReinstallsARegisteredVersionWhoseBinaryIsGone(t *testing.T) {
+	for _, state := range []VersionState{StateActive, StateProvisional} {
+		t.Run(string(state), func(t *testing.T) {
+			versionmanager := useVersionManager(t)
+			release := serveInstallableRelease(t, "2026.07.04", []byte(workingBinaryScript), false)
+			addVersion(versionmanager, "2026.07.04", &VersionEntry{Path: VersionedBinaryPath("2026.07.04"), State: state})
+			versionmanager.state.ActiveVersion = "2026.07.04"
+			stubCanary(t, true, false)
+			testutil.Swap(t, &getLatestReleaseFn, func(channel string) (*GitHubRelease, error) { return release, nil })
+
+			outcome, err := updateFromChannel(config.YtDlpChannelStable, false)
+			if err != nil {
+				t.Fatalf("updateFromChannel returned %v, want nil", err)
+			}
+			if !outcome.updated {
+				t.Error("got updated=false, want the missing binary reinstalled")
+			}
+			if _, err := os.Stat(VersionedBinaryPath("2026.07.04")); err != nil {
+				t.Errorf("the binary is still missing: %v", err)
+			}
+			if got := versionmanager.state.Versions["2026.07.04"].State; got != StateActive {
+				t.Errorf("got state %q, want %q after the canary passed", got, StateActive)
+			}
+		})
+	}
+}
+
+func TestUpdateKeepsAnInstalledActiveVersion(t *testing.T) {
+	versionmanager := useVersionManager(t)
+	release := serveInstallableRelease(t, "2026.07.04", []byte(workingBinaryScript), true)
+	path := writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.07.04"), "echo 2026.07.04")
+	addVersion(versionmanager, "2026.07.04", &VersionEntry{Path: path, State: StateActive})
+	versionmanager.state.ActiveVersion = "2026.07.04"
+	testutil.Swap(t, &getLatestReleaseFn, func(channel string) (*GitHubRelease, error) { return release, nil })
+
+	outcome, err := updateFromChannel(config.YtDlpChannelStable, false)
+	if err != nil {
+		t.Fatalf("updateFromChannel returned %v, want nil without a download", err)
+	}
+	if outcome.updated {
+		t.Error("got updated=true, want the installed version kept")
+	}
+}
+
+func keepOnlyPythonAsset(release *GitHubRelease) {
+	kept := release.Assets[:0]
+	for _, asset := range release.Assets {
+		if !slices.Contains(platformAssetNames, asset.Name) || asset.Name == pythonAssetName {
+			kept = append(kept, asset)
+		}
+	}
+	release.Assets = kept
+}
+
+func TestInstallVersionBinaryNamesPythonWhenThePythonBuildCannotRun(t *testing.T) {
+	t.Chdir(t.TempDir())
+	release := serveInstallableRelease(t, "2026.07.04", []byte("#!/bin/sh\nexit 127\n"), false)
+	keepOnlyPythonAsset(release)
+	testutil.Swap(t, &lookPath, func(file string) (string, error) { return "", exec.ErrNotFound })
+
+	_, _, err := installVersionBinary(release, "2026.07.04")
+	if err == nil || !strings.Contains(err.Error(), "needs python3") {
+		t.Errorf("got %v, want an error naming python3", err)
+	}
+}
+
+func TestInstallVersionBinaryOmitsPythonWhenItIsInstalled(t *testing.T) {
+	t.Chdir(t.TempDir())
+	release := serveInstallableRelease(t, "2026.07.04", []byte("#!/bin/sh\nexit 127\n"), false)
+	keepOnlyPythonAsset(release)
+	testutil.Swap(t, &lookPath, func(file string) (string, error) { return "/usr/bin/" + file, nil })
+
+	_, _, err := installVersionBinary(release, "2026.07.04")
+	if err == nil {
+		t.Fatal("installVersionBinary returned nil, want a verification error")
+	}
+	if strings.Contains(err.Error(), "python3") {
+		t.Errorf("got %v, want no python3 hint when python3 exists", err)
 	}
 }
 

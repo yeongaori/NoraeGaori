@@ -16,11 +16,13 @@ var (
 	errorLogFile *os.File
 	errorLogMu   sync.Mutex
 
-	outMu       sync.Mutex
-	output      io.Writer = os.Stdout
-	earlyBuf    *bytes.Buffer
-	logFile     *os.File
-	logFilePath string
+	outMu             sync.Mutex
+	console           io.Writer = os.Stdout
+	consoleIsTerminal bool
+	output            io.Writer = os.Stdout
+	earlyBuf          *bytes.Buffer
+	logFile           *os.File
+	logFilePath       string
 
 	infoBadge = "\033[48;5;10m\x1b[37m INFO \033[0m"
 
@@ -38,15 +40,24 @@ type lockedWriter struct{}
 func (lockedWriter) Write(p []byte) (int, error) {
 	outMu.Lock()
 	defer outMu.Unlock()
+	hideProgress()
+	defer redrawProgress()
 	return output.Write(p)
+}
+
+func isTerminal(file *os.File) bool {
+	info, err := file.Stat()
+	return err == nil && info.Mode()&os.ModeCharDevice != 0
 }
 
 func Initialize(debug bool) {
 	debugMode = debug
 
 	outMu.Lock()
+	console = os.Stdout
+	consoleIsTerminal = isTerminal(os.Stdout)
 	earlyBuf = &bytes.Buffer{}
-	output = io.MultiWriter(earlyBuf, os.Stdout)
+	output = io.MultiWriter(earlyBuf, console)
 	outMu.Unlock()
 
 	log.SetOutput(lockedWriter{})
@@ -67,6 +78,9 @@ func SetLogFile(path string) {
 		return
 	}
 
+	hideProgress()
+	progressLine = ""
+
 	if logFile != nil {
 		logFile.Close()
 		logFile = nil
@@ -74,14 +88,14 @@ func SetLogFile(path string) {
 	logFilePath = path
 
 	if path == "" || path == "off" || path == "none" {
-		output = os.Stdout
+		output = console
 		earlyBuf = nil
 		return
 	}
 
 	f, err := os.OpenFile(path, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		output = os.Stdout
+		output = console
 		earlyBuf = nil
 		fmt.Printf("Warning: Failed to open log file %s: %v\n", path, err)
 		return
@@ -94,7 +108,7 @@ func SetLogFile(path string) {
 		earlyBuf = nil
 	}
 	logFile = f
-	output = io.MultiWriter(f, os.Stdout)
+	output = io.MultiWriter(f, console)
 }
 
 func Close() {
@@ -103,7 +117,7 @@ func Close() {
 		logFile.Close()
 		logFile = nil
 	}
-	output = os.Stdout
+	output = console
 	outMu.Unlock()
 
 	errorLogMu.Lock()
@@ -116,7 +130,9 @@ func Close() {
 func printLine(badge, tag, message string) {
 	outMu.Lock()
 	defer outMu.Unlock()
+	hideProgress()
 	_, _ = fmt.Fprintf(output, "%s [%s] %s\n", badge, tag, message)
+	redrawProgress()
 }
 
 func logToFile(level, tag, message string) {

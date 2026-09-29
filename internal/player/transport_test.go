@@ -102,7 +102,7 @@ func TestPlayAudioStopsOnSignal(t *testing.T) {
 	player.mu.Unlock()
 
 	orig := newAudioStream
-	newAudioStream = func(args []string, collectTail bool) (audioStream, error) {
+	newAudioStream = func(_ string, args []string, collectTail bool, _ func()) (audioStream, error) {
 		return fakeAudioStream(), nil
 	}
 	defer func() { newAudioStream = orig }()

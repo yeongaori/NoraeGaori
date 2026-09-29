@@ -50,7 +50,7 @@ func stubJoinVoiceResults(t *testing.T, results ...error) *int {
 func stubPlayAudioResult(t *testing.T, err error) {
 	t.Helper()
 
-	testutil.Swap(t, &newAudioStream, func([]string, bool) (audioStream, error) { return boundedAudioStream(3), nil })
+	testutil.Swap(t, &newAudioStream, func(string, []string, bool, func()) (audioStream, error) { return boundedAudioStream(3), nil })
 }
 
 func preparedPlayer(t *testing.T, guildID string, songs int) *GuildPlayer {

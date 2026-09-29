@@ -1,8 +1,11 @@
 package youtube
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"noraegaori/internal/dependency"
 )
 
 func argValue(args []string, flag string) (string, bool) {
@@ -24,7 +27,7 @@ func hasArg(args []string, flag string) bool {
 }
 
 func TestStreamPipeArgsAlwaysEndsWithTheURL(t *testing.T) {
-	args := streamPipeArgs("https://example.invalid/watch?v=abc", false, 128000, 0)
+	args := streamPipeArgs("https://example.invalid/watch?v=abc", false, 128000, 0, nil)
 
 	if len(args) == 0 || args[len(args)-1] != "https://example.invalid/watch?v=abc" {
 		t.Errorf("got args %v, want the URL last so yt-dlp treats it as the target", args)
@@ -38,17 +41,29 @@ func TestStreamPipeArgsAlwaysEndsWithTheURL(t *testing.T) {
 }
 
 func TestStreamPipeArgsOmitsOptionalFlagsByDefault(t *testing.T) {
-	args := streamPipeArgs("https://example.invalid/watch?v=abc", false, 128000, 0)
+	args := streamPipeArgs("https://example.invalid/watch?v=abc", false, 128000, 0, nil)
 
-	for _, flag := range []string{"--sponsorblock-mark", "--sponsorblock-remove", "--download-sections"} {
+	for _, flag := range []string{"--sponsorblock-mark", "--sponsorblock-remove", "--download-sections", "--ffmpeg-location"} {
 		if hasArg(args, flag) {
 			t.Errorf("%s was passed even though it was not requested", flag)
 		}
 	}
 }
 
+func TestStreamPipeArgsPointYtDlpAtADownloadedFFmpeg(t *testing.T) {
+	ffmpeg := &dependency.Binary{Tool: "ffmpeg", Version: "2026.09.25.1845", Path: filepath.Join("/app", "lib", "ffmpeg-2026.09.25.1845", "ffmpeg")}
+	args := streamPipeArgs("https://example.invalid/watch?v=abc", true, 128000, 0, ffmpeg)
+
+	if location, ok := argValue(args, "--ffmpeg-location"); !ok || location != filepath.Join("/app", "lib", "ffmpeg-2026.09.25.1845") {
+		t.Errorf("got --ffmpeg-location %q, want the guild's ffmpeg directory", location)
+	}
+	if args[len(args)-1] != "https://example.invalid/watch?v=abc" {
+		t.Errorf("got args %v, want the URL still last", args)
+	}
+}
+
 func TestStreamPipeArgsAddsSponsorBlockWhenRequested(t *testing.T) {
-	args := streamPipeArgs("https://example.invalid/watch?v=abc", true, 128000, 0)
+	args := streamPipeArgs("https://example.invalid/watch?v=abc", true, 128000, 0, nil)
 
 	if mark, ok := argValue(args, "--sponsorblock-mark"); !ok || mark != "all" {
 		t.Errorf("got --sponsorblock-mark %q, want %q", mark, "all")
@@ -65,7 +80,7 @@ func TestStreamPipeArgsAddsSponsorBlockWhenRequested(t *testing.T) {
 }
 
 func TestStreamPipeArgsConvertsSeekMillisecondsToASection(t *testing.T) {
-	args := streamPipeArgs("https://example.invalid/watch?v=abc", false, 128000, 90500)
+	args := streamPipeArgs("https://example.invalid/watch?v=abc", false, 128000, 90500, nil)
 
 	section, ok := argValue(args, "--download-sections")
 	if !ok {
@@ -77,8 +92,8 @@ func TestStreamPipeArgsConvertsSeekMillisecondsToASection(t *testing.T) {
 }
 
 func TestStreamPipeArgsTracksTheRequestedBitrate(t *testing.T) {
-	low := streamPipeArgs("https://example.invalid/watch?v=abc", false, 64000, 0)
-	high := streamPipeArgs("https://example.invalid/watch?v=abc", false, 384000, 0)
+	low := streamPipeArgs("https://example.invalid/watch?v=abc", false, 64000, 0, nil)
+	high := streamPipeArgs("https://example.invalid/watch?v=abc", false, 384000, 0, nil)
 
 	lowFormat, lowOK := argValue(low, "--format")
 	highFormat, highOK := argValue(high, "--format")

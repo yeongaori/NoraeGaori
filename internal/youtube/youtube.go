@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"noraegaori/internal/dependency"
 	"noraegaori/internal/logger"
 	ytdlpUpdater "noraegaori/internal/ytdlp"
 
@@ -14,7 +15,7 @@ import (
 )
 
 func applyJsRuntime(cmd *ytdlp.Command) *ytdlp.Command {
-	if rt := ytdlpUpdater.GetJsRuntime(); rt != "" {
+	if rt := dependency.JsRuntimeArg(); rt != "" {
 		return cmd.JsRuntimes(rt)
 	}
 	return cmd

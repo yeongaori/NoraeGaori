@@ -30,15 +30,23 @@ A feature-rich & high-quality audio Discord music bot written in Go.
 
 ## Prerequisites
 
-- **Go** 1.25+
-- **FFmpeg** (`sudo apt install ffmpeg`)
-- **libopus** (optional, for native encoding — `sudo apt install libopus0`)
-  - The bot loads libopus at runtime via dlopen. If the library is found, the
-    native encoder is used; if not, a pure-Go WASM encoder is used as a fallback
-    (a warning is logged at startup). Released binaries do not need libopus
-    installed to run.
+Release binaries are built for Linux and Windows on x64, x86 and arm64.
 
-yt-dlp is automatically downloaded and updated by the bot on startup.
+The bot sets up its own tools at startup. A copy installed on the system always takes priority over a download:
+
+| Tool                                                  | When it is not installed                                                                                                                                                   |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **yt-dlp**                                            | Always downloaded and kept up to date by the bot                                                                                                                           |
+| **FFmpeg**                                            | Downloaded when a build exists for the platform. Otherwise the bot stops with an error; on Linux x86, install it with `sudo apt install ffmpeg`                            |
+| **JavaScript runtime** (Deno, Node.js 22+ or Bun)     | Deno is downloaded when a build exists for the platform, otherwise Node.js or Bun with a warning. With none available, the bot warns and YouTube playback may miss formats |
+| **libopus** (optional, `sudo apt install libopus0`)   | A pure-Go WASM encoder is used instead                                                                                                                                     |
+
+Linux x86 also needs **python3**, because yt-dlp publishes no standalone x86 build for Linux.
+
+The bot loads libopus at runtime via dlopen, so released binaries do not need it installed to run.
+Downloads are kept in `lib/` and updated in the background; each server switches to a new FFmpeg build at its next pause in playback.
+
+Building from source needs **Go** 1.25+.
 
 ## Quick Start
 
@@ -195,15 +203,28 @@ global default — e.g. `!setprefix #`.
 
 ## Docker
 
+Set up `.env` and the files in `config/` as in [Quick Start](#quick-start), then:
+
+```bash
+docker compose up -d --build
+```
+
+To upgrade:
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+`data/` (the database) and `lib/` (yt-dlp, Deno and other downloads) persist
+across upgrades. The image includes FFmpeg and libopus, and the bot downloads
+Deno on its first start.
+
+Or with make:
+
 ```bash
 make docker-build
 make docker-run
-```
-
-Or with docker-compose:
-
-```bash
-docker-compose up -d
 ```
 
 ## Make Commands
@@ -212,6 +233,7 @@ docker-compose up -d
 | ------------ | ------------------------------------------------------------------ |
 | `make setup` | First-time setup (install deps + build)                            |
 | `make build` | Build the bot (uses libopus at runtime if present, WASM otherwise) |
+| `make all`   | Cross-compile packages for all platforms into `dist/`              |
 | `make run`   | Build and run                                                      |
 | `make dev`   | Run in dev mode with debug logging                                 |
 | `make clean` | Remove build artifacts                                             |

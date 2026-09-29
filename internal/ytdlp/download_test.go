@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 
+	"noraegaori/internal/download"
+
 	"github.com/ProtonMail/go-crypto/openpgp"
 	"github.com/ProtonMail/go-crypto/openpgp/armor"
 )
@@ -20,12 +22,7 @@ import (
 const testAssetName = "yt-dlp-test-binary"
 
 func addAsset(release *GitHubRelease, name, url, digest string) {
-	release.Assets = append(release.Assets, struct {
-		Name               string `json:"name"`
-		BrowserDownloadURL string `json:"browser_download_url"`
-		Size               int64  `json:"size"`
-		Digest             string `json:"digest"`
-	}{Name: name, BrowserDownloadURL: url, Digest: digest})
+	release.Assets = append(release.Assets, download.Asset{Name: name, BrowserDownloadURL: url, Digest: digest})
 }
 
 func sha256Hex(payload []byte) string {
@@ -120,28 +117,6 @@ func serveRelease(t *testing.T, payload []byte, claimedSum string) (*GitHubRelea
 	return release, filepath.Join(t.TempDir(), "downloaded")
 }
 
-func TestDownloadFileReturnsContentDigest(t *testing.T) {
-	payload := []byte("yt-dlp binary contents")
-	release, destination := serveRelease(t, payload, sha256Hex(payload))
-
-	sum, err := DownloadFile(release.Assets[0].BrowserDownloadURL, destination)
-	if err != nil {
-		t.Fatalf("DownloadFile returned %v, want nil", err)
-	}
-
-	if sum != sha256Hex(payload) {
-		t.Errorf("got digest %q, want %q", sum, sha256Hex(payload))
-	}
-
-	written, err := os.ReadFile(destination)
-	if err != nil {
-		t.Fatalf("failed to read the downloaded file: %v", err)
-	}
-	if string(written) != string(payload) {
-		t.Errorf("got file contents %q, want %q", written, payload)
-	}
-}
-
 func TestDownloadVerifiedAcceptsMatchingChecksum(t *testing.T) {
 	payload := []byte("trusted yt-dlp binary")
 	release, destination := serveRelease(t, payload, sha256Hex(payload))
@@ -180,13 +155,13 @@ func TestDownloadVerifiedRejectsTamperedPayload(t *testing.T) {
 func TestDownloadVerifiedRejectsDigestDisagreeingWithSignedSums(t *testing.T) {
 	payload := []byte("trusted yt-dlp binary")
 	release, destination := serveRelease(t, payload, sha256Hex(payload))
-	release.Assets[0].Digest = checksumDigestPrefix + sha256Hex([]byte("something else"))
+	release.Assets[0].Digest = "sha256:" + sha256Hex([]byte("something else"))
 
 	err := DownloadVerified(release, testAssetName, release.Assets[0].BrowserDownloadURL, destination)
 	if err == nil {
 		t.Fatal("DownloadVerified returned nil, want a rejection when the digest contradicts the signed sums")
 	}
-	if !strings.Contains(err.Error(), "disagrees with the signed") {
+	if !strings.Contains(err.Error(), "digest disagrees with the published checksum") {
 		t.Errorf("error %q does not identify the digest disagreement", err)
 	}
 

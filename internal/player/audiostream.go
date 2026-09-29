@@ -20,8 +20,10 @@ type streamRef struct {
 }
 
 var (
-	newAudioStream     = func(args []string, collectTail bool) (audioStream, error) { return ffmpeg.Start(args, collectTail) }
-	newAudioStreamPipe = func(args []string, stdin io.ReadCloser, collectTail bool) (audioStream, error) {
-		return ffmpeg.StartPipe(args, stdin, collectTail)
+	newAudioStream = func(binary string, args []string, collectTail bool, onExit func()) (audioStream, error) {
+		return ffmpeg.Start(binary, args, collectTail, onExit)
+	}
+	newAudioStreamPipe = func(binary string, args []string, stdin io.ReadCloser, collectTail bool, onExit func()) (audioStream, error) {
+		return ffmpeg.StartPipe(binary, args, stdin, collectTail, onExit)
 	}
 )

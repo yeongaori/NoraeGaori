@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"noraegaori/internal/config"
+	"noraegaori/internal/dependency"
 	"noraegaori/internal/logger"
 	ytdlpUpdater "noraegaori/internal/ytdlp"
 )
@@ -100,7 +101,7 @@ func downloadRateLimitArg() (string, bool) {
 	return fmt.Sprintf("%.2fM", limitMbps/8.0), true
 }
 
-func streamPipeArgs(url string, sponsorBlock bool, bitrate, seekTime int) []string {
+func streamPipeArgs(url string, sponsorBlock bool, bitrate, seekTime int, ffmpeg *dependency.Binary) []string {
 	audioFormat := GetOptimalAudioFormat(bitrate)
 	logger.Debugf("Creating stream pipe for: %s (SponsorBlock: %v, Format: %s)", url, sponsorBlock, audioFormat)
 
@@ -111,9 +112,11 @@ func streamPipeArgs(url string, sponsorBlock bool, bitrate, seekTime int) []stri
 		"--output", "-",
 	}
 
-	if rt := ytdlpUpdater.GetJsRuntime(); rt != "" {
+	if rt := dependency.JsRuntimeArg(); rt != "" {
 		args = append(args, "--js-runtimes", rt)
 	}
+
+	args = append(args, dependency.FFmpegLocationArgs(ffmpeg)...)
 
 	if rateLimit, limited := downloadRateLimitArg(); limited {
 		args = append(args, "--limit-rate", rateLimit)
@@ -164,14 +167,14 @@ func logStderrUntilClosed(ctx context.Context, stderrPipe io.ReadCloser) chan st
 	return stderrDone
 }
 
-func GetStreamPipe(url string, sponsorBlock bool, bitrate int, seekTime int) (*StreamPipe, error) {
+func GetStreamPipe(url string, sponsorBlock bool, bitrate int, seekTime int, ffmpeg *dependency.Binary) (*StreamPipe, error) {
 
 	if err := ytCircuitBreaker.canAttempt(); err != nil {
 		logger.Warnf("Circuit breaker open: %v", err)
 		return nil, err
 	}
 
-	args := streamPipeArgs(url, sponsorBlock, bitrate, seekTime)
+	args := streamPipeArgs(url, sponsorBlock, bitrate, seekTime, ffmpeg)
 
 	ctx, cancel := context.WithCancel(context.Background())
 

@@ -60,7 +60,7 @@ func TestLeaveDuringLoadingStopsWithoutRejoining(t *testing.T) {
 	player := preparedPlayer(t, guildID, 1)
 	resumeFrom := seedResumePoint(t, guildID, 30000)
 	joins := countVoiceJoins(t, newMockVoiceConn())
-	testutil.Swap(t, &newAudioStream, func([]string, bool) (audioStream, error) { return fakeAudioStream(), nil })
+	testutil.Swap(t, &newAudioStream, func(string, []string, bool, func()) (audioStream, error) { return fakeAudioStream(), nil })
 	testutil.Swap(t, &fetchStreamURL, func(string, bool, int) (string, error) {
 		if err := leaveInternal(guildID); err != nil {
 			t.Errorf("leave returned %v, want nil", err)
@@ -122,7 +122,7 @@ func TestLeaveWhilePlayingSavesThePositionAndEndsTheSession(t *testing.T) {
 	conn := player.currentVoice().(*mockVoiceConn)
 	joins := countVoiceJoins(t, newMockVoiceConn())
 	stubStreamURL(t, "fake://url", nil)
-	testutil.Swap(t, &newAudioStream, func([]string, bool) (audioStream, error) { return fakeAudioStream(), nil })
+	testutil.Swap(t, &newAudioStream, func(string, []string, bool, func()) (audioStream, error) { return fakeAudioStream(), nil })
 
 	if err := startPlaybackSession(nil, guildID); err != nil {
 		t.Fatalf("session returned %v, want nil", err)
@@ -276,7 +276,7 @@ func TestSeekRacingALeaveDoesNotRestartPlayback(t *testing.T) {
 	player := preparedPlayer(t, guildID, 1)
 	stubStreamURL(t, "fake://url", nil)
 	var opened atomic.Int32
-	testutil.Swap(t, &newAudioStream, func([]string, bool) (audioStream, error) {
+	testutil.Swap(t, &newAudioStream, func(string, []string, bool, func()) (audioStream, error) {
 		opened.Add(1)
 		return fakeAudioStream(), nil
 	})

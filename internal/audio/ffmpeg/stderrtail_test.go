@@ -37,7 +37,7 @@ func requireFFmpeg(t *testing.T) {
 func TestFailedFFmpegReportsItsOwnDiagnostics(t *testing.T) {
 	requireFFmpeg(t)
 
-	stream, err := Start(Args("/nonexistent/definitely-not-a-media-file", 0, false), false)
+	stream, err := Start("ffmpeg", Args("/nonexistent/definitely-not-a-media-file", 0, false), false, nil)
 	if err != nil {
 		t.Fatalf("Start returned %v, want nil", err)
 	}

@@ -12,6 +12,7 @@ require (
 	github.com/lrstanley/go-ytdlp v1.3.1
 	github.com/ppalone/ytsearch v0.0.1
 	github.com/shirou/gopsutil/v3 v3.24.5
+	github.com/ulikunitz/xz v0.5.15
 	golang.org/x/sys v0.47.0
 	modernc.org/sqlite v1.59.0
 )
@@ -31,7 +32,6 @@ require (
 	github.com/tetratelabs/wazero v1.11.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.16 // indirect
 	github.com/tklauser/numcpus v0.11.0 // indirect
-	github.com/ulikunitz/xz v0.5.15 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	golang.org/x/crypto v0.48.0 // indirect
 	modernc.org/libc v1.75.7 // indirect

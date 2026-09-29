@@ -1,25 +1,21 @@
 package ytdlp
 
 import (
-	"bufio"
 	"bytes"
 	"context"
-	"crypto/sha256"
 	_ "embed"
-	"encoding/hex"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"time"
 
 	"noraegaori/internal/config"
+	"noraegaori/internal/download"
 	"noraegaori/internal/logger"
 
 	"github.com/ProtonMail/go-crypto/openpgp"
@@ -39,21 +35,9 @@ const (
 	fallbackReleaseFetch = 15
 	checksumAssetName    = "SHA2-256SUMS"
 	checksumSigAssetName = "SHA2-256SUMS.sig"
-	checksumDigestPrefix = "sha256:"
-	defaultDownloadMbps  = 10.0
-	downloadTimeout      = 30 * time.Minute
 )
 
-type GitHubRelease struct {
-	TagName     string `json:"tag_name"`
-	PublishedAt string `json:"published_at"`
-	Assets      []struct {
-		Name               string `json:"name"`
-		BrowserDownloadURL string `json:"browser_download_url"`
-		Size               int64  `json:"size"`
-		Digest             string `json:"digest"`
-	} `json:"assets"`
-}
+type GitHubRelease = download.Release
 
 func GetLegacyBinaryPath() string {
 	binaryName := "yt-dlp"
@@ -109,156 +93,52 @@ func releasesURL(channel string) string {
 }
 
 func GetLatestRelease(channel string) (*GitHubRelease, error) {
-	client := &http.Client{Timeout: 30 * time.Second}
-	req, err := http.NewRequest("GET", latestReleaseURL(channel), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("User-Agent", "yt-dlp-updater")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("GitHub API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GitHub API returned status: %d", resp.StatusCode)
-	}
-
-	var release GitHubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		return nil, fmt.Errorf("failed to parse release info: %w", err)
-	}
-
-	return &release, nil
+	return download.FetchRelease(latestReleaseURL(channel))
 }
 
 func GetReleases(channel string, perPage int) ([]*GitHubRelease, error) {
-	client := &http.Client{Timeout: 30 * time.Second}
-	url := fmt.Sprintf("%s?per_page=%d", releasesURL(channel), perPage)
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
+	return download.FetchReleases(fmt.Sprintf("%s?per_page=%d", releasesURL(channel), perPage))
+}
+
+var standaloneAssetNames = map[string]string{
+	"linux/amd64":   "yt-dlp_linux",
+	"linux/arm64":   "yt-dlp_linux_aarch64",
+	"linux/386":     "yt-dlp_linux_i686",
+	"windows/amd64": "yt-dlp.exe",
+	"windows/386":   "yt-dlp_x86.exe",
+	"windows/arm64": "yt-dlp_arm64.exe",
+	"darwin/amd64":  "yt-dlp_macos",
+	"darwin/arm64":  "yt-dlp_macos",
+}
+
+const pythonAssetName = "yt-dlp"
+
+func pickAsset(release *GitHubRelease, goos, goarch string) (*download.Asset, error) {
+	candidates := make([]string, 0, 2)
+	if name, ok := standaloneAssetNames[goos+"/"+goarch]; ok {
+		candidates = append(candidates, name)
+	}
+	if goos != "windows" {
+		candidates = append(candidates, pythonAssetName)
 	}
 
-	req.Header.Set("User-Agent", "yt-dlp-updater")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("GitHub API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GitHub API returned status: %d", resp.StatusCode)
+	for _, name := range candidates {
+		if asset, ok := release.FindAsset(name); ok {
+			return asset, nil
+		}
 	}
 
-	var releases []*GitHubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
-		return nil, fmt.Errorf("failed to parse releases list: %w", err)
-	}
-
-	return releases, nil
+	return nil, fmt.Errorf("no yt-dlp build for %s/%s", goos, goarch)
 }
 
 func GetDownloadAsset(release *GitHubRelease) (string, string, error) {
-	var assetName string
-
-	switch runtime.GOOS {
-	case "windows":
-		assetName = "yt-dlp.exe"
-	case "darwin":
-		assetName = "yt-dlp_macos"
-	case "linux":
-		switch runtime.GOARCH {
-		case "arm64", "aarch64":
-			assetName = "yt-dlp_linux_aarch64"
-		case "arm":
-			return "", "", fmt.Errorf("ARMv7l on Linux is not directly supported")
-		default:
-			assetName = "yt-dlp"
-		}
-	default:
-		return "", "", fmt.Errorf("unsupported platform: %s", runtime.GOOS)
-	}
-
-	for _, asset := range release.Assets {
-		if asset.Name == assetName {
-			sizeMB := float64(asset.Size) / 1024 / 1024
-			logger.Debugf("Found asset: %s (%.2f MB)", asset.Name, sizeMB)
-			return asset.Name, asset.BrowserDownloadURL, nil
-		}
-	}
-
-	return "", "", fmt.Errorf("asset not found: %s", assetName)
-}
-
-func parseChecksums(r io.Reader) (map[string]string, error) {
-	checksums := make(map[string]string)
-
-	scanner := bufio.NewScanner(r)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
-		}
-
-		fields := strings.Fields(line)
-		if len(fields) != 2 {
-			return nil, fmt.Errorf("malformed checksum line: %q", line)
-		}
-
-		sum := strings.ToLower(fields[0])
-		decoded, err := hex.DecodeString(sum)
-		if err != nil || len(decoded) != sha256.Size {
-			return nil, fmt.Errorf("malformed checksum for %s: %q", fields[1], fields[0])
-		}
-
-		checksums[strings.TrimPrefix(fields[1], "*")] = sum
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("failed to read checksums: %w", err)
-	}
-
-	if len(checksums) == 0 {
-		return nil, fmt.Errorf("%s contained no entries", checksumAssetName)
-	}
-
-	return checksums, nil
-}
-
-func assetURL(release *GitHubRelease, name string) string {
-	for _, asset := range release.Assets {
-		if asset.Name == name {
-			return asset.BrowserDownloadURL
-		}
-	}
-	return ""
-}
-
-func fetchAsset(url string) ([]byte, error) {
-	client := &http.Client{Timeout: 30 * time.Second}
-	req, err := http.NewRequest("GET", url, nil)
+	asset, err := pickAsset(release, runtime.GOOS, runtime.GOARCH)
 	if err != nil {
-		return nil, err
+		return "", "", err
 	}
 
-	req.Header.Set("User-Agent", "yt-dlp-updater")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("asset request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("asset request returned status: %d", resp.StatusCode)
-	}
-
-	return io.ReadAll(resp.Body)
+	logger.Debugf("Found asset: %s (%.2f MB)", asset.Name, float64(asset.Size)/1024/1024)
+	return asset.Name, asset.BrowserDownloadURL, nil
 }
 
 func VerifyChecksumSignature(checksums, signature []byte) error {
@@ -275,22 +155,22 @@ func VerifyChecksumSignature(checksums, signature []byte) error {
 }
 
 func fetchChecksums(release *GitHubRelease) (map[string]string, error) {
-	checksumURL := assetURL(release, checksumAssetName)
+	checksumURL := release.AssetURL(checksumAssetName)
 	if checksumURL == "" {
 		return nil, fmt.Errorf("release %s has no %s asset", release.TagName, checksumAssetName)
 	}
 
-	signatureURL := assetURL(release, checksumSigAssetName)
+	signatureURL := release.AssetURL(checksumSigAssetName)
 	if signatureURL == "" {
 		return nil, fmt.Errorf("release %s has no %s asset", release.TagName, checksumSigAssetName)
 	}
 
-	checksums, err := fetchAsset(checksumURL)
+	checksums, err := download.FetchBytes(checksumURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch %s: %w", checksumAssetName, err)
 	}
 
-	signature, err := fetchAsset(signatureURL)
+	signature, err := download.FetchBytes(signatureURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch %s: %w", checksumSigAssetName, err)
 	}
@@ -301,16 +181,7 @@ func fetchChecksums(release *GitHubRelease) (map[string]string, error) {
 
 	logger.Debugf("Verified %s signature for release %s", checksumAssetName, release.TagName)
 
-	return parseChecksums(bytes.NewReader(checksums))
-}
-
-func assetDigest(release *GitHubRelease, assetName string) string {
-	for _, asset := range release.Assets {
-		if asset.Name == assetName && strings.HasPrefix(asset.Digest, checksumDigestPrefix) {
-			return strings.ToLower(strings.TrimPrefix(asset.Digest, checksumDigestPrefix))
-		}
-	}
-	return ""
+	return download.ParseChecksums(bytes.NewReader(checksums))
 }
 
 func ExpectedChecksum(release *GitHubRelease, assetName string) (string, error) {
@@ -324,8 +195,8 @@ func ExpectedChecksum(release *GitHubRelease, assetName string) (string, error) 
 		return "", fmt.Errorf("%s has no entry for %s", checksumAssetName, assetName)
 	}
 
-	if digest := assetDigest(release, assetName); digest != "" && digest != sum {
-		return "", fmt.Errorf("%s disagrees with the signed %s for %s: %s vs %s", "the GitHub asset digest", checksumAssetName, assetName, digest, sum)
+	if err := download.CheckDigest(assetName, sum, release.AssetDigest(assetName)); err != nil {
+		return "", err
 	}
 
 	return sum, nil
@@ -337,7 +208,7 @@ func DownloadVerified(release *GitHubRelease, assetName, url, destination string
 		return fmt.Errorf("failed to resolve checksum for %s: %w", assetName, err)
 	}
 
-	actual, err := DownloadFile(url, destination)
+	actual, err := download.SaveFile(url, destination)
 	if err != nil {
 		return err
 	}
@@ -351,84 +222,9 @@ func DownloadVerified(release *GitHubRelease, assetName, url, destination string
 	return nil
 }
 
-func downloadRateLimit() float64 {
-	mbps := defaultDownloadMbps
-	if cfg := config.GetConfig(); cfg != nil && cfg.MaxDownloadSpeedMbps > 0 {
-		mbps = cfg.MaxDownloadSpeedMbps
-	}
-	return mbps * 1000 * 1000 / 8
-}
-
-func DownloadFile(url, destination string) (string, error) {
-	logger.Debugf("Starting download from: %s", url)
-
-	client := &http.Client{Timeout: downloadTimeout}
-	resp, err := client.Get(url)
-	if err != nil {
-		return "", fmt.Errorf("download failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("download returned status: %d", resp.StatusCode)
-	}
-
-	out, err := os.Create(destination)
-	if err != nil {
-		return "", fmt.Errorf("failed to create file: %w", err)
-	}
-	defer out.Close()
-
-	totalSize := resp.ContentLength
-	downloaded := int64(0)
-	lastProgress := 0
-
-	hasher := sha256.New()
-	sink := io.MultiWriter(out, hasher)
-
-	rateLimit := downloadRateLimit()
-	buffer := make([]byte, 16*1024)
-	chunkDelay := time.Duration(float64(len(buffer)) / rateLimit * float64(time.Second))
-
-	for {
-		n, err := resp.Body.Read(buffer)
-		if n > 0 {
-			if _, writeErr := sink.Write(buffer[:n]); writeErr != nil {
-				return "", fmt.Errorf("failed to write to file: %w", writeErr)
-			}
-			downloaded += int64(n)
-
-			if totalSize > 0 {
-				progress := int((downloaded * 100) / totalSize)
-				if progress >= lastProgress+10 {
-					logger.Debugf("Download progress: %d%%", progress)
-					lastProgress = progress
-				}
-			}
-
-			time.Sleep(chunkDelay)
-		}
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return "", fmt.Errorf("download interrupted: %w", err)
-		}
-	}
-
-	if err := out.Sync(); err != nil {
-		return "", fmt.Errorf("failed to flush file: %w", err)
-	}
-
-	logger.Debugf("Download completed")
-	return hex.EncodeToString(hasher.Sum(nil)), nil
-}
-
 func resolveCurrentVersion(versionmanager *VersionManager) string {
-	if versionmanager != nil {
-		if version := versionmanager.GetActiveVersion(); version != "" {
-			return version
-		}
+	if versionmanager != nil && versionmanager.hasActiveBinary() {
+		return versionmanager.GetActiveVersion()
 	}
 
 	version, err := GetCurrentVersion()
@@ -445,6 +241,13 @@ func verifyBinaryRuns(binaryPath string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(output)), nil
+}
+
+var lookPath = exec.LookPath
+
+func hasPython() bool {
+	_, err := lookPath("python3")
+	return err == nil
 }
 
 func installVersionBinary(release *GitHubRelease, version string) (string, string, error) {
@@ -473,6 +276,9 @@ func installVersionBinary(release *GitHubRelease, version string) (string, strin
 	reportedVersion, err := verifyBinaryRuns(binaryPath)
 	if err != nil {
 		os.RemoveAll(versionDir)
+		if assetName == pythonAssetName && !hasPython() {
+			return "", "", fmt.Errorf("the Python build of yt-dlp needs python3 to verify %s: %w", version, err)
+		}
 		return "", "", fmt.Errorf("failed to verify %s after download: %w", version, err)
 	}
 
@@ -564,14 +370,17 @@ func UpdateYtDlp(force bool) (bool, error) {
 		return outcome.updated, err
 	}
 
-	outcome, err := updateChannelFn(config.YtDlpChannelStable, force)
-	if !outcome.canaryFailed && activeVersionIsHealthy() {
-		return outcome.updated, err
+	stable, stableErr := updateChannelFn(config.YtDlpChannelStable, force)
+	if !stable.canaryFailed && activeVersionIsHealthy() {
+		return stable.updated, stableErr
 	}
 
 	logger.Infof("Stable yt-dlp is not usable; trying the nightly channel")
-	nightly, err := updateChannelFn(config.YtDlpChannelNightly, force)
-	return nightly.updated, err
+	nightly, nightlyErr := updateChannelFn(config.YtDlpChannelNightly, force)
+	if nightlyErr != nil {
+		return nightly.updated, errors.Join(stableErr, nightlyErr)
+	}
+	return nightly.updated, nil
 }
 
 func updateFromChannel(channel string, force bool) (channelOutcome, error) {
@@ -602,7 +411,10 @@ func updateFromChannel(channel string, force bool) (channelOutcome, error) {
 				logger.Warnf("No usable binary on disk; trying previous releases")
 				return installFallbackVersion(versionmanager, channel, latestVersion, release)
 			}
-			if state == StateActive || state == StateProvisional {
+			_, statErr := os.Stat(VersionedBinaryPath(latestVersion))
+			isInstalled := statErr == nil
+
+			if (state == StateActive || state == StateProvisional) && isInstalled {
 				logger.Debugf("Version %s already registered as %s", latestVersion, state)
 				return channelOutcome{}, nil
 			}
@@ -612,7 +424,7 @@ func updateFromChannel(channel string, force bool) (channelOutcome, error) {
 				return channelOutcome{}, nil
 			}
 
-			if _, statErr := os.Stat(VersionedBinaryPath(latestVersion)); statErr == nil {
+			if isInstalled {
 				if state == StateVerified {
 					logger.Infof("Re-verifying %s before returning to it", latestVersion)
 				}
@@ -627,9 +439,7 @@ func updateFromChannel(channel string, force bool) (channelOutcome, error) {
 				}
 			}
 
-			if state == StateVerified {
-				logger.Debugf("Version %s is verified but its binary is gone; reinstalling", latestVersion)
-			}
+			logger.Debugf("Version %s is %s but its binary is gone; reinstalling", latestVersion, state)
 		}
 	}
 
@@ -653,7 +463,9 @@ func updateFromChannel(channel string, force bool) (channelOutcome, error) {
 		return channelOutcome{updated: true}, nil
 	}
 
-	versionmanager.RegisterVersion(latestVersion, binaryPath)
+	if _, ok := versionmanager.GetVersionState(latestVersion); !ok {
+		versionmanager.RegisterVersion(latestVersion, binaryPath)
+	}
 
 	switch runCanaryAndActivate(versionmanager, latestVersion) {
 	case canaryActivated:
@@ -765,7 +577,7 @@ func RequestUpdateCheck() {
 	}
 }
 
-func StartBackgroundUpdater(ctx context.Context) {
+func StartBackgroundUpdater(ctx context.Context, onSchedule func()) {
 	go func() {
 		logger.Debug("Background updater started")
 		ticker := time.NewTicker(updateCheckInterval)
@@ -780,6 +592,7 @@ func StartBackgroundUpdater(ctx context.Context) {
 				runBackgroundUpdateCheck()
 			case <-ticker.C:
 				runBackgroundUpdateCheck()
+				onSchedule()
 			}
 		}
 	}()
@@ -853,52 +666,6 @@ func AutoUpdate() {
 	if versionmanager := GetVersionManager(); versionmanager != nil {
 		versionmanager.SetLastGitHubCheck(time.Now())
 	}
-}
-
-var jsRuntime string
-
-func DetectJsRuntime() {
-	if _, err := exec.LookPath("node"); err == nil {
-		jsRuntime = "node"
-		return
-	}
-
-	if tryNvm() {
-		jsRuntime = "node"
-		return
-	}
-
-	for _, rt := range []string{"deno", "bun"} {
-		if _, err := exec.LookPath(rt); err == nil {
-			logger.Warnf("Node.js not found, using %s", rt)
-			jsRuntime = rt
-			return
-		}
-	}
-
-	logger.Warn("Node.js not found, using no JS runtime")
-}
-
-func tryNvm() bool {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return false
-	}
-	matches, err := filepath.Glob(filepath.Join(home, ".nvm", "versions", "node", "*", "bin", "node"))
-	if err != nil || len(matches) == 0 {
-		return false
-	}
-	sort.Strings(matches)
-	nodeBin := filepath.Dir(matches[len(matches)-1])
-	if err := os.Setenv("PATH", nodeBin+string(os.PathListSeparator)+os.Getenv("PATH")); err != nil {
-		logger.Warnf("Failed to add %s to PATH: %v", nodeBin, err)
-		return false
-	}
-	return true
-}
-
-func GetJsRuntime() string {
-	return jsRuntime
 }
 
 func copyFile(src, dst string) error {

@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"noraegaori/internal/dependency"
 	"noraegaori/internal/lockmap"
 	"noraegaori/internal/logger"
 	"noraegaori/internal/queue"
@@ -91,6 +92,7 @@ type GuildPlayer struct {
 	sessionDone      chan struct{}
 	lastCommand      string
 	lastCommandAt    time.Time
+	ffmpeg           ffmpegPin
 }
 
 type fadeSettings struct {
@@ -136,8 +138,8 @@ var (
 
 	playCurrentSong func(*discordgo.Session, string) playResult
 
-	getLiveStreamPipe = func(url string, sponsorBlock bool, bitrate, seekTime int) (io.ReadCloser, error) {
-		return youtube.GetStreamPipe(url, sponsorBlock, bitrate, seekTime)
+	getLiveStreamPipe = func(url string, sponsorBlock bool, bitrate, seekTime int, ffmpeg *dependency.Binary) (io.ReadCloser, error) {
+		return youtube.GetStreamPipe(url, sponsorBlock, bitrate, seekTime, ffmpeg)
 	}
 
 	fetchStreamURL = youtube.GetStreamURL

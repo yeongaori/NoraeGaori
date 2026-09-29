@@ -67,7 +67,7 @@ func stubAudioStream(t *testing.T) audioStream {
 
 	stream := newFakeStream(0)
 
-	testutil.Swap(t, &newAudioStream, func([]string, bool) (audioStream, error) { return stream, nil })
+	testutil.Swap(t, &newAudioStream, func(string, []string, bool, func()) (audioStream, error) { return stream, nil })
 
 	return stream
 }
@@ -75,7 +75,7 @@ func stubAudioStream(t *testing.T) audioStream {
 func failingAudioStream(t *testing.T) {
 	t.Helper()
 
-	testutil.Swap(t, &newAudioStream, func([]string, bool) (audioStream, error) { return nil, errFakeStream })
+	testutil.Swap(t, &newAudioStream, func(string, []string, bool, func()) (audioStream, error) { return nil, errFakeStream })
 }
 
 func crossfadeFade() fadeSettings {

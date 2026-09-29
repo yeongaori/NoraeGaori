@@ -2,6 +2,7 @@ package ytdlp
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"noraegaori/tests/testutil"
@@ -351,6 +352,46 @@ func TestAutoTriesNightlyWhenStableFailsItsCanary(t *testing.T) {
 
 	if len(attempts) != 2 || attempts[1] != config.YtDlpChannelNightly {
 		t.Errorf("got attempts %v, want nightly tried after stable failed its canary even though the active version is healthy", attempts)
+	}
+}
+
+func TestAutoReportsBothChannelErrorsWhenNightlyAlsoFails(t *testing.T) {
+	useChannel(t, config.YtDlpChannelAuto)
+	useVersionManager(t)
+	stableErr := errors.New("stable release unreachable")
+	nightlyErr := errors.New("nightly release unreachable")
+	testutil.Swap(t, &updateChannelFn, func(channel string, force bool) (channelOutcome, error) {
+		if channel == config.YtDlpChannelStable {
+			return channelOutcome{}, stableErr
+		}
+		return channelOutcome{}, nightlyErr
+	})
+
+	_, err := UpdateYtDlp(false)
+	if !errors.Is(err, stableErr) {
+		t.Errorf("got %v, want the stable channel error kept", err)
+	}
+	if !errors.Is(err, nightlyErr) {
+		t.Errorf("got %v, want the nightly channel error kept", err)
+	}
+}
+
+func TestAutoDropsTheStableErrorOnceNightlySucceeds(t *testing.T) {
+	useChannel(t, config.YtDlpChannelAuto)
+	useVersionManager(t)
+	testutil.Swap(t, &updateChannelFn, func(channel string, force bool) (channelOutcome, error) {
+		if channel == config.YtDlpChannelStable {
+			return channelOutcome{}, errors.New("stable release unreachable")
+		}
+		return channelOutcome{updated: true}, nil
+	})
+
+	updated, err := UpdateYtDlp(false)
+	if err != nil {
+		t.Errorf("got %v, want nil once nightly succeeded", err)
+	}
+	if !updated {
+		t.Error("got updated=false, want the nightly update reported")
 	}
 }
 

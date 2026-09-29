@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"time"
 
+	"noraegaori/internal/dependency"
 	"noraegaori/internal/logger"
 	"noraegaori/internal/queue"
 	"noraegaori/internal/youtube"
@@ -216,7 +217,10 @@ func analyzeStreamHead(ctx context.Context, streamURL string) (*analysis.TrackAn
 		"pipe:1",
 	}
 
-	ffmpeg := exec.CommandContext(ctx, "ffmpeg", args...)
+	ffmpegBinary := dependency.AcquireFFmpeg()
+	defer ffmpegBinary.Release()
+
+	ffmpeg := exec.CommandContext(ctx, ffmpegBinary.Path, args...)
 	stdout, err := ffmpeg.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
@@ -230,6 +234,7 @@ func analyzeStreamHead(ctx context.Context, streamURL string) (*analysis.TrackAn
 		if killErr := ffmpeg.Process.Kill(); killErr != nil {
 			logger.Debugf("Failed to kill ffmpeg: %v", killErr)
 		}
+		_ = ffmpeg.Wait()
 		return nil, fmt.Errorf("read error: %w", err)
 	}
 

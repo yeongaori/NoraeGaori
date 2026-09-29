@@ -148,22 +148,17 @@ func fadeOutGainAt(frame, startFrame, frames int) (float64, bool) {
 	return dsp.QSinOut(float64(frame-startFrame) / float64(frames)), true
 }
 
-func openPlaybackStream(song *queue.Song, streamURL string, seekTime, bitrate int, normalization, collectTail bool, guildID string) (audioStream, error) {
+func openPlaybackStream(player *GuildPlayer, song *queue.Song, streamURL string, seekTime, bitrate int, normalization, collectTail bool) (audioStream, error) {
 	if song.IsLive {
-		logger.Debugf("Opening live yt-dlp pipe for guild: %s", guildID)
-		sp, pipeErr := getLiveStreamPipe(song.URL, false, bitrate, 0)
-		if pipeErr != nil {
-			return nil, pipeErr
-		}
-
-		return newAudioStreamPipe(ffmpeg.PipeArgs(normalization), sp, collectTail)
+		logger.Debugf("Opening live yt-dlp pipe for guild: %s", player.GuildID)
+		return player.startLiveStream(song.URL, bitrate, normalization, collectTail)
 	}
 
 	if streamURL == "" {
 		return nil, fmt.Errorf("no stream URL available for playback")
 	}
 
-	logger.Debugf("Building FFmpeg command for guild: %s", guildID)
+	logger.Debugf("Building FFmpeg command for guild: %s", player.GuildID)
 	args := []string{
 		"-reconnect", "1",
 		"-reconnect_streamed", "1",
@@ -188,7 +183,7 @@ func openPlaybackStream(song *queue.Song, streamURL string, seekTime, bitrate in
 		"pipe:1",
 	)
 
-	return newAudioStream(args, collectTail)
+	return player.startStream(args, collectTail)
 }
 
 func acquireOpusEncoder(resumeMode bool, pending *PendingStream, bitrate int, guildID string) (*opus.Encoder, error) {
@@ -350,7 +345,7 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 	}
 
 	if stream == nil {
-		opened, openErr := openPlaybackStream(song, streamURL, seekTime, bitrate, normalization, collectTail, guildID)
+		opened, openErr := openPlaybackStream(player, song, streamURL, seekTime, bitrate, normalization, collectTail)
 		if openErr != nil {
 			return openErr
 		}

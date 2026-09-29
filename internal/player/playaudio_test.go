@@ -32,7 +32,7 @@ func newCharacterizationPlayer(t *testing.T, guildID string, stream func() audio
 	player.PendingStream = nil
 	player.mu.Unlock()
 
-	testutil.Swap(t, &newAudioStream, func(args []string, collectTail bool) (audioStream, error) {
+	testutil.Swap(t, &newAudioStream, func(_ string, args []string, collectTail bool, _ func()) (audioStream, error) {
 		return stream(), nil
 	})
 

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"noraegaori/internal/config"
+	"noraegaori/internal/dependency"
 	"noraegaori/internal/logger"
 )
 
@@ -202,6 +203,18 @@ func (versionmanager *VersionManager) GetActiveVersion() string {
 	versionmanager.mu.RLock()
 	defer versionmanager.mu.RUnlock()
 	return versionmanager.state.ActiveVersion
+}
+
+func (versionmanager *VersionManager) hasActiveBinary() bool {
+	versionmanager.mu.RLock()
+	entry, ok := versionmanager.state.Versions[versionmanager.state.ActiveVersion]
+	versionmanager.mu.RUnlock()
+
+	if !ok {
+		return false
+	}
+	_, err := os.Stat(entry.Path)
+	return err == nil
 }
 
 func (versionmanager *VersionManager) SetActiveVersion(version string) {
@@ -680,7 +693,7 @@ func (versionmanager *VersionManager) testExtraction(binaryPath, videoID string)
 	url := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID)
 	args := []string{"-f", canaryAudioFormat, "--dump-json", "--no-playlist", "--no-warnings", url}
 
-	if rt := GetJsRuntime(); rt != "" {
+	if rt := dependency.JsRuntimeArg(); rt != "" {
 		args = append([]string{"--js-runtimes", rt}, args...)
 	}
 

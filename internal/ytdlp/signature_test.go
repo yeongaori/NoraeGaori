@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"noraegaori/internal/download"
 )
 
 func loadSignedFixtures(t *testing.T) (checksums, signature []byte) {
@@ -105,9 +107,9 @@ func TestVerifyChecksumSignatureRejectsAForeignSignature(t *testing.T) {
 func TestFixtureChecksumsParseAndCoverEveryPlatform(t *testing.T) {
 	checksums, _ := loadSignedFixtures(t)
 
-	parsed, err := parseChecksums(bytes.NewReader(checksums))
+	parsed, err := download.ParseChecksums(bytes.NewReader(checksums))
 	if err != nil {
-		t.Fatalf("parseChecksums returned %v, want nil", err)
+		t.Fatalf("ParseChecksums returned %v, want nil", err)
 	}
 
 	for _, asset := range []string{"yt-dlp", "yt-dlp.exe", "yt-dlp_macos", "yt-dlp_linux_aarch64"} {

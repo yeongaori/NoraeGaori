@@ -254,7 +254,7 @@ func (cs *crossfadeState) buildPlan(player *GuildPlayer, es *ffmpeg.EndState, se
 	startOffsetSec := analysisFirstBeat(bAnal)
 
 	bArgs := ffmpeg.Args(nextURL, startOffsetSec, normalization)
-	bStream, err := newAudioStream(bArgs, fade.autoMix || fade.trimSilence)
+	bStream, err := player.startStream(bArgs, fade.autoMix || fade.trimSilence)
 	if err != nil {
 		scope.Debugf("failed to start next stream for guild %s: %v", guildID, err)
 		return nil
@@ -419,7 +419,7 @@ func (cs *crossfadeState) startNextStreamRefetch(player *GuildPlayer) {
 			return
 		}
 
-		stream, err := newAudioStream(ffmpeg.Args(freshURL, startOffsetSec, normalization), collectTail)
+		stream, err := player.startStream(ffmpeg.Args(freshURL, startOffsetSec, normalization), collectTail)
 		if err != nil {
 			cs.scope.Debugf("refetched stream failed to start for guild %s: %v", guildID, err)
 			return

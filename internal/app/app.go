@@ -8,6 +8,7 @@ import (
 	"noraegaori/internal/audio/opus"
 	"noraegaori/internal/config"
 	"noraegaori/internal/database"
+	"noraegaori/internal/dependency"
 	"noraegaori/internal/discord/command"
 	"noraegaori/internal/guild"
 	"noraegaori/internal/logger"
@@ -84,12 +85,16 @@ func Run(token string) error {
 		return fmt.Errorf("failed to initialize YouTube: %w", err)
 	}
 
+	logger.Debug("Preparing ffmpeg and the JavaScript runtime...")
+	if err := dependency.Prepare(); err != nil {
+		return fmt.Errorf("failed to prepare dependencies: %w", err)
+	}
+
 	ytdlpUpdater.AutoUpdate()
-	ytdlpUpdater.DetectJsRuntime()
 
 	updaterCtx, updaterCancel := context.WithCancel(context.Background())
 	defer updaterCancel()
-	ytdlpUpdater.StartBackgroundUpdater(updaterCtx)
+	ytdlpUpdater.StartBackgroundUpdater(updaterCtx, dependency.CheckUpdates)
 
 	logger.Debugf("Opus encoder: %s", opus.GetEncoderType())
 	logger.Info("Starting Discord bot...")
