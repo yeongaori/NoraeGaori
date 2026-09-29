@@ -118,8 +118,8 @@ var (
 	loadingMessages   = make(map[string]*discordgo.Message)
 	loadingMessagesMu sync.RWMutex
 
-	reconnectMessages   = make(map[string]*discordgo.Message)
-	reconnectMessagesMu sync.RWMutex
+	reconnectNotices guildMessages
+	rateLimitNotices guildMessages
 
 	preCacheStore   = make(map[string]*PreCache)
 	preCacheStoreMu sync.RWMutex
@@ -144,11 +144,15 @@ var (
 
 	fetchStreamURL = youtube.GetStreamURL
 
+	retryDelay = 2 * time.Second
+
 	joinVoiceChannel func(session *discordgo.Session, guildID, channelID string) (voiceConnection, error)
 
 	announceNowPlaying        func(session *discordgo.Session, guildID string, song *queue.Song, q *queue.Queue)
 	announcePlaybackEnd       func(session *discordgo.Session, guildID, reason string, isLeaving bool)
 	announceReconnect         func(session *discordgo.Session, guildID string, song *queue.Song)
+	announceRateLimit         func(session *discordgo.Session, guildID string, song *queue.Song)
+	rateLimitCooldown         = youtube.RateLimitCooldown
 	dismissLoadingMessage     func(session *discordgo.Session, guildID string)
 	lookupVoiceChannelBitrate func(session *discordgo.Session, channelID string) int
 	announceSongError         func(session *discordgo.Session, guildID string, song *queue.Song, reason string)
@@ -164,6 +168,7 @@ func init() {
 	announceNowPlaying = sendNowPlayingMessage
 	announcePlaybackEnd = sendPlaybackEndMessage
 	announceReconnect = sendReconnectMessage
+	announceRateLimit = sendRateLimitMessage
 	dismissLoadingMessage = deleteLoadingMessageFor
 	lookupVoiceChannelBitrate = readVoiceChannelBitrate
 	announceSongError = sendSongErrorMessage

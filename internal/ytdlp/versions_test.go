@@ -169,6 +169,23 @@ func TestSaveErrorIgnoresUnactionableFailures(t *testing.T) {
 	}
 }
 
+func TestSaveErrorIgnoresRateLimits(t *testing.T) {
+	versionmanager := newTestVersionManager(t)
+	addVersion(versionmanager, "2026.07.04", &VersionEntry{Path: "lib/a/yt-dlp", State: StateActive})
+	versionmanager.state.ActiveVersion = "2026.07.04"
+
+	for _, videoID := range []string{"video1", "video2", "video3", "video4"} {
+		versionmanager.SaveError("2026.07.04", videoID, "WARNING: [youtube] "+videoID+": Unable to download webpage: HTTP Error 429: Too Many Requests")
+	}
+
+	if got := len(versionmanager.state.Versions["2026.07.04"].Errors); got != 0 {
+		t.Errorf("got %d saved errors, want YouTube rate limits not blamed on yt-dlp", got)
+	}
+	if versionmanager.ActiveVersionIsFailing() {
+		t.Error("the active version is reported failing because of YouTube rate limits")
+	}
+}
+
 func TestSaveErrorDeduplicatesByVideo(t *testing.T) {
 	versionmanager := newTestVersionManager(t)
 	addVersion(versionmanager, "2026.07.04", &VersionEntry{Path: "lib/a/yt-dlp", State: StateActive})

@@ -132,9 +132,9 @@ func TestDeliverNowPlayingRespectsShowStartedTrack(t *testing.T) {
 
 func TestDeliverNowPlayingResolvesReconnectMessage(t *testing.T) {
 	guildID := "deliverreconnect"
-	t.Cleanup(func() { deleteReconnectMessage(guildID) })
+	t.Cleanup(func() { reconnectNotices.remove(guildID) })
 
-	setReconnectMessage(guildID, &discordgo.Message{ID: "reconnect", ChannelID: "reconnectchannel"})
+	reconnectNotices.set(guildID, &discordgo.Message{ID: "reconnect", ChannelID: "reconnectchannel"})
 	song, q := nowPlayingFixture(guildID, false)
 
 	sender := &fakeEmbedSender{}
@@ -146,7 +146,7 @@ func TestDeliverNowPlayingResolvesReconnectMessage(t *testing.T) {
 	if sender.edits[0].messageID != "reconnect" {
 		t.Errorf("edited %s, want the reconnect message", sender.edits[0].messageID)
 	}
-	if getReconnectMessage(guildID) != nil {
+	if reconnectNotices.get(guildID) != nil {
 		t.Error("reconnect message should be released once resolved")
 	}
 }

@@ -31,6 +31,21 @@ func IsDefinitiveUnavailableError(errorMsg string) bool {
 	return false
 }
 
+func IsRateLimitError(errorMsg string) bool {
+	errorLower := strings.ToLower(errorMsg)
+	rateLimitPatterns := []string{
+		"http error 429",
+		"too many requests",
+		"rate-limited by youtube",
+	}
+	for _, pattern := range rateLimitPatterns {
+		if strings.Contains(errorLower, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
 func IsNetworkError(errorMsg string) bool {
 	errorLower := strings.ToLower(errorMsg)
 	networkPatterns := []string{

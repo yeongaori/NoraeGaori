@@ -370,7 +370,7 @@ func (versionmanager *VersionManager) SaveSuccess(version, videoID string) {
 
 func (versionmanager *VersionManager) SaveError(version, videoID string, errMsg string) {
 
-	if IsDefinitiveUnavailableError(errMsg) || IsNetworkError(errMsg) {
+	if IsDefinitiveUnavailableError(errMsg) || IsNetworkError(errMsg) || IsRateLimitError(errMsg) {
 		return
 	}
 

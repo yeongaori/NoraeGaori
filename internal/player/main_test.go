@@ -17,6 +17,7 @@ func TestMain(m *testing.M) {
 	announceNowPlaying = func(*discordgo.Session, string, *queue.Song, *queue.Queue) {}
 	announcePlaybackEnd = func(*discordgo.Session, string, string, bool) {}
 	announceReconnect = func(*discordgo.Session, string, *queue.Song) {}
+	announceRateLimit = func(*discordgo.Session, string, *queue.Song) {}
 	dismissLoadingMessage = func(*discordgo.Session, string) {}
 	lookupVoiceChannelBitrate = func(*discordgo.Session, string) int { return 128000 }
 	announceSongError = func(*discordgo.Session, string, *queue.Song, string) {}

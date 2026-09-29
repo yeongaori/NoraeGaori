@@ -454,6 +454,10 @@ type PlayerMessages struct {
 	StreamReconnectFailedTitle string `json:"stream_reconnect_failed_title"`
 	StreamReconnectFailedDesc  string `json:"stream_reconnect_failed_desc"`
 	MaxRetriesSkipping         string `json:"max_retries_skipping"`
+	RateLimitedTitle           string `json:"rate_limited_title"`
+	RateLimitedDesc            string `json:"rate_limited_desc"`
+	RateLimitClearedTitle      string `json:"rate_limit_cleared_title"`
+	RateLimitClearedDesc       string `json:"rate_limit_cleared_desc"`
 	PlaybackCrashRetry         string `json:"playback_crash_retry"`
 	LeavingEmptyDesc           string `json:"leaving_empty_desc"`
 	LeavingEmptyFooter         string `json:"leaving_empty_footer"`

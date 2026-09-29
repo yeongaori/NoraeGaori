@@ -1,6 +1,7 @@
 package youtube
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -8,6 +9,7 @@ import (
 
 	"noraegaori/internal/logger"
 	"noraegaori/internal/messages"
+	ytdlpUpdater "noraegaori/internal/ytdlp"
 )
 
 type VideoError struct {
@@ -95,15 +97,24 @@ type circuitBreaker struct {
 	mu               sync.RWMutex
 }
 
-func isRateLimitError(err error) bool {
-	if err == nil {
-		return false
+var ErrRateLimited = errors.New("YouTube rate limit exceeded")
+
+func IsRateLimitError(err error) bool {
+	return err != nil && (errors.Is(err, ErrRateLimited) || ytdlpUpdater.IsRateLimitError(err.Error()))
+}
+
+func RateLimitCooldown() time.Duration {
+	return ytCircuitBreaker.remainingCooldown()
+}
+
+func (cb *circuitBreaker) remainingCooldown() time.Duration {
+	cb.mu.RLock()
+	defer cb.mu.RUnlock()
+
+	if cb.state != circuitOpen {
+		return 0
 	}
-	errMsg := strings.ToLower(err.Error())
-	return strings.Contains(errMsg, "rate limit") ||
-		strings.Contains(errMsg, "too many requests") ||
-		strings.Contains(errMsg, "429") ||
-		strings.Contains(errMsg, "quota exceeded")
+	return max(circuitCooldownPeriod-time.Since(cb.lastFailureTime), 0)
 }
 
 func (cb *circuitBreaker) recordSuccess() {
@@ -118,7 +129,7 @@ func (cb *circuitBreaker) recordSuccess() {
 }
 
 func (cb *circuitBreaker) recordFailure(err error) {
-	if !isRateLimitError(err) {
+	if !IsRateLimitError(err) {
 		return
 	}
 
@@ -129,6 +140,11 @@ func (cb *circuitBreaker) recordFailure(err error) {
 	cb.failureCount++
 	cb.lastFailureTime = time.Now()
 
+	if cb.state == circuitHalfOpen {
+		logger.Warn("Test request was rate limited, reopening circuit")
+		cb.state = circuitOpen
+		return
+	}
 	if cb.consecutiveFails >= circuitOpenThreshold && cb.state == circuitClosed {
 		logger.Warnf("Opening circuit after %d consecutive rate limit errors", cb.consecutiveFails)
 		cb.state = circuitOpen
@@ -153,8 +169,8 @@ func (cb *circuitBreaker) canAttempt() error {
 			logger.Info("Cooldown complete, entering half-open state (testing)")
 			return nil
 		}
-		return fmt.Errorf("YouTube rate limit exceeded, please wait %v before trying again",
-			circuitCooldownPeriod-time.Since(lastFailure))
+		return fmt.Errorf("%w, please wait %v before trying again",
+			ErrRateLimited, circuitCooldownPeriod-time.Since(lastFailure))
 	case circuitHalfOpen:
 		return nil
 	}

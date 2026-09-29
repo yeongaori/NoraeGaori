@@ -1,6 +1,7 @@
 package player
 
 import (
+	"sync"
 	"time"
 
 	"noraegaori/internal/logger"
@@ -86,42 +87,59 @@ func deliverNowPlaying(sender embedSender, guildID string, song *queue.Song, q *
 		}
 	}
 
-	if reconnectMsg := getReconnectMessage(guildID); reconnectMsg != nil {
-		reconnectedEmbed := messages.CreateSongEmbed(
-			guildID,
-			messages.ColorSuccess,
-			messages.T(guildID).Player.StreamReconnectedTitle,
-			messages.T(guildID).Player.StreamReconnectedDesc,
-			song.Title,
-			song.URL,
-			song.Uploader,
-			song.Duration,
-			song.RequestedByTag,
-			song.Thumbnail,
-		)
-		if _, err := sender.ChannelMessageEditEmbed(reconnectMsg.ChannelID, reconnectMsg.ID, reconnectedEmbed); err != nil {
-			logger.Warnf("Failed to update the stream reconnected message: %v", err)
-		}
-		deleteReconnectMessage(guildID)
+	player := messages.T(guildID).Player
+	resolveNotice(sender, &reconnectNotices, guildID, song, player.StreamReconnectedTitle, player.StreamReconnectedDesc)
+	resolveNotice(sender, &rateLimitNotices, guildID, song, player.RateLimitClearedTitle, player.RateLimitClearedDesc)
+}
+
+func resolveNotice(sender embedSender, notices *guildMessages, guildID string, song *queue.Song, title, description string) {
+	notice := notices.get(guildID)
+	if notice == nil {
+		return
 	}
+
+	resolvedEmbed := messages.CreateSongEmbed(
+		guildID,
+		messages.ColorSuccess,
+		title,
+		description,
+		song.Title,
+		song.URL,
+		song.Uploader,
+		song.Duration,
+		song.RequestedByTag,
+		song.Thumbnail,
+	)
+	if _, err := sender.ChannelMessageEditEmbed(notice.ChannelID, notice.ID, resolvedEmbed); err != nil {
+		logger.Warnf("Failed to update the %q notice: %v", title, err)
+	}
+	notices.remove(guildID)
 }
 
-func setReconnectMessage(guildID string, msg *discordgo.Message) {
-	reconnectMessagesMu.Lock()
-	defer reconnectMessagesMu.Unlock()
-	reconnectMessages[guildID] = msg
+type guildMessages struct {
+	mu      sync.RWMutex
+	byGuild map[string]*discordgo.Message
 }
 
-func getReconnectMessage(guildID string) *discordgo.Message {
-	reconnectMessagesMu.RLock()
-	defer reconnectMessagesMu.RUnlock()
-	return reconnectMessages[guildID]
+func (notices *guildMessages) set(guildID string, msg *discordgo.Message) {
+	notices.mu.Lock()
+	defer notices.mu.Unlock()
+	if notices.byGuild == nil {
+		notices.byGuild = make(map[string]*discordgo.Message)
+	}
+	notices.byGuild[guildID] = msg
 }
 
-func deleteReconnectMessage(guildID string) {
-	reconnectMessagesMu.Lock()
-	defer reconnectMessagesMu.Unlock()
-	delete(reconnectMessages, guildID)
+func (notices *guildMessages) get(guildID string) *discordgo.Message {
+	notices.mu.RLock()
+	defer notices.mu.RUnlock()
+	return notices.byGuild[guildID]
+}
+
+func (notices *guildMessages) remove(guildID string) {
+	notices.mu.Lock()
+	defer notices.mu.Unlock()
+	delete(notices.byGuild, guildID)
 }
 
 func sendReconnectMessage(session *discordgo.Session, guildID string, song *queue.Song) {
@@ -144,8 +162,41 @@ func sendReconnectMessage(session *discordgo.Session, guildID string, song *queu
 	)
 	msg, err := session.ChannelMessageSendEmbed(q.TextChannelID, embed)
 	if err == nil && msg != nil {
-		setReconnectMessage(guildID, msg)
+		reconnectNotices.set(guildID, msg)
 	}
+}
+
+func sendRateLimitMessage(session *discordgo.Session, guildID string, song *queue.Song) {
+	postRateLimitNotice(session, guildID, song)
+}
+
+func postRateLimitNotice(sender embedSender, guildID string, song *queue.Song) {
+	if rateLimitNotices.get(guildID) != nil {
+		return
+	}
+	q, err := queue.GetQueue(guildID, false)
+	if err != nil || q == nil || q.TextChannelID == "" {
+		return
+	}
+
+	embed := messages.CreateSongEmbed(
+		guildID,
+		messages.ColorWarning,
+		messages.T(guildID).Player.RateLimitedTitle,
+		messages.T(guildID).Player.RateLimitedDesc,
+		song.Title,
+		song.URL,
+		song.Uploader,
+		song.Duration,
+		song.RequestedByTag,
+		song.Thumbnail,
+	)
+	msg, err := sender.ChannelMessageSendEmbed(q.TextChannelID, embed)
+	if err != nil || msg == nil {
+		logger.Warnf("Failed to send the rate limit notice: %v", err)
+		return
+	}
+	rateLimitNotices.set(guildID, msg)
 }
 
 func sendSongErrorMessage(session *discordgo.Session, guildID string, song *queue.Song, reason string) {

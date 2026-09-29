@@ -335,7 +335,10 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 				return playStop
 			default:
 			}
-			time.Sleep(2 * time.Second)
+			if !waitBeforeRetry(player, streamErr, retryDelay) {
+				logger.Debugf("Stop signal received while waiting to retry: %s", song.Title)
+				return playStop
+			}
 			return playContinue
 		}
 
@@ -482,14 +485,19 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 			default:
 			}
 
+			delay := retryDelay
 			if isVoiceError {
 				logger.Infof("Waiting 3 seconds before reconnecting voice for guild: %s", guildID)
-				time.Sleep(3 * time.Second)
+				delay = 3 * time.Second
 			} else {
 				invalidatePreCacheSong(guildID, song.ID)
-				time.Sleep(2 * time.Second)
 			}
+			isRetrying := waitBeforeRetry(player, err, delay)
 			abortPlayback()
+			if !isRetrying {
+				logger.Debugf("Stop signal received while waiting to retry: %s", song.Title)
+				return playStop
+			}
 			return playContinue
 		}
 

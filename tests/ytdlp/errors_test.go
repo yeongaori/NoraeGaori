@@ -46,11 +46,33 @@ func TestIsNetworkError(t *testing.T) {
 	}
 }
 
+func TestIsRateLimitError(t *testing.T) {
+	cases := map[string]bool{
+		"WARNING: [youtube] f_2PqUwdijI: Unable to download webpage: HTTP Error 429: Too Many Requests": true,
+		"ERROR: [youtube] abc: This content isn't available. Too many requests from this client":        true,
+		"The current session has been rate-limited by YouTube for up to an hour":                        true,
+		"ERROR: [youtube] ab429cd: Private video":                                                       false,
+		"failed to open https://www.youtube.com/watch?v=x429y":                                          false,
+		"quota exceeded":               false,
+		"dial tcp: connection refused": false,
+		"":                             false,
+	}
+
+	for message, want := range cases {
+		if got := ytdlp.IsRateLimitError(message); got != want {
+			t.Errorf("IsRateLimitError(%q) = %v, want %v", message, got, want)
+		}
+	}
+}
+
 func TestErrorClassifiersAreCaseInsensitive(t *testing.T) {
 	if !ytdlp.IsDefinitiveUnavailableError("PRIVATE VIDEO") {
 		t.Error("IsDefinitiveUnavailableError missed an uppercase pattern")
 	}
 	if !ytdlp.IsNetworkError("CONNECTION REFUSED") {
 		t.Error("IsNetworkError missed an uppercase pattern")
+	}
+	if !ytdlp.IsRateLimitError("http error 429: too many requests") {
+		t.Error("IsRateLimitError missed a lowercase pattern")
 	}
 }

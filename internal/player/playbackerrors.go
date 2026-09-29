@@ -3,6 +3,7 @@ package player
 import (
 	"errors"
 	"strings"
+	"time"
 
 	"noraegaori/internal/logger"
 	"noraegaori/internal/messages"
@@ -140,6 +141,22 @@ func reportPlaybackFailure(song *queue.Song, errMsg string) {
 
 var reportStreamFailure = youtube.SaveStreamFailure
 
+func waitBeforeRetry(player *GuildPlayer, err error, delay time.Duration) bool {
+	if youtube.IsRateLimitError(err) {
+		delay = max(delay, rateLimitCooldown())
+	}
+
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case <-player.StopChan:
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
 func handlePlaybackError(session *discordgo.Session, guildID string, song *queue.Song, err error) bool {
 	errMsg := err.Error()
 
@@ -164,6 +181,12 @@ func handlePlaybackError(session *discordgo.Session, guildID string, song *queue
 		return false
 	}
 
+	if youtube.IsRateLimitError(err) {
+		logger.Warnf("YouTube is rate limiting, keeping %s queued in guild: %s", song.Title, guildID)
+		announceRateLimit(session, guildID, song)
+		return true
+	}
+
 	key := retryKey(guildID, song.URL)
 	playbackRetriesMu.Lock()
 	retries := playbackRetries[key]
@@ -179,7 +202,7 @@ func handlePlaybackError(session *discordgo.Session, guildID string, song *queue
 	song.SetState(queue.SongStateFailed)
 	logger.Errorf("Max retries exceeded for song %s in guild: %s", song.Title, guildID)
 
-	if reconnectMsg := getReconnectMessage(guildID); reconnectMsg != nil {
+	if reconnectMsg := reconnectNotices.get(guildID); reconnectMsg != nil {
 		failedEmbed := messages.CreateSongEmbed(
 			guildID,
 			messages.ColorError,
@@ -193,7 +216,7 @@ func handlePlaybackError(session *discordgo.Session, guildID string, song *queue
 			song.Thumbnail,
 		)
 		session.ChannelMessageEditEmbed(reconnectMsg.ChannelID, reconnectMsg.ID, failedEmbed)
-		deleteReconnectMessage(guildID)
+		reconnectNotices.remove(guildID)
 	} else {
 		announceSongError(session, guildID, song, messages.T(guildID).Player.MaxRetriesSkipping)
 	}
