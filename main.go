@@ -37,6 +37,9 @@ func loadEnv() error {
 	envPath := ".env"
 
 	if _, err := os.Stat(envPath); os.IsNotExist(err) {
+		if os.Getenv("DISCORD_BOT_TOKEN") != "" {
+			return nil
+		}
 
 		exampleEnv := `# Discord Bot Configuration
 DISCORD_BOT_TOKEN=your_bot_token_here

@@ -1,55 +1,41 @@
-# Build stage
-FROM golang:1.25-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.25-trixie AS builder
 
-# CGO is required for go-sqlite3; libopus is dlopen'd at runtime via purego,
-# so no opus headers are needed at build time.
-RUN apk add --no-cache gcc musl-dev sqlite-dev
+ARG TARGETOS
+ARG TARGETARCH
 
 WORKDIR /build
 
-# Copy go mod files
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy source code
 COPY . .
 
-# Build the application
-RUN CGO_ENABLED=1 go build -ldflags="-s -w" -o noraegaori .
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags="-s -w" -o noraegaori .
 
-# Runtime stage
-FROM alpine:latest
+FROM debian:trixie-slim
 
-# Install runtime dependencies
-RUN apk add --no-cache \
-    ffmpeg \
-    python3 \
-    py3-pip \
-    ca-certificates \
-    sqlite \
-    opus \
-    && pip3 install --no-cache-dir --break-system-packages yt-dlp
+ARG TARGETARCH
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates ffmpeg libopus0 procps \
+    && if [ "$TARGETARCH" = "386" ]; then apt-get install -y --no-install-recommends python3; fi \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy binary and locale files from builder
 COPY --from=builder /build/noraegaori .
 COPY --from=builder /build/locales ./locales
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
-# Create directories
-RUN mkdir -p /app/config /app/data
+RUN mkdir -p /app/config /app/data /app/lib
 
-# Set environment
 ENV DEBUG_MODE=false
 
-# Run as non-root user
-RUN adduser -D -u 1000 botuser && \
+RUN useradd --uid 1000 --user-group --create-home botuser && \
     chown -R botuser:botuser /app
-USER botuser
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD pgrep noraegaori || exit 1
 
-# Run the bot
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["./noraegaori"]

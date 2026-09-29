@@ -14,13 +14,14 @@ services:
     volumes:
       - ./config:/app/config:ro          # Config files (read-only)
       - ./data:/app/data                 # Database (read-write)
+      - ./lib:/app/lib
 
     # Resource limits (optional)
     deploy:
       resources:
         limits:
           cpus: '1.0'
-          memory: 256M
+          memory: 512M
         reservations:
           cpus: '0.5'
           memory: 128M

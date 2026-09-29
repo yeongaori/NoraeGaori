@@ -4,9 +4,14 @@ noraegaori
 # Data
 data/
 *.sqlite
+lib/
+dist/
+*.log
 
 # Config with secrets
 .env
+config/*.json
+!config/*.example.json
 
 # Git
 .git/
