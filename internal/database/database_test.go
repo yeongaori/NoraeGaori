@@ -19,7 +19,7 @@ func useTestDB(t *testing.T, db *sql.DB) {
 func openTestDB(t *testing.T, dsn string) *sql.DB {
 	t.Helper()
 
-	db, err := sql.Open("sqlite3", dsn)
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		t.Fatalf("failed to open test database: %v", err)
 	}
@@ -31,7 +31,7 @@ func openTestDB(t *testing.T, dsn string) *sql.DB {
 func createLegacySchema(t *testing.T, dbPath string) {
 	t.Helper()
 
-	db, err := sql.Open("sqlite3", "file:"+dbPath)
+	db, err := sql.Open("sqlite", "file:"+dbPath)
 	if err != nil {
 		t.Fatalf("failed to open test database: %v", err)
 	}
@@ -104,6 +104,34 @@ func assertMigratedColumns(t *testing.T, db *sql.DB) {
 				t.Errorf("%s.%s is missing after migrations", table, column)
 			}
 		}
+	}
+}
+
+func TestInitializeEnablesWALAndABusyTimeout(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Cleanup(func() {
+		Close()
+		DB = nil
+	})
+
+	if err := Initialize(); err != nil {
+		t.Fatalf("Initialize returned %v, want nil", err)
+	}
+
+	var journalMode string
+	if err := DB.QueryRow("PRAGMA journal_mode").Scan(&journalMode); err != nil {
+		t.Fatalf("failed to read journal_mode: %v", err)
+	}
+	if journalMode != "wal" {
+		t.Errorf("got journal_mode %q, want wal so readers do not block the writer", journalMode)
+	}
+
+	var busyTimeout int
+	if err := DB.QueryRow("PRAGMA busy_timeout").Scan(&busyTimeout); err != nil {
+		t.Fatalf("failed to read busy_timeout: %v", err)
+	}
+	if busyTimeout != 5000 {
+		t.Errorf("got busy_timeout %d, want 5000 so concurrent writes wait instead of failing", busyTimeout)
 	}
 }
 

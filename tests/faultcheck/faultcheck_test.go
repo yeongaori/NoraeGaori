@@ -109,7 +109,7 @@ func whileQueryOnly(t *testing.T, run func()) {
 	t.Helper()
 
 	dbtest.WhileClosed(t, func() {
-		queryOnly, err := sql.Open("sqlite3", "file:"+filepath.Join("data", "database.sqlite")+"?_busy_timeout=5000&_query_only=true")
+		queryOnly, err := sql.Open("sqlite", "file:"+filepath.Join("data", "database.sqlite")+"?_pragma=busy_timeout(5000)&_pragma=query_only(1)")
 		if err != nil {
 			t.Fatalf("failed to open the database in query-only mode: %v", err)
 		}

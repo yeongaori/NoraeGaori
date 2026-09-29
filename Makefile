@@ -4,22 +4,17 @@ ifeq ($(OS),Windows_NT)
     NULL := nul
     EXE := .exe
     BLANK := echo.
-    CGO := 0
 else
     NULL := /dev/null
     EXE :=
     BLANK := echo
-    CGO := 1
 endif
 
-# Binary name
 BINARY_NAME=noraegaori$(EXE)
 BINARY_PATH=./$(BINARY_NAME)
 
-# Build flags
 BUILD_FLAGS=-ldflags="-s -w"
 
-# Docker image tag: master → release, anything else → dev
 GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>$(NULL))
 ifeq ($(GIT_BRANCH),master)
     DOCKER_TAG := release
@@ -28,10 +23,19 @@ else
 endif
 DOCKER_IMAGE := $(BINARY_NAME):$(DOCKER_TAG)
 
-all: build
+.DEFAULT_GOAL := build
+
+DIST_DIR := dist
+VERSION ?= $(shell git describe --tags --always --dirty 2>$(NULL))
+
+## all: Cross-compile release packages for every supported OS and architecture into dist/
+all: deps
+	@echo Cross-compiling $(VERSION) into $(DIST_DIR)/...
+	@VERSION=$(VERSION) DIST=$(DIST_DIR) sh scripts/crossbuild.sh
+	@echo Packages written to $(DIST_DIR)/
 
 ## build: Build the bot (uses libopus at runtime if present, WASM otherwise)
-build: export CGO_ENABLED := $(CGO)
+build: export CGO_ENABLED := 0
 build: deps
 	@echo Building $(BINARY_NAME)...
 	@go build $(BUILD_FLAGS) -o $(BINARY_NAME) .
@@ -51,6 +55,7 @@ dev:
 clean:
 	@echo Cleaning build artifacts...
 	@rm -f $(BINARY_NAME)
+	@rm -rf $(DIST_DIR)/
 	@rm -rf data/
 	@echo Clean complete
 
@@ -103,7 +108,7 @@ local:
 	@echo Building $(BINARY_NAME) with local discordgo-fork...
 	@cp go.mod go.mod.bak; cp go.sum go.sum.bak; \
 		go mod edit -replace github.com/bwmarrin/discordgo=/home/yeongaori/discordgo-fork; \
-		CGO_ENABLED=1 go build $(BUILD_FLAGS) -o $(BINARY_NAME) .; \
+		CGO_ENABLED=0 go build $(BUILD_FLAGS) -o $(BINARY_NAME) .; \
 		RC=$$?; mv go.mod.bak go.mod; mv go.sum.bak go.sum; exit $$RC
 	@echo "Build complete (local fork): $(BINARY_PATH)"
 
@@ -119,6 +124,7 @@ docker-run:
 	@docker run --rm -it \
 		-v $(PWD)/config:/app/config \
 		-v $(PWD)/data:/app/data \
+		-v $(PWD)/lib:/app/lib \
 		-v $(PWD)/.env:/app/.env \
 		$(DOCKER_IMAGE)
 

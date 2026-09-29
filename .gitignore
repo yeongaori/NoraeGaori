@@ -2,7 +2,8 @@
 *.exe
 yt-dlp.exe
 yt-dlp
-lib/yt-dlp-*/
+lib/
+dist/
 *.exe~
 *.dll
 *.so
