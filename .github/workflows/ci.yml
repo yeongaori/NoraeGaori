@@ -43,12 +43,12 @@ jobs:
       - name: Run tests
         env:
           CGO_ENABLED: "1"
-        run: go test -race ./...
+        run: go test -tags testhooks -race ./...
 
       - name: Run tests repeatedly
         env:
           CGO_ENABLED: "1"
-        run: go test -count=3 ./...
+        run: go test -tags testhooks -count=3 ./...
 
   lint:
     name: Lint

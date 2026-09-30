@@ -1,0 +1,363 @@
+package player_test
+
+import (
+	"errors"
+	"fmt"
+	"sync"
+	"testing"
+	"time"
+
+	"noraegaori/internal/player"
+	"noraegaori/internal/queue"
+)
+
+func newTestPlayer(guildID string, handler func(player.PlayerCommand) error) *player.GuildPlayer {
+	p := player.HookBuildGuildPlayer(player.HookGuildPlayerFields{
+		GuildID:          guildID,
+		Volume:           1.0,
+		StopChan:         make(chan struct{}),
+		PlaybackDone:     make(chan struct{}, 1),
+		CommandChan:      make(chan player.PlayerCommand, 10),
+		QuitChan:         make(chan struct{}),
+		ProcessorRunning: true,
+		Dispatch:         handler,
+	})
+	go p.HookProcessCommands()
+	return p
+}
+
+func stopTestProcessor(guildPlayer *player.GuildPlayer) {
+	close(guildPlayer.QuitChan)
+}
+
+func sendTestCommand(p *player.GuildPlayer, cmdType string) chan error {
+	done := make(chan error, 1)
+	p.CommandChan <- player.PlayerCommand{Type: cmdType, GuildID: p.GuildID, Done: done}
+	return done
+}
+
+func TestDispatchSerialization(t *testing.T) {
+	var mu sync.Mutex
+	var order []string
+
+	p := newTestPlayer("serialguild", func(cmd player.PlayerCommand) error {
+		time.Sleep(2 * time.Millisecond)
+		mu.Lock()
+		order = append(order, cmd.Type)
+		mu.Unlock()
+		return nil
+	})
+	defer stopTestProcessor(p)
+
+	dones := make([]chan error, 5)
+	for i := 0; i < 5; i++ {
+		dones[i] = sendTestCommand(p, fmt.Sprintf("cmd%d", i))
+	}
+	for i, d := range dones {
+		select {
+		case err := <-d:
+			if err != nil {
+				t.Errorf("cmd%d returned error: %v", i, err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("cmd%d never completed", i)
+		}
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(order) != 5 {
+		t.Fatalf("expected 5 processed, got %d", len(order))
+	}
+	for i := 0; i < 5; i++ {
+		if order[i] != fmt.Sprintf("cmd%d", i) {
+			t.Errorf("out of order at %d: got %s", i, order[i])
+		}
+	}
+}
+
+func TestDispatchPanicRecovery(t *testing.T) {
+	p := newTestPlayer("panicguild", func(cmd player.PlayerCommand) error {
+		if cmd.Type == "boom" {
+			panic("simulated command panic")
+		}
+		return nil
+	})
+	defer stopTestProcessor(p)
+
+	okDone := sendTestCommand(p, "ok")
+	if err := <-okDone; err != nil {
+		t.Errorf("ok command errored: %v", err)
+	}
+
+	boomDone := sendTestCommand(p, "boom")
+	select {
+	case err := <-boomDone:
+		if err == nil {
+			t.Error("panicking command should report an error via Done")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("boom command never reported")
+	}
+
+	afterDone := sendTestCommand(p, "ok")
+	select {
+	case err := <-afterDone:
+		if err != nil {
+			t.Errorf("command after panic errored: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("processor died after panic - next command never ran")
+	}
+
+	p.HookMu().Lock()
+	running := *p.HookProcessorRunning()
+	p.HookMu().Unlock()
+	if !running {
+		t.Error("processor should still be running after a recovered panic")
+	}
+}
+
+func TestDispatchErrorPropagation(t *testing.T) {
+	wantErr := fmt.Errorf("boom error")
+	p := newTestPlayer("errguild", func(cmd player.PlayerCommand) error {
+		return wantErr
+	})
+	defer stopTestProcessor(p)
+
+	done := sendTestCommand(p, "whatever")
+	if err := <-done; err == nil || err.Error() != wantErr.Error() {
+		t.Errorf("want %v, got %v", wantErr, err)
+	}
+}
+
+func TestDispatchUnknownCommand(t *testing.T) {
+	p := newTestPlayer("unknownguild", nil)
+	defer stopTestProcessor(p)
+
+	done := sendTestCommand(p, "nonsense")
+	if err := <-done; err == nil {
+		t.Error("unknown command type should error via defaultDispatch")
+	}
+}
+
+func TestForceSkipSpamAdvancesQueueCleanly(t *testing.T) {
+	guildID := "spamguild"
+	setupPlayerDB(t, guildID, 2)
+
+	p := newTestPlayer(guildID, func(cmd player.PlayerCommand) error {
+		if cmd.Type == "skip" {
+			return queue.RemoveFirstSong(cmd.GuildID)
+		}
+		return nil
+	})
+	defer stopTestProcessor(p)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			done := sendTestCommand(p, "skip")
+			select {
+			case err := <-done:
+				if err != nil {
+					t.Errorf("skip errored: %v", err)
+				}
+			case <-time.After(2 * time.Second):
+				t.Error("skip never completed")
+			}
+		}()
+	}
+	wg.Wait()
+
+	q, err := queue.GetQueue(guildID, true)
+	if err != nil {
+		t.Fatalf("get queue: %v", err)
+	}
+	if q == nil || len(q.Songs) != 0 {
+		t.Errorf("expected empty queue after 5 skips on 2 songs, got %v", q)
+	}
+
+	p.HookMu().Lock()
+	running := *p.HookProcessorRunning()
+	p.HookMu().Unlock()
+	if !running {
+		t.Error("processor should survive command spam")
+	}
+}
+
+func TestCommandChanBufferFull(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	p := newTestPlayer("fullguild", func(cmd player.PlayerCommand) error {
+		if cmd.Type == "block" {
+			close(started)
+			<-release
+		}
+		return nil
+	})
+	defer stopTestProcessor(p)
+	defer close(release)
+
+	p.CommandChan <- player.PlayerCommand{Type: "block", GuildID: p.GuildID}
+	<-started
+
+	for i := 0; i < cap(p.CommandChan); i++ {
+		p.CommandChan <- player.PlayerCommand{Type: "x", GuildID: p.GuildID}
+	}
+
+	select {
+	case p.CommandChan <- player.PlayerCommand{Type: "overflow", GuildID: p.GuildID}:
+		t.Error("send to a full CommandChan should not succeed (production returns 'queue full')")
+	default:
+	}
+}
+
+func registerTestPlayer(t *testing.T, guildID string, handler func(player.PlayerCommand) error) *player.GuildPlayer {
+	t.Helper()
+
+	p := newTestPlayer(guildID, handler)
+	player.HookPlayersMu.Lock()
+	(*player.HookPlayers)[guildID] = p
+	player.HookPlayersMu.Unlock()
+
+	t.Cleanup(func() {
+		player.HookPlayersMu.Lock()
+		delete(*player.HookPlayers, guildID)
+		player.HookPlayersMu.Unlock()
+		stopTestProcessor(p)
+		player.HookClearAnnounced(guildID)
+	})
+
+	return p
+}
+
+func TestResumeOrStartAnnouncesResumedSong(t *testing.T) {
+	guildID := "resumeannounce"
+
+	dispatched := make(chan string, 4)
+	p := registerTestPlayer(t, guildID, func(cmd player.PlayerCommand) error {
+		dispatched <- cmd.Type
+		return nil
+	})
+
+	p.HookMu().Lock()
+	p.Paused = true
+	p.HookMu().Unlock()
+
+	player.HookMarkAnnounced(guildID, 7)
+
+	player.ResumeOrStart(nil, guildID)
+
+	select {
+	case cmdType := <-dispatched:
+		if cmdType != "resume" {
+			t.Errorf("want resume command, got %s", cmdType)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("paused player was never resumed")
+	}
+
+	if !player.HookMarkAnnounced(guildID, 7) {
+		t.Error("resumed song is still marked announced, so no now playing message would be sent")
+	}
+}
+
+func TestResumeOrStartLeavesActivePlaybackAlone(t *testing.T) {
+	guildID := "resumeactive"
+
+	dispatched := make(chan string, 4)
+	p := registerTestPlayer(t, guildID, func(cmd player.PlayerCommand) error {
+		dispatched <- cmd.Type
+		return nil
+	})
+
+	p.HookMu().Lock()
+	p.Playing = true
+	p.HookMu().Unlock()
+
+	player.HookMarkAnnounced(guildID, 7)
+
+	player.ResumeOrStart(nil, guildID)
+
+	select {
+	case cmdType := <-dispatched:
+		t.Errorf("playing player should not be restarted, got %s command", cmdType)
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	if player.HookMarkAnnounced(guildID, 7) {
+		t.Error("announcement state was cleared while the song was still playing")
+	}
+}
+
+func TestResumeOrStartAnnouncesFirstStartedSong(t *testing.T) {
+	guildID := "resumeidle"
+
+	dispatched := make(chan string, 4)
+	registerTestPlayer(t, guildID, func(cmd player.PlayerCommand) error {
+		dispatched <- cmd.Type
+		return nil
+	})
+
+	player.HookMarkAnnounced(guildID, 7)
+
+	player.ResumeOrStart(nil, guildID)
+
+	select {
+	case cmdType := <-dispatched:
+		if cmdType != "play" {
+			t.Errorf("want play command, got %s", cmdType)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("idle player never started playback")
+	}
+
+	if !player.HookMarkAnnounced(guildID, 7) {
+		t.Error("started song is still marked announced, so no now playing message would be sent")
+	}
+}
+
+func TestDeletePlayerKeepsCommandDeliveryHonest(t *testing.T) {
+	guildID := "deletedguild"
+
+	stale := player.GetPlayer(guildID)
+	player.DeletePlayer(guildID)
+
+	t.Cleanup(func() { player.DeletePlayer(guildID) })
+
+	if err := player.HookSendCommandToPlayer(guildID, player.PlayerCommand{Type: inertCommandType, GuildID: guildID}); err != nil {
+		t.Fatalf("send after DeletePlayer returned %v, want delivery to a fresh player", err)
+	}
+
+	if live := player.GetPlayer(guildID); live == stale {
+		t.Fatal("command was delivered to the deleted player instead of a fresh one")
+	}
+}
+
+func TestConcurrentSendAndDeleteNeverPanic(t *testing.T) {
+	guildID := "racyguild"
+	t.Cleanup(func() { player.DeletePlayer(guildID) })
+
+	var waitGroup sync.WaitGroup
+	for index := 0; index < 40; index++ {
+		waitGroup.Add(1)
+		go func(shouldDelete bool) {
+			defer waitGroup.Done()
+
+			if shouldDelete {
+				player.DeletePlayer(guildID)
+				return
+			}
+
+			err := player.HookSendCommandToPlayer(guildID, player.PlayerCommand{Type: inertCommandType, GuildID: guildID})
+			if err != nil && !errors.Is(err, player.ErrCommandQueueFull) {
+				t.Errorf("send returned an undeclared error: %v", err)
+			}
+		}(index%2 == 0)
+	}
+	waitGroup.Wait()
+}
+
+const inertCommandType = "test-inert"

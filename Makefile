@@ -1,4 +1,4 @@
-.PHONY: all build run clean test test-race test-repeat deps install help local lint format automixcheck
+.PHONY: all build run clean test test-race test-repeat cover deps install help local lint format automixcheck
 
 ifeq ($(OS),Windows_NT)
     NULL := nul
@@ -69,17 +69,25 @@ deps:
 ## test: Run tests
 test:
 	@echo Running tests...
-	@go test -v ./...
+	@go test -tags testhooks -v ./...
 
 ## test-race: Run tests with the race detector
 test-race:
 	@echo Running tests with the race detector...
-	@CGO_ENABLED=1 go test -race ./...
+	@CGO_ENABLED=1 go test -tags testhooks -race ./...
 
 ## test-repeat: Run tests three times to catch order-dependent tests
 test-repeat:
 	@echo Running tests three times...
-	@go test -count=3 ./...
+	@go test -tags testhooks -count=3 ./...
+
+## cover: Report per-package test coverage of internal/ into coverage.out
+cover:
+	@echo Measuring coverage...
+	@go test -tags testhooks -coverpkg=./internal/... -coverprofile=coverage.out ./... > $(NULL)
+	@awk 'NR > 1 { split($$1, location, ":"); package = location[1]; sub(/\/[^\/]*$$/, "", package); owner[$$1] = package; statements[$$1] = $$2; if ($$3 > 0) covered[$$1] = 1 } \
+		END { for (block in owner) { total[owner[block]] += statements[block]; if (block in covered) hit[owner[block]] += statements[block] } \
+		for (package in total) printf "%-50s %5.1f%%\n", package, 100 * hit[package] / total[package] }' coverage.out | sort
 
 ## install: Install required system dependencies
 install:
@@ -137,7 +145,7 @@ lint:
 ## automixcheck: Run the AutoMix check harness
 automixcheck:
 	@echo Running AutoMix checks...
-	@go test -v ./internal/player/ ./internal/commands/automix/
+	@go test -tags testhooks -v ./tests/player/ ./tests/commands/automix/
 
 ## format: Format code
 format:

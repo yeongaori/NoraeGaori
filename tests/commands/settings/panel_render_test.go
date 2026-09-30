@@ -1,0 +1,250 @@
+package settings_test
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/bwmarrin/discordgo"
+	"noraegaori/internal/commands/settings"
+	"noraegaori/internal/discord"
+	"noraegaori/internal/messages"
+	"noraegaori/tests/testutil/dbtest"
+)
+
+const checkGuildID = "settings-panel-guild"
+
+const discordRowLimit = 5
+
+func rowMenu(t *testing.T, row discordgo.MessageComponent) discordgo.SelectMenu {
+	t.Helper()
+
+	actionsRow, ok := row.(discordgo.ActionsRow)
+	if !ok {
+		t.Fatalf("panel row is %T, want discordgo.ActionsRow", row)
+	}
+	if len(actionsRow.Components) != 1 {
+		t.Fatalf("panel row holds %d components, want a single select menu", len(actionsRow.Components))
+	}
+	menu, ok := actionsRow.Components[0].(discordgo.SelectMenu)
+	if !ok {
+		t.Fatalf("panel row holds %T, want discordgo.SelectMenu", actionsRow.Components[0])
+	}
+	return menu
+}
+
+func TestEveryCategoryStaysWithinDiscordComponentLimits(t *testing.T) {
+	dbtest.Setup(t)
+
+	for _, category := range *settings.HookSettingCategories {
+		for _, isAdmin := range []bool{true, false} {
+			components := settings.HookBuildSettingsComponents(settings.HookNewPanelView(checkGuildID, category, isAdmin))
+
+			if len(components) > discordRowLimit {
+				t.Errorf("category %q (admin=%v) built %d rows, want at most %d",
+					category, isAdmin, len(components), discordRowLimit)
+			}
+			for index, row := range components {
+				menu := rowMenu(t, row)
+				if len(menu.Options) == 0 {
+					t.Errorf("category %q (admin=%v) row %d has an empty menu", category, isAdmin, index)
+				}
+				if len(menu.Options) > settings.HookSelectOptionLimit {
+					t.Errorf("category %q (admin=%v) row %d offers %d options, want at most %d",
+						category, isAdmin, index, len(menu.Options), settings.HookSelectOptionLimit)
+				}
+			}
+		}
+	}
+}
+
+func TestEveryCategoryShowsExactlyTwoRows(t *testing.T) {
+	dbtest.Setup(t)
+
+	for _, category := range *settings.HookSettingCategories {
+		for _, isAdmin := range []bool{true, false} {
+			if !settings.HookHasVisibleSetting(category, isAdmin) {
+				continue
+			}
+			components := settings.HookBuildSettingsComponents(settings.HookNewPanelView(checkGuildID, category, isAdmin))
+			if len(components) != 2 {
+				t.Errorf("category %q (admin=%v) built %d rows, want 2", category, isAdmin, len(components))
+			}
+		}
+	}
+}
+
+func TestThePickerListsEverySettingWithItsCurrentValue(t *testing.T) {
+	dbtest.Setup(t)
+
+	for _, category := range *settings.HookSettingCategories {
+		specs := settings.HookSettingsInCategory(category, true)
+		if len(specs) == 0 {
+			continue
+		}
+
+		view := settings.HookNewPanelView(checkGuildID, category, true)
+		components := settings.HookBuildSettingsComponents(view)
+		menu := rowMenu(t, components[len(components)-1])
+
+		if want := discord.ComponentID(settings.HookPickRoute, discord.ViewArgument(true), category); menu.CustomID != want {
+			t.Fatalf("category %q picker has custom id %q, want %q", category, menu.CustomID, want)
+		}
+		if len(menu.Options) != len(specs) {
+			t.Fatalf("category %q picker lists %d settings, want %d", category, len(menu.Options), len(specs))
+		}
+		for index, spec := range specs {
+			option := menu.Options[index]
+			if option.Value != *spec.HookKey() {
+				t.Errorf("picker option %d is %q, want %q", index, option.Value, *spec.HookKey())
+			}
+			if option.Label != settings.HookSettingLabel(checkGuildID, *spec.HookKey()) {
+				t.Errorf("picker option %q is labelled %q", *spec.HookKey(), option.Label)
+			}
+			if option.Description != view.HookDisplayValue(spec) {
+				t.Errorf("picker option %q describes %q, want the current value %q",
+					*spec.HookKey(), option.Description, view.HookDisplayValue(spec))
+			}
+			if option.Default {
+				t.Errorf("picker option %q is marked selected, which stops it firing when picked again", *spec.HookKey())
+			}
+		}
+	}
+}
+
+func TestAdminOnlySettingsAreHiddenFromNonAdmins(t *testing.T) {
+	dbtest.Setup(t)
+
+	for index := range *settings.HookSettingSpecs {
+		spec := &(*settings.HookSettingSpecs)[index]
+		if !*spec.HookAdminOnly() {
+			continue
+		}
+		for _, visible := range settings.HookSettingsInCategory(*spec.HookCategory(), false) {
+			if *visible.HookKey() == *spec.HookKey() {
+				t.Errorf("admin-only setting %q is visible to a non-admin", *spec.HookKey())
+			}
+		}
+	}
+
+	if categories := settings.HookVisibleCategories(false); len(categories) == 0 {
+		t.Fatal("a non-admin sees no categories at all")
+	}
+	for _, category := range settings.HookVisibleCategories(false) {
+		if category == settings.HookCategoryGeneral {
+			t.Error("the general category is offered to a non-admin but holds only admin settings")
+		}
+	}
+}
+
+func TestNonAdminPanelDefaultsToAVisibleCategory(t *testing.T) {
+	dbtest.Setup(t)
+
+	category := settings.HookDefaultCategory(false)
+	if len(settings.HookSettingsInCategory(category, false)) == 0 {
+		t.Errorf("default category %q is empty for a non-admin", category)
+	}
+	if admin := settings.HookDefaultCategory(true); admin != settings.HookCategoryGeneral {
+		t.Errorf("an admin panel opens on %q, want %q", admin, settings.HookCategoryGeneral)
+	}
+}
+
+func TestEmbedListsEveryVisibleSettingInTheCategory(t *testing.T) {
+	dbtest.Setup(t)
+	seedSetting(t, "volume", "120")
+	seedSetting(t, "sponsorblock", settings.HookValueOn)
+	wantValues := map[string]string{"volume": "120", "sponsorblock": messages.T(checkGuildID).Settings.StatusOn}
+
+	for _, category := range *settings.HookSettingCategories {
+		embed := settings.HookBuildSettingsEmbed(settings.HookNewPanelView(checkGuildID, category, true))
+		specs := settings.HookSettingsInCategory(category, true)
+
+		if len(embed.Fields) != len(specs) {
+			t.Errorf("category %q shows %d fields, want %d", category, len(embed.Fields), len(specs))
+			continue
+		}
+		for index, spec := range specs {
+			want := settings.HookSettingLabel(checkGuildID, *spec.HookKey())
+			if embed.Fields[index].Name != want {
+				t.Errorf("category %q field %d is %q, want %q", category, index, embed.Fields[index].Name, want)
+			}
+			if want, isSeeded := wantValues[*spec.HookKey()]; isSeeded && !strings.Contains(embed.Fields[index].Value, want) {
+				t.Errorf("setting %q renders %q, want it to show %q", *spec.HookKey(), embed.Fields[index].Value, want)
+			}
+		}
+	}
+}
+
+func TestVoicePolicyTogglesShowInPlaybackForEveryoneAndStartOn(t *testing.T) {
+	dbtest.Setup(t)
+
+	visible := make(map[string]bool)
+	for _, spec := range settings.HookSettingsInCategory(settings.HookCategoryPlayback, false) {
+		visible[*spec.HookKey()] = true
+	}
+
+	view := settings.HookNewPanelView(checkGuildID, settings.HookCategoryPlayback, false)
+	for _, key := range []string{"autoleave", "autopause", "autoresume"} {
+		if !visible[key] {
+			t.Errorf("%s is not in the Playback tab for non-admins", key)
+			continue
+		}
+		if got := view.HookDisplayValue(specFor(t, key)); got != messages.T(checkGuildID).Settings.StatusOn {
+			t.Errorf("%s renders %q on a new server, want on", key, got)
+		}
+	}
+}
+
+func TestTogglingASettingPersistsAndShowsTheNewValue(t *testing.T) {
+	dbtest.Setup(t)
+
+	spec := specFor(t, "sponsorblock")
+
+	before, ok := settings.HookCurrentValue(checkGuildID, spec)
+	if !ok {
+		t.Fatal("could not read sponsorblock")
+	}
+
+	if err := settings.HookApplySetting(checkGuildID, spec, settings.HookNextValue(spec, before)); err != nil {
+		t.Fatalf("failed to toggle sponsorblock: %v", err)
+	}
+
+	after, ok := settings.HookCurrentValue(checkGuildID, spec)
+	if !ok {
+		t.Fatal("could not re-read sponsorblock")
+	}
+	if after == before {
+		t.Errorf("sponsorblock stayed %q after a toggle", before)
+	}
+	view := settings.HookNewPanelView(checkGuildID, *spec.HookCategory(), true)
+	want := messages.T(checkGuildID).Settings.StatusOff
+	if after == settings.HookValueOn {
+		want = messages.T(checkGuildID).Settings.StatusOn
+	}
+	if got := view.HookDisplayValue(spec); got != want {
+		t.Errorf("sponsorblock renders %q after a toggle to %q, want %q", got, after, want)
+	}
+}
+
+func TestRejectedModalValuesLeaveTheSettingUntouched(t *testing.T) {
+	dbtest.Setup(t)
+
+	spec := specFor(t, "volume")
+
+	if err := settings.HookApplySetting(checkGuildID, spec, "42"); err != nil {
+		t.Fatalf("failed to set volume: %v", err)
+	}
+
+	for _, value := range []string{"abc", "5000", "-1"} {
+		if err := settings.HookApplySetting(checkGuildID, spec, value); err == nil {
+			t.Errorf("volume accepted %q", value)
+		}
+	}
+
+	after, ok := settings.HookCurrentValue(checkGuildID, spec)
+	if !ok {
+		t.Fatal("could not read volume")
+	}
+	if after != "42" {
+		t.Errorf("volume is %q after rejected writes, want \"42\"", after)
+	}
+}
