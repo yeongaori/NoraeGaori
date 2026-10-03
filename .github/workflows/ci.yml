@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_call:
   pull_request:
   push:
     branches:
@@ -65,3 +66,15 @@ jobs:
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
+
+  docker:
+    name: Docker
+    needs: [test, lint]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/docker-publish.yml
+    with:
+      push: ${{ github.ref == 'refs/heads/dev' }}
+      tags: ghcr.io/yeongaori/noraegaori:dev

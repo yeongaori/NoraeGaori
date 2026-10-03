@@ -203,24 +203,34 @@ global default — e.g. `!setprefix #`.
 
 ## Docker
 
-Set up `.env` and the files in `config/` as in [Quick Start](#quick-start), then:
+No clone needed:
 
 ```bash
-docker compose up -d --build
+mkdir noraegaori && cd noraegaori
+curl -fsSLO https://raw.githubusercontent.com/yeongaori/NoraeGaori/master/docker-compose.yml
+curl -fsSL https://raw.githubusercontent.com/yeongaori/NoraeGaori/master/.env.example -o .env
+# Set DISCORD_BOT_TOKEN in .env
+docker compose up -d
 ```
+
+The bot creates the files in `config/` on its first start. Edit them there.
 
 To upgrade:
 
 ```bash
-git pull
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
-`data/` (the database) and `lib/` (yt-dlp, Deno and other downloads) persist
-across upgrades. The image includes FFmpeg and libopus, and the bot downloads
-Deno on its first start.
+`config/`, `data/` (the database) and `lib/` (yt-dlp, Deno and other downloads)
+persist across upgrades. The image includes FFmpeg and libopus, and the bot
+downloads Deno on its first start.
 
-Or with make:
+The image runs as `linux/amd64` by default. On ARM or 32-bit hosts, set
+`NORAEGAORI_PLATFORM` in `.env` to `linux/arm64` or `linux/386`. To stay on one
+version, set `NORAEGAORI_TAG` (for example `v1.6.0`).
+
+To build the image from a checkout instead:
 
 ```bash
 make docker-build

@@ -1,7 +1,7 @@
 services:
   noraegaori:
-    build: .
-    image: noraegaori:${IMAGE_TAG:-dev}
+    image: ghcr.io/yeongaori/noraegaori:${NORAEGAORI_TAG:-latest}
+    platform: ${NORAEGAORI_PLATFORM:-linux/amd64}
     container_name: noraegaori-bot
     restart: unless-stopped
 
@@ -9,10 +9,11 @@ services:
     environment:
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
       - DEBUG_MODE=${DEBUG_MODE:-false}
+      - DISCORDGO_DEBUG=${DISCORDGO_DEBUG:-false}
 
     # Mount volumes for persistence
     volumes:
-      - ./config:/app/config:ro          # Config files (read-only)
+      - ./config:/app/config             # Config files
       - ./data:/app/data                 # Database (read-write)
       - ./lib:/app/lib
 
