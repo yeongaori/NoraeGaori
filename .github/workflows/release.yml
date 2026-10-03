@@ -8,9 +8,6 @@ on:
 permissions:
   contents: write
 
-env:
-  LLVM_MINGW_VERSION: "20250114"
-
 jobs:
   ci:
     name: CI
@@ -19,20 +16,9 @@ jobs:
     uses: ./.github/workflows/ci-checks.yml
 
   build:
-    name: Build ${{ matrix.name }}
+    name: Build
     needs: ci
     runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { goos: linux,   goarch: amd64, cc: gcc,                     name: linux-x64    }
-          - { goos: linux,   goarch: "386", cc: gcc,                     name: linux-x86    }
-          - { goos: linux,   goarch: arm64, cc: aarch64-linux-gnu-gcc,   name: linux-arm64  }
-          - { goos: windows, goarch: amd64, cc: x86_64-w64-mingw32-gcc,  name: windows-x64  }
-          - { goos: windows, goarch: "386", cc: i686-w64-mingw32-gcc,    name: windows-x86  }
-          - { goos: windows, goarch: arm64, cc: aarch64-w64-mingw32-gcc, name: windows-arm64 }
-
     steps:
       - uses: actions/checkout@v6
 
@@ -41,79 +27,16 @@ jobs:
         with:
           go-version-file: 'go.mod'
 
-      - name: Set version
-        run: |
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            echo "VERSION=${{ github.ref_name }}" >> $GITHUB_ENV
-          else
-            echo "VERSION=dev" >> $GITHUB_ENV
-          fi
-
-      - name: Install cross-compiler
-        run: |
-          sudo apt-get update -q
-          case "${{ matrix.goos }}-${{ matrix.goarch }}" in
-            linux-386)
-              sudo apt-get install -y gcc-multilib
-              ;;
-            linux-arm64)
-              sudo apt-get install -y gcc-aarch64-linux-gnu
-              ;;
-            windows-amd64|windows-386)
-              sudo apt-get install -y mingw-w64
-              ;;
-            windows-arm64)
-              wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/${LLVM_MINGW_VERSION}/llvm-mingw-${LLVM_MINGW_VERSION}-ucrt-ubuntu-20.04-x86_64.tar.xz"
-              tar xf llvm-mingw-*.tar.xz
-              echo "${PWD}/llvm-mingw-${LLVM_MINGW_VERSION}-ucrt-ubuntu-20.04-x86_64/bin" >> $GITHUB_PATH
-              ;;
-          esac
-
       - name: Build
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: "1"
-          CC: ${{ matrix.cc }}
-        run: |
-          BINARY="noraegaori"
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            BINARY="noraegaori.exe"
-          fi
-          go build -ldflags="-s -w" -o "$BINARY" .
-
-      - name: Package
-        run: |
-          BINARY="noraegaori"
-          EXT="tar.gz"
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            BINARY="noraegaori.exe"
-            EXT="zip"
-          fi
-
-          DIR="noraegaori-${VERSION}-${{ matrix.name }}"
-          mkdir -p "$DIR/config"
-
-          cp "$BINARY" "$DIR/"
-          cp config/*.example.json "$DIR/config/"
-          cp .env.example "$DIR/"
-          cp README.md LICENSE "$DIR/"
-
-          if [ "$EXT" = "zip" ]; then
-            zip -rq "${DIR}.zip" "$DIR"
-          else
-            tar czf "${DIR}.tar.gz" "$DIR"
-          fi
-
-          # Generate checksum
-          sha256sum "${DIR}.${EXT}" > "${DIR}.${EXT}.sha256"
+          VERSION: ${{ github.ref_type == 'tag' && github.ref_name || 'dev' }}
+        run: make all
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.name }}
-          path: |
-            noraegaori-*-${{ matrix.name }}.*
+          name: packages
+          path: dist/noraegaori-*
 
   docker:
     name: Docker
