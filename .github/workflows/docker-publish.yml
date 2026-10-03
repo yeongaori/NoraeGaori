@@ -3,6 +3,9 @@ name: Docker Publish
 on:
   workflow_call:
     inputs:
+      kind:
+        required: true
+        type: string
       tags:
         required: true
         type: string
@@ -16,7 +19,7 @@ permissions:
 
 jobs:
   image:
-    name: Image
+    name: ${{ inputs.kind }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:

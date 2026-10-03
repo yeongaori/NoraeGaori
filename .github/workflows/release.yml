@@ -16,8 +16,7 @@ jobs:
     name: CI
     permissions:
       contents: read
-      packages: write
-    uses: ./.github/workflows/ci.yml
+    uses: ./.github/workflows/ci-checks.yml
 
   build:
     name: Build ${{ matrix.name }}
@@ -126,6 +125,7 @@ jobs:
       packages: write
     uses: ./.github/workflows/docker-publish.yml
     with:
+      kind: Release
       push: true
       tags: ghcr.io/yeongaori/noraegaori:${{ github.ref_name }},ghcr.io/yeongaori/noraegaori:latest
 
