@@ -11,11 +11,13 @@ import (
 	"noraegaori/internal/dependency"
 	"noraegaori/internal/discord/command"
 	"noraegaori/internal/guild"
+	"noraegaori/internal/localesync"
 	"noraegaori/internal/logger"
 	"noraegaori/internal/messages"
 	"noraegaori/internal/queue"
 	"noraegaori/internal/youtube"
 	ytdlpUpdater "noraegaori/internal/ytdlp"
+	"noraegaori/locales"
 )
 
 func Run(token string) error {
@@ -28,6 +30,10 @@ func Run(token string) error {
 			logger.Errorf("Failed to close database: %v", err)
 		}
 	}()
+
+	if err := localesync.Sync("locales", locales.Files, localesync.DatabaseStore{}); err != nil {
+		logger.Warnf("Failed to update the locale files: %v", err)
+	}
 
 	logger.Debug("Clearing stale playback states...")
 	if err := queue.ClearStalePlaybackStates(); err != nil {

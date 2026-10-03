@@ -20,9 +20,8 @@ build() {
     directory="noraegaori-${version}-${name}"
     staging="$package/$directory"
     rm -rf "$staging"
-    mkdir -p "$staging/config" "$staging/locales"
+    mkdir -p "$staging/config"
     GOOS="$goos" GOARCH="$goarch" CGO_ENABLED=0 go build -ldflags="-s -w" -o "$staging/$binary" .
-    cp locales/*.json "$staging/locales/"
     cp config/*.example.json "$staging/config/"
     cp .env.example README.md LICENSE "$staging/"
 

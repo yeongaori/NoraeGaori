@@ -24,10 +24,9 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY --from=builder /build/noraegaori .
-COPY --from=builder /build/locales ./locales
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
-RUN mkdir -p /app/config /app/data /app/lib
+RUN mkdir -p /app/config /app/data /app/lib /app/locales
 
 ENV DEBUG_MODE=false
 

@@ -110,7 +110,13 @@ func createTables() error {
 	CREATE INDEX IF NOT EXISTS idx_track_analysis_analyzed_at
 	ON track_analysis(analyzed_at);`
 
-	statements := []string{guildSettingsSQL, queuesSQL, songsSQL, indexSQL, trackAnalysisSQL, trackAnalysisIndexSQL}
+	localeBaselinesSQL := `
+	CREATE TABLE IF NOT EXISTS locale_baselines (
+		lang TEXT PRIMARY KEY,
+		content TEXT NOT NULL
+	);`
+
+	statements := []string{guildSettingsSQL, queuesSQL, songsSQL, indexSQL, trackAnalysisSQL, trackAnalysisIndexSQL, localeBaselinesSQL}
 	for _, stmt := range statements {
 		if _, err := DB.Exec(stmt); err != nil {
 			return fmt.Errorf("failed to execute SQL statement: %w", err)

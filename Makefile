@@ -133,6 +133,7 @@ docker-run:
 		-v $(PWD)/config:/app/config \
 		-v $(PWD)/data:/app/data \
 		-v $(PWD)/lib:/app/lib \
+		-v $(PWD)/locales:/app/locales \
 		-v $(PWD)/.env:/app/.env \
 		$(DOCKER_IMAGE)
 

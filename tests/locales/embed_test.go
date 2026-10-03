@@ -2,10 +2,35 @@ package locales_test
 
 import (
 	"encoding/json"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"noraegaori/locales"
 )
+
+func TestFilesEmbedEveryShippedLocale(t *testing.T) {
+	onDisk, err := filepath.Glob(filepath.Join("..", "..", "locales", "*.json"))
+	if err != nil || len(onDisk) < 2 {
+		t.Fatalf("found shipped locales %v (err %v), want at least en.json and ko.json", onDisk, err)
+	}
+	embedded, err := fs.Glob(locales.Files, "*.json")
+	if err != nil || len(embedded) != len(onDisk) {
+		t.Fatalf("embedded locales = %v (err %v), want the %d files in locales/", embedded, err, len(onDisk))
+	}
+
+	for _, path := range onDisk {
+		want, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", path, err)
+		}
+		got, err := locales.Files.ReadFile(filepath.Base(path))
+		if err != nil || string(got) != string(want) {
+			t.Errorf("embedded %s differs from the file on disk (err %v)", filepath.Base(path), err)
+		}
+	}
+}
 
 func TestEnglishLocaleIsEmbedded(t *testing.T) {
 	if len(locales.EnglishLocale) == 0 {

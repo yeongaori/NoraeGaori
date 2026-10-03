@@ -16,6 +16,7 @@ services:
       - ./config:/app/config             # Config files
       - ./data:/app/data                 # Database (read-write)
       - ./lib:/app/lib
+      - ./locales:/app/locales
 
     # Resource limits (optional)
     deploy:

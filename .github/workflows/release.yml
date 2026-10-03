@@ -92,10 +92,9 @@ jobs:
           fi
 
           DIR="noraegaori-${VERSION}-${{ matrix.name }}"
-          mkdir -p "$DIR/config" "$DIR/locales"
+          mkdir -p "$DIR/config"
 
           cp "$BINARY" "$DIR/"
-          cp locales/*.json "$DIR/locales/"
           cp config/*.example.json "$DIR/config/"
           cp .env.example "$DIR/"
           cp README.md LICENSE "$DIR/"
