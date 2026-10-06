@@ -9,6 +9,7 @@ import (
 	"noraegaori/internal/audio/transition"
 	"noraegaori/internal/commands/automix"
 	"noraegaori/internal/messages"
+	"noraegaori/internal/queue"
 )
 
 func effectiveStyle(row *automix.HookTransitionRow, category transition.Category) string {
@@ -257,31 +258,45 @@ func TestPanelDropsALoopThePlayerCannotRun(t *testing.T) {
 	}
 }
 
-func TestAnalyzingStateFollowsTheBackfillWorker(t *testing.T) {
-	songs := checkSongs(2, "Track")
+func analyzingRows(songs []*queue.Song, pending map[int]int) []*automix.HookTransitionRow {
+	state := checkPanelState(songs, nil, true)
+	*state.HookPending() = pending
+	return automix.HookHydrateTransitionRows("check-guild", state, *state.HookPairs())
+}
 
-	idleState := checkPanelState(songs, nil, true)
-	*idleState.HookBackfillActive() = false
-	idleRows := automix.HookHydrateTransitionRows("check-guild", idleState, *idleState.HookPairs())
-	busyRows := checkRowsFor(songs)
+func TestAnalyzingFollowsThePendingSongs(t *testing.T) {
+	songs := checkSongs(3, "Track")
 
-	if len(idleRows) != 2 || len(busyRows) != 2 {
-		t.Fatalf("got %d idle and %d busy rows, want 2 each", len(idleRows), len(busyRows))
+	idleRows := analyzingRows(songs, nil)
+	if len(idleRows) != 3 {
+		t.Fatalf("got %d rows, want 3", len(idleRows))
 	}
-	if *idleRows[0].HookFromAnalyzing() || *idleRows[0].HookToAnalyzing() {
-		t.Error("an idle backfill worker still reported analyzing tracks")
+	for index, row := range idleRows {
+		if *row.HookFromAnalyzing() || *row.HookToAnalyzing() {
+			t.Errorf("row %d reports analyzing with nothing pending", index)
+		}
 	}
-	if !*busyRows[0].HookFromAnalyzing() || !*busyRows[0].HookToAnalyzing() {
-		t.Error("a busy backfill worker did not mark the transition as analyzing")
+
+	playingRows := analyzingRows(songs, map[int]int{songs[0].ID: 1})
+	if !*playingRows[0].HookFromAnalyzing() {
+		t.Error("the playing song is not flagged while its ending is pending")
 	}
-	if !busyRows[1].HookIsOutro() {
-		t.Fatal("the second busy row is not an outro")
+	if *playingRows[0].HookToAnalyzing() || *playingRows[1].HookFromAnalyzing() {
+		t.Error("a song that is not pending is flagged as analyzing")
 	}
-	if !*busyRows[1].HookFromAnalyzing() {
-		t.Error("the outro did not mark its own track as analyzing")
+
+	laterRows := analyzingRows(songs, map[int]int{songs[2].ID: 2})
+	if *laterRows[0].HookFromAnalyzing() || *laterRows[0].HookToAnalyzing() {
+		t.Error("the first transition is flagged although only the last song is pending")
 	}
-	if *busyRows[1].HookToAnalyzing() {
-		t.Error("the outro marked a nonexistent next track as analyzing")
+	if !*laterRows[1].HookToAnalyzing() || !*laterRows[2].HookFromAnalyzing() {
+		t.Error("the pending last song is not flagged in both rows it appears in")
+	}
+	if !laterRows[2].HookIsOutro() {
+		t.Fatal("the last row is not an outro")
+	}
+	if *laterRows[2].HookToAnalyzing() {
+		t.Error("the outro flags a nonexistent next track as analyzing")
 	}
 }
 

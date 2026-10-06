@@ -21,8 +21,8 @@ const (
 
 	BufSize             = 2000
 	tailSamplesPerFrame = 480
-	tailWindowSeconds   = 90
-	tailCapacitySamples = 24000 * tailWindowSeconds
+	TailWindowSeconds   = 90
+	tailCapacitySamples = 24000 * TailWindowSeconds
 	framesPerSecond     = dsp.FramesPerSecond
 	stderrTailBytes     = 2048
 )
@@ -337,11 +337,7 @@ func (s *Stream) finishEndState(totalFrames int, tail *monoTail) {
 	es := &EndState{TotalFrames: totalFrames}
 	if tail != nil {
 		samples, startSample := tail.snapshot()
-		lead := dsp.LeadingSilentSamples(samples)
-		trail := 0
-		if lead < len(samples) {
-			trail = dsp.TrailingSilentSamples(samples)
-		}
+		lead, trail := dsp.SilentEdges(samples)
 		es.SilentTailFrames = trail / tailSamplesPerFrame
 		if es.SilentTailFrames > 0 {
 			logger.Debugf("trailing silence detected: %d frames (%.1fs)", es.SilentTailFrames, float64(es.SilentTailFrames)/framesPerSecond)

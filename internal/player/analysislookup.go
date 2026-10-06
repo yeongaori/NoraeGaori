@@ -5,6 +5,8 @@ import (
 	"noraegaori/internal/queue"
 )
 
+const storedTailMarginSec = 5
+
 func LookupAnalysis(guildID string, song *queue.Song, segment string) *analysis.TrackAnalysis {
 	if song == nil {
 		return nil
@@ -16,6 +18,20 @@ func LookupAnalysis(guildID string, song *queue.Song, segment string) *analysis.
 		}
 	}
 	return analysis.LoadTrackAnalysis(song.URL, segment)
+}
+
+func analysisDuration(track *analysis.TrackAnalysis) float64 {
+	if track == nil {
+		return 0
+	}
+	return track.Duration
+}
+
+func chooseTailAnalysis(live, stored *analysis.TrackAnalysis) (*analysis.TrackAnalysis, bool) {
+	if live == nil || analysisDuration(stored) > live.Duration+storedTailMarginSec {
+		return stored, false
+	}
+	return live, true
 }
 
 func LookupAnalysisForDisplay(guildID string, song *queue.Song, segment string) *analysis.TrackAnalysis {

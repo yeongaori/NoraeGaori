@@ -3,6 +3,7 @@ package player
 import (
 	"context"
 	"noraegaori/internal/audio/analysis"
+	"noraegaori/internal/audio/ffmpeg"
 	"sync"
 	"time"
 
@@ -12,7 +13,6 @@ import (
 )
 
 const (
-	analysisBackfillGap       = 2 * time.Second
 	analysisBackfillPassGap   = 5 * time.Second
 	analysisBackfillLimit     = 50
 	analysisBackfillTimeout   = 3 * time.Minute
@@ -33,6 +33,9 @@ var (
 
 	analysisFailures   = make(map[string]time.Time)
 	analysisFailuresMu sync.Mutex
+
+	fetchBackfillStreamURL = youtube.GetStreamURLContext
+	analysisBackfillGap    = 2 * time.Second
 )
 
 func withAnalysisSlot(ctx context.Context, fn func() error) error {
@@ -45,38 +48,41 @@ func withAnalysisSlot(ctx context.Context, fn func() error) error {
 	return fn()
 }
 
-func markAnalysisFailed(url string) {
+type backfillItem struct {
+	song    *queue.Song
+	segment string
+}
+
+func analysisFailureKey(url, segment string) string {
+	return url + "\x00" + segment
+}
+
+func markAnalysisFailed(url, segment string) {
 	if url == "" {
 		return
 	}
 	analysisFailuresMu.Lock()
 	defer analysisFailuresMu.Unlock()
-	analysisFailures[url] = time.Now()
+	analysisFailures[analysisFailureKey(url, segment)] = time.Now()
 }
 
-func AnalysisFailed(url string) bool {
+func analysisFailed(url, segment string) bool {
 	if url == "" {
 		return false
 	}
 	analysisFailuresMu.Lock()
 	defer analysisFailuresMu.Unlock()
 
-	failedAt, exists := analysisFailures[url]
+	key := analysisFailureKey(url, segment)
+	failedAt, exists := analysisFailures[key]
 	if !exists {
 		return false
 	}
 	if time.Since(failedAt) > analysisFailureTTL {
-		delete(analysisFailures, url)
+		delete(analysisFailures, key)
 		return false
 	}
 	return true
-}
-
-func AnalysisBackfillActive(guildID string) bool {
-	backfillWorkersMu.Lock()
-	defer backfillWorkersMu.Unlock()
-	_, running := backfillWorkers[guildID]
-	return running
 }
 
 func playerActive(guildID string) bool {
@@ -162,37 +168,27 @@ func runAnalysisBackfillPass(ctx context.Context, guildID string, bitrate int) (
 		return 0, context.Canceled
 	}
 
-	skipPlaying := playerActive(guildID)
+	items := planBackfillWork(guildID, q.Songs, playerActive(guildID))
+	markAnalysisPending(guildID, backfillSongIDs(items)...)
+	finished := 0
+	defer func() {
+		clearAnalysisPending(guildID, backfillSongIDs(items[finished:])...)
+	}()
 
 	analyzed := 0
-	for index, song := range q.Songs {
-		if index >= analysisBackfillLimit {
-			break
-		}
+	for _, item := range items {
 		if ctx.Err() != nil {
 			return analyzed, ctx.Err()
-		}
-		if index == 0 && skipPlaying {
-			continue
 		}
 		if TransitionPending(guildID) {
 			logger.Debugf("Deferring pass, transition pending for guild: %s", guildID)
 			return analyzed, nil
 		}
-		if song.IsLive {
-			continue
-		}
-		if AnalysisFailed(song.URL) {
-			continue
-		}
-		if analysis.LoadTrackAnalysis(song.URL, analysis.SegmentHead) != nil {
-			continue
-		}
-		if GetPreCache(guildID, song.ID) != nil {
-			continue
-		}
 
-		if !analyzeBackfillSong(ctx, guildID, song, bitrate) {
+		isAnalyzed := analyzeBackfillItem(ctx, guildID, item, bitrate)
+		clearAnalysisPending(guildID, item.song.ID)
+		finished++
+		if !isAnalyzed {
 			if ctx.Err() != nil {
 				return analyzed, ctx.Err()
 			}
@@ -210,13 +206,56 @@ func runAnalysisBackfillPass(ctx context.Context, guildID string, bitrate int) (
 	return analyzed, nil
 }
 
-func analyzeBackfillSong(ctx context.Context, guildID string, song *queue.Song, bitrate int) bool {
+func planBackfillWork(guildID string, songs []*queue.Song, isPlaying bool) []backfillItem {
+	var items []backfillItem
+	for index, song := range songs {
+		if index >= analysisBackfillLimit {
+			break
+		}
+		segment := analysis.SegmentHead
+		if index == 0 && isPlaying {
+			segment = analysis.SegmentTail
+		}
+		if needsBackfill(guildID, song, segment) {
+			items = append(items, backfillItem{song: song, segment: segment})
+		}
+	}
+	return items
+}
+
+func needsBackfill(guildID string, song *queue.Song, segment string) bool {
+	if song.IsLive || analysisFailed(song.URL, segment) {
+		return false
+	}
+	if analysis.LoadTrackAnalysis(song.URL, segment) != nil {
+		return false
+	}
+	if segment == analysis.SegmentTail {
+		return songSeconds(song) > 0
+	}
+	return GetPreCache(guildID, song.ID) == nil
+}
+
+func backfillSongIDs(items []backfillItem) []int {
+	songIDs := make([]int, len(items))
+	for index := range items {
+		songIDs[index] = items[index].song.ID
+	}
+	return songIDs
+}
+
+func (item *backfillItem) window() (float64, int) {
+	if item.segment == analysis.SegmentTail {
+		return max(0, songSeconds(item.song)-ffmpeg.TailWindowSeconds), ffmpeg.TailWindowSeconds
+	}
+	return 0, analysisHeadSecs
+}
+
+func analyzeBackfillItem(ctx context.Context, guildID string, item backfillItem, bitrate int) bool {
+	song := item.song
 	analyzed := false
 	if slotErr := withAnalysisSlot(ctx, func() error {
-		if ctx.Err() != nil {
-			return nil
-		}
-		if analysis.LoadTrackAnalysis(song.URL, analysis.SegmentHead) != nil {
+		if ctx.Err() != nil || !needsBackfill(guildID, song, item.segment) {
 			return nil
 		}
 
@@ -228,30 +267,35 @@ func analyzeBackfillSong(ctx context.Context, guildID string, song *queue.Song, 
 		songCtx, cancel := context.WithTimeout(ctx, analysisBackfillTimeout)
 		defer cancel()
 
-		streamURL, err := youtube.GetStreamURLContext(songCtx, song.URL, sponsorBlock, bitrate)
+		streamURL, err := fetchBackfillStreamURL(songCtx, song.URL, sponsorBlock, bitrate)
 		if err != nil {
 			if ctx.Err() == nil {
-				markAnalysisFailed(song.URL)
+				markAnalysisFailed(song.URL, item.segment)
 			}
 			logger.Debugf("Stream URL failed for %s: %v", song.Title, err)
 			return nil
 		}
 
-		head, err := analyzeStreamHead(songCtx, streamURL)
+		startSec, seconds := item.window()
+		result, err := analyzeSegment(songCtx, streamURL, startSec, seconds)
 		if err != nil {
 			if ctx.Err() == nil {
-				markAnalysisFailed(song.URL)
+				markAnalysisFailed(song.URL, item.segment)
 			}
-			logger.Debugf("Head analysis failed for %s: %v", song.Title, err)
+			logger.Debugf("Analysis of the %s failed for %s: %v", item.segment, song.Title, err)
 			return nil
 		}
 
-		if saveErr := analysis.SaveTrackAnalysis(song.URL, analysis.SegmentHead, head); saveErr != nil {
-			logger.Warnf("Failed to save head analysis for %s: %v", song.Title, saveErr)
+		if analysis.LoadTrackAnalysis(song.URL, item.segment) != nil {
+			logger.Debugf("Kept the %s analysis stored meanwhile for %s", item.segment, song.Title)
+			return nil
 		}
-		logger.Debugf("Analyzed head for: %s (BPM %.1f, key %s / %s, confidence %.3f)",
-			song.Title, head.BPM, analysis.KeyName(head.Tonic, head.Minor),
-			analysis.CamelotCode(head.Tonic, head.Minor), head.KeyConfidence)
+		if saveErr := analysis.SaveTrackAnalysis(song.URL, item.segment, result); saveErr != nil {
+			logger.Warnf("Failed to save %s analysis for %s: %v", item.segment, song.Title, saveErr)
+		}
+		logger.Debugf("Analyzed %s for: %s (BPM %.1f, key %s / %s, confidence %.3f)",
+			item.segment, song.Title, result.BPM, analysis.KeyName(result.Tonic, result.Minor),
+			analysis.CamelotCode(result.Tonic, result.Minor), result.KeyConfidence)
 		analyzed = true
 		return nil
 	}); slotErr != nil {

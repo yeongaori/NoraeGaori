@@ -32,7 +32,7 @@ type HookPanelStateFields struct {
 	Crossfade      bool
 	AutoMixBeats   int
 	CrossfadeSec   float64
-	BackfillActive bool
+	Pending        map[int]int
 }
 
 var HookChooseTransitionStyle = chooseTransitionStyle
@@ -69,7 +69,7 @@ func HookBuildPanelState(fields HookPanelStateFields) *panelState {
 		crossfade:      fields.Crossfade,
 		autoMixBeats:   fields.AutoMixBeats,
 		crossfadeSec:   fields.CrossfadeSec,
-		backfillActive: fields.BackfillActive,
+		pending:        fields.Pending,
 	}
 }
 
@@ -81,8 +81,8 @@ func (p *panelLocation) HookPage() *int {
 	return &p.page
 }
 
-func (p *panelState) HookBackfillActive() *bool {
-	return &p.backfillActive
+func (p *panelState) HookPending() *map[int]int {
+	return &p.pending
 }
 
 func (p *panelState) HookPairs() *[]transitionPair {

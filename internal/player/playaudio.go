@@ -508,6 +508,26 @@ type playbackSession struct {
 	endStateAdj          *ffmpeg.EndState
 }
 
+func settleTailAnalysis(song *queue.Song, es *ffmpeg.EndState, baseOffsetMs int) *ffmpeg.EndState {
+	if es.Analysis != nil {
+		es.Analysis.Offset = float64(baseOffsetMs)/1000 + float64(es.TailStartFrame)/dsp.FramesPerSecond
+	}
+	tail, isLive := chooseTailAnalysis(es.Analysis, analysis.LoadTrackAnalysis(song.URL, analysis.SegmentTail))
+	if isLive {
+		if saveErr := analysis.SaveTrackAnalysis(song.URL, analysis.SegmentTail, tail); saveErr != nil {
+			logger.Warnf("Failed to save tail analysis for %s: %v", song.Title, saveErr)
+		}
+		return es
+	}
+	if tail == nil {
+		return es
+	}
+	logger.Debugf("Using the stored tail analysis for %s (%.1fs over %.1fs live)", song.Title, tail.Duration, analysisDuration(es.Analysis))
+	chosen := *es
+	chosen.Analysis = tail
+	return &chosen
+}
+
 func (s *playbackSession) planEndOfStream() {
 	es := s.stream.EndState()
 	if es == nil {
@@ -524,12 +544,7 @@ func (s *playbackSession) planEndOfStream() {
 		return
 	}
 
-	if es.Analysis != nil {
-		es.Analysis.Offset = float64(s.baseOffsetMs)/1000 + float64(es.TailStartFrame)/dsp.FramesPerSecond
-		if saveErr := analysis.SaveTrackAnalysis(s.song.URL, analysis.SegmentTail, es.Analysis); saveErr != nil {
-			logger.Warnf("Failed to save tail analysis for %s: %v", s.song.Title, saveErr)
-		}
-	}
+	es = settleTailAnalysis(s.song, es, s.baseOffsetMs)
 	if s.fade.trimSilence && es.SilentTailFrames > 0 {
 		s.player.mu.Lock()
 		s.player.TrimEndMs = s.baseOffsetMs + (es.TotalFrames-es.SilentTailFrames)*20

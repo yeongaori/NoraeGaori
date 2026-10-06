@@ -45,3 +45,11 @@ func TrailingSilentSamples(samples []float32) int {
 	}
 	return len(samples) - 1 - last
 }
+
+func SilentEdges(samples []float32) (lead, trail int) {
+	lead = LeadingSilentSamples(samples)
+	if lead < len(samples) {
+		trail = TrailingSilentSamples(samples)
+	}
+	return lead, trail
+}

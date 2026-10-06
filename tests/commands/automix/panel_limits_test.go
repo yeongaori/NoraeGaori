@@ -36,8 +36,16 @@ func checkPanelState(songs []*queue.Song, guildOverrides map[string]string, auto
 		Crossfade:      true,
 		AutoMixBeats:   16,
 		CrossfadeSec:   8,
-		BackfillActive: true,
+		Pending:        pendingFor(songs),
 	})
+}
+
+func pendingFor(songs []*queue.Song) map[int]int {
+	pending := make(map[int]int, len(songs))
+	for _, song := range songs {
+		pending[song.ID] = 1
+	}
+	return pending
 }
 
 func checkRowsFor(songs []*queue.Song) []*automix.HookTransitionRow {

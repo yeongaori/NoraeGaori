@@ -92,7 +92,7 @@ type panelState struct {
 	autoMixBeats   int
 	crossfadeSec   float64
 	repeatSingle   bool
-	backfillActive bool
+	pending        map[int]int
 }
 
 func voiceChannelBitrate(s *discordgo.Session, guildID string) int {
@@ -150,7 +150,7 @@ func hydrateTransitionRow(guildID string, state *panelState, pair *transitionPai
 		transitionPair: pair,
 		auto:           transition.PresetRecipe(transition.NoPreset),
 		fromAnalysis:   player.LookupAnalysisForDisplay(guildID, pair.fromSong, analysis.SegmentTail),
-		fromAnalyzing:  state.backfillActive && !player.AnalysisFailed(pair.fromSong.URL),
+		fromAnalyzing:  state.pending[pair.fromSong.ID] > 0,
 	}
 	frames, _ := transition.CrossfadeFrames(state.autoSelect, state.autoMixBeats, state.crossfadeSec, row.fromAnalysis)
 
@@ -160,7 +160,7 @@ func hydrateTransitionRow(guildID string, state *panelState, pair *transitionPai
 		}
 	} else {
 		row.toAnalysis = player.LookupAnalysisForDisplay(guildID, pair.toSong, analysis.SegmentHead)
-		row.toAnalyzing = state.backfillActive && !player.AnalysisFailed(pair.toSong.URL)
+		row.toAnalyzing = state.pending[pair.toSong.ID] > 0
 		if state.autoSelect {
 			row.overlap = previewOverlap(pair, row.fromAnalysis, row.toAnalysis, state.autoMixBeats)
 		}
@@ -213,7 +213,7 @@ func loadPanelState(guildID string) (*panelState, bool) {
 		autoMixBeats:   q.AutoMixBeats,
 		crossfadeSec:   q.CrossfadeDuration,
 		repeatSingle:   q.RepeatMode == queue.RepeatSingle,
-		backfillActive: player.AnalysisBackfillActive(guildID),
+		pending:        player.PendingAnalyses(guildID),
 	}, true
 }
 

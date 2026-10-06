@@ -12,10 +12,12 @@ import (
 	"noraegaori/internal/audio/opus"
 	"noraegaori/internal/audio/transition"
 	"noraegaori/internal/dependency"
+	"noraegaori/internal/queue"
 )
 
 const HookAnalysisHeadSecs = analysisHeadSecs
-const HookAnalysisMaxBytes = analysisMaxBytes
+const HookAnalysisBackfillLimit = analysisBackfillLimit
+const HookStoredTailMarginSec = storedTailMarginSec
 const HookChannels = channels
 const HookFallbackSlideFrames = fallbackSlideFrames
 const HookFrameRate = frameRate
@@ -55,7 +57,22 @@ type HookFadeSettingsFields struct {
 	StyleOverrides map[string]string
 }
 
+var HookAnalysisMaxBytes = analysisReadBytes(analysisHeadSecs)
+
+type HookBackfillItem = backfillItem
+
 var HookAcquireFFmpeg = &acquireFFmpeg
+var HookAnalysisBackfillGap = &analysisBackfillGap
+var HookAnalysisFailed = analysisFailed
+var HookAnalyzeSegment = &analyzeSegment
+var HookAnalyzeStreamSegment = analyzeStreamSegment
+var HookChooseTailAnalysis = chooseTailAnalysis
+var HookClearAnalysisPending = clearAnalysisPending
+var HookFetchBackfillStreamURL = &fetchBackfillStreamURL
+var HookMarkAnalysisFailed = markAnalysisFailed
+var HookMarkAnalysisPending = markAnalysisPending
+var HookPlanBackfillWork = planBackfillWork
+var HookRunAnalysisBackfillPass = runAnalysisBackfillPass
 var HookAdjustEndStateForOffset = adjustEndStateForOffset
 var HookAnnounceAutoPause = &announceAutoPause
 var HookAnnounceNowPlaying = &announceNowPlaying
@@ -112,6 +129,7 @@ var HookPlayers = &players
 var HookPlayersMu = &playersMu
 var HookPostRateLimitNotice = postRateLimitNotice
 var HookPreCacheNext = &preCacheNext
+var HookPreCacheSong = preCacheSong
 var HookPreCacheStore = &preCacheStore
 var HookPreCacheStoreMu = &preCacheStoreMu
 var HookPrepareVoiceConnection = prepareVoiceConnection
@@ -131,6 +149,7 @@ var HookResumePlayback = &resumePlayback
 var HookRetryDelay = &retryDelay
 var HookRetryKey = retryKey
 var HookSendAutoPauseNotification = sendAutoPauseNotification
+var HookSettleTailAnalysis = settleTailAnalysis
 var HookSendCommandToPlayer = sendCommandToPlayer
 var HookSendFrame = sendFrame
 var HookSendPlaybackEndMessage = sendPlaybackEndMessage
@@ -347,6 +366,18 @@ func (cs *crossfadeState) HookPlan(player *GuildPlayer, es *ffmpeg.EndState, sen
 
 func (cs *crossfadeState) HookSlideTransition(reason string) {
 	cs.slideTransition(reason)
+}
+
+func (item *backfillItem) HookSong() *queue.Song {
+	return item.song
+}
+
+func (item *backfillItem) HookSegment() string {
+	return item.segment
+}
+
+func (item *backfillItem) HookWindow() (float64, int) {
+	return item.window()
 }
 
 func (pin *ffmpegPin) HookBinary() **dependency.Binary {

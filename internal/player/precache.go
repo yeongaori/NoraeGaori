@@ -14,18 +14,19 @@ import (
 	"noraegaori/internal/dependency"
 	"noraegaori/internal/logger"
 	"noraegaori/internal/queue"
-	"noraegaori/internal/youtube"
 )
 
 const (
 	preCacheTTL        = time.Hour
 	analysisHeadSecs   = 75
 	analysisReadMargin = 5
-	analysisMaxBytes   = int64((analysisHeadSecs + analysisReadMargin) * analysis.SampleRate * 4)
 	analysisReadChunk  = 32 * 1024
 )
 
-var preCacheNext = PreCacheNext
+var (
+	preCacheNext   = PreCacheNext
+	analyzeSegment = analyzeStreamSegment
+)
 
 func PreCacheNext(guildID string, bitrate int) {
 	q, err := queue.GetQueue(guildID, false)
@@ -38,11 +39,13 @@ func PreCacheNext(guildID string, bitrate int) {
 
 	if nextSong.IsLive {
 		logger.Debugf("Skipping pre-cache for live stream: %s", nextSong.Title)
+		StartAnalysisBackfill(guildID, bitrate)
 		return
 	}
 
 	if nextSong.SeekTime > 0 {
 		logger.Debugf("Skipping pre-cache for song with seek time: %s", nextSong.Title)
+		StartAnalysisBackfill(guildID, bitrate)
 		return
 	}
 
@@ -80,7 +83,7 @@ func PreCacheNext(guildID string, bitrate int) {
 
 func preCacheSong(ctx context.Context, guildID string, song *queue.Song, sponsorBlock bool, bitrate int) error {
 
-	streamURL, err := youtube.GetStreamURL(song.URL, sponsorBlock, bitrate)
+	streamURL, err := fetchStreamURL(song.URL, sponsorBlock, bitrate)
 	if err != nil {
 		return fmt.Errorf("failed to get stream URL: %w", err)
 	}
@@ -108,11 +111,13 @@ func preCacheSong(ctx context.Context, guildID string, song *queue.Song, sponsor
 
 		var analyzeErr error
 		if head == nil {
+			markAnalysisPending(guildID, song.ID)
 			analyzeErr = withAnalysisSlot(ctx, func() error {
 				var err error
-				head, err = analyzeStreamHead(ctx, streamURL)
+				head, err = analyzeSegment(ctx, streamURL, 0, analysisHeadSecs)
 				return err
 			})
+			clearAnalysisPending(guildID, song.ID)
 		}
 
 		if analyzeErr == nil && head != nil {
@@ -204,18 +209,27 @@ func readFloat32Samples(reader io.Reader, maxBytes int64) ([]float32, error) {
 	}
 }
 
-func analyzeStreamHead(ctx context.Context, streamURL string) (*analysis.TrackAnalysis, error) {
+func analysisReadBytes(seconds int) int64 {
+	return int64(float64(seconds+analysisReadMargin) * analysis.SampleRate * 4)
+}
+
+func analyzeStreamSegment(ctx context.Context, streamURL string, startSec float64, seconds int) (*analysis.TrackAnalysis, error) {
 	args := []string{
 		"-reconnect", "1",
 		"-reconnect_streamed", "1",
 		"-reconnect_delay_max", "5",
-		"-t", fmt.Sprintf("%d", analysisHeadSecs),
+	}
+	if startSec > 0 {
+		args = append(args, "-ss", fmt.Sprintf("%.3f", startSec))
+	}
+	args = append(args,
+		"-t", fmt.Sprintf("%d", seconds),
 		"-i", streamURL,
 		"-ac", "1",
 		"-ar", "24000",
 		"-f", "f32le",
 		"pipe:1",
-	}
+	)
 
 	ffmpegBinary := dependency.AcquireFFmpeg()
 	defer ffmpegBinary.Release()
@@ -229,7 +243,7 @@ func analyzeStreamHead(ctx context.Context, streamURL string) (*analysis.TrackAn
 		return nil, fmt.Errorf("failed to start ffmpeg: %w", err)
 	}
 
-	samples, err := readFloat32Samples(stdout, analysisMaxBytes)
+	samples, err := readFloat32Samples(stdout, analysisReadBytes(seconds))
 	if err != nil {
 		if killErr := ffmpeg.Process.Kill(); killErr != nil {
 			logger.Debugf("Failed to kill ffmpeg: %v", killErr)
@@ -243,11 +257,16 @@ func analyzeStreamHead(ctx context.Context, streamURL string) (*analysis.TrackAn
 		return nil, fmt.Errorf("ffmpeg failed: %w", err)
 	}
 
-	lead := dsp.LeadingSilentSamples(samples)
+	lead, trail := dsp.SilentEdges(samples)
 	if lead >= len(samples) {
-		return nil, fmt.Errorf("head is entirely silent")
+		return nil, fmt.Errorf("segment is entirely silent")
 	}
-	return analysis.AnalyzeAfterLead(samples, lead, analysis.SampleRate)
+	segment, err := analysis.AnalyzeAfterLead(samples[:len(samples)-trail], lead, analysis.SampleRate)
+	if err != nil {
+		return nil, err
+	}
+	segment.Offset = startSec
+	return segment, nil
 }
 
 func ClearPreCache(guildID string) {
