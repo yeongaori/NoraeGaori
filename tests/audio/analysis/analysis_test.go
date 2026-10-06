@@ -417,7 +417,11 @@ func TestAnalysisCarriesKeyData(t *testing.T) {
 	}
 }
 
-func measureProcessorFrameCost(recipe *transition.Recipe, bothSides bool) time.Duration {
+func measureProcessorFrameCost(t *testing.T, recipe *transition.Recipe, bothSides bool) time.Duration {
+	t.Helper()
+	if audiotest.IsRaceEnabled {
+		t.Skip("race detector instrumentation outweighs the realtime budget")
+	}
 	frames := 500
 	processor := transition.NewProcessor(recipe, &transition.Window{Frames: frames, PeriodSec: 0.5, Bars: 4})
 	aTone := &audiotest.ToneGenerator{Frequency: 220, Amplitude: 8000}
@@ -451,7 +455,7 @@ func TestHeaviestRecipeFitsTheRealtimeBudget(t *testing.T) {
 		Volume: transition.VolumeFastAtEdge, EQ: transition.EQThreeBand, Filter: transition.FilterLowPass, FX: transition.FXPhaser,
 	}
 	recipe.Loop = transition.LoopSpinbackFourBeats
-	perFrame := measureProcessorFrameCost(&recipe, true)
+	perFrame := measureProcessorFrameCost(t, &recipe, true)
 
 	if perFrame >= 4*time.Millisecond {
 		t.Errorf("%.3fms per 20ms frame (%.1f%% of realtime), want under 4ms",
@@ -463,7 +467,7 @@ func TestReverbFitsTheRealtimeBudget(t *testing.T) {
 	recipe := transition.DefaultRecipe()
 	recipe.Out.FX = transition.FXReverbOutCenter
 
-	if perFrame := measureProcessorFrameCost(&recipe, false); perFrame >= 4*time.Millisecond {
+	if perFrame := measureProcessorFrameCost(t, &recipe, false); perFrame >= 4*time.Millisecond {
 		t.Errorf("%.3fms per 20ms frame, want under 4ms", float64(perFrame.Microseconds())/1000)
 	}
 }
