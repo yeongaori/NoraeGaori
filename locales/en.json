@@ -704,7 +704,7 @@
     "auto_recipe_field": "Auto-selected",
     "effective_field": "In use",
     "bpm_delta": "BPM delta %+.1f%%",
-    "camelot_distance": "Camelot distance %d",
+    "fifths_distance": "Fifths distance %d",
     "harmonic": "harmonic",
     "clashing": "clashing",
     "auto_option": "Auto-select",

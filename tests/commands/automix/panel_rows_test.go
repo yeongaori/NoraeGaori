@@ -34,7 +34,7 @@ func TestDescribeTrackCoversEveryAnalysisState(t *testing.T) {
 			"a confident key",
 			&analysis.TrackAnalysis{BPM: 128, KeyConfidence: 1, Tonic: 9, Minor: true},
 			false,
-			fmt.Sprintf("%.1f BPM · %s (%s)", 128.0, analysis.KeyName(9, true), analysis.CamelotCode(9, true)),
+			fmt.Sprintf("%.1f BPM · %s (%s)", 128.0, analysis.KeyName(9, true), analysis.FifthsCode(9, true)),
 		},
 	} {
 		if got := automix.HookDescribeTrack("check-guild", check.track, check.analyzing); got != check.want {

@@ -76,7 +76,7 @@ type AutoMixPanelMessages struct {
 	AutoRecipeField      string            `json:"auto_recipe_field"`
 	EffectiveField       string            `json:"effective_field"`
 	BPMDelta             string            `json:"bpm_delta"`
-	CamelotDistance      string            `json:"camelot_distance"`
+	FifthsDistance       string            `json:"fifths_distance"`
 	Harmonic             string            `json:"harmonic"`
 	Clashing             string            `json:"clashing"`
 	AutoOption           string            `json:"auto_option"`

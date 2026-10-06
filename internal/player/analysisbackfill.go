@@ -295,7 +295,7 @@ func analyzeBackfillItem(ctx context.Context, guildID string, item backfillItem,
 		}
 		logger.Debugf("Analyzed %s for: %s (BPM %.1f, key %s / %s, confidence %.3f)",
 			item.segment, song.Title, result.BPM, analysis.KeyName(result.Tonic, result.Minor),
-			analysis.CamelotCode(result.Tonic, result.Minor), result.KeyConfidence)
+			analysis.FifthsCode(result.Tonic, result.Minor), result.KeyConfidence)
 		analyzed = true
 		return nil
 	}); slotErr != nil {

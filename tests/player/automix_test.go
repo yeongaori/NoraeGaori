@@ -611,7 +611,7 @@ func clampedLoop(loop transition.LoopStyle, periodSec float64, frames int) trans
 }
 
 func TestAnalysisSummaryHandlesNil(t *testing.T) {
-	bpm, key, camelot, hasKey := analysis.Summarize(nil)
+	bpm, key, code, hasKey := analysis.Summarize(nil)
 
 	if bpm != 0 {
 		t.Errorf("bpm = %.1f, want 0", bpm)
@@ -619,8 +619,8 @@ func TestAnalysisSummaryHandlesNil(t *testing.T) {
 	if key != "" {
 		t.Errorf("key = %q, want empty", key)
 	}
-	if camelot != "" {
-		t.Errorf("camelot = %q, want empty", camelot)
+	if code != "" {
+		t.Errorf("code = %q, want empty", code)
 	}
 	if hasKey {
 		t.Error("hasKey is true for a nil analysis")
@@ -640,7 +640,7 @@ func TestAnalysisSummaryHidesLowConfidenceKeys(t *testing.T) {
 }
 
 func TestAnalysisSummaryReportsConfidentKeys(t *testing.T) {
-	_, key, camelot, hasKey := analysis.Summarize(&analysis.TrackAnalysis{BPM: 174, Tonic: 0, Minor: false, KeyConfidence: 0.5})
+	_, key, code, hasKey := analysis.Summarize(&analysis.TrackAnalysis{BPM: 174, Tonic: 0, Minor: false, KeyConfidence: 0.5})
 
 	if !hasKey {
 		t.Fatal("hasKey is false for a confident key")
@@ -648,8 +648,8 @@ func TestAnalysisSummaryReportsConfidentKeys(t *testing.T) {
 	if key != "C major" {
 		t.Errorf("key = %q, want C major", key)
 	}
-	if camelot != "8B" {
-		t.Errorf("camelot = %q, want 8B", camelot)
+	if code != "8B" {
+		t.Errorf("code = %q, want 8B", code)
 	}
 }
 

@@ -372,7 +372,7 @@ func describeTransitionInputs(a, b *analysis.TrackAnalysis) string {
 	folded, factor := analysis.TempoDeltaFactor(a.BPM, b.BPM)
 	return fmt.Sprintf("bpmA=%.1f bpmB=%.1f delta=%.4f raw=%.4f factorB=%.1fx keyA=%s keyB=%s confA=%.4f confB=%.4f tier=%d strengthA=%.3f strengthB=%.3f barsA=%d barsB=%d",
 		a.BPM, b.BPM, folded, raw, factor,
-		analysis.CamelotCode(a.Tonic, a.Minor), analysis.CamelotCode(b.Tonic, b.Minor),
+		analysis.FifthsCode(a.Tonic, a.Minor), analysis.FifthsCode(b.Tonic, b.Minor),
 		a.KeyConfidence, b.KeyConfidence, analysis.KeyTier(a, b),
 		a.BeatStrength, b.BeatStrength, len(a.BarOffsets), len(b.BarOffsets))
 }

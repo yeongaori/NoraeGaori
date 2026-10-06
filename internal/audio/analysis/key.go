@@ -228,7 +228,7 @@ func AnalyzeKey(samples []float32, sampleRate float64) (int, bool, float64) {
 	tonic, minor, gap := estimateKey(chroma)
 	if contrast < keyContrastFloor {
 		logger.Debugf("%s verdict=below-contrast gap=%.4f contrast=%.4f contrastFloor=%.4f windows=%d",
-			CamelotCode(tonic, minor), gap, contrast, keyContrastFloor, windows)
+			FifthsCode(tonic, minor), gap, contrast, keyContrastFloor, windows)
 		return 0, false, 0
 	}
 
@@ -237,11 +237,11 @@ func AnalyzeKey(samples []float32, sampleRate float64) (int, bool, float64) {
 		verdict = "below-gap"
 	}
 	logger.Debugf("%s verdict=%s gap=%.4f gapFloor=%.4f contrast=%.4f contrastFloor=%.4f windows=%d",
-		CamelotCode(tonic, minor), verdict, gap, KeyConfidenceFloor, contrast, keyContrastFloor, windows)
+		FifthsCode(tonic, minor), verdict, gap, KeyConfidenceFloor, contrast, keyContrastFloor, windows)
 	return tonic, minor, gap
 }
 
-func camelotPosition(tonic int, minor bool) int {
+func fifthsPosition(tonic int, minor bool) int {
 	pitch := tonic
 	if minor {
 		pitch = (tonic + 3) % 12
@@ -253,12 +253,12 @@ func camelotPosition(tonic int, minor bool) int {
 	return number
 }
 
-func CamelotCode(tonic int, minor bool) string {
+func FifthsCode(tonic int, minor bool) string {
 	letter := "B"
 	if minor {
 		letter = "A"
 	}
-	return fmt.Sprintf("%d%s", camelotPosition(tonic, minor), letter)
+	return fmt.Sprintf("%d%s", fifthsPosition(tonic, minor), letter)
 }
 
 func KeyName(tonic int, minor bool) string {
@@ -269,7 +269,7 @@ func KeyName(tonic int, minor bool) string {
 	return fmt.Sprintf("%s %s", keyPitchNames[tonic%12], quality)
 }
 
-func CamelotDistance(a, b *TrackAnalysis) int {
+func FifthsDistance(a, b *TrackAnalysis) int {
 	if a == nil || b == nil {
 		return -1
 	}
@@ -277,8 +277,8 @@ func CamelotDistance(a, b *TrackAnalysis) int {
 		return -1
 	}
 
-	positionA := camelotPosition(a.Tonic, a.Minor)
-	positionB := camelotPosition(b.Tonic, b.Minor)
+	positionA := fifthsPosition(a.Tonic, a.Minor)
+	positionB := fifthsPosition(b.Tonic, b.Minor)
 
 	diff := positionA - positionB
 	if diff < 0 {
@@ -301,24 +301,24 @@ func KeyTier(a, b *TrackAnalysis) int {
 	if a == nil || b == nil || a.KeyConfidence < KeyConfidenceFloor || b.KeyConfidence < KeyConfidenceFloor {
 		return 0
 	}
-	numberA := camelotPosition(a.Tonic, a.Minor)
-	numberB := camelotPosition(b.Tonic, b.Minor)
+	numberA := fifthsPosition(a.Tonic, a.Minor)
+	numberB := fifthsPosition(b.Tonic, b.Minor)
 	sameLetter := a.Minor == b.Minor
 
 	switch {
-	case sameLetter && (numberA == numberB || camelotSteps(numberA, numberB, 1)):
+	case sameLetter && (numberA == numberB || fifthsSteps(numberA, numberB, 1)):
 		return 0
 	case numberA == numberB:
 		return 1
-	case camelotSteps(numberA, numberB, 1):
+	case fifthsSteps(numberA, numberB, 1):
 		return 2
-	case sameLetter && camelotSteps(numberA, numberB, 2):
+	case sameLetter && fifthsSteps(numberA, numberB, 2):
 		return 3
 	}
 	return 4
 }
 
-func camelotSteps(numberA, numberB, steps int) bool {
+func fifthsSteps(numberA, numberB, steps int) bool {
 	return numberB == (numberA+steps)%12 || numberA == (numberB+steps)%12
 }
 

@@ -128,7 +128,7 @@ func keyed(tonic int, minor bool) *analysis.TrackAnalysis {
 	return &analysis.TrackAnalysis{Tonic: tonic, Minor: minor, KeyConfidence: 0.5}
 }
 
-func TestKeyTiersFollowTheCamelotRules(t *testing.T) {
+func TestKeyTiersFollowTheFifthsRules(t *testing.T) {
 	cMajor := keyed(0, false)
 	cases := []struct {
 		name  string

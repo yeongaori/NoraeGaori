@@ -123,7 +123,7 @@ func describeOutroInput(a *analysis.TrackAnalysis) string {
 	if a == nil {
 		return "analysis unavailable"
 	}
-	return fmt.Sprintf("bpm=%.1f key=%s period=%.4f", a.BPM, analysis.CamelotCode(a.Tonic, a.Minor), a.PeriodSec)
+	return fmt.Sprintf("bpm=%.1f key=%s period=%.4f", a.BPM, analysis.FifthsCode(a.Tonic, a.Minor), a.PeriodSec)
 }
 
 func (os *outroState) cancel() {

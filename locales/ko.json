@@ -704,7 +704,7 @@
     "auto_recipe_field": "자동 선택",
     "effective_field": "적용 중",
     "bpm_delta": "BPM 차이 %+.1f%%",
-    "camelot_distance": "카멜롯 거리 %d",
+    "fifths_distance": "5도권 거리 %d",
     "harmonic": "잘 맞음",
     "clashing": "안 맞음",
     "auto_option": "자동 선택",

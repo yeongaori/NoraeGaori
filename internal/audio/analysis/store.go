@@ -136,12 +136,12 @@ func Summarize(analysis *TrackAnalysis) (float64, string, string, bool) {
 	if analysis.KeyConfidence < KeyConfidenceFloor {
 		return analysis.BPM, "", "", false
 	}
-	return analysis.BPM, KeyName(analysis.Tonic, analysis.Minor), CamelotCode(analysis.Tonic, analysis.Minor), true
+	return analysis.BPM, KeyName(analysis.Tonic, analysis.Minor), FifthsCode(analysis.Tonic, analysis.Minor), true
 }
 
 func Compare(a, b *TrackAnalysis) (float64, int, bool) {
 	if a == nil || b == nil || a.BPM <= 0 || b.BPM <= 0 {
 		return 0, -1, false
 	}
-	return SignedTempoDelta(a.BPM, b.BPM), CamelotDistance(a, b), true
+	return SignedTempoDelta(a.BPM, b.BPM), FifthsDistance(a, b), true
 }

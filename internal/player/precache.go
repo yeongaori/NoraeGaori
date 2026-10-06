@@ -134,7 +134,7 @@ func preCacheSong(ctx context.Context, guildID string, song *queue.Song, sponsor
 			}
 			logger.Debugf("Analyzed head for: %s (BPM %.1f, key %s / %s, confidence %.3f, reused %v)",
 				song.Title, head.BPM, analysis.KeyName(head.Tonic, head.Minor),
-				analysis.CamelotCode(head.Tonic, head.Minor), head.KeyConfidence, reused)
+				analysis.FifthsCode(head.Tonic, head.Minor), head.KeyConfidence, reused)
 		} else {
 			logger.Debugf("Head analysis failed for %s: %v", song.Title, analyzeErr)
 		}

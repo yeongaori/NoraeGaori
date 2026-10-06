@@ -389,7 +389,7 @@ func describeTrack(guildID string, track *analysis.TrackAnalysis, analyzing bool
 		return panel.Unknown
 	}
 
-	bpm, key, camelot, hasKey := analysis.Summarize(track)
+	bpm, key, code, hasKey := analysis.Summarize(track)
 	if bpm <= 0 {
 		if analyzing {
 			return panel.Analyzing
@@ -399,7 +399,7 @@ func describeTrack(guildID string, track *analysis.TrackAnalysis, analyzing bool
 	if !hasKey {
 		return fmt.Sprintf("%.1f BPM · %s", bpm, panel.Unknown)
 	}
-	return fmt.Sprintf("%.1f BPM · %s (%s)", bpm, key, camelot)
+	return fmt.Sprintf("%.1f BPM · %s (%s)", bpm, key, code)
 }
 
 func describeRecipe(guildID string, row *transitionRow, marked bool) string {
@@ -560,7 +560,7 @@ func createTransitionEditorEmbed(guildID string, row *transitionRow, tab *editor
 			if distance <= 1 {
 				verdict = panel.Harmonic
 			}
-			compatibility += fmt.Sprintf(" · %s (%s)", fmt.Sprintf(panel.CamelotDistance, distance), verdict)
+			compatibility += fmt.Sprintf(" · %s (%s)", fmt.Sprintf(panel.FifthsDistance, distance), verdict)
 		}
 	}
 

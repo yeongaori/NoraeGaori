@@ -55,7 +55,7 @@ func noiseSamples(seconds float64, seed int64) []float32 {
 	return noise
 }
 
-func TestCamelotWheelMapping(t *testing.T) {
+func TestFifthsWheelMapping(t *testing.T) {
 	cases := []struct {
 		tonic int
 		minor bool
@@ -72,14 +72,14 @@ func TestCamelotWheelMapping(t *testing.T) {
 	}
 
 	for _, testCase := range cases {
-		got := analysis.CamelotCode(testCase.tonic, testCase.minor)
+		got := analysis.FifthsCode(testCase.tonic, testCase.minor)
 		if got != testCase.want {
 			t.Errorf("%s = %s, want %s", analysis.KeyName(testCase.tonic, testCase.minor), got, testCase.want)
 		}
 	}
 }
 
-func TestCamelotDistanceSemantics(t *testing.T) {
+func TestFifthsDistanceSemantics(t *testing.T) {
 	confident := func(tonic int, minor bool) *analysis.TrackAnalysis {
 		return &analysis.TrackAnalysis{Tonic: tonic, Minor: minor, KeyConfidence: 0.5}
 	}
@@ -98,7 +98,7 @@ func TestCamelotDistanceSemantics(t *testing.T) {
 	}
 
 	for _, testCase := range cases {
-		if got := analysis.CamelotDistance(root, testCase.other); got != testCase.want {
+		if got := analysis.FifthsDistance(root, testCase.other); got != testCase.want {
 			t.Errorf("%s = %d, want %d", testCase.name, got, testCase.want)
 		}
 	}
@@ -112,7 +112,7 @@ func TestCMajorProgressionDetectsCMajorOrItsRelative(t *testing.T) {
 		t.Fatalf("confidence = %.4f, want > 0", confidence)
 	}
 	if !((tonic == 0 && !minor) || (tonic == 9 && minor)) {
-		t.Errorf("got %s (%s), want C major or A minor", analysis.KeyName(tonic, minor), analysis.CamelotCode(tonic, minor))
+		t.Errorf("got %s (%s), want C major or A minor", analysis.KeyName(tonic, minor), analysis.FifthsCode(tonic, minor))
 	}
 }
 
@@ -124,7 +124,7 @@ func TestAMinorProgressionDetectsAMinorOrItsRelative(t *testing.T) {
 		t.Fatalf("confidence = %.4f, want > 0", confidence)
 	}
 	if !((tonic == 9 && minor) || (tonic == 0 && !minor)) {
-		t.Errorf("got %s (%s), want A minor or C major", analysis.KeyName(tonic, minor), analysis.CamelotCode(tonic, minor))
+		t.Errorf("got %s (%s), want A minor or C major", analysis.KeyName(tonic, minor), analysis.FifthsCode(tonic, minor))
 	}
 }
 
@@ -412,8 +412,8 @@ func TestAnalysisCarriesKeyData(t *testing.T) {
 	if track.BPM <= 0 {
 		t.Errorf("BPM = %.1f, want > 0", track.BPM)
 	}
-	if code := analysis.CamelotCode(track.Tonic, track.Minor); code == "" {
-		t.Error("analysis carries no Camelot code")
+	if code := analysis.FifthsCode(track.Tonic, track.Minor); code == "" {
+		t.Error("analysis carries no circle-of-fifths code")
 	}
 }
 
