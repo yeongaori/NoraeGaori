@@ -3,7 +3,6 @@ package player_test
 import (
 	"fmt"
 	"math"
-	"reflect"
 	"testing"
 
 	"noraegaori/internal/audio/analysis"
@@ -14,8 +13,6 @@ import (
 	"noraegaori/internal/queue"
 	"noraegaori/tests/testutil/audiotest"
 )
-
-var styleCategories = []string{"volume", "eq", "filter", "effect", "loop"}
 
 func containsAnnouncement(guildID string) bool {
 	player.HookAnnouncedSongsMu.Lock()
@@ -273,71 +270,65 @@ func TestTheAnalysisReadCapAdmitsFarMoreThanTheMinimumAnalysableLength(t *testin
 	}
 }
 
-func styleOverridesFor(category, value string) transition.StyleOverrides {
-	overrides := transition.StyleOverrides{}
-	switch category {
-	case "volume":
-		overrides.Volume = value
-	case "eq":
-		overrides.EQ = value
-	case "filter":
-		overrides.Filter = value
-	case "effect":
-		overrides.Effect = value
-	case "loop":
-		overrides.Loop = value
+var autoRecipe = transition.PresetRecipe(3)
+
+type expectedStyle struct {
+	category transition.Category
+	style    string
+	source   string
+}
+
+func checkResolved(t *testing.T, resolved *transition.Resolved, wants []expectedStyle) {
+	t.Helper()
+	for _, want := range wants {
+		if got := transition.StyleOf(&resolved.Recipe, want.category); got != want.style {
+			t.Errorf("%s = %q, want %q", want.category, got, want.style)
+		}
+		if got := resolved.Sources[want.category]; got != want.source {
+			t.Errorf("%s source = %q, want %q", want.category, got, want.source)
+		}
 	}
-	return overrides
 }
 
-func resolutionAnalyses() (*analysis.TrackAnalysis, *analysis.TrackAnalysis) {
-	return &analysis.TrackAnalysis{BPM: 128, PeriodSec: 60.0 / 128, Duration: 240, Tonic: 9, Minor: true, KeyConfidence: 0.5},
-		&analysis.TrackAnalysis{BPM: 127, PeriodSec: 60.0 / 127, Duration: 240, Tonic: 4, Minor: true, KeyConfidence: 0.5}
-}
-
-func TestAutoStylesAreValidStyleKeys(t *testing.T) {
-	analysisA, analysisB := resolutionAnalyses()
-	autoStyles := transition.AutoStyles(analysisA, analysisB)
-
-	for _, category := range styleCategories {
-		if !transition.ValidStyle(category, autoStyles[category]) {
-			t.Errorf("auto style %q for %q is not a valid style key", autoStyles[category], category)
+func TestEveryPresetResolvesToValidStyleKeys(t *testing.T) {
+	for _, preset := range []int{1, 2, 3, 4, 5, 8, 9, 10, 11, 17, 18, 19} {
+		for _, category := range transition.StyleCategories() {
+			if style := transition.StyleOf(transition.PresetRecipe(preset), category); !transition.ValidStyle(category, style) {
+				t.Errorf("preset %d style %q for %q is not a valid style key", preset, style, category)
+			}
 		}
 	}
 }
 
 func TestStylePrecedenceSongOverGuildOverAuto(t *testing.T) {
-	analysisA, analysisB := resolutionAnalyses()
-	autoStyles := transition.AutoStyles(analysisA, analysisB)
-
-	for _, category := range styleCategories {
-		t.Run(category, func(t *testing.T) {
+	for _, category := range transition.StyleCategories() {
+		t.Run(string(category), func(t *testing.T) {
 			values := transition.StyleValues(category)
 			guildStyle := values[len(values)-1]
 			songStyle := values[1]
+			autoStyle := transition.StyleOf(autoRecipe, category)
 
 			cases := []struct {
 				name       string
-				guild      transition.StyleOverrides
-				song       transition.StyleOverrides
+				guild      map[string]string
+				song       map[string]string
 				wantStyle  string
 				wantSource string
 			}{
-				{"no overrides", transition.StyleOverrides{}, transition.StyleOverrides{}, autoStyles[category], "auto"},
-				{"guild only", styleOverridesFor(category, guildStyle), transition.StyleOverrides{}, guildStyle, "guild"},
-				{"song wins over guild", styleOverridesFor(category, guildStyle), styleOverridesFor(category, songStyle), songStyle, "song"},
-				{"song auto defers to guild", styleOverridesFor(category, guildStyle), styleOverridesFor(category, transition.StyleAuto), guildStyle, "guild"},
-				{"unknown values fall back to auto", styleOverridesFor(category, "not_a_real_style"), styleOverridesFor(category, ""), autoStyles[category], "auto"},
+				{"no overrides", nil, nil, autoStyle, "auto"},
+				{"guild only", category.Override(guildStyle), nil, guildStyle, "guild"},
+				{"song wins over guild", category.Override(guildStyle), category.Override(songStyle), songStyle, "song"},
+				{"song auto defers to guild", category.Override(guildStyle), category.Override(transition.StyleAuto), guildStyle, "guild"},
+				{"unknown values fall back to auto", category.Override("not_a_real_style"), category.Override(""), autoStyle, "auto"},
 			}
 
 			for _, testCase := range cases {
-				_, effective, source := transition.ResolveStyles(analysisA, analysisB, true, testCase.guild, testCase.song)
-
-				if effective[category] != testCase.wantStyle {
-					t.Errorf("%s: style = %q, want %q", testCase.name, effective[category], testCase.wantStyle)
+				resolved := transition.ResolveStyles(autoRecipe, testCase.guild, testCase.song)
+				if got := transition.StyleOf(&resolved.Recipe, category); got != testCase.wantStyle {
+					t.Errorf("%s: style = %q, want %q", testCase.name, got, testCase.wantStyle)
 				}
-				if source[category] != testCase.wantSource {
-					t.Errorf("%s: source = %q, want %q", testCase.name, source[category], testCase.wantSource)
+				if got := resolved.Sources[category]; got != testCase.wantSource {
+					t.Errorf("%s: source = %q, want %q", testCase.name, got, testCase.wantSource)
 				}
 			}
 		})
@@ -345,206 +336,88 @@ func TestStylePrecedenceSongOverGuildOverAuto(t *testing.T) {
 }
 
 func TestOverrideAffectsOnlyItsOwnCategory(t *testing.T) {
-	analysisA, analysisB := resolutionAnalyses()
-	autoStyles := transition.AutoStyles(analysisA, analysisB)
+	resolved := transition.ResolveStyles(autoRecipe, nil, transition.CategoryFXOut.Override("echo_half_cut_end"))
 
-	_, effective, source := transition.ResolveStyles(analysisA, analysisB, true,
-		transition.StyleOverrides{}, transition.StyleOverrides{Effect: "echo_half_cut_end"})
-
-	if effective["effect"] != "echo_half_cut_end" {
-		t.Errorf("effect = %q, want echo_half_cut_end", effective["effect"])
-	}
-	for _, category := range styleCategories {
-		if category == "effect" {
-			continue
+	for _, category := range transition.StyleCategories() {
+		want := expectedStyle{category, transition.StyleOf(autoRecipe, category), "auto"}
+		if category == transition.CategoryFXOut {
+			want = expectedStyle{category, "echo_half_cut_end", "song"}
 		}
-		if effective[category] != autoStyles[category] {
-			t.Errorf("%s = %q, want the untouched auto style %q", category, effective[category], autoStyles[category])
-		}
-		if source[category] != "auto" {
-			t.Errorf("%s source = %q, want auto", category, source[category])
-		}
+		checkResolved(t, resolved, []expectedStyle{want})
 	}
 }
 
-func TestNilAnalysisResolvesToTheDefaultRecipe(t *testing.T) {
-	_, effective, source := transition.ResolveStyles(nil, nil, true, transition.StyleOverrides{}, transition.StyleOverrides{})
+func TestTheFadePresetIsTheDefaultCrossfadeWithABassSwap(t *testing.T) {
+	resolved := transition.ResolveStyles(transition.PresetRecipe(transition.FadePreset), nil, nil)
 
-	for category, want := range map[string]string{
-		"volume": "smooth",
-		"eq":     "none",
-		"filter": "none",
-		"effect": "none",
-		"loop":   "none",
-	} {
-		if effective[category] != want {
-			t.Errorf("%s = %q, want %q", category, effective[category], want)
-		}
-	}
-	if source["volume"] != "auto" {
-		t.Errorf("volume source = %q, want auto", source["volume"])
-	}
+	checkResolved(t, resolved, []expectedStyle{
+		{transition.CategoryVolumeOut, "cross_shape", "auto"},
+		{transition.CategoryVolumeIn, "cross_shape", "auto"},
+		{transition.CategoryEQOut, "bass_fast", "auto"},
+		{transition.CategoryEQIn, "bass_fast", "auto"},
+		{transition.CategoryFilterOut, "none", "auto"},
+		{transition.CategoryFXOut, "none", "auto"},
+		{transition.CategoryLoop, "none", "auto"},
+	})
 }
 
-func TestAutoSelectionIsSkippedWhenDisabled(t *testing.T) {
-	analysisA, analysisB := resolutionAnalyses()
-	defaultStyles := transition.RecipeStyleMap(transition.DefaultRecipe())
+func TestOverridesStillLayerOverThePlainCrossfade(t *testing.T) {
+	resolved := transition.ResolveStyles(transition.PresetRecipe(transition.NoPreset),
+		transition.ExpandLegacy(transition.ShortcutEQ, "quick_bass"), transition.CategoryFXOut.Override("reverb_out_end"))
 
-	_, effective, source := transition.ResolveStyles(analysisA, analysisB, false, transition.StyleOverrides{}, transition.StyleOverrides{})
-
-	for _, category := range styleCategories {
-		if effective[category] != defaultStyles[category] {
-			t.Errorf("%s = %q, want the default %q", category, effective[category], defaultStyles[category])
-		}
-		if source[category] != "auto" {
-			t.Errorf("%s source = %q, want auto", category, source[category])
-		}
-	}
-	if reflect.DeepEqual(effective, transition.AutoStyles(analysisA, analysisB)) {
-		t.Error("disabled auto selection still produced the auto styles")
-	}
+	checkResolved(t, resolved, []expectedStyle{
+		{transition.CategoryEQOut, "bass_fast_one_bar_from_end", "guild"},
+		{transition.CategoryFXOut, "reverb_out_end", "song"},
+		{transition.CategoryVolumeOut, "cross_shape", "auto"},
+	})
 }
 
-func TestOverridesStillLayerWhenAutoSelectionIsDisabled(t *testing.T) {
-	analysisA, analysisB := resolutionAnalyses()
-	defaultStyles := transition.RecipeStyleMap(transition.DefaultRecipe())
-
-	_, effective, source := transition.ResolveStyles(analysisA, analysisB, false,
-		transition.StyleOverrides{EQ: "quick_bass"}, transition.StyleOverrides{Effect: "reverb_out_end"})
-
-	for _, want := range []struct{ category, style, source string }{
-		{"eq", "quick_bass", "guild"},
-		{"effect", "reverb_out_end", "song"},
-		{"volume", defaultStyles["volume"], "auto"},
-	} {
-		if effective[want.category] != want.style {
-			t.Errorf("%s = %q, want %q", want.category, effective[want.category], want.style)
-		}
-		if source[want.category] != want.source {
-			t.Errorf("%s source = %q, want %q", want.category, source[want.category], want.source)
+func TestAutoOutroLetsTheSongEndNaturally(t *testing.T) {
+	outro := transition.OutroRecipe()
+	for _, category := range []transition.Category{transition.CategoryEQOut, transition.CategoryFilterOut, transition.CategoryFXOut, transition.CategoryLoop} {
+		if style := transition.StyleOf(outro, category); style != "none" {
+			t.Errorf("%s = %q, want none so the last song is left alone", category, style)
 		}
 	}
-}
-
-func outroAnalysisShapes() []struct {
-	name  string
-	track *analysis.TrackAnalysis
-} {
-	return []struct {
-		name  string
-		track *analysis.TrackAnalysis
-	}{
-		{"nil analysis", nil},
-		{"zero bpm", &analysis.TrackAnalysis{BPM: 0, PeriodSec: 0}},
-		{"bpm without grid", &analysis.TrackAnalysis{BPM: 128, PeriodSec: 0}},
-		{"full grid", &analysis.TrackAnalysis{BPM: 128, PeriodSec: 60.0 / 128, Tonic: 9, Minor: true, KeyConfidence: 0.5}},
-	}
-}
-
-func TestOutroRecipesAreValidAcrossEveryAnalysisShape(t *testing.T) {
-	for _, input := range outroAnalysisShapes() {
-		styles := transition.AutoOutroStyles(input.track)
-		for _, category := range styleCategories {
-			if !transition.ValidStyle(category, styles[category]) {
-				t.Errorf("%s: %q style %q is not a valid style key", input.name, category, styles[category])
-			}
-		}
-	}
-}
-
-func TestEveryOutroShapesTheEnding(t *testing.T) {
-	for _, input := range outroAnalysisShapes() {
-		styles := transition.AutoOutroStyles(input.track)
-		if styles["effect"] == "none" && styles["filter"] == "none" {
-			t.Errorf("%s produced no filter and no effect", input.name)
-		}
-	}
-}
-
-func TestOutroDiffersFromTheOrdinaryTransitionRecipe(t *testing.T) {
-	gridded := &analysis.TrackAnalysis{BPM: 128, PeriodSec: 60.0 / 128}
-
-	outro := transition.AutoOutroStyles(gridded)
-	ordinary := transition.AutoStyles(gridded, gridded)
-	if reflect.DeepEqual(outro, ordinary) {
-		t.Errorf("outro %v matches the ordinary transition %v", outro, ordinary)
-	}
-}
-
-func TestABeatGridEarnsARhythmicOutro(t *testing.T) {
-	gridded := &analysis.TrackAnalysis{BPM: 128, PeriodSec: 60.0 / 128}
-	ungridded := &analysis.TrackAnalysis{BPM: 128, PeriodSec: 0}
-
-	if got := transition.AutoOutroStyles(gridded)["effect"]; got != "echo_half_cut_end" {
-		t.Errorf("gridded effect = %q, want echo_half_cut_end", got)
-	}
-	if got := transition.AutoOutroStyles(ungridded)["effect"]; got == "echo_half_cut_end" {
-		t.Errorf("ungridded effect = %q, want anything but the rhythmic echo", got)
-	}
-}
-
-func TestOutroAutoSelectionIsSkippedWhenDisabled(t *testing.T) {
-	gridded := &analysis.TrackAnalysis{BPM: 128, PeriodSec: 60.0 / 128}
-	defaultStyles := transition.RecipeStyleMap(transition.DefaultRecipe())
-
-	_, effective, source := transition.ResolveOutroStyles(gridded, false, transition.StyleOverrides{}, transition.StyleOverrides{})
-
-	for _, category := range styleCategories {
-		if effective[category] != defaultStyles[category] {
-			t.Errorf("%s = %q, want the default %q", category, effective[category], defaultStyles[category])
-		}
-		if source[category] != "auto" {
-			t.Errorf("%s source = %q, want auto", category, source[category])
-		}
+	if !outro.IsOutroDefault() {
+		t.Error("the auto outro is not recognized as the default")
 	}
 }
 
 func TestOutroOverridesLayerSongOverGuildOverAuto(t *testing.T) {
-	gridded := &analysis.TrackAnalysis{BPM: 128, PeriodSec: 60.0 / 128}
-	auto := transition.AutoOutroStyles(gridded)
+	resolved := transition.ResolveStyles(transition.OutroRecipe(),
+		transition.ExpandLegacy(transition.ShortcutVolume, "fadein_cutout"), transition.CategoryFXOut.Override("reverb_out_center"))
 
-	_, effective, source := transition.ResolveOutroStyles(gridded, true,
-		transition.StyleOverrides{Volume: "fadein_cutout"}, transition.StyleOverrides{Effect: "reverb_out_center"})
-
-	for _, want := range []struct{ category, style, source string }{
-		{"volume", "fadein_cutout", "guild"},
-		{"effect", "reverb_out_center", "song"},
-		{"filter", auto["filter"], "auto"},
-	} {
-		if effective[want.category] != want.style {
-			t.Errorf("%s = %q, want %q", want.category, effective[want.category], want.style)
-		}
-		if source[want.category] != want.source {
-			t.Errorf("%s source = %q, want %q", want.category, source[want.category], want.source)
-		}
-	}
+	checkResolved(t, resolved, []expectedStyle{
+		{transition.CategoryVolumeOut, "fast_at_end", "guild"},
+		{transition.CategoryFXOut, "reverb_out_center", "song"},
+		{transition.CategoryFilterOut, "none", "auto"},
+	})
 }
 
 func TestEveryVolumeStyleGivesTheOutroADistinctShape(t *testing.T) {
 	distinct := map[string]bool{}
 
-	for _, style := range transition.StyleValues("volume") {
-		if style == transition.StyleAuto {
-			continue
+	for _, style := range transition.StyleValues(transition.CategoryVolumeOut)[1:] {
+		recipe := transition.DefaultRecipe()
+		recipe.Apply(transition.CategoryVolumeOut.Override(style))
+		processor := transition.NewProcessor(&recipe, &transition.Window{Frames: 500, PeriodSec: 60.0 / 128, Bars: 8})
+		samples := make([]string, 0, 9)
+		for _, progress := range []float64{0, 0.25, 0.5, 0.505, 0.6, 0.8, 0.95, 0.999, 1} {
+			gain, _ := processor.Gains(progress)
+			samples = append(samples, fmt.Sprintf("%.3f", gain))
 		}
-
-		recipe := transition.ApplyStyleOverrides(transition.DefaultRecipe(), transition.StyleOverrides{Volume: style})
-		processor := transition.NewProcessor(recipe, 500, 60.0/128)
-		start, _ := processor.Gains(0)
-		mid, _ := processor.Gains(0.5)
-		lastHalfBeat, _ := processor.Gains(1 - 60.0/128*dsp.FramesPerSecond/500/2)
-		end, _ := processor.Gains(1)
-		distinct[fmt.Sprintf("%.3f/%.3f/%.3f/%.3f", start, mid, lastHalfBeat, end)] = true
+		distinct[fmt.Sprint(samples)] = true
 	}
 
-	if len(distinct) != 5 {
-		t.Errorf("got %d distinct A-side curves across 5 styles, want 5", len(distinct))
+	if want := len(transition.StyleValues(transition.CategoryVolumeOut)) - 1; len(distinct) != want {
+		t.Errorf("got %d distinct outgoing curves, want %d: every outgoing volume style has its own shape", len(distinct), want)
 	}
 }
 
-func outroWindowFixture() (*ffmpeg.EndState, player.HookFadeSettings, int) {
+func outroWindowFixture() (*ffmpeg.EndState, *player.HookFadeSettings, int) {
 	track := &analysis.TrackAnalysis{BPM: 128, PeriodSec: 60.0 / 128, Duration: 240}
-	fade := *player.HookBuildFadeSettings(player.HookFadeSettingsFields{AutoMix: true, AutoMixBeats: 16, CrossfadeSec: 8})
+	fade := player.HookBuildFadeSettings(player.HookFadeSettingsFields{AutoMix: true, AutoMixBeats: 16, CrossfadeSec: 8})
 	expectedFrames, _ := transition.CrossfadeFrames(true, 16, 8, track)
 
 	return &ffmpeg.EndState{TotalFrames: 12000, Analysis: track}, fade, expectedFrames
@@ -602,7 +475,7 @@ func TestOutroRefusesATrackTooShortToHoldIt(t *testing.T) {
 func TestOutroWindowStillResolvesWithoutAnalysis(t *testing.T) {
 	full, fade, _ := outroWindowFixture()
 
-	if _, _, ok := player.HookPlanOutroWindow(full, 100, *player.HookBuildFadeSettings(player.HookFadeSettingsFields{AutoMix: false, AutoMixBeats: 16, CrossfadeSec: 8})); !ok {
+	if _, _, ok := player.HookPlanOutroWindow(full, 100, player.HookBuildFadeSettings(player.HookFadeSettingsFields{AutoMix: false, AutoMixBeats: 16, CrossfadeSec: 8})); !ok {
 		t.Error("no window was planned with automix off")
 	}
 
@@ -662,16 +535,33 @@ func TestCrossfadeSecondsAreClampedToTheMaximum(t *testing.T) {
 	}
 }
 
+func loopOutput(loop *transition.BeatLoop, frames int) []int16 {
+	output := make([]int16, 0, frames*dsp.FrameSize)
+	frame := make([]int16, dsp.FrameSize*dsp.Channels)
+	for index := 0; index < frames; index++ {
+		for pair := 0; pair < dsp.FrameSize; pair++ {
+			value := int16((index*dsp.FrameSize + pair) % 30000)
+			frame[pair*dsp.Channels] = value
+			frame[pair*dsp.Channels+1] = value
+		}
+		out := loop.Next(frame)
+		for pair := 0; pair < dsp.FrameSize; pair++ {
+			output = append(output, out[pair*dsp.Channels])
+		}
+	}
+	return output
+}
+
 func TestLoopSurvivesWhenItFitsInsideTheCrossfade(t *testing.T) {
 	track := timingTrack()
 	crossfadeFrames, _ := transition.CrossfadeFrames(true, 16, 8, track)
 
-	style, loopSamples := transition.ClampLoopStyle(transition.LoopFourBeats, track.PeriodSec, crossfadeFrames)
-	if style != transition.LoopFourBeats {
-		t.Errorf("style = %s, want four_beats", style)
+	if style := clampedLoop(transition.LoopFourBeats, track.PeriodSec, crossfadeFrames); style != transition.LoopFourBeats {
+		t.Errorf("style = %d, want four_beats", style)
 	}
-	if loopSamples != 90000 {
-		t.Errorf("loopSamples = %d, want 90000 (four beats at 128 BPM, not rounded to whole frames)", loopSamples)
+	output := loopOutput(transition.PrepareBeatLoop(transition.LoopFourBeats, track.PeriodSec, crossfadeFrames), 100)
+	if got := output[90000+500]; got != 500 {
+		t.Errorf("sample 90500 = %d, want 500 from a 90000-sample loop (four beats at 128 BPM, not rounded to whole frames)", got)
 	}
 }
 
@@ -679,33 +569,29 @@ func TestLoopLengthRoundsToTheNearestSample(t *testing.T) {
 	track := &analysis.TrackAnalysis{BPM: 123, PeriodSec: 60.0 / 123, Duration: 240}
 	crossfadeFrames, _ := transition.CrossfadeFrames(true, 16, 8, track)
 
-	if _, loopSamples := transition.ClampLoopStyle(transition.LoopFourBeats, track.PeriodSec, crossfadeFrames); loopSamples != 93659 {
-		t.Errorf("loopSamples = %d, want 93659 (four beats at 123 BPM is 93658.5 samples, rounded)", loopSamples)
+	output := loopOutput(transition.PrepareBeatLoop(transition.LoopFourBeats, track.PeriodSec, crossfadeFrames), 100)
+	if got := output[93659+500]; got != 500 {
+		t.Errorf("sample 94159 = %d, want 500 from a 93659-sample loop (93658.5 rounded)", got)
 	}
 }
 
-func TestLoopIsDroppedWhenItNeedsMoreThanHalfTheCrossfade(t *testing.T) {
+func TestLoopIsDroppedWhenItIsLongerThanTheCrossfade(t *testing.T) {
 	track := timingTrack()
-	crossfadeFrames, _ := transition.CrossfadeFrames(true, 16, 8, track)
+	crossfadeFrames, _ := transition.CrossfadeFrames(true, 8, 8, track)
 
-	style, loopSamples := transition.ClampLoopStyle(transition.LoopEightBeats, track.PeriodSec, crossfadeFrames)
-	if style != transition.LoopNone {
-		t.Errorf("style = %s, want none", style)
+	if style := clampedLoop(transition.LoopSixteenBeats, track.PeriodSec, crossfadeFrames); style != transition.LoopNone {
+		t.Errorf("style = %d, want none", style)
 	}
-	if loopSamples != 0 {
-		t.Errorf("loopSamples = %d of %d, want 0", loopSamples, crossfadeFrames)
+	if loop := transition.PrepareBeatLoop(transition.LoopSixteenBeats, track.PeriodSec, crossfadeFrames); loop != nil {
+		t.Error("a loop longer than the crossfade was still built")
 	}
 }
 
 func TestLoopIsDroppedWithoutABeatGrid(t *testing.T) {
 	crossfadeFrames, _ := transition.CrossfadeFrames(true, 16, 8, timingTrack())
 
-	style, loopSamples := transition.ClampLoopStyle(transition.LoopFourBeats, 0, crossfadeFrames)
-	if style != transition.LoopNone {
-		t.Errorf("style = %s, want none", style)
-	}
-	if loopSamples != 0 {
-		t.Errorf("loopSamples = %d, want 0", loopSamples)
+	if style := clampedLoop(transition.LoopFourBeats, 0, crossfadeFrames); style != transition.LoopNone {
+		t.Errorf("style = %d, want none", style)
 	}
 }
 
@@ -713,13 +599,15 @@ func TestLoopNoneStaysNone(t *testing.T) {
 	track := timingTrack()
 	crossfadeFrames, _ := transition.CrossfadeFrames(true, 16, 8, track)
 
-	style, loopSamples := transition.ClampLoopStyle(transition.LoopNone, track.PeriodSec, crossfadeFrames)
-	if style != transition.LoopNone {
-		t.Errorf("style = %s, want none", style)
+	if style := clampedLoop(transition.LoopNone, track.PeriodSec, crossfadeFrames); style != transition.LoopNone {
+		t.Errorf("style = %d, want none", style)
 	}
-	if loopSamples != 0 {
-		t.Errorf("loopSamples = %d, want 0", loopSamples)
-	}
+}
+
+func clampedLoop(loop transition.LoopStyle, periodSec float64, frames int) transition.LoopStyle {
+	resolved := transition.ResolveStyles(&transition.Recipe{Loop: loop}, nil, nil)
+	resolved.ClampRolls(periodSec, frames)
+	return resolved.Recipe.Loop
 }
 
 func TestAnalysisSummaryHandlesNil(t *testing.T) {

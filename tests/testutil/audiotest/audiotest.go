@@ -73,22 +73,58 @@ func IsBufferFinite(buf []float64) bool {
 func FilterResponse(setup func(*dsp.Biquad), frequency float64) float64 {
 	var filter dsp.Biquad
 	setup(&filter)
+	return ToneResponse(filter.ProcessStereo, frequency)
+}
+
+func ToneResponse(process func([]float64), frequency float64) float64 {
 	phase := 0.0
 	var lastRMS float64
 	for frame := 0; frame < 25; frame++ {
 		buf := SineFloatFrame(frequency, 10000, &phase)
-		filter.ProcessStereo(buf)
+		process(buf)
 		lastRMS = BufferRMS(buf)
 	}
 	return lastRMS / (10000 / math.Sqrt2)
 }
 
+func Decibels(gain float64) float64 {
+	return 20 * math.Log10(gain)
+}
+
+type PinkNoise struct {
+	source *rand.Rand
+	rows   [7]float64
+}
+
+func (p *PinkNoise) Fill(buf []float64, amplitude float64) {
+	if p.source == nil {
+		p.source = rand.New(rand.NewSource(7))
+	}
+	weights := [6][2]float64{{0.99886, 0.0555179}, {0.99332, 0.0750759}, {0.969, 0.153852}, {0.8665, 0.3104856}, {0.55, 0.5329522}, {-0.7616, -0.016898}}
+	for i := 0; i+1 < len(buf); i += dsp.Channels {
+		white := p.source.Float64()*2 - 1
+		sum := p.rows[6] + white*0.5362
+		for row, weight := range weights {
+			p.rows[row] = weight[0]*p.rows[row] + white*weight[1]
+			sum += p.rows[row]
+		}
+		p.rows[6] = white * 0.115926
+		buf[i] = sum * amplitude / 4
+		buf[i+1] = buf[i]
+	}
+}
+
 func SynthesizeClickTrack(bpm, seconds, sampleRate float64, accentEvery, accentPhase int) []float32 {
+	return SynthesizeJitteredClickTrack(bpm, seconds, sampleRate, accentEvery, accentPhase, 0)
+}
+
+func SynthesizeJitteredClickTrack(bpm, seconds, sampleRate float64, accentEvery, accentPhase int, jitterSec float64) []float32 {
 	total := int(seconds * sampleRate)
 	samples := make([]float32, total)
 	interval := 60 / bpm * sampleRate
 	burst := int(0.02 * sampleRate)
 	source := rand.New(rand.NewSource(11))
+	timing := rand.New(rand.NewSource(13))
 
 	beat := 0
 	for position := 0.0; position < float64(total); position += interval {
@@ -96,7 +132,7 @@ func SynthesizeClickTrack(bpm, seconds, sampleRate float64, accentEvery, accentP
 		if accentEvery > 0 && beat%accentEvery == accentPhase {
 			amplitude = 1.0
 		}
-		start := int(position)
+		start := max(0, int(position+(timing.Float64()*2-1)*jitterSec*sampleRate))
 		for i := 0; i < burst && start+i < total; i++ {
 			decay := 1 - float64(i)/float64(burst)
 			samples[start+i] += float32(amplitude * decay * source.NormFloat64() * 0.5)

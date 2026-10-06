@@ -1,144 +1,247 @@
 package transition
 
 import (
-	"fmt"
-	"math"
+	"slices"
+	"strings"
 
 	"noraegaori/internal/audio/analysis"
 	"noraegaori/internal/audio/dsp"
+	"noraegaori/internal/logger"
 )
 
-type Recipe struct {
+type Side struct {
 	Volume VolumeStyle
 	EQ     EQStyle
 	Filter FilterStyle
-	Effect EffectStyle
-	Loop   LoopStyle
+	FX     FXStyle
 }
 
-type StyleOverrides struct {
-	Volume string
-	EQ     string
-	Filter string
-	Effect string
-	Loop   string
+type Recipe struct {
+	Out  Side
+	In   Side
+	Loop LoopStyle
+}
+
+type Settings struct {
+	Preset    int
+	Bars      int
+	Beatmatch BeatmatchMode
 }
 
 func DefaultRecipe() Recipe {
-	return Recipe{
-		Volume: VolumeSmoothCrossfade,
-		EQ:     EQNone,
-		Filter: FilterNone,
-		Effect: EffectNone,
-		Loop:   LoopNone,
+	return Recipe{Out: Side{Volume: VolumeCrossShape}, In: Side{Volume: VolumeCrossShape}}
+}
+
+var outroRecipe = Recipe{Out: Side{Volume: VolumeFastAtEdge}, In: Side{Volume: VolumeFastAtEdge}}
+
+func OutroRecipe() *Recipe {
+	return &outroRecipe
+}
+
+func (r *Recipe) IsOutroDefault() bool {
+	return r.Out == outroRecipe.Out && r.Loop == outroRecipe.Loop
+}
+
+func ShortcutTargets(category Category) []Category {
+	targets := shortcutTargets[category]
+	return targets[:len(targets):len(targets)]
+}
+
+func (r *Recipe) String() string {
+	parts := make([]string, 0, len(styleCategories))
+	for _, category := range styleCategories {
+		parts = append(parts, string(category)+"="+categories[category].readStyle(r))
+	}
+	return strings.Join(parts, " ")
+}
+
+type Category string
+
+const (
+	CategoryVolumeOut Category = "volume_out"
+	CategoryVolumeIn  Category = "volume_in"
+	CategoryEQOut     Category = "eq_out"
+	CategoryEQIn      Category = "eq_in"
+	CategoryFilterOut Category = "filter_out"
+	CategoryFilterIn  Category = "filter_in"
+	CategoryFXOut     Category = "fx_out"
+	CategoryFXIn      Category = "fx_in"
+	CategoryLoop      Category = "loop"
+	CategoryPreset    Category = "preset"
+	CategoryLength    Category = "length"
+	CategoryBeatmatch Category = "beatmatch"
+	ShortcutVolume    Category = "volume"
+	ShortcutEQ        Category = "eq"
+	ShortcutFilter    Category = "filter"
+	ShortcutEffect    Category = "effect"
+)
+
+type categoryInfo struct {
+	names        []string
+	readStyle    func(*Recipe) string
+	writeStyle   func(*Recipe, string)
+	writeSetting func(*Settings, string)
+}
+
+var (
+	styleCategories = []Category{
+		CategoryVolumeOut, CategoryVolumeIn, CategoryEQOut, CategoryEQIn, CategoryFilterOut, CategoryFilterIn,
+		CategoryFXOut, CategoryFXIn, CategoryLoop,
+	}
+	settingCategories = []Category{CategoryPreset, CategoryLength, CategoryBeatmatch}
+)
+
+var categories = map[Category]categoryInfo{
+	CategoryVolumeOut: styleCategory(volumeOutNames, func(r *Recipe) *VolumeStyle { return &r.Out.Volume }),
+	CategoryVolumeIn:  styleCategory(volumeInNames, func(r *Recipe) *VolumeStyle { return &r.In.Volume }),
+	CategoryEQOut:     styleCategory(eqOutNames, func(r *Recipe) *EQStyle { return &r.Out.EQ }),
+	CategoryEQIn:      styleCategory(eqInNames, func(r *Recipe) *EQStyle { return &r.In.EQ }),
+	CategoryFilterOut: styleCategory(filterNames, func(r *Recipe) *FilterStyle { return &r.Out.Filter }),
+	CategoryFilterIn:  styleCategory(filterNames, func(r *Recipe) *FilterStyle { return &r.In.Filter }),
+	CategoryFXOut:     styleCategory(fxOutNames, func(r *Recipe) *FXStyle { return &r.Out.FX }),
+	CategoryFXIn:      styleCategory(fxInNames, func(r *Recipe) *FXStyle { return &r.In.FX }),
+	CategoryLoop:      styleCategory(loopNames, func(r *Recipe) *LoopStyle { return &r.Loop }),
+	CategoryPreset:    settingCategory(presetNames, func(s *Settings) *int { return &s.Preset }),
+	CategoryLength:    settingCategory(lengthNames, func(s *Settings) *int { return &s.Bars }),
+	CategoryBeatmatch: settingCategory(beatmatchNames, func(s *Settings) *BeatmatchMode { return &s.Beatmatch }),
+}
+
+func ParseCategory(name string) (Category, bool) {
+	category := Category(name)
+	_, ok := categoryValues[category]
+	return category, ok
+}
+
+func (c Category) Override(style string) map[string]string {
+	return map[string]string{string(c): style}
+}
+
+func (c Category) IsStyle() bool {
+	info, ok := categories[c]
+	return ok && info.readStyle != nil
+}
+
+func styleCategory[T comparable](names catalogue[T], field func(*Recipe) *T) categoryInfo {
+	return categoryInfo{
+		names: names.names(),
+		readStyle: func(recipe *Recipe) string {
+			return names.nameOf(*field(recipe))
+		},
+		writeStyle: func(recipe *Recipe, name string) {
+			if value, ok := names.lookup(name); ok {
+				*field(recipe) = value
+			}
+		},
 	}
 }
 
-func (s VolumeStyle) String() string {
-	return lookupStyleName(volumeStyleNames, s)
+func settingCategory[T comparable](names catalogue[T], field func(*Settings) *T) categoryInfo {
+	return categoryInfo{
+		names: names.names(),
+		writeSetting: func(settings *Settings, name string) {
+			if value, ok := names.lookup(name); ok {
+				*field(settings) = value
+			}
+		},
+	}
 }
 
-func (s EQStyle) String() string {
-	return lookupStyleName(eqStyleNames, s)
-}
+var categoryValues = buildCategoryValues()
 
-func (s FilterStyle) String() string {
-	return lookupStyleName(filterStyleNames, s)
-}
-
-func (s EffectStyle) String() string {
-	return lookupStyleName(effectStyleNames, s)
-}
-
-func (s LoopStyle) String() string {
-	return lookupStyleName(loopStyleNames, s)
-}
-
-func lookupStyleName[T comparable](names map[string]T, value T) string {
-	for name, candidate := range names {
-		if candidate == value {
-			return name
+func buildCategoryValues() map[Category][]string {
+	values := make(map[Category][]string, len(categories)+len(legacyStyles))
+	for category, info := range categories {
+		values[category] = withAuto(info.names)
+	}
+	for category, styles := range legacyStyles {
+		names := make([]string, 0, len(styles))
+		for _, style := range styles {
+			names = append(names, style.name)
 		}
+		values[category] = withAuto(names)
+	}
+	return values
+}
+
+func withAuto(names []string) []string {
+	values := make([]string, 0, len(names)+1)
+	values = append(values, StyleAuto)
+	values = append(values, names...)
+	return values[:len(values):len(values)]
+}
+
+func StyleCategories() []Category {
+	return styleCategories[:len(styleCategories):len(styleCategories)]
+}
+
+func SettingCategories() []Category {
+	return settingCategories[:len(settingCategories):len(settingCategories)]
+}
+
+func StyleValues(category Category) []string {
+	return categoryValues[category]
+}
+
+func ValidStyle(category Category, value string) bool {
+	return slices.Contains(categoryValues[category], value)
+}
+
+func StyleOf(recipe *Recipe, category Category) string {
+	if info, ok := categories[category]; ok && info.readStyle != nil {
+		return info.readStyle(recipe)
 	}
 	return StyleAuto
 }
 
-func (r Recipe) String() string {
-	return fmt.Sprintf("volume=%s eq=%s filter=%s effect=%s loop=%s",
-		r.Volume, r.EQ, r.Filter, r.Effect, r.Loop)
-}
-
-var styleOrder = map[string][]string{
-	"volume": {"smooth", "overlap", "fadein_fadeout", "cutin_fadeout", "fadein_cutout"},
-	"eq":     {"none", "center_bass_swap", "end_bass_swap", "start_bass_swap", "three_band_fade", "quick_bass"},
-	"filter": {"none", "lowpass_out", "lowpass_in", "lowpass_in_out", "lowpass_in_highpass_out"},
-	"effect": {"none", "reverb_out_center", "reverb_cut_end", "reverb_out_end", "echo_half_cut_end"},
-	"loop":   {"none", "one_beat", "two_beats", "four_beats", "eight_beats"},
-}
-
-func StyleValues(category string) []string {
-	values, ok := styleOrder[category]
-	if !ok {
-		return nil
-	}
-	out := make([]string, 0, len(values)+1)
-	out = append(out, StyleAuto)
-	out = append(out, values...)
-	return out
-}
-
-func ValidStyle(category, value string) bool {
-	if value == StyleAuto {
-		return true
-	}
-	switch category {
-	case "volume":
-		_, ok := volumeStyleNames[value]
-		return ok
-	case "eq":
-		_, ok := eqStyleNames[value]
-		return ok
-	case "filter":
-		_, ok := filterStyleNames[value]
-		return ok
-	case "effect":
-		_, ok := effectStyleNames[value]
-		return ok
-	case "loop":
-		_, ok := loopStyleNames[value]
-		return ok
-	}
-	return false
-}
-
-func RecipeStyleMap(recipe Recipe) map[string]string {
-	return map[string]string{
-		"volume": recipe.Volume.String(),
-		"eq":     recipe.EQ.String(),
-		"filter": recipe.Filter.String(),
-		"effect": recipe.Effect.String(),
-		"loop":   recipe.Loop.String(),
+func (r *Recipe) Apply(overrides map[string]string) {
+	for _, category := range styleCategories {
+		if value, ok := overrides[string(category)]; ok {
+			categories[category].writeStyle(r, value)
+		}
 	}
 }
 
-func overrideValue(overrides StyleOverrides, category string) string {
-	switch category {
-	case "volume":
-		return overrides.Volume
-	case "eq":
-		return overrides.EQ
-	case "filter":
-		return overrides.Filter
-	case "effect":
-		return overrides.Effect
-	case "loop":
-		return overrides.Loop
-	}
-	return ""
+type Resolved struct {
+	Recipe  Recipe
+	Sources map[Category]string
 }
 
-func AutoStyles(a, b *analysis.TrackAnalysis) map[string]string {
-	return RecipeStyleMap(SelectRecipe(a, b))
+var overrideLayers = [...]string{"guild", "song"}
+
+func ResolveStyles(auto *Recipe, guild, song map[string]string) *Resolved {
+	resolved := &Resolved{Recipe: *auto, Sources: make(map[Category]string, len(styleCategories))}
+	for _, category := range styleCategories {
+		resolved.Sources[category] = "auto"
+	}
+
+	for index, overrides := range [...]map[string]string{guild, song} {
+		reportUnknownOverrides(overrides, overrideLayers[index])
+		for _, category := range styleCategories {
+			if value := overrides[string(category)]; value != StyleAuto && ValidStyle(category, value) {
+				resolved.Sources[category] = overrideLayers[index]
+			}
+		}
+		resolved.Recipe.Apply(overrides)
+	}
+	return resolved
+}
+
+func reportUnknownOverrides(overrides map[string]string, layer string) {
+	for key, value := range overrides {
+		if category := Category(key); categories[category].names == nil || !ValidStyle(category, value) {
+			logger.Errorf("Ignoring the unknown AutoMix %s override %s=%s", layer, key, value)
+		}
+	}
+}
+
+func ResolveSettings(overrides map[string]string) Settings {
+	var settings Settings
+	for _, category := range settingCategories {
+		if value, ok := overrides[string(category)]; ok {
+			categories[category].writeSetting(&settings, value)
+		}
+	}
+	return settings
 }
 
 func CrossfadeFrames(autoMix bool, autoMixBeats int, crossfadeSec float64, a *analysis.TrackAnalysis) (int, float64) {
@@ -158,152 +261,11 @@ func CrossfadeFrames(autoMix bool, autoMixBeats int, crossfadeSec float64, a *an
 	return int(effectiveSec * dsp.FramesPerSecond), effectiveSec
 }
 
-func ClampLoopStyle(loop LoopStyle, periodSec float64, crossfadeFrames int) (LoopStyle, int) {
-	beats := LoopBeatCount(loop)
-	if beats <= 0 || periodSec <= 0 {
-		return LoopNone, 0
+func (r *Resolved) ClampRolls(periodSec float64, frames int) {
+	if schedule, ok := loopSchedules[r.Recipe.Loop]; ok && !schedule.fits(periodSec, frames) {
+		r.Recipe.Loop = LoopNone
 	}
-	frames := int(math.Round(float64(beats) * periodSec * dsp.FramesPerSecond))
-	if frames < 1 || frames*2 > crossfadeFrames {
-		return LoopNone, 0
+	if schedule, ok := incomingSchedules[r.Recipe.In.FX]; ok && !schedule.fits(periodSec, frames) {
+		r.Recipe.In.FX = FXNone
 	}
-	return loop, int(math.Round(float64(beats) * periodSec * dsp.SampleRate))
-}
-
-func layerTransitionStyles(base Recipe, guild, song StyleOverrides) (Recipe, map[string]string, map[string]string) {
-	recipe := base
-	source := make(map[string]string, len(styleOrder))
-	for category := range styleOrder {
-		source[category] = "auto"
-	}
-
-	for _, layer := range []struct {
-		name      string
-		overrides StyleOverrides
-	}{{"guild", guild}, {"song", song}} {
-		for category := range styleOrder {
-			value := overrideValue(layer.overrides, category)
-			if value == "" || value == StyleAuto || !ValidStyle(category, value) {
-				continue
-			}
-			source[category] = layer.name
-		}
-		recipe = ApplyStyleOverrides(recipe, layer.overrides)
-	}
-
-	return recipe, RecipeStyleMap(recipe), source
-}
-
-func ResolveStyles(a, b *analysis.TrackAnalysis, autoSelect bool, guild, song StyleOverrides) (Recipe, map[string]string, map[string]string) {
-	base := DefaultRecipe()
-	if autoSelect {
-		base = SelectRecipe(a, b)
-	}
-	return layerTransitionStyles(base, guild, song)
-}
-
-func ResolveOutroStyles(a *analysis.TrackAnalysis, autoSelect bool, guild, song StyleOverrides) (Recipe, map[string]string, map[string]string) {
-	base := DefaultRecipe()
-	if autoSelect {
-		base = selectOutroRecipe(a)
-	}
-	return layerTransitionStyles(base, guild, song)
-}
-
-func AutoOutroStyles(a *analysis.TrackAnalysis) map[string]string {
-	return RecipeStyleMap(selectOutroRecipe(a))
-}
-
-func ApplyStyleOverrides(recipe Recipe, overrides StyleOverrides) Recipe {
-	if style, ok := volumeStyleNames[overrides.Volume]; ok {
-		recipe.Volume = style
-	}
-	if style, ok := eqStyleNames[overrides.EQ]; ok {
-		recipe.EQ = style
-	}
-	if style, ok := filterStyleNames[overrides.Filter]; ok {
-		recipe.Filter = style
-	}
-	if style, ok := effectStyleNames[overrides.Effect]; ok {
-		recipe.Effect = style
-	}
-	if style, ok := loopStyleNames[overrides.Loop]; ok {
-		recipe.Loop = style
-	}
-	return recipe
-}
-
-func LoopBeatCount(style LoopStyle) int {
-	switch style {
-	case LoopOneBeat:
-		return 1
-	case LoopTwoBeats:
-		return 2
-	case LoopFourBeats:
-		return 4
-	case LoopEightBeats:
-		return 8
-	}
-	return 0
-}
-
-func selectOutroRecipe(a *analysis.TrackAnalysis) Recipe {
-	recipe := DefaultRecipe()
-	recipe.Filter = FilterLowPassOut
-
-	if a == nil || a.BPM <= 0 {
-		recipe.Effect = EffectReverbCutEnd
-		return recipe
-	}
-	if a.PeriodSec > 0 {
-		recipe.EQ = EQEndBassSwap
-		recipe.Effect = EffectEchoHalfCutEnd
-		return recipe
-	}
-
-	recipe.Effect = EffectReverbOutEnd
-	return recipe
-}
-
-func SelectRecipe(a, b *analysis.TrackAnalysis) Recipe {
-	recipe := DefaultRecipe()
-	if a == nil || b == nil || a.BPM <= 0 || b.BPM <= 0 {
-		return recipe
-	}
-
-	bpmDelta := analysis.TempoDelta(a.BPM, b.BPM)
-	gridSolid := a.PeriodSec > 0 && b.PeriodSec > 0
-	distance := analysis.CamelotDistance(a, b)
-	harmonic := distance >= 0 && distance <= 1
-
-	switch {
-	case bpmDelta < bpmMatchTolerance && harmonic:
-		recipe.Volume = VolumeOverlap
-		recipe.EQ = EQThreeBandFade
-	case bpmDelta < bpmMatchTolerance:
-		recipe.Volume = VolumeSmoothCrossfade
-		recipe.EQ = EQCenterBassSwap
-		recipe.Filter = FilterLowPassInHighPassOut
-	case bpmDelta < bpmLooseTolerance && harmonic:
-		recipe.Volume = VolumeSmoothCrossfade
-		recipe.EQ = EQCenterBassSwap
-		recipe.Filter = FilterLowPassIn
-	case bpmDelta < bpmLooseTolerance:
-		recipe.Volume = VolumeSmoothCrossfade
-		recipe.EQ = EQEndBassSwap
-		recipe.Filter = FilterLowPassInOut
-		recipe.Effect = EffectReverbOutEnd
-	case gridSolid:
-		recipe.Volume = VolumeFadeInCutOut
-		recipe.EQ = EQStartBassSwap
-		recipe.Filter = FilterLowPassOut
-		recipe.Effect = EffectEchoHalfCutEnd
-		recipe.Loop = LoopFourBeats
-	default:
-		recipe.Volume = VolumeFadeInCutOut
-		recipe.Filter = FilterLowPassOut
-		recipe.Effect = EffectReverbCutEnd
-	}
-
-	return recipe
 }

@@ -23,23 +23,17 @@ func GetTrimRange(guildID string) (int, int) {
 
 func fadeSettingsFromQueue(q *queue.Queue) fadeSettings {
 	return fadeSettings{
-		fadeIn:       q.FadeIn,
-		fadeOut:      q.FadeOut,
-		autoMix:      q.AutoMix,
-		crossfade:    q.Crossfade || q.AutoMix,
-		trimSilence:  q.TrimSilence || q.AutoMix,
-		fadeInSec:    q.FadeInDuration,
-		fadeOutSec:   q.FadeOutDuration,
-		crossfadeSec: q.CrossfadeDuration,
-		autoMixBeats: q.AutoMixBeats,
-		repeatMode:   q.RepeatMode,
-		styleOverrides: transition.StyleOverrides{
-			Volume: q.AutoMixStyleVolume,
-			EQ:     q.AutoMixStyleEQ,
-			Filter: q.AutoMixStyleFilter,
-			Effect: q.AutoMixStyleEffect,
-			Loop:   q.AutoMixStyleLoop,
-		},
+		fadeIn:         q.FadeIn,
+		fadeOut:        q.FadeOut,
+		autoMix:        q.AutoMix,
+		crossfade:      q.Crossfade || q.AutoMix,
+		trimSilence:    q.TrimSilence || q.AutoMix,
+		fadeInSec:      q.FadeInDuration,
+		fadeOutSec:     q.FadeOutDuration,
+		crossfadeSec:   q.CrossfadeDuration,
+		autoMixBeats:   q.AutoMixBeats,
+		repeatMode:     q.RepeatMode,
+		styleOverrides: q.AutoMixOverrides,
 	}
 }
 
@@ -73,21 +67,7 @@ func advanceQueueForAutoMix(player *GuildPlayer, song *queue.Song, crossfade *cr
 	}
 	var repeatSong *queue.Song
 	if repeatMode != queue.RepeatOff && !song.IsLive {
-		repeatSong = &queue.Song{
-			URL:                song.URL,
-			Title:              song.Title,
-			Duration:           song.Duration,
-			Thumbnail:          song.Thumbnail,
-			Uploader:           song.Uploader,
-			RequestedByID:      song.RequestedByID,
-			RequestedByTag:     song.RequestedByTag,
-			IsLive:             song.IsLive,
-			AutoMixStyleVolume: song.AutoMixStyleVolume,
-			AutoMixStyleEQ:     song.AutoMixStyleEQ,
-			AutoMixStyleFilter: song.AutoMixStyleFilter,
-			AutoMixStyleEffect: song.AutoMixStyleEffect,
-			AutoMixStyleLoop:   song.AutoMixStyleLoop,
-		}
+		repeatSong = repeatCopyOf(song)
 	}
 
 	if err := queue.RemoveFirstSong(guildID); err != nil {
@@ -103,7 +83,7 @@ func advanceQueueForAutoMix(player *GuildPlayer, song *queue.Song, crossfade *cr
 
 	player.mu.Lock()
 	player.AutoMixAdvanced = true
-	player.PlaybackStart = time.Now().Add(-time.Duration(crossfade.startOffsetSec * float64(time.Second)))
+	player.PlaybackStart = time.Now().Add(-time.Duration(crossfade.bSeekSec * float64(time.Second)))
 	player.mu.Unlock()
 
 	callOnSongStart(guildID)
@@ -545,6 +525,7 @@ func (s *playbackSession) planEndOfStream() {
 	}
 
 	if es.Analysis != nil {
+		es.Analysis.Offset = float64(s.baseOffsetMs)/1000 + float64(es.TailStartFrame)/dsp.FramesPerSecond
 		if saveErr := analysis.SaveTrackAnalysis(s.song.URL, analysis.SegmentTail, es.Analysis); saveErr != nil {
 			logger.Warnf("Failed to save tail analysis for %s: %v", s.song.Title, saveErr)
 		}
@@ -558,14 +539,18 @@ func (s *playbackSession) planEndOfStream() {
 	es = adjustEndStateForOffset(es, s.frameOffset)
 	s.endStateAdj = es
 
-	planned := s.crossfade.plan(s.player, es, s.sentFrames, s.fade, s.normalization, s.bitrate)
+	planned := s.crossfade.plan(s.player, es, s.sentFrames, s.originSec(), &s.fade, s.normalization, s.bitrate)
 	if !planned {
-		planned = s.outro.plan(s.player, es, s.sentFrames, s.fade)
+		planned = s.outro.plan(s.player, es, s.sentFrames, &s.fade)
 	}
 	if !planned && s.fade.fadeOut {
 		s.fadeOutStartFrame, s.fadeOutFrames = planFadeOutWindow(es.TotalFrames-es.SilentTailFrames, s.sentFrames, s.fade.fadeOutSec)
 		logger.Debugf("Fade-out window planned: start frame %d, %d frames (total %d, sent %d) for guild: %s", s.fadeOutStartFrame, s.fadeOutFrames, es.TotalFrames, s.sentFrames, s.guildID)
 	}
+}
+
+func (s *playbackSession) originSec() float64 {
+	return float64(s.baseOffsetMs)/1000 + float64(s.frameOffset)/dsp.FramesPerSecond
 }
 
 func (s *playbackSession) readyToReplan() bool {
@@ -578,7 +563,7 @@ func (s *playbackSession) readyToReplan() bool {
 func (s *playbackSession) replanTransition() {
 	go preCacheNext(s.guildID, s.bitrate)
 
-	if s.crossfade.plan(s.player, s.endStateAdj, s.sentFrames, s.fade, s.normalization, s.bitrate) {
+	if s.crossfade.plan(s.player, s.endStateAdj, s.sentFrames, s.originSec(), &s.fade, s.normalization, s.bitrate) {
 		if s.fadeOutFrames > 0 {
 			logger.Debugf("Fade-out window cleared, crossfade armed for guild: %s", s.guildID)
 		}
@@ -591,7 +576,7 @@ func (s *playbackSession) replanTransition() {
 		return
 	}
 
-	if !s.outro.armed && s.outro.plan(s.player, s.endStateAdj, s.sentFrames, s.fade) {
+	if !s.outro.armed && s.outro.plan(s.player, s.endStateAdj, s.sentFrames, &s.fade) {
 		if s.fadeOutFrames > 0 {
 			logger.Debugf("Fade-out window cleared, outro armed for guild: %s", s.guildID)
 		}

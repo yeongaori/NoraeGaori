@@ -9,42 +9,64 @@ const (
 type VolumeStyle int
 
 const (
-	VolumeSmoothCrossfade VolumeStyle = iota
-	VolumeOverlap
-	VolumeFadeInFadeOut
-	VolumeCutInFadeOut
-	VolumeFadeInCutOut
+	VolumeCrossShape VolumeStyle = iota
+	VolumeCrossfade
+	VolumeSlow
+	VolumeFast
+	VolumeFastAtEdge
+	VolumeSemiFastAtEnd
+	VolumeSwitcharoo
 )
 
 type EQStyle int
 
 const (
 	EQNone EQStyle = iota
-	EQCenterBassSwap
-	EQEndBassSwap
-	EQStartBassSwap
-	EQThreeBandFade
-	EQQuickBass
+	EQThreeBand
+	EQBassFade
+	EQBassCrossfade
+	EQBassFast
+	EQBassAndMidFast
+	EQMidFast
+	EQHiFast
+	EQBassFastAtEnd
+	EQBassFastAtStart
+	EQBassFastOneBarFromEnd
 )
 
 type FilterStyle int
 
 const (
 	FilterNone FilterStyle = iota
-	FilterLowPassOut
-	FilterLowPassIn
-	FilterLowPassInOut
-	FilterLowPassInHighPassOut
+	FilterLowPass
+	FilterHighPass
 )
 
-type EffectStyle int
+type FXStyle int
 
 const (
-	EffectNone EffectStyle = iota
-	EffectReverbOutCenter
-	EffectReverbCutEnd
-	EffectReverbOutEnd
-	EffectEchoHalfCutEnd
+	FXNone FXStyle = iota
+	FXReverbOutCenter
+	FXReverbCutEnd
+	FXReverbOutEnd
+	FXEchoHalfCutEnd
+	FXEchoHalfOutEnd
+	FXEchoThreeQuarterCutEnd
+	FXEchoThreeQuarterOutEnd
+	FXEchoBeatCutEnd
+	FXEchoBeatOutEnd
+	FXDelayHalfCutEnd
+	FXDelayThreeQuarterCutEnd
+	FXNoise
+	FXNoiseAtEnd
+	FXDelayRamp
+	FXDelayRampAtEnd
+	FXDelayOneBar
+	FXDelayOneBarAtEnd
+	FXPhaser
+	FXBitcrusher
+	FXRoll
+	FXSlipRoll
 )
 
 type LoopStyle int
@@ -55,78 +77,193 @@ const (
 	LoopTwoBeats
 	LoopFourBeats
 	LoopEightBeats
+	LoopSixteenBeats
+	LoopRoll
+	LoopRollAtEnd
+	LoopSlipRoll
+	LoopSlipRollAtEnd
+	LoopSpinbackOneBeat
+	LoopSpinbackTwoBeats
+	LoopSpinbackFourBeats
+	LoopVinylStopCenter
+	LoopVinylStopCenterShort
+	LoopVinylStopEnd
+	LoopVinylStopEndShort
+)
+
+type BeatmatchMode int
+
+const (
+	BeatmatchAuto BeatmatchMode = iota
+	BeatmatchOn
+	BeatmatchOff
 )
 
 const (
-	StyleAuto               = "auto"
-	EQKillDB                = -40.0
-	EQCutDB                 = -15.0
-	EQLowFreq               = 160.0
-	EQMidFreq               = 1000.0
-	EQHighFreq              = 4000.0
-	EQShelfQ                = 0.707
-	EQMidQ                  = 0.9
-	filterQ                 = 0.707
-	filterOpenFreq          = 20000.0
-	filterClosedFreq        = 400.0
-	highPassRestFreq        = 25.0
-	highPassPeakFreq        = 1200.0
-	filterOpenThreshold     = 18000.0
-	filterRestThreshold     = 30.0
-	overlapHeadroom         = 0.85
-	cutBeatFraction         = 0.25
-	paramBlockSamples       = 64
-	ReverbTailFrames        = 140
-	EchoTailFrames          = 170
-	HandoffReverbTailFrames = 55
-	HandoffEchoTailFrames   = 50
-	echoFeedback            = 0.55
-	echoWet                 = 0.85
-	reverbMaxWet            = 0.9
-	minBeatFraction         = 0.02
-	maxBeatFraction         = 0.5
-	defaultBeatFraction     = 0.1
-	bpmMatchTolerance       = 0.03
-	bpmLooseTolerance       = 0.08
+	StyleAuto         = "auto"
+	paramBlockSamples = 64
+	minimumBars       = 2
+	quarterBeatParts  = 16
+	tickBeatParts     = 256
+	eqUnity           = 0.5
+	eqCut             = 0.2
+	eqKill            = 0.0
+	wetPeak           = 0.5
+	wetCutEnd         = 0.99999
+	noiseColourStart  = 0.62
+	noiseColourEnd    = 0.83
 )
 
-var volumeStyleNames = map[string]VolumeStyle{
-	"smooth":         VolumeSmoothCrossfade,
-	"overlap":        VolumeOverlap,
-	"fadein_fadeout": VolumeFadeInFadeOut,
-	"cutin_fadeout":  VolumeCutInFadeOut,
-	"fadein_cutout":  VolumeFadeInCutOut,
+type named[T comparable] struct {
+	name  string
+	value T
 }
 
-var eqStyleNames = map[string]EQStyle{
-	"none":             EQNone,
-	"center_bass_swap": EQCenterBassSwap,
-	"end_bass_swap":    EQEndBassSwap,
-	"start_bass_swap":  EQStartBassSwap,
-	"three_band_fade":  EQThreeBandFade,
-	"quick_bass":       EQQuickBass,
+type catalogue[T comparable] []named[T]
+
+func (c catalogue[T]) lookup(name string) (T, bool) {
+	for _, entry := range c {
+		if entry.name == name {
+			return entry.value, true
+		}
+	}
+	var zero T
+	return zero, false
 }
 
-var filterStyleNames = map[string]FilterStyle{
-	"none":                    FilterNone,
-	"lowpass_out":             FilterLowPassOut,
-	"lowpass_in":              FilterLowPassIn,
-	"lowpass_in_out":          FilterLowPassInOut,
-	"lowpass_in_highpass_out": FilterLowPassInHighPassOut,
+func (c catalogue[T]) nameOf(value T) string {
+	for _, entry := range c {
+		if entry.value == value {
+			return entry.name
+		}
+	}
+	return StyleAuto
 }
 
-var effectStyleNames = map[string]EffectStyle{
-	"none":              EffectNone,
-	"reverb_out_center": EffectReverbOutCenter,
-	"reverb_cut_end":    EffectReverbCutEnd,
-	"reverb_out_end":    EffectReverbOutEnd,
-	"echo_half_cut_end": EffectEchoHalfCutEnd,
+func (c catalogue[T]) names() []string {
+	names := make([]string, 0, len(c))
+	for _, entry := range c {
+		names = append(names, entry.name)
+	}
+	return names
 }
 
-var loopStyleNames = map[string]LoopStyle{
-	"none":        LoopNone,
-	"one_beat":    LoopOneBeat,
-	"two_beats":   LoopTwoBeats,
-	"four_beats":  LoopFourBeats,
-	"eight_beats": LoopEightBeats,
+var volumeOutNames = catalogue[VolumeStyle]{
+	{"crossfade", VolumeCrossfade},
+	{"cross_shape", VolumeCrossShape},
+	{"slow", VolumeSlow},
+	{"fast", VolumeFast},
+	{"fast_at_end", VolumeFastAtEdge},
+	{"semi_fast_at_end", VolumeSemiFastAtEnd},
+	{"switcharoo", VolumeSwitcharoo},
+}
+
+var volumeInNames = catalogue[VolumeStyle]{
+	{"crossfade", VolumeCrossfade},
+	{"cross_shape", VolumeCrossShape},
+	{"slow", VolumeSlow},
+	{"fast", VolumeFast},
+	{"fast_at_start", VolumeFastAtEdge},
+	{"switcharoo", VolumeSwitcharoo},
+}
+
+var eqInNames = catalogue[EQStyle]{
+	{"none", EQNone},
+	{"three_band", EQThreeBand},
+	{"bass_crossfade", EQBassCrossfade},
+	{"bass_fast", EQBassFast},
+	{"bass_and_mid_fast", EQBassAndMidFast},
+	{"mid_fast", EQMidFast},
+	{"hi_fast", EQHiFast},
+	{"bass_fast_at_end", EQBassFastAtEnd},
+	{"bass_fast_at_start", EQBassFastAtStart},
+}
+
+var eqOutNames = catalogue[EQStyle]{
+	{"none", EQNone},
+	{"three_band", EQThreeBand},
+	{"bass_fade", EQBassFade},
+	{"bass_crossfade", EQBassCrossfade},
+	{"bass_fast", EQBassFast},
+	{"bass_and_mid_fast", EQBassAndMidFast},
+	{"mid_fast", EQMidFast},
+	{"hi_fast", EQHiFast},
+	{"bass_fast_at_end", EQBassFastAtEnd},
+	{"bass_fast_at_start", EQBassFastAtStart},
+	{"bass_fast_one_bar_from_end", EQBassFastOneBarFromEnd},
+}
+
+var filterNames = catalogue[FilterStyle]{
+	{"none", FilterNone},
+	{"low_pass", FilterLowPass},
+	{"high_pass", FilterHighPass},
+}
+
+var fxOutNames = catalogue[FXStyle]{
+	{"none", FXNone},
+	{"reverb_out_center", FXReverbOutCenter},
+	{"reverb_cut_end", FXReverbCutEnd},
+	{"reverb_out_end", FXReverbOutEnd},
+	{"echo_half_cut_end", FXEchoHalfCutEnd},
+	{"echo_half_out_end", FXEchoHalfOutEnd},
+	{"echo_three_quarter_cut_end", FXEchoThreeQuarterCutEnd},
+	{"echo_three_quarter_out_end", FXEchoThreeQuarterOutEnd},
+	{"echo_beat_cut_end", FXEchoBeatCutEnd},
+	{"echo_beat_out_end", FXEchoBeatOutEnd},
+	{"delay_half_cut_end", FXDelayHalfCutEnd},
+	{"delay_three_quarter_cut_end", FXDelayThreeQuarterCutEnd},
+	{"noise", FXNoise},
+	{"noise_at_end", FXNoiseAtEnd},
+	{"delay_ramp", FXDelayRamp},
+	{"delay_ramp_at_end", FXDelayRampAtEnd},
+	{"delay_one_bar", FXDelayOneBar},
+	{"delay_one_bar_at_end", FXDelayOneBarAtEnd},
+	{"phaser", FXPhaser},
+	{"bitcrusher", FXBitcrusher},
+}
+
+var fxInNames = catalogue[FXStyle]{
+	{"none", FXNone},
+	{"roll", FXRoll},
+	{"slip_roll", FXSlipRoll},
+	{"delay_one_bar", FXDelayOneBar},
+	{"delay_one_bar_at_end", FXDelayOneBarAtEnd},
+	{"phaser", FXPhaser},
+	{"bitcrusher", FXBitcrusher},
+}
+
+var loopNames = catalogue[LoopStyle]{
+	{"none", LoopNone},
+	{"one_beat", LoopOneBeat},
+	{"two_beats", LoopTwoBeats},
+	{"four_beats", LoopFourBeats},
+	{"eight_beats", LoopEightBeats},
+	{"sixteen_beats", LoopSixteenBeats},
+	{"roll", LoopRoll},
+	{"roll_at_end", LoopRollAtEnd},
+	{"slip_roll", LoopSlipRoll},
+	{"slip_roll_at_end", LoopSlipRollAtEnd},
+	{"spinback_one_beat", LoopSpinbackOneBeat},
+	{"spinback_two_beats", LoopSpinbackTwoBeats},
+	{"spinback_four_beats", LoopSpinbackFourBeats},
+	{"vinyl_stop_center", LoopVinylStopCenter},
+	{"vinyl_stop_center_short", LoopVinylStopCenterShort},
+	{"vinyl_stop_end", LoopVinylStopEnd},
+	{"vinyl_stop_end_short", LoopVinylStopEndShort},
+}
+
+var presetNames = catalogue[int]{
+	{"1", 1}, {"2", 2}, {"3", 3}, {"4", 4}, {"5", 5}, {"9", 9}, {"10", 10}, {"11", 11}, {"17", 17}, {"18", 18},
+}
+
+var lengthNames = catalogue[int]{
+	{"two_bars", 2},
+	{"four_bars", 4},
+	{"eight_bars", 8},
+	{"sixteen_bars", 16},
+}
+
+var beatmatchNames = catalogue[BeatmatchMode]{
+	{"on", BeatmatchOn},
+	{"off", BeatmatchOff},
 }

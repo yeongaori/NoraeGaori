@@ -42,6 +42,7 @@ func createLegacySchema(t *testing.T, dbPath string) {
 		`CREATE TABLE guild_settings (guild_id TEXT PRIMARY KEY)`,
 		`CREATE TABLE queues (guild_id TEXT PRIMARY KEY, text_channel_id TEXT NOT NULL, voice_channel_id TEXT NOT NULL)`,
 		`CREATE TABLE songs (id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id TEXT NOT NULL, url TEXT NOT NULL, title TEXT NOT NULL, queue_position INTEGER NOT NULL)`,
+		`CREATE TABLE track_analysis (url TEXT NOT NULL, segment TEXT NOT NULL, bpm REAL, period_sec REAL, first_beat REAL, duration REAL, tonic INTEGER, minor INTEGER, key_confidence REAL, downbeat_phase INTEGER, analysis_version INTEGER NOT NULL, analyzed_at INTEGER NOT NULL, PRIMARY KEY (url, segment))`,
 	}
 
 	for _, statement := range statements {
@@ -82,17 +83,12 @@ var migratedColumns = map[string][]string{
 		"show_started_track", "normalization", "language", "prefix",
 		"fadein", "fadeout", "automix", "fade_on_stop",
 		"fadein_duration", "fadeout_duration", "automix_beats",
-		"crossfade", "crossfade_duration", "trim_silence",
-		"automix_style_volume", "automix_style_eq", "automix_style_filter",
-		"automix_style_effect", "automix_style_loop",
+		"crossfade", "crossfade_duration", "trim_silence", "automix_overrides",
 		"auto_leave", "auto_pause", "auto_resume",
 	},
-	"queues": {"paused", "playing", "loading"},
-	"songs": {
-		"seek_time", "uploader", "is_live",
-		"automix_style_volume", "automix_style_eq", "automix_style_filter",
-		"automix_style_effect", "automix_style_loop",
-	},
+	"queues":         {"paused", "playing", "loading"},
+	"songs":          {"seek_time", "uploader", "is_live", "automix_overrides"},
+	"track_analysis": {"offset_sec", "beat_strength", "bar_offsets"},
 }
 
 func assertMigratedColumns(t *testing.T, db *sql.DB) {
@@ -222,17 +218,17 @@ func TestMigrationsApplyColumnDefaults(t *testing.T) {
 		t.Fatalf("failed to insert guild settings: %v", err)
 	}
 
-	var style string
+	var overrides string
 	var beats int
-	if err := db.QueryRow("SELECT automix_style_volume, automix_beats FROM guild_settings WHERE guild_id = ?", "guild").Scan(&style, &beats); err != nil {
+	if err := db.QueryRow("SELECT automix_overrides, automix_beats FROM guild_settings WHERE guild_id = ?", "guild").Scan(&overrides, &beats); err != nil {
 		t.Fatalf("failed to read migrated defaults: %v", err)
 	}
 
-	if style != "auto" {
-		t.Errorf("automix_style_volume defaulted to %q, want \"auto\"", style)
+	if overrides != "" {
+		t.Errorf("automix_overrides defaulted to %q, want none", overrides)
 	}
-	if beats != 16 {
-		t.Errorf("automix_beats defaulted to %d, want 16", beats)
+	if beats != 64 {
+		t.Errorf("automix_beats defaulted to %d, want 64", beats)
 	}
 
 	for _, column := range []string{"auto_leave", "auto_pause", "auto_resume"} {

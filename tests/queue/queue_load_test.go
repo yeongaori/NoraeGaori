@@ -32,8 +32,8 @@ func TestLoadQueueFromDBAppliesEveryDefault(t *testing.T) {
 	if q.Volume != config.DefaultVolume() {
 		t.Errorf("Volume = %g, want the configured default %g", q.Volume, config.DefaultVolume())
 	}
-	if q.AutoMixBeats != 16 {
-		t.Errorf("AutoMixBeats = %d, want 16", q.AutoMixBeats)
+	if q.AutoMixBeats != 64 {
+		t.Errorf("AutoMixBeats = %d, want 64", q.AutoMixBeats)
 	}
 	if q.FadeInDuration != 3 {
 		t.Errorf("FadeInDuration = %g, want 3", q.FadeInDuration)
@@ -45,17 +45,8 @@ func TestLoadQueueFromDBAppliesEveryDefault(t *testing.T) {
 		t.Errorf("CrossfadeDuration = %g, want 8", q.CrossfadeDuration)
 	}
 
-	styles := map[string]string{
-		"AutoMixStyleVolume": q.AutoMixStyleVolume,
-		"AutoMixStyleEQ":     q.AutoMixStyleEQ,
-		"AutoMixStyleFilter": q.AutoMixStyleFilter,
-		"AutoMixStyleEffect": q.AutoMixStyleEffect,
-		"AutoMixStyleLoop":   q.AutoMixStyleLoop,
-	}
-	for name, value := range styles {
-		if value != "auto" {
-			t.Errorf("%s = %q, want %q", name, value, "auto")
-		}
+	if len(q.AutoMixOverrides) != 0 {
+		t.Errorf("AutoMixOverrides = %v, want none so every style stays auto", q.AutoMixOverrides)
 	}
 
 	flags := map[string]bool{
@@ -95,10 +86,8 @@ func TestLoadQueueFromDBMapsEveryColumnToItsOwnField(t *testing.T) {
 		guild_id, volume, repeat, sponsorblock, show_started_track, normalization,
 		fadein, fadeout, automix, fade_on_stop,
 		fadein_duration, fadeout_duration, automix_beats,
-		crossfade, crossfade_duration, trim_silence,
-		automix_style_volume, automix_style_eq, automix_style_filter,
-		automix_style_effect, automix_style_loop
-	) VALUES (?, 42, 2, 1, 0, 1, 1, 0, 1, 1, 1.5, 2.5, 32, 1, 9.5, 1, 'sv', 'se', 'sf', 'sx', 'sl')`, "guild1")
+		crossfade, crossfade_duration, trim_silence, automix_overrides
+	) VALUES (?, 42, 2, 1, 0, 1, 1, 0, 1, 1, 1.5, 2.5, 32, 1, 9.5, 1, 'eq_out=hi_fast,fx_in=phaser')`, "guild1")
 	if err != nil {
 		t.Fatalf("failed to seed distinct settings: %v", err)
 	}
@@ -163,24 +152,8 @@ func TestLoadQueueFromDBMapsEveryColumnToItsOwnField(t *testing.T) {
 		t.Errorf("Paused/Playing/Loading = %v/%v/%v, want all true", q.Paused, q.Playing, q.Loading)
 	}
 
-	styles := map[string]string{
-		"AutoMixStyleVolume": q.AutoMixStyleVolume,
-		"AutoMixStyleEQ":     q.AutoMixStyleEQ,
-		"AutoMixStyleFilter": q.AutoMixStyleFilter,
-		"AutoMixStyleEffect": q.AutoMixStyleEffect,
-		"AutoMixStyleLoop":   q.AutoMixStyleLoop,
-	}
-	want := map[string]string{
-		"AutoMixStyleVolume": "sv",
-		"AutoMixStyleEQ":     "se",
-		"AutoMixStyleFilter": "sf",
-		"AutoMixStyleEffect": "sx",
-		"AutoMixStyleLoop":   "sl",
-	}
-	for name, value := range styles {
-		if value != want[name] {
-			t.Errorf("%s = %q, want %q", name, value, want[name])
-		}
+	if len(q.AutoMixOverrides) != 2 || q.AutoMixOverrides["eq_out"] != "hi_fast" || q.AutoMixOverrides["fx_in"] != "phaser" {
+		t.Errorf("AutoMixOverrides = %v, want eq_out=hi_fast and fx_in=phaser", q.AutoMixOverrides)
 	}
 }
 

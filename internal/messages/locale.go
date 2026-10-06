@@ -86,6 +86,14 @@ type AutoMixPanelMessages struct {
 	SourceSong           string            `json:"source_song"`
 	SongGone             string            `json:"song_gone"`
 	UpdateFailed         string            `json:"update_failed"`
+	SettingsTab          string            `json:"settings_tab"`
+	MixingButton         string            `json:"mixing_button"`
+	OverlapField         string            `json:"overlap_field"`
+	BarsFormat           string            `json:"bars_format"`
+	SecondsFormat        string            `json:"seconds_format"`
+	Beatmatched          string            `json:"beatmatched"`
+	NotBeatmatched       string            `json:"not_beatmatched"`
+	EndsNaturally        string            `json:"ends_naturally"`
 	CategoryLabels       map[string]string `json:"category_labels"`
 	StyleLabels          map[string]string `json:"style_labels"`
 }
@@ -551,6 +559,13 @@ func Lang(guildID ...string) string {
 		return active.lang
 	}
 	return lang
+}
+
+func ForLang(lang string) *Locale {
+	if loc := getCachedLocale(lang); loc != nil {
+		return loc
+	}
+	return activeLocale.Load().locale
 }
 
 func AvailableLocales() []string {

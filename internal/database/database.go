@@ -97,10 +97,13 @@ func createTables() error {
 		period_sec REAL,
 		first_beat REAL,
 		duration REAL,
+		offset_sec REAL DEFAULT 0,
 		tonic INTEGER,
 		minor INTEGER,
 		key_confidence REAL,
 		downbeat_phase INTEGER,
+		beat_strength REAL DEFAULT 0,
+		bar_offsets TEXT DEFAULT '',
 		analysis_version INTEGER NOT NULL,
 		analyzed_at INTEGER NOT NULL,
 		PRIMARY KEY (url, segment)
@@ -152,52 +155,25 @@ func runMigrations() error {
 		{"guild_settings", "fade_on_stop", "INTEGER DEFAULT 0"},
 		{"guild_settings", "fadein_duration", "REAL DEFAULT 3"},
 		{"guild_settings", "fadeout_duration", "REAL DEFAULT 3"},
-		{"guild_settings", "automix_beats", "INTEGER DEFAULT 16"},
+		{"guild_settings", "automix_beats", "INTEGER DEFAULT 64"},
 		{"guild_settings", "crossfade", "INTEGER DEFAULT 0"},
 		{"guild_settings", "crossfade_duration", "REAL DEFAULT 8"},
 		{"guild_settings", "trim_silence", "INTEGER DEFAULT 0"},
-		{"guild_settings", "automix_style_volume", "TEXT DEFAULT 'auto'"},
-		{"guild_settings", "automix_style_eq", "TEXT DEFAULT 'auto'"},
-		{"guild_settings", "automix_style_filter", "TEXT DEFAULT 'auto'"},
-		{"guild_settings", "automix_style_effect", "TEXT DEFAULT 'auto'"},
-		{"guild_settings", "automix_style_loop", "TEXT DEFAULT 'auto'"},
-		{"songs", "automix_style_volume", "TEXT DEFAULT 'auto'"},
-		{"songs", "automix_style_eq", "TEXT DEFAULT 'auto'"},
-		{"songs", "automix_style_filter", "TEXT DEFAULT 'auto'"},
-		{"songs", "automix_style_effect", "TEXT DEFAULT 'auto'"},
-		{"songs", "automix_style_loop", "TEXT DEFAULT 'auto'"},
+		{"guild_settings", "automix_overrides", "TEXT DEFAULT ''"},
+		{"songs", "automix_overrides", "TEXT DEFAULT ''"},
 		{"guild_settings", "auto_leave", "INTEGER DEFAULT 1"},
 		{"guild_settings", "auto_pause", "INTEGER DEFAULT 1"},
 		{"guild_settings", "auto_resume", "INTEGER DEFAULT 1"},
+		{"track_analysis", "offset_sec", "REAL DEFAULT 0"},
+		{"track_analysis", "beat_strength", "REAL DEFAULT 0"},
+		{"track_analysis", "bar_offsets", "TEXT DEFAULT ''"},
 	}
 
 	for _, m := range migrations {
-
-		query := fmt.Sprintf("PRAGMA table_info(%s)", m.table)
-		rows, err := DB.Query(query)
+		columnExists, err := ColumnExists(m.table, m.column)
 		if err != nil {
-			return fmt.Errorf("failed to get table info for %s: %w", m.table, err)
+			return err
 		}
-
-		columnExists := false
-		for rows.Next() {
-			var cid int
-			var name, typ string
-			var notNull, dfltValue, pk interface{}
-			if err := rows.Scan(&cid, &name, &typ, &notNull, &dfltValue, &pk); err != nil {
-				rows.Close()
-				return fmt.Errorf("failed to scan column info: %w", err)
-			}
-			if name == m.column {
-				columnExists = true
-				break
-			}
-		}
-		if err := rows.Err(); err != nil {
-			rows.Close()
-			return fmt.Errorf("failed to read column info for %s: %w", m.table, err)
-		}
-		rows.Close()
 
 		if !columnExists {
 			alterSQL := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", m.table, m.column, m.typ)
@@ -209,6 +185,30 @@ func runMigrations() error {
 	}
 
 	return nil
+}
+
+func ColumnExists(table, column string) (bool, error) {
+	rows, err := DB.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return false, fmt.Errorf("failed to get table info for %s: %w", table, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name, typ string
+		var notNull, dfltValue, pk interface{}
+		if err := rows.Scan(&cid, &name, &typ, &notNull, &dfltValue, &pk); err != nil {
+			return false, fmt.Errorf("failed to scan column info: %w", err)
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, fmt.Errorf("failed to read column info for %s: %w", table, err)
+	}
+	return false, nil
 }
 
 func Close() error {

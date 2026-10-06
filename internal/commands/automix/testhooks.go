@@ -3,7 +3,6 @@
 package automix
 
 import (
-	"noraegaori/internal/audio/analysis"
 	"noraegaori/internal/audio/transition"
 	"noraegaori/internal/queue"
 )
@@ -13,7 +12,10 @@ const HookDiscordSelectLimit = discordSelectLimit
 const HookTransitionPageRoute = transitionPageRoute
 const HookTransitionPickRoute = transitionPickRoute
 const HookTransitionStyleRoute = transitionStyleRoute
+const HookTransitionTabRoute = transitionTabRoute
+const HookMixingSettingsRoute = mixingSettingsRoute
 
+type HookEditorTab = editorTab
 type HookPanelLocation = panelLocation
 type HookPanelState = panelState
 type HookTransitionRow = transitionRow
@@ -25,7 +27,7 @@ type HookPanelLocationFields struct {
 
 type HookPanelStateFields struct {
 	Pairs          []transitionPair
-	GuildOverrides transition.StyleOverrides
+	GuildOverrides map[string]string
 	AutoSelect     bool
 	Crossfade      bool
 	AutoMixBeats   int
@@ -38,18 +40,20 @@ var HookCreateTransitionEditorComponents = createTransitionEditorComponents
 var HookCreateTransitionEditorEmbed = createTransitionEditorEmbed
 var HookCreateTransitionPanelComponents = createTransitionPanelComponents
 var HookCreateTransitionPanelEmbed = createTransitionPanelEmbed
+var HookDescribeRecipe = describeRecipe
 var HookDescribeTrack = describeTrack
+var HookEditorTabs = &editorTabs
+var HookFindTab = findTab
 var HookFindTransitionPair = findTransitionPair
 var HookHydrateTransitionRows = hydrateTransitionRows
 var HookPanelOpenButtons = panelOpenButtons
 var HookPickTransition = pickTransition
-var HookQueueStyleOverrides = queueStyleOverrides
 var HookRegisterPanelRoutes = registerPanelRoutes
 var HookSourceLabel = sourceLabel
-var HookTransitionCategories = &transitionCategories
 var HookTransitionPageCount = transitionPageCount
 var HookTransitionPageSlice = transitionPageSlice
 var HookTransitionPairs = transitionPairs
+var HookTurnEditorTab = turnEditorTab
 var HookTurnTransitionPage = turnTransitionPage
 var HookVoiceChannelBitrate = voiceChannelBitrate
 
@@ -101,26 +105,34 @@ func (pair *transitionPair) HookToSong() **queue.Song {
 	return &pair.toSong
 }
 
-func (pair transitionPair) HookIsOutro() bool {
+func (pair *transitionPair) HookIsOutro() bool {
 	return pair.isOutro()
 }
 
-func (t *transitionRow) HookEffective() *map[string]string {
-	return &t.effective
+func (row *transitionRow) HookResolved() *transition.Resolved {
+	return row.resolved
 }
 
-func (t *transitionRow) HookFromAnalysis() **analysis.TrackAnalysis {
-	return &t.fromAnalysis
+func (row *transitionRow) HookOverlap() *transition.Overlap {
+	return row.overlap
 }
 
-func (t *transitionRow) HookFromAnalyzing() *bool {
-	return &t.fromAnalyzing
+func (row *transitionRow) HookSource(category transition.Category) string {
+	return row.source(category)
 }
 
-func (t *transitionRow) HookSource() *map[string]string {
-	return &t.source
+func (row *transitionRow) HookFromAnalyzing() *bool {
+	return &row.fromAnalyzing
 }
 
-func (t *transitionRow) HookToAnalyzing() *bool {
-	return &t.toAnalyzing
+func (row *transitionRow) HookToAnalyzing() *bool {
+	return &row.toAnalyzing
+}
+
+func (tab *editorTab) HookKey() string {
+	return tab.key
+}
+
+func (tab *editorTab) HookCategories() []transition.Category {
+	return tab.categories
 }

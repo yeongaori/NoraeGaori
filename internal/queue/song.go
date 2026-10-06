@@ -32,11 +32,7 @@ type Song struct {
 	Uploader       string
 	IsLive         bool
 
-	AutoMixStyleVolume string
-	AutoMixStyleEQ     string
-	AutoMixStyleFilter string
-	AutoMixStyleEffect string
-	AutoMixStyleLoop   string
+	AutoMixOverrides map[string]string
 
 	State           SongState
 	RetryCount      int
@@ -134,27 +130,23 @@ func (s *Song) Clone() *Song {
 	defer s.mu.RUnlock()
 
 	clone := &Song{
-		ID:                 s.ID,
-		GuildID:            s.GuildID,
-		URL:                s.URL,
-		Title:              s.Title,
-		Duration:           s.Duration,
-		Thumbnail:          s.Thumbnail,
-		RequestedByID:      s.RequestedByID,
-		RequestedByTag:     s.RequestedByTag,
-		QueuePosition:      s.QueuePosition,
-		SeekTime:           s.SeekTime,
-		Uploader:           s.Uploader,
-		IsLive:             s.IsLive,
-		AutoMixStyleVolume: s.AutoMixStyleVolume,
-		AutoMixStyleEQ:     s.AutoMixStyleEQ,
-		AutoMixStyleFilter: s.AutoMixStyleFilter,
-		AutoMixStyleEffect: s.AutoMixStyleEffect,
-		AutoMixStyleLoop:   s.AutoMixStyleLoop,
-		State:              s.State,
-		RetryCount:         s.RetryCount,
-		AddedAt:            s.AddedAt,
-		StateChangedAt:     s.StateChangedAt,
+		ID:               s.ID,
+		GuildID:          s.GuildID,
+		URL:              s.URL,
+		Title:            s.Title,
+		Duration:         s.Duration,
+		Thumbnail:        s.Thumbnail,
+		RequestedByID:    s.RequestedByID,
+		RequestedByTag:   s.RequestedByTag,
+		QueuePosition:    s.QueuePosition,
+		SeekTime:         s.SeekTime,
+		Uploader:         s.Uploader,
+		IsLive:           s.IsLive,
+		AutoMixOverrides: s.AutoMixOverrides,
+		State:            s.State,
+		RetryCount:       s.RetryCount,
+		AddedAt:          s.AddedAt,
+		StateChangedAt:   s.StateChangedAt,
 	}
 
 	return clone

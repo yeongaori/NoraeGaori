@@ -79,8 +79,8 @@ func failingAudioStream(t *testing.T) {
 	testutil.Swap(t, player.HookNewAudioStream, func(string, []string, bool, func()) (player.HookAudioStream, error) { return nil, errFakeStream })
 }
 
-func crossfadeFade() player.HookFadeSettings {
-	return *player.HookBuildFadeSettings(player.HookFadeSettingsFields{Crossfade: true, CrossfadeSec: 6, RepeatMode: queue.RepeatOff})
+func crossfadeFade() *player.HookFadeSettings {
+	return player.HookBuildFadeSettings(player.HookFadeSettingsFields{Crossfade: true, CrossfadeSec: 6, RepeatMode: queue.RepeatOff})
 }
 
 func crossfadeEndState() *ffmpeg.EndState {
@@ -97,7 +97,7 @@ func TestCrossfadePlanArmsWithTheExpectedFrameMath(t *testing.T) {
 	cs := player.HookNewCrossfadeState()
 	*cs.HookArmed() = false
 
-	if planned := cs.HookPlan(guildPlayer, crossfadeEndState(), 100, crossfadeFade(), false, 128000); !planned {
+	if planned := cs.HookPlan(guildPlayer, crossfadeEndState(), 100, 0, crossfadeFade(), false, 128000); !planned {
 		t.Fatal("plan returned false, want an armed crossfade")
 	}
 
@@ -155,7 +155,7 @@ func TestCrossfadePlanTrimsTheSilentTailFromTheEffectiveEnd(t *testing.T) {
 	es.SilentTailFrames = 500
 
 	cs := player.HookNewCrossfadeState()
-	if planned := cs.HookPlan(player.GetPlayer(guildID), es, 100, crossfadeFade(), false, 128000); !planned {
+	if planned := cs.HookPlan(player.GetPlayer(guildID), es, 100, 0, crossfadeFade(), false, 128000); !planned {
 		t.Fatal("plan returned false, want an armed crossfade")
 	}
 
@@ -174,7 +174,7 @@ func TestCrossfadePlanClampsTheTransitionAheadOfTheCurrentFrame(t *testing.T) {
 	stubAudioStream(t)
 
 	cs := player.HookNewCrossfadeState()
-	if planned := cs.HookPlan(player.GetPlayer(guildID), crossfadeEndState(), 8699, crossfadeFade(), false, 128000); !planned {
+	if planned := cs.HookPlan(player.GetPlayer(guildID), crossfadeEndState(), 8699, 0, crossfadeFade(), false, 128000); !planned {
 		t.Fatal("plan returned false, want an armed crossfade at the boundary")
 	}
 
@@ -190,7 +190,7 @@ func TestCrossfadePlanRefusesEveryGuard(t *testing.T) {
 
 	cases := []struct {
 		name       string
-		fade       player.HookFadeSettings
+		fade       *player.HookFadeSettings
 		endState   *ffmpeg.EndState
 		sentFrames int
 		cacheURL   string
@@ -199,7 +199,7 @@ func TestCrossfadePlanRefusesEveryGuard(t *testing.T) {
 	}{
 		{
 			name:     "neither automix nor crossfade",
-			fade:     *player.HookBuildFadeSettings(player.HookFadeSettingsFields{CrossfadeSec: 6}),
+			fade:     player.HookBuildFadeSettings(player.HookFadeSettingsFields{CrossfadeSec: 6}),
 			cacheURL: "https://example.invalid/next",
 			streamOK: true,
 		},
@@ -212,7 +212,7 @@ func TestCrossfadePlanRefusesEveryGuard(t *testing.T) {
 		},
 		{
 			name:     "repeat single",
-			fade:     *player.HookBuildFadeSettings(player.HookFadeSettingsFields{Crossfade: true, CrossfadeSec: 6, RepeatMode: queue.RepeatSingle}),
+			fade:     player.HookBuildFadeSettings(player.HookFadeSettingsFields{Crossfade: true, CrossfadeSec: 6, RepeatMode: queue.RepeatSingle}),
 			cacheURL: "https://example.invalid/next",
 			streamOK: true,
 		},
@@ -259,7 +259,7 @@ func TestCrossfadePlanRefusesEveryGuard(t *testing.T) {
 			}
 			wasArmed := *cs.HookArmed()
 
-			if planned := cs.HookPlan(player.GetPlayer(guildID), es, testCase.sentFrames, testCase.fade, false, 128000); planned {
+			if planned := cs.HookPlan(player.GetPlayer(guildID), es, testCase.sentFrames, 0, testCase.fade, false, 128000); planned {
 				t.Fatal("plan returned true, want a refusal")
 			}
 			if *cs.HookArmed() != wasArmed {
@@ -285,7 +285,7 @@ func TestCrossfadePlanRefusesAShortNextSong(t *testing.T) {
 	stubAudioStream(t)
 
 	cs := player.HookNewCrossfadeState()
-	if planned := cs.HookPlan(player.GetPlayer(guildID), crossfadeEndState(), 100, crossfadeFade(), false, 128000); planned {
+	if planned := cs.HookPlan(player.GetPlayer(guildID), crossfadeEndState(), 100, 0, crossfadeFade(), false, 128000); planned {
 		t.Error("plan returned true, want a refusal for a next song shorter than the crossfade")
 	}
 }
@@ -307,7 +307,7 @@ func TestCrossfadePlanRefusesALiveNextSong(t *testing.T) {
 	stubAudioStream(t)
 
 	cs := player.HookNewCrossfadeState()
-	if planned := cs.HookPlan(player.GetPlayer(guildID), crossfadeEndState(), 100, crossfadeFade(), false, 128000); planned {
+	if planned := cs.HookPlan(player.GetPlayer(guildID), crossfadeEndState(), 100, 0, crossfadeFade(), false, 128000); planned {
 		t.Error("plan returned true, want a refusal when the next song is live")
 	}
 }

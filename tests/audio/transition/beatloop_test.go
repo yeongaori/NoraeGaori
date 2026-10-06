@@ -171,3 +171,115 @@ func TestBeatLoopCopiesTheSourceFrame(t *testing.T) {
 		t.Errorf("sample 2879 = %d, want 879 (loop position (2879-1000) mod 1000 from the first frame)", last)
 	}
 }
+
+func TestRollPlaysLiveUntilTheMiddle(t *testing.T) {
+	output := runBeatLoop(transition.PrepareBeatLoop(transition.LoopRoll, 0.1, 40), 20, countingFrame)
+
+	for index, value := range output {
+		if int(value) != index {
+			t.Fatalf("sample %d = %d, want the live audio before the roll starts", index, value)
+		}
+	}
+}
+
+func TestRollHalvesTheLoopFromTheSameStart(t *testing.T) {
+	output := runBeatLoop(transition.PrepareBeatLoop(transition.LoopRoll, 0.1, 40), 40, countingFrame)
+	start := 20 * dsp.FrameSize
+
+	cases := []struct {
+		frame, pair, want int
+	}{
+		{22, 100, start + 2*dsp.FrameSize + 100},
+		{26, 300, start + (6*dsp.FrameSize+300)%4800},
+		{31, 300, start + (11*dsp.FrameSize+300)%2400},
+		{36, 500, start + (16*dsp.FrameSize+500)%1200},
+		{39, 900, start + (19*dsp.FrameSize+900)%1200},
+	}
+	for _, c := range cases {
+		if got := int(output[c.frame*dsp.FrameSize+c.pair]); got != c.want {
+			t.Errorf("frame %d pair %d = %d, want %d", c.frame, c.pair, got, c.want)
+		}
+	}
+}
+
+func counted(sample int) int {
+	return sample % 30000
+}
+
+type loopProbe struct {
+	frame, pair, want int
+}
+
+func checkLoopProbes(t *testing.T, output []int16, probes []loopProbe) {
+	t.Helper()
+	for _, probe := range probes {
+		if got := int(output[probe.frame*dsp.FrameSize+probe.pair]); got != counted(probe.want) {
+			t.Errorf("frame %d pair %d = %d, want %d", probe.frame, probe.pair, got, counted(probe.want))
+		}
+	}
+}
+
+func TestSlipRollReturnsToTheLivePosition(t *testing.T) {
+	output := runBeatLoop(transition.PrepareBeatLoop(transition.LoopSlipRoll, 0.1, 80), 80, countingFrame)
+	start := 40 * dsp.FrameSize
+
+	checkLoopProbes(t, output, []loopProbe{
+		{45, 300, start + (5*dsp.FrameSize+300)%4800},
+		{52, 300, start + (12*dsp.FrameSize+300)%2400},
+		{57, 900, start + (17*dsp.FrameSize+900)%1200},
+		{60, 100, 60*dsp.FrameSize + 100},
+		{79, 700, 79*dsp.FrameSize + 700},
+	})
+}
+
+func TestRollAtEndStartsInTheLastQuarter(t *testing.T) {
+	output := runBeatLoop(transition.PrepareBeatLoop(transition.LoopRollAtEnd, 0.1, 80), 80, countingFrame)
+	for index := 0; index < 60*dsp.FrameSize; index++ {
+		if int(output[index]) != counted(index) {
+			t.Fatalf("sample %d = %d, want live audio before three quarters", index, output[index])
+		}
+	}
+	checkLoopProbes(t, output, []loopProbe{{75, 500, 60*dsp.FrameSize + (15*dsp.FrameSize+500)%1200}})
+}
+
+func TestIncomingRollGrowsFromTheFirstBeatAndReleases(t *testing.T) {
+	output := runBeatLoop(transition.PrepareIncomingLoop(transition.FXRoll, 0.1, 40), 40, countingFrame)
+
+	checkLoopProbes(t, output, []loopProbe{
+		{2, 100, (2*dsp.FrameSize + 100) % 1200},
+		{7, 100, (7*dsp.FrameSize + 100) % 2400},
+		{15, 600, (15*dsp.FrameSize + 600) % 4800},
+		{20, 100, 20*dsp.FrameSize + 100},
+		{39, 900, 39*dsp.FrameSize + 900},
+	})
+}
+
+func TestIncomingSlipRollReleasesAtAQuarter(t *testing.T) {
+	output := runBeatLoop(transition.PrepareIncomingLoop(transition.FXSlipRoll, 0.1, 40), 40, countingFrame)
+	checkLoopProbes(t, output, []loopProbe{
+		{5, 500, (5*dsp.FrameSize + 500) % 1200},
+		{10, 3, 10*dsp.FrameSize + 3},
+	})
+}
+
+func TestOnlyRollsBuildAnIncomingLoop(t *testing.T) {
+	for _, fx := range []transition.FXStyle{transition.FXNone, transition.FXPhaser, transition.FXDelayOneBar} {
+		if loop := transition.PrepareIncomingLoop(fx, 0.5, 400); loop != nil {
+			t.Errorf("incoming effect %d built a loop", fx)
+		}
+	}
+	if loop := transition.PrepareIncomingLoop(transition.FXRoll, 0.5, 10); loop != nil {
+		t.Error("an incoming roll that does not fit still built a loop")
+	}
+}
+
+func TestPrepareBeatLoopBuildsTheChosenLength(t *testing.T) {
+	if loop := transition.PrepareBeatLoop(transition.LoopNone, 0.5, 400); loop != nil {
+		t.Error("no loop style still built a loop")
+	}
+	loop := transition.PrepareBeatLoop(transition.LoopTwoBeats, 0.1, 400)
+	output := runBeatLoop(loop, 12, countingFrame)
+	if got := output[9600+300]; int(got) != 300 {
+		t.Errorf("sample 9900 = %d, want 300 from a 9600-sample two-beat loop", got)
+	}
+}

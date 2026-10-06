@@ -32,6 +32,14 @@ func renderPanel(guildID string, target *panelTarget) (*discordgo.MessageEmbed, 
 	return buildSettingsEmbed(view), buildSettingsComponents(view)
 }
 
+func OpenMixingPanel(s *discordgo.Session, ic *discordgo.InteractionCreate) {
+	isAdmin := canEditAdminSettings(s, ic.GuildID, ic.Member)
+	embed, components := renderPanel(ic.GuildID, &panelTarget{isAdmin: isAdmin, category: categoryMixing})
+	if err := discord.RespondEphemeralEmbed(s, ic, embed, components...); err != nil {
+		logger.Errorf("Failed to open the mixing settings: %v", err)
+	}
+}
+
 func HandleSettingsPanel(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	isAdmin := canEditAdminSettings(s, i.GuildID, i.Member)
 	embed, components := renderPanel(i.GuildID, &panelTarget{isAdmin: isAdmin, category: requestedCategory(i, isAdmin)})

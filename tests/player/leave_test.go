@@ -367,12 +367,12 @@ func TestOutroFlushStopsAtADeadConnection(t *testing.T) {
 		t.Fatalf("opus encoder: %v", err)
 	}
 	recipe := transition.DefaultRecipe()
-	recipe.Effect = transition.EffectReverbCutEnd
+	recipe.Out.FX = transition.FXReverbOutEnd
 
 	outro := player.HookNewOutroState()
 	*outro.HookCommitted() = true
-	*outro.HookProcessor() = transition.NewProcessor(recipe, 200, 0.5)
-	*outro.HookTail() = (*outro.HookProcessor()).MakeTail(1)
+	*outro.HookProcessor() = transition.NewProcessor(&recipe, &transition.Window{Frames: 200, PeriodSec: 0.5, Bars: 4})
+	*outro.HookTail() = (*outro.HookProcessor()).MakeTail()
 	if *outro.HookTail() == nil {
 		t.Fatal("the fixture has no tail to flush")
 	}

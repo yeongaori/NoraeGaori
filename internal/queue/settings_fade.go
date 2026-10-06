@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 
@@ -50,79 +51,65 @@ func SetAutoMix(guildID string, enabled bool) error {
 }
 
 func GetAutoMixBeats(guildID string) (int, error) {
-	return readSetting(guildID, "automix_beats", 16, func(settings *guildSettingsRow) int { return settings.autoMixBeats })
+	return readSetting(guildID, "automix_beats", 64, func(settings *guildSettingsRow) int { return settings.autoMixBeats })
 }
 
 func SetAutoMixBeats(guildID string, beats int) error {
 	return saveGuildSetting(guildID, "automix_beats", beats)
 }
 
-const AutoMixStyleAuto = "auto"
-
-var autoMixStyleColumns = map[string]string{
-	"volume": "automix_style_volume",
-	"eq":     "automix_style_eq",
-	"filter": "automix_style_filter",
-	"effect": "automix_style_effect",
-	"loop":   "automix_style_loop",
-}
-
-func AutoMixStyleCategories() []string {
-	return []string{"volume", "eq", "filter", "effect", "loop"}
-}
-
-func GetAutoMixStyle(guildID, category string) (string, error) {
-	column, ok := autoMixStyleColumns[category]
-	if !ok {
-		return AutoMixStyleAuto, fmt.Errorf("unknown automix style category: %s", category)
-	}
-
-	return readSetting(guildID, column, AutoMixStyleAuto, func(settings *guildSettingsRow) string {
-		return defaultAutoMixStyle(autoMixStyleOf(settings, category))
+func GetAutoMixOverrides(guildID string) (map[string]string, error) {
+	return readSetting(guildID, autoMixOverridesColumn, nil, func(settings *guildSettingsRow) map[string]string {
+		return settings.autoMixOverrides
 	})
 }
 
-func SetAutoMixStyle(guildID, category, style string) error {
-	column, ok := autoMixStyleColumns[category]
-	if !ok {
-		return fmt.Errorf("unknown automix style category: %s", category)
+func SetAutoMixOverrides(guildID string, changes map[string]string) error {
+	release := guild.AcquireLock(guildID)
+	defer release()
+
+	var stored string
+	err := database.DB.QueryRow(
+		`SELECT COALESCE(automix_overrides, '') FROM guild_settings WHERE guild_id = ?`, guildID,
+	).Scan(&stored)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("failed to read %s: %w", autoMixOverridesColumn, err)
 	}
-	return saveGuildSetting(guildID, column, style)
+
+	encoded := EncodeOverrides(ApplyOverrideChanges(DecodeOverrides(stored), changes))
+	if err := guild.SaveSetting(guildID, autoMixOverridesColumn, encoded); err != nil {
+		return fmt.Errorf("failed to set %s: %w", autoMixOverridesColumn, err)
+	}
+	logger.Debugf("Set %s=%q for guild: %s", autoMixOverridesColumn, encoded, guildID)
+	return nil
 }
 
 var ErrSongNotInQueue = errors.New("song is no longer in the queue")
 
-func defaultAutoMixStyle(style string) string {
-	if style == "" {
-		return AutoMixStyleAuto
-	}
-	return style
-}
-
-func SetSongAutoMixStyle(guildID string, songID int, category, style string) error {
-	column, ok := autoMixStyleColumns[category]
-	if !ok {
-		return fmt.Errorf("unknown automix style category: %s", category)
-	}
-
+func SetSongAutoMixOverrides(guildID string, songID int, changes map[string]string) error {
 	release := guild.AcquireLock(guildID)
 	defer release()
 
-	result, err := database.DB.Exec(
-		fmt.Sprintf(`UPDATE songs SET %s = ? WHERE guild_id = ? AND id = ?`, column),
-		defaultAutoMixStyle(style), guildID, songID,
-	)
+	var stored string
+	err := database.DB.QueryRow(
+		`SELECT COALESCE(automix_overrides, '') FROM songs WHERE guild_id = ? AND id = ?`, guildID, songID,
+	).Scan(&stored)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrSongNotInQueue
+	}
 	if err != nil {
-		return fmt.Errorf("failed to set song %s: %w", column, err)
+		return fmt.Errorf("failed to read song %s: %w", autoMixOverridesColumn, err)
 	}
 
-	affected, err := result.RowsAffected()
-	if err == nil && affected == 0 {
-		return ErrSongNotInQueue
+	encoded := EncodeOverrides(ApplyOverrideChanges(DecodeOverrides(stored), changes))
+	if _, err := database.DB.Exec(
+		`UPDATE songs SET automix_overrides = ? WHERE guild_id = ? AND id = ?`, encoded, guildID, songID,
+	); err != nil {
+		return fmt.Errorf("failed to set song %s: %w", autoMixOverridesColumn, err)
 	}
 
 	InvalidateCache(guildID)
-	logger.Debugf("Set %s=%s for song %d in guild: %s", column, style, songID, guildID)
+	logger.Debugf("Set %s=%q for song %d in guild: %s", autoMixOverridesColumn, encoded, songID, guildID)
 	return nil
 }
 

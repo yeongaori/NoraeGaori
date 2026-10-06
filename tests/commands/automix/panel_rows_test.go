@@ -2,14 +2,18 @@ package automix_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"noraegaori/internal/audio/analysis"
 	"noraegaori/internal/audio/transition"
 	"noraegaori/internal/commands/automix"
 	"noraegaori/internal/messages"
-	"noraegaori/internal/queue"
 )
+
+func effectiveStyle(row *automix.HookTransitionRow, category transition.Category) string {
+	return transition.StyleOf(&row.HookResolved().Recipe, category)
+}
 
 func TestDescribeTrackCoversEveryAnalysisState(t *testing.T) {
 	panel := &messages.T("check-guild").AutoMixPanel
@@ -51,26 +55,14 @@ func TestSourceLabelsNameEveryOverrideSource(t *testing.T) {
 func TestFindTransitionPairLooksUpTheOutgoingSong(t *testing.T) {
 	pairs := automix.HookTransitionPairs(checkSongs(3, "Track"))
 
-	if pair, found := automix.HookFindTransitionPair(pairs, 2); !found || (*pair.HookFromSong()).ID != 2 {
-		t.Errorf("findTransitionPair(2) = (%+v, %v), want the pair leaving song 2", pair, found)
+	if pair := automix.HookFindTransitionPair(pairs, 2); pair == nil || (*pair.HookFromSong()).ID != 2 {
+		t.Errorf("findTransitionPair(2) = %+v, want the pair leaving song 2", pair)
 	}
-	if _, found := automix.HookFindTransitionPair(pairs, 99); found {
+	if pair := automix.HookFindTransitionPair(pairs, 99); pair != nil {
 		t.Error("a missing song was found")
 	}
-}
-
-func TestQueueStyleOverridesCopyEveryCategory(t *testing.T) {
-	stored := &queue.Queue{
-		AutoMixStyleVolume: "volume-style",
-		AutoMixStyleEQ:     "eq-style",
-		AutoMixStyleFilter: "filter-style",
-		AutoMixStyleEffect: "effect-style",
-		AutoMixStyleLoop:   "loop-style",
-	}
-	want := transition.StyleOverrides{Volume: "volume-style", EQ: "eq-style", Filter: "filter-style", Effect: "effect-style", Loop: "loop-style"}
-
-	if got := automix.HookQueueStyleOverrides(stored); got != want {
-		t.Errorf("queueStyleOverrides = %+v, want %+v", got, want)
+	if pair := automix.HookFindTransitionPair(pairs, 2); pair != &pairs[1] {
+		t.Error("the found pair is a copy, want the pair stored in the panel state")
 	}
 }
 
@@ -106,8 +98,8 @@ func TestTwoSongsYieldOneTransitionAndAnOutro(t *testing.T) {
 }
 
 func TestFiftySongsYieldFortyNineTransitionsPlusAnOutro(t *testing.T) {
-	state := checkPanelState(checkSongs(50, "Track"), transition.StyleOverrides{}, true)
-	rows := automix.HookHydrateTransitionRows("check-guild", &state, *state.HookPairs())
+	state := checkPanelState(checkSongs(50, "Track"), nil, true)
+	rows := automix.HookHydrateTransitionRows("check-guild", state, *state.HookPairs())
 
 	if len(rows) != 50 {
 		t.Errorf("got %d rows, want 50", len(rows))
@@ -156,96 +148,111 @@ func TestALiveLastSongGetsNoOutro(t *testing.T) {
 
 func TestSongOverrideMarksOnlyItsOwnTransition(t *testing.T) {
 	songs := checkSongs(3, "Track")
-	songs[0].AutoMixStyleEffect = "echo_half_cut_end"
+	songs[0].AutoMixOverrides = transition.CategoryFXOut.Override("echo_half_cut_end")
 	rows := checkRowsFor(songs)
 
 	if len(rows) < 2 {
 		t.Fatalf("got %d rows, want at least 2", len(rows))
 	}
-	if got := (*rows[0].HookEffective())["effect"]; got != "echo_half_cut_end" {
+	if got := effectiveStyle(rows[0], transition.CategoryFXOut); got != "echo_half_cut_end" {
 		t.Errorf("first effect = %q, want echo_half_cut_end", got)
 	}
-	if got := (*rows[0].HookSource())["effect"]; got != "song" {
+	if got := rows[0].HookSource(transition.CategoryFXOut); got != "song" {
 		t.Errorf("first effect source = %q, want song", got)
 	}
-	if got := (*rows[1].HookSource())["effect"]; got != "auto" {
+	if got := rows[1].HookSource(transition.CategoryFXOut); got != "auto" {
 		t.Errorf("second effect source = %q, want auto", got)
 	}
 }
 
 func TestGuildDefaultsApplyWhereTheSongDoesNotOverride(t *testing.T) {
 	songs := checkSongs(3, "Track")
-	songs[0].AutoMixStyleFilter = "lowpass_out"
-	rows := checkRowsWithGuild(songs, transition.StyleOverrides{Filter: "lowpass_in", Effect: "reverb_out_end"})
+	songs[0].AutoMixOverrides = transition.CategoryFilterOut.Override("low_pass")
+	rows := checkRowsWithGuild(songs, map[string]string{"filter_out": "high_pass", "fx_out": "reverb_out_end"})
 
 	if len(rows) < 2 {
 		t.Fatalf("got %d rows, want at least 2", len(rows))
 	}
-	if got := (*rows[0].HookEffective())["filter"]; got != "lowpass_out" {
-		t.Errorf("first filter = %q, want the song override lowpass_out", got)
+	for _, want := range []struct {
+		row      int
+		category transition.Category
+		style    string
+		source   string
+	}{
+		{0, transition.CategoryFilterOut, "low_pass", "song"},
+		{0, transition.CategoryFXOut, "reverb_out_end", "guild"},
+		{1, transition.CategoryFilterOut, "high_pass", "guild"},
+	} {
+		if got := effectiveStyle(rows[want.row], want.category); got != want.style {
+			t.Errorf("row %d %s = %q, want %q", want.row, want.category, got, want.style)
+		}
+		if got := rows[want.row].HookSource(want.category); got != want.source {
+			t.Errorf("row %d %s source = %q, want %s", want.row, want.category, got, want.source)
+		}
 	}
-	if got := (*rows[0].HookSource())["filter"]; got != "song" {
-		t.Errorf("first filter source = %q, want song", got)
+}
+
+func TestInvalidStoredChoicesShowAsAuto(t *testing.T) {
+	songs := checkSongs(3, "Track")
+	songs[0].AutoMixOverrides = map[string]string{"fx_out": "bogus", "preset": "7", "length": "four_bars"}
+	rows := checkRowsFor(songs)
+
+	if got := rows[0].HookSource(transition.CategoryFXOut); got != "auto" {
+		t.Errorf("an invalid stored effect has source %q, want auto", got)
 	}
-	if got := (*rows[0].HookEffective())["effect"]; got != "reverb_out_end" {
-		t.Errorf("first effect = %q, want the guild default reverb_out_end", got)
+	if got := rows[0].HookSource(transition.CategoryPreset); got != "auto" {
+		t.Errorf("an invalid stored preset has source %q, want auto", got)
 	}
-	if got := (*rows[0].HookSource())["effect"]; got != "guild" {
-		t.Errorf("first effect source = %q, want guild", got)
-	}
-	if got := (*rows[1].HookEffective())["filter"]; got != "lowpass_in" {
-		t.Errorf("second filter = %q, want the guild default lowpass_in", got)
-	}
-	if got := (*rows[1].HookSource())["filter"]; got != "guild" {
-		t.Errorf("second filter source = %q, want guild", got)
+	if got := rows[0].HookSource(transition.CategoryLength); got != "song" {
+		t.Errorf("a valid stored length has source %q, want song", got)
 	}
 }
 
 func TestPanelHidesAutoSelectionWhenAutoMixIsOff(t *testing.T) {
 	songs := checkSongs(3, "Track")
-	songs[0].AutoMixStyleEffect = "reverb_out_end"
+	songs[0].AutoMixOverrides = transition.CategoryFXOut.Override("reverb_out_end")
 
-	state := checkPanelState(songs, transition.StyleOverrides{EQ: "quick_bass"}, false)
-	rows := automix.HookHydrateTransitionRows("check-guild", &state, *state.HookPairs())
+	state := checkPanelState(songs, transition.ExpandLegacy(transition.ShortcutEQ, "quick_bass"), false)
+	rows := automix.HookHydrateTransitionRows("check-guild", state, *state.HookPairs())
 	if len(rows) == 0 {
 		t.Fatal("no rows built")
 	}
 
 	for _, want := range []struct {
-		field string
-		key   string
-		value string
+		category transition.Category
+		style    string
+		source   string
 	}{
-		{"volume", "effective", "smooth"},
-		{"volume", "source", "auto"},
-		{"filter", "effective", "none"},
-		{"effect", "effective", "reverb_out_end"},
-		{"effect", "source", "song"},
-		{"eq", "effective", "quick_bass"},
-		{"eq", "source", "guild"},
+		{transition.CategoryVolumeOut, "cross_shape", "auto"},
+		{transition.CategoryFilterIn, "none", "auto"},
+		{transition.CategoryFXOut, "reverb_out_end", "song"},
+		{transition.CategoryEQOut, "bass_fast_one_bar_from_end", "guild"},
+		{transition.CategoryEQIn, "bass_fast_at_end", "guild"},
 	} {
-		lookup := *rows[0].HookEffective()
-		if want.key == "source" {
-			lookup = *rows[0].HookSource()
+		if got := effectiveStyle(rows[0], want.category); got != want.style {
+			t.Errorf("%s = %q, want %q", want.category, got, want.style)
 		}
-		if got := lookup[want.field]; got != want.value {
-			t.Errorf("%s %s = %q, want %q", want.field, want.key, got, want.value)
+		if got := rows[0].HookSource(want.category); got != want.source {
+			t.Errorf("%s source = %q, want %q", want.category, got, want.source)
 		}
+	}
+	if rows[0].HookOverlap() != nil {
+		t.Error("the panel previewed an overlap with AutoMix off")
 	}
 }
 
 func TestPanelDropsALoopThePlayerCannotRun(t *testing.T) {
 	songs := checkSongs(3, "Track")
-	songs[0].AutoMixStyleLoop = "eight_beats"
+	songs[0].AutoMixOverrides = transition.CategoryLoop.Override("eight_beats")
 	rows := checkRowsFor(songs)
 
 	if len(rows) == 0 {
 		t.Fatal("no rows built")
 	}
-	if got := (*rows[0].HookEffective())["loop"]; got != "none" {
+	if got := effectiveStyle(rows[0], transition.CategoryLoop); got != "none" {
 		t.Errorf("loop = %q, want none", got)
 	}
-	if got := (*rows[0].HookSource())["loop"]; got != "song" {
+	if got := rows[0].HookSource(transition.CategoryLoop); got != "song" {
 		t.Errorf("loop source = %q, want song", got)
 	}
 }
@@ -253,9 +260,9 @@ func TestPanelDropsALoopThePlayerCannotRun(t *testing.T) {
 func TestAnalyzingStateFollowsTheBackfillWorker(t *testing.T) {
 	songs := checkSongs(2, "Track")
 
-	idleState := checkPanelState(songs, transition.StyleOverrides{}, true)
+	idleState := checkPanelState(songs, nil, true)
 	*idleState.HookBackfillActive() = false
-	idleRows := automix.HookHydrateTransitionRows("check-guild", &idleState, *idleState.HookPairs())
+	idleRows := automix.HookHydrateTransitionRows("check-guild", idleState, *idleState.HookPairs())
 	busyRows := checkRowsFor(songs)
 
 	if len(idleRows) != 2 || len(busyRows) != 2 {
@@ -281,31 +288,75 @@ func TestAnalyzingStateFollowsTheBackfillWorker(t *testing.T) {
 func TestOutroRowResolvesToTheAutoOutroRecipe(t *testing.T) {
 	rows := checkRowsFor(checkSongs(2, "Track"))
 	outro := rows[len(rows)-1]
-	auto := transition.AutoOutroStyles(*outro.HookFromAnalysis())
 
-	for _, category := range *automix.HookTransitionCategories {
-		if !transition.ValidStyle(category, auto[category]) {
-			t.Errorf("auto outro style %q for %q is not valid", auto[category], category)
+	if outro.HookResolved().Recipe != *transition.OutroRecipe() {
+		t.Errorf("outro recipe = %s, want the auto outro %s", &outro.HookResolved().Recipe, transition.OutroRecipe())
+	}
+	want := messages.T("check-guild").AutoMixPanel.EndsNaturally
+	if got := automix.HookDescribeRecipe("check-guild", outro, true); got != want {
+		t.Errorf("outro row reads %q, want %q", got, want)
+	}
+}
+
+func TestPreviewShowsTheFadeWhenTheSongsCanHoldIt(t *testing.T) {
+	songs := checkSongs(2, "Track")
+	for _, song := range songs {
+		song.Duration = "3:00"
+	}
+	row := checkRowsFor(songs)[0]
+	if got := effectiveStyle(row, transition.CategoryEQOut); got != "bass_fast" {
+		t.Errorf("eq out = %q, want the Fade preset's bass_fast for two 3-minute songs", got)
+	}
+	panel := &messages.T("check-guild").AutoMixPanel
+	text := automix.HookDescribeRecipe("check-guild", row, true)
+	for _, part := range []string{panel.StyleLabels["preset.1"], fmt.Sprintf(panel.SecondsFormat, 5.0), panel.NotBeatmatched} {
+		if !strings.Contains(text, part) {
+			t.Errorf("row reads %q, want it to mention %q", text, part)
 		}
-		if got := (*outro.HookEffective())[category]; got != auto[category] {
-			t.Errorf("%s = %q, want the auto outro %q", category, got, auto[category])
+	}
+
+	if got := effectiveStyle(checkRowsFor(checkSongs(2, "Track"))[0], transition.CategoryEQOut); got != "none" {
+		t.Errorf("eq out = %q, want the plain crossfade when no overlap fits songs of unknown length", got)
+	}
+}
+
+func TestSongSettingsShapeThePreview(t *testing.T) {
+	songs := checkSongs(2, "Track")
+	for _, song := range songs {
+		song.Duration = "3:00"
+	}
+	songs[0].AutoMixOverrides = map[string]string{"preset": "11", "length": "two_bars"}
+	row := checkRowsFor(songs)[0]
+
+	overlap := row.HookOverlap()
+	if overlap == nil || overlap.Preset != 11 || overlap.Bars != 2 || overlap.Length != 4 {
+		t.Fatalf("preview = %v, want preset 11 over two bars of 2s", overlap)
+	}
+	if got := effectiveStyle(row, transition.CategoryVolumeOut); got != "fast" {
+		t.Errorf("volume out = %q, want the chosen simple cut", got)
+	}
+	text := automix.HookDescribeRecipe("check-guild", row, true)
+	panel := &messages.T("check-guild").AutoMixPanel
+	for _, part := range []string{panel.StyleLabels["preset.11"], fmt.Sprintf(panel.BarsFormat, 2), panel.CategoryLabels["length"], panel.OverrideMarker} {
+		if !strings.Contains(text, part) {
+			t.Errorf("row reads %q, want it to mention %q", text, part)
 		}
 	}
 }
 
 func TestOutroHonoursTheLastSongsOverride(t *testing.T) {
 	songs := checkSongs(2, "Track")
-	songs[1].AutoMixStyleEffect = "reverb_out_center"
+	songs[1].AutoMixOverrides = transition.CategoryFXOut.Override("reverb_out_center")
 	rows := checkRowsFor(songs)
 	last := rows[len(rows)-1]
 
 	if !last.HookIsOutro() {
 		t.Fatal("the last row is not an outro")
 	}
-	if got := (*last.HookEffective())["effect"]; got != "reverb_out_center" {
+	if got := effectiveStyle(last, transition.CategoryFXOut); got != "reverb_out_center" {
 		t.Errorf("effect = %q, want reverb_out_center", got)
 	}
-	if got := (*last.HookSource())["effect"]; got != "song" {
+	if got := last.HookSource(transition.CategoryFXOut); got != "song" {
 		t.Errorf("effect source = %q, want song", got)
 	}
 }

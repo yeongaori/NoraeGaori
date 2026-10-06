@@ -184,19 +184,15 @@ func announceOnFirstFrame(session *discordgo.Session, player *GuildPlayer, song 
 
 func repeatCopyOf(song *queue.Song) *queue.Song {
 	return &queue.Song{
-		URL:                song.URL,
-		Title:              song.Title,
-		Duration:           song.Duration,
-		Thumbnail:          song.Thumbnail,
-		Uploader:           song.Uploader,
-		RequestedByID:      song.RequestedByID,
-		RequestedByTag:     song.RequestedByTag,
-		IsLive:             song.IsLive,
-		AutoMixStyleVolume: song.AutoMixStyleVolume,
-		AutoMixStyleEQ:     song.AutoMixStyleEQ,
-		AutoMixStyleFilter: song.AutoMixStyleFilter,
-		AutoMixStyleEffect: song.AutoMixStyleEffect,
-		AutoMixStyleLoop:   song.AutoMixStyleLoop,
+		URL:              song.URL,
+		Title:            song.Title,
+		Duration:         song.Duration,
+		Thumbnail:        song.Thumbnail,
+		Uploader:         song.Uploader,
+		RequestedByID:    song.RequestedByID,
+		RequestedByTag:   song.RequestedByTag,
+		IsLive:           song.IsLive,
+		AutoMixOverrides: song.AutoMixOverrides,
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 
 	"noraegaori/internal/audio/analysis"
 	"noraegaori/internal/audio/opus"
+	"noraegaori/internal/audio/transition"
 	"noraegaori/internal/config"
 	"noraegaori/internal/database"
 	"noraegaori/internal/dependency"
@@ -20,6 +21,17 @@ import (
 	"noraegaori/locales"
 )
 
+func expandStoredStyle(category, value string) map[string]string {
+	return transition.ExpandLegacy(transition.Category(category), value)
+}
+
+func convertStoredStyles() error {
+	if err := queue.ConvertLegacyStyles(expandStoredStyle); err != nil {
+		return fmt.Errorf("failed to convert stored AutoMix styles: %w", err)
+	}
+	return nil
+}
+
 func Run(token string) error {
 	logger.Debug("Initializing database...")
 	if err := database.Initialize(); err != nil {
@@ -30,6 +42,10 @@ func Run(token string) error {
 			logger.Errorf("Failed to close database: %v", err)
 		}
 	}()
+
+	if err := convertStoredStyles(); err != nil {
+		return err
+	}
 
 	if err := localesync.Sync("locales", locales.Files, localesync.DatabaseStore{}); err != nil {
 		logger.Warnf("Failed to update the locale files: %v", err)

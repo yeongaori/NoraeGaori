@@ -2,6 +2,7 @@ package queue_test
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"strings"
 	"testing"
@@ -184,9 +185,6 @@ func TestSettersReportInvalidInputAndSaveFailures(t *testing.T) {
 	if err := queue.SetVolume("guild1", math.NaN()); err == nil {
 		t.Error("SetVolume accepted NaN")
 	}
-	if err := queue.SetAutoMixStyle("guild1", "nope", "bass"); err == nil {
-		t.Error("SetAutoMixStyle accepted an unknown category")
-	}
 
 	if err := database.Close(); err != nil {
 		t.Fatalf("failed to close the test database: %v", err)
@@ -194,9 +192,12 @@ func TestSettersReportInvalidInputAndSaveFailures(t *testing.T) {
 	if err := queue.SetSponsorBlock("guild1", true); err == nil || !strings.Contains(err.Error(), "failed to set sponsorblock") {
 		t.Errorf("SetSponsorBlock on a closed database = %v, want a wrapped error", err)
 	}
+	if err := queue.SetAutoMixOverrides("guild1", map[string]string{"eq_out": "hi_fast"}); err == nil {
+		t.Error("SetAutoMixOverrides on a closed database succeeded")
+	}
 }
 
-func TestSetSongAutoMixStyle(t *testing.T) {
+func TestSetSongAutoMixOverrides(t *testing.T) {
 	setupTestDB(t)
 
 	song := &queue.Song{
@@ -215,13 +216,20 @@ func TestSetSongAutoMixStyle(t *testing.T) {
 	}
 	songID := q.Songs[0].ID
 
-	if err := queue.SetSongAutoMixStyle("guild1", songID, "eq", "bass"); err != nil {
-		t.Errorf("setting the song's eq style failed: %v", err)
+	if err := queue.SetSongAutoMixOverrides("guild1", songID, map[string]string{"eq_out": "hi_fast", "fx_in": "phaser"}); err != nil {
+		t.Errorf("setting the song's styles failed: %v", err)
 	}
-	if err := queue.SetSongAutoMixStyle("guild1", songID, "nope", "bass"); err == nil {
-		t.Error("an unknown style category was accepted")
+	if err := queue.SetSongAutoMixOverrides("guild1", songID, map[string]string{"fx_in": "auto", "length": "four_bars"}); err != nil {
+		t.Errorf("changing the song's styles failed: %v", err)
 	}
-	if err := queue.SetSongAutoMixStyle("guild1", songID+1000, "eq", "bass"); !errors.Is(err, queue.ErrSongNotInQueue) {
+	q, err = queue.GetQueue("guild1", true)
+	if err != nil || q == nil {
+		t.Fatalf("GetQueue = (%v, %v), want the queue", q, err)
+	}
+	if got := q.Songs[0].AutoMixOverrides; len(got) != 2 || got["eq_out"] != "hi_fast" || got["length"] != "four_bars" {
+		t.Errorf("song overrides = %v, want eq_out kept, fx_in reset to auto and length added", got)
+	}
+	if err := queue.SetSongAutoMixOverrides("guild1", songID+1000, map[string]string{"eq_out": "hi_fast"}); !errors.Is(err, queue.ErrSongNotInQueue) {
 		t.Errorf("a missing song = %v, want ErrSongNotInQueue", err)
 	}
 
@@ -233,7 +241,7 @@ func TestSetSongAutoMixStyle(t *testing.T) {
 	if err := database.Close(); err != nil {
 		t.Fatalf("failed to close the test database: %v", err)
 	}
-	if err := queue.SetSongAutoMixStyle("guild1", songID, "eq", "bass"); err == nil {
+	if err := queue.SetSongAutoMixOverrides("guild1", songID, map[string]string{"eq_out": "hi_fast"}); err == nil {
 		t.Error("setting a song style on a closed database succeeded")
 	}
 }
@@ -245,22 +253,37 @@ func must[T any](value T, err error) T {
 	return value
 }
 
-func TestGetAutoMixStyleReadsEveryCategory(t *testing.T) {
+func TestGuildOverridesMergeAndReset(t *testing.T) {
 	setupTestDB(t)
 
-	for _, category := range queue.AutoMixStyleCategories() {
-		if err := queue.SetAutoMixStyle("guild1", category, category+"-style"); err != nil {
-			t.Fatalf("failed to set the %s style: %v", category, err)
-		}
+	if err := queue.SetAutoMixOverrides("guild1", map[string]string{"volume_out": "slow", "volume_in": "slow"}); err != nil {
+		t.Fatalf("failed to set the volume styles: %v", err)
 	}
-	for _, category := range queue.AutoMixStyleCategories() {
-		if style, err := queue.GetAutoMixStyle("guild1", category); err != nil || style != category+"-style" {
-			t.Errorf("GetAutoMixStyle(%s) = (%q, %v), want %q", category, style, err, category+"-style")
-		}
+	if err := queue.SetAutoMixOverrides("guild1", map[string]string{"volume_in": "auto", "fx_out": "phaser"}); err != nil {
+		t.Fatalf("failed to change the styles: %v", err)
 	}
+	got, err := queue.GetAutoMixOverrides("guild1")
+	if err != nil || len(got) != 2 || got["volume_out"] != "slow" || got["fx_out"] != "phaser" {
+		t.Errorf("GetAutoMixOverrides = (%v, %v), want volume_out and fx_out with volume_in back on auto", got, err)
+	}
+}
 
-	if style, err := queue.GetAutoMixStyle("guild1", "nope"); err == nil || style != queue.AutoMixStyleAuto {
-		t.Errorf("an unknown category = (%q, %v), want auto and an error", style, err)
+func TestGuildOverridesAreSharedNotCopied(t *testing.T) {
+	setupTestDB(t)
+	if err := queue.SetAutoMixOverrides("guild1", map[string]string{"fx_out": "phaser"}); err != nil {
+		t.Fatalf("failed to set a style: %v", err)
+	}
+	first := must(queue.GetAutoMixOverrides("guild1"))
+
+	allocations := testing.AllocsPerRun(50, func() {
+		_ = must(queue.GetAutoMixOverrides("guild1"))
+	})
+	if allocations != 0 {
+		t.Errorf("reading the cached overrides allocates %.0f times, want the cached map handed out", allocations)
+	}
+	second := must(queue.GetAutoMixOverrides("guild1"))
+	if fmt.Sprintf("%p", first) != fmt.Sprintf("%p", second) {
+		t.Error("two reads returned different maps, want the one decoded map shared")
 	}
 }
 
@@ -280,10 +303,10 @@ func TestSettingGettersReturnTheirFallbackWhenTheDatabaseFails(t *testing.T) {
 	if volume, err := queue.GetVolume("guild1"); err == nil || volume != 0 || !strings.Contains(err.Error(), "failed to get volume") {
 		t.Errorf("GetVolume = (%g, %v), want 0 and a wrapped error", volume, err)
 	}
-	if beats, err := queue.GetAutoMixBeats("guild1"); err == nil || beats != 16 {
-		t.Errorf("GetAutoMixBeats = (%d, %v), want 16 and an error", beats, err)
+	if beats, err := queue.GetAutoMixBeats("guild1"); err == nil || beats != 64 {
+		t.Errorf("GetAutoMixBeats = (%d, %v), want 64 and an error", beats, err)
 	}
-	if style, err := queue.GetAutoMixStyle("guild1", "eq"); err == nil || style != queue.AutoMixStyleAuto {
-		t.Errorf("GetAutoMixStyle = (%q, %v), want auto and an error", style, err)
+	if overrides, err := queue.GetAutoMixOverrides("guild1"); err == nil || overrides != nil {
+		t.Errorf("GetAutoMixOverrides = (%v, %v), want none and an error", overrides, err)
 	}
 }

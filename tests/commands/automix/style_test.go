@@ -26,13 +26,8 @@ func styleOptions(category, style string) []*discordgo.ApplicationCommandInterac
 	return options
 }
 
-func firstStyle(category string) string {
-	for _, style := range transition.StyleValues(category) {
-		if style != queue.AutoMixStyleAuto {
-			return style
-		}
-	}
-	return ""
+func firstStyle(category transition.Category) string {
+	return transition.StyleValues(category)[1]
 }
 
 func wantStyleFields(want map[string]string) func(t *testing.T, reply map[string]any) {
@@ -59,32 +54,51 @@ func wantStyleFields(want map[string]string) func(t *testing.T, reply map[string
 	}
 }
 
-func wantStoredStyle(category, want string) func(t *testing.T, reply map[string]any) {
+func wantStoredStyles(want map[transition.Category]string) func(t *testing.T, reply map[string]any) {
 	return func(t *testing.T, _ map[string]any) {
 		t.Helper()
 
-		if stored, err := queue.GetAutoMixStyle(commandtest.GuildID, category); err != nil || stored != want {
-			t.Errorf("stored %s style = (%q, %v), want %q", category, stored, err, want)
+		stored, err := queue.GetAutoMixOverrides(commandtest.GuildID)
+		if err != nil {
+			t.Fatalf("failed to read the stored styles: %v", err)
+		}
+		for category, style := range want {
+			got, ok := stored[string(category)]
+			if !ok {
+				got = transition.StyleAuto
+			}
+			if got != style {
+				t.Errorf("stored %s style = %q, want %q", category, got, style)
+			}
 		}
 	}
 }
 
+func joinedCommandCategories() string {
+	names := []string{}
+	for _, category := range append(transition.StyleCategories(), transition.ShortcutCategories()...) {
+		names = append(names, string(category))
+	}
+	return strings.Join(names, ", ")
+}
+
 func TestAutoMixStyleCommand(t *testing.T) {
-	volumeStyle := firstStyle("volume")
 	everyAuto := map[string]string{}
-	for _, category := range queue.AutoMixStyleCategories() {
-		everyAuto[category] = queue.AutoMixStyleAuto
+	for _, category := range transition.StyleCategories() {
+		everyAuto[string(category)] = transition.StyleAuto
 	}
 	styleTitle := func(locale *messages.Locale) string { return locale.Settings.AutoMixStyleTitle }
-	saveVolumeStyle := func(t *testing.T) {
+	saveStyles := func(t *testing.T) {
 		t.Helper()
 
-		if err := queue.SetAutoMixStyle(commandtest.GuildID, "volume", volumeStyle); err != nil {
-			t.Fatalf("failed to seed the volume style: %v", err)
+		if err := queue.SetAutoMixOverrides(commandtest.GuildID, map[string]string{"fx_out": "phaser", "volume_out": "slow"}); err != nil {
+			t.Fatalf("failed to seed styles: %v", err)
 		}
 	}
-	changedTo := func(locale *messages.Locale) string {
-		return fmt.Sprintf(locale.Settings.AutoMixStyleChanged, "volume", volumeStyle)
+	changedTo := func(category, style string) func(locale *messages.Locale) string {
+		return func(locale *messages.Locale) string {
+			return fmt.Sprintf(locale.Settings.AutoMixStyleChanged, category, style)
+		}
 	}
 
 	commandtest.Run(t, "automixstyle", automix.HandleAutoMixStyle, []commandtest.Case{
@@ -103,39 +117,71 @@ func TestAutoMixStyleCommand(t *testing.T) {
 			Name:    "an unknown category",
 			Options: styleOptions("bogus", ""),
 			WantText: func(locale *messages.Locale) string {
-				return fmt.Sprintf(locale.Settings.AutoMixStyleInvalidCategory, "bogus", strings.Join(queue.AutoMixStyleCategories(), ", "))
+				return fmt.Sprintf(locale.Settings.AutoMixStyleInvalidCategory, "bogus", joinedCommandCategories())
 			},
 		},
 		{
-			Name:     "one category with a saved style",
-			Options:  styleOptions("volume", ""),
-			Prepare:  saveVolumeStyle,
+			Name:    "a song-only setting",
+			Options: styleOptions("preset", "3"),
+			WantText: func(locale *messages.Locale) string {
+				return fmt.Sprintf(locale.Settings.AutoMixStyleInvalidCategory, "preset", joinedCommandCategories())
+			},
+		},
+		{
+			Name:     "one side with a saved style",
+			Options:  styleOptions("fx_out", ""),
+			Prepare:  saveStyles,
 			WantText: styleTitle,
-			Check:    wantStyleFields(map[string]string{"volume": volumeStyle}),
+			Check:    wantStyleFields(map[string]string{"fx_out": "phaser"}),
+		},
+		{
+			Name:     "a shortcut shows both sides",
+			Options:  styleOptions("volume", ""),
+			Prepare:  saveStyles,
+			WantText: styleTitle,
+			Check:    wantStyleFields(map[string]string{"volume": "slow / auto"}),
 		},
 		{
 			Name:    "an unknown style",
-			Options: styleOptions("volume", "bogus"),
+			Options: styleOptions("fx_out", "bogus"),
 			WantText: func(locale *messages.Locale) string {
-				return fmt.Sprintf(locale.Settings.AutoMixStyleInvalidValue, "bogus", "volume", strings.Join(transition.StyleValues("volume"), ", "))
+				return fmt.Sprintf(locale.Settings.AutoMixStyleInvalidValue, "bogus", "fx_out", strings.Join(transition.StyleValues(transition.CategoryFXOut), ", "))
 			},
-			Check: wantStoredStyle("volume", queue.AutoMixStyleAuto),
+			Check: wantStoredStyles(map[transition.Category]string{transition.CategoryFXOut: transition.StyleAuto}),
 		},
 		{
-			Name:     "a saved style",
-			Options:  styleOptions("volume", volumeStyle),
-			WantText: changedTo,
-			Check:    wantStoredStyle("volume", volumeStyle),
+			Name:     "a saved side style",
+			Options:  styleOptions("fx_out", "phaser"),
+			WantText: changedTo("fx_out", "phaser"),
+			Check:    wantStoredStyles(map[transition.Category]string{transition.CategoryFXOut: "phaser"}),
 		},
 		{
 			Name:     "a style typed in capitals with spaces",
-			Options:  styleOptions(" VOLUME ", " "+strings.ToUpper(volumeStyle)+" "),
-			WantText: changedTo,
-			Check:    wantStoredStyle("volume", volumeStyle),
+			Options:  styleOptions(" FX_OUT ", " PHASER "),
+			WantText: changedTo("fx_out", "phaser"),
+			Check:    wantStoredStyles(map[transition.Category]string{transition.CategoryFXOut: "phaser"}),
+		},
+		{
+			Name:     "a shortcut sets both sides",
+			Options:  styleOptions("volume", "overlap"),
+			WantText: changedTo("volume", "overlap"),
+			Check: wantStoredStyles(map[transition.Category]string{
+				transition.CategoryVolumeOut: "fast_at_end", transition.CategoryVolumeIn: "fast_at_start",
+			}),
+		},
+		{
+			Name:     "a shortcut set to auto resets both sides",
+			Options:  styleOptions("volume", "auto"),
+			Prepare:  saveStyles,
+			WantText: changedTo("volume", "auto"),
+			Check: wantStoredStyles(map[transition.Category]string{
+				transition.CategoryVolumeOut: transition.StyleAuto, transition.CategoryVolumeIn: transition.StyleAuto,
+				transition.CategoryFXOut: "phaser",
+			}),
 		},
 		{
 			Name:    "a closed database",
-			Options: styleOptions("volume", volumeStyle),
+			Options: styleOptions("fx_out", "phaser"),
 			Prepare: dbtest.CloseUntilCleanup,
 			WantErr: true,
 			WantText: func(locale *messages.Locale) string {

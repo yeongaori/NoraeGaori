@@ -19,7 +19,7 @@ import (
 const (
 	StallTimeout = 30 * time.Second
 
-	BufSize             = 1500
+	BufSize             = 2000
 	tailSamplesPerFrame = 480
 	tailWindowSeconds   = 90
 	tailCapacitySamples = 24000 * tailWindowSeconds
@@ -104,7 +104,7 @@ func (m *monoTail) snapshot() ([]float32, int64) {
 	return m.buf[:m.count], m.produced - int64(m.count)
 }
 
-func Args(streamURL string, seekSeconds float64, normalization bool) []string {
+func Args(streamURL string, seekSeconds float64, normalization bool, tempo Tempo) []string {
 	args := []string{
 		"-hide_banner",
 		"-nostats",
@@ -119,10 +119,7 @@ func Args(streamURL string, seekSeconds float64, normalization bool) []string {
 	}
 
 	args = append(args, "-i", streamURL)
-
-	if normalization {
-		args = append(args, "-af", "dynaudnorm=framelen=500:gausssize=31:peak=0.95")
-	}
+	args = append(args, audioFilters(normalization, tempo)...)
 
 	args = append(args,
 		"-f", "s16le",
@@ -135,10 +132,7 @@ func Args(streamURL string, seekSeconds float64, normalization bool) []string {
 
 func PipeArgs(normalization bool) []string {
 	args := []string{"-hide_banner", "-nostats", "-loglevel", "error", "-i", "pipe:0"}
-
-	if normalization {
-		args = append(args, "-af", "dynaudnorm=framelen=500:gausssize=31:peak=0.95")
-	}
+	args = append(args, audioFilters(normalization, Tempo{})...)
 
 	args = append(args,
 		"-f", "s16le",
@@ -353,9 +347,7 @@ func (s *Stream) finishEndState(totalFrames int, tail *monoTail) {
 			logger.Debugf("trailing silence detected: %d frames (%.1fs)", es.SilentTailFrames, float64(es.SilentTailFrames)/framesPerSecond)
 		}
 
-		audible := samples[lead : len(samples)-trail]
-		if tail, err := analysis.AnalyzeTrackSamples(audible, analysis.SampleRate); err == nil {
-			tail.FirstBeat += float64(lead) / analysis.SampleRate
+		if tail, err := analysis.AnalyzeAfterLead(samples[:len(samples)-trail], lead, analysis.SampleRate); err == nil {
 			es.Analysis = tail
 		} else {
 			logger.Debugf("tail analysis failed: %v", err)

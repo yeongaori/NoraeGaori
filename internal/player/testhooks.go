@@ -52,7 +52,7 @@ type HookFadeSettingsFields struct {
 	CrossfadeSec   float64
 	AutoMixBeats   int
 	RepeatMode     int
-	StyleOverrides transition.StyleOverrides
+	StyleOverrides map[string]string
 }
 
 var HookAcquireFFmpeg = &acquireFFmpeg
@@ -269,6 +269,14 @@ func (cs *crossfadeState) HookBeatLoop() **transition.BeatLoop {
 	return &cs.beatLoop
 }
 
+func (cs *crossfadeState) HookIncomingLoop() **transition.BeatLoop {
+	return &cs.bLoop
+}
+
+func (cs *crossfadeState) HookNextBFrame() []int16 {
+	return cs.nextBFrame()
+}
+
 func (cs *crossfadeState) HookBitrate() *int {
 	return &cs.bitrate
 }
@@ -309,6 +317,14 @@ func (cs *crossfadeState) HookSlideFrames() *int {
 	return &cs.slideFrames
 }
 
+func HookSessionOriginSec(baseOffsetMs, frameOffset int) float64 {
+	return (&playbackSession{baseOffsetMs: baseOffsetMs, frameOffset: frameOffset}).originSec()
+}
+
+func (cs *crossfadeState) HookTrimBLead() *bool {
+	return &cs.trimBLead
+}
+
 func (cs *crossfadeState) HookTotalFrames() *int {
 	return &cs.totalFrames
 }
@@ -325,8 +341,8 @@ func (cs *crossfadeState) HookMixAndSend(player *GuildPlayer, conn voiceConnecti
 	return cs.mixAndSend(player, conn, stopCh, aFrame, bFrame, volume, enc)
 }
 
-func (cs *crossfadeState) HookPlan(player *GuildPlayer, es *ffmpeg.EndState, sentFrames int, fade fadeSettings, normalization bool, bitrate int) bool {
-	return cs.plan(player, es, sentFrames, fade, normalization, bitrate)
+func (cs *crossfadeState) HookPlan(player *GuildPlayer, es *ffmpeg.EndState, sentFrames int, originSec float64, fade *fadeSettings, normalization bool, bitrate int) bool {
+	return cs.plan(player, es, sentFrames, originSec, fade, normalization, bitrate)
 }
 
 func (cs *crossfadeState) HookSlideTransition(reason string) {
@@ -355,6 +371,10 @@ func (notices *guildMessages) HookRemove(guildID string) {
 
 func (notices *guildMessages) HookSet(guildID string, msg *discordgo.Message) {
 	notices.set(guildID, msg)
+}
+
+func (os *outroState) HookPlan(player *GuildPlayer, es *ffmpeg.EndState, sentFrames int, fade *fadeSettings) bool {
+	return os.plan(player, es, sentFrames, fade)
 }
 
 func (os *outroState) HookCommitted() *bool {

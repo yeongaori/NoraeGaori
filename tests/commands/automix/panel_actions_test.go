@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
+	"noraegaori/internal/audio/transition"
 	"noraegaori/internal/commands/automix"
 	"noraegaori/internal/discord"
 	"noraegaori/internal/messages"
@@ -34,23 +35,59 @@ func TestTransitionRoutesIgnoreMalformedInteractions(t *testing.T) {
 	songID := firstSongID(fixture.Queue)
 	component := fixture.Component(automix.HookTransitionPickRoute)
 	picked := fixture.Component(automix.HookTransitionPickRoute, "not-a-song")
-	styled := fixture.Component(automix.HookTransitionStyleRoute, firstStyle("volume"))
+	styled := fixture.Component(automix.HookTransitionStyleRoute, firstStyle(transition.CategoryVolumeOut))
 	modal := &discordgo.InteractionCreate{Interaction: &discordgo.Interaction{
 		Type:    discordgo.InteractionModalSubmit,
 		GuildID: commandtest.GuildID,
 		Data:    discordgo.ModalSubmitInteractionData{CustomID: automix.HookTransitionPageRoute},
 	}}
+	volumeOut := string(transition.CategoryVolumeOut)
 
 	automix.HookTurnTransitionPage(fixture.Session, component, nil)
 	automix.HookTurnTransitionPage(fixture.Session, component, []string{"two"})
 	automix.HookTurnTransitionPage(fixture.Session, modal, []string{"2"})
 	automix.HookPickTransition(fixture.Session, component, []string{"1"})
 	automix.HookPickTransition(fixture.Session, picked, []string{"1"})
-	automix.HookChooseTransitionStyle(fixture.Session, component, []string{"volume", songID, "123", "1"})
-	automix.HookChooseTransitionStyle(fixture.Session, styled, []string{"volume", songID, "123"})
-	automix.HookChooseTransitionStyle(fixture.Session, styled, []string{"volume", "not-a-song", "123", "1"})
+	automix.HookChooseTransitionStyle(fixture.Session, component, []string{volumeOut, songID, "123", "1"})
+	automix.HookChooseTransitionStyle(fixture.Session, styled, []string{volumeOut, songID, "123"})
+	automix.HookChooseTransitionStyle(fixture.Session, styled, []string{volumeOut, "not-a-song", "123", "1"})
+	automix.HookChooseTransitionStyle(fixture.Session, styled, []string{"volume", songID, "123", "1"})
+	automix.HookChooseTransitionStyle(fixture.Session, styled, []string{"bogus", songID, "123", "1"})
+	automix.HookTurnEditorTab(fixture.Session, component, []string{"bogus", songID, "123", "1"})
+	automix.HookTurnEditorTab(fixture.Session, component, []string{"incoming", "not-a-song", "123", "1"})
+	automix.HookTurnEditorTab(fixture.Session, component, []string{"incoming", songID, "123"})
 
 	fixture.WantNoRequests(t)
+}
+
+func TestTurningAnEditorTabRedrawsItsDropdowns(t *testing.T) {
+	fixture := panelFixture(t, 3)
+	songID := firstSongID(fixture.Queue)
+
+	automix.HookTurnEditorTab(fixture.Session, fixture.Component(automix.HookTransitionTabRoute), []string{"incoming", songID, discordtest.PanelMessageID, "1"})
+
+	sent := fixture.Requests()
+	commandtest.WantSingleResponse(t, sent, discordgo.InteractionResponseUpdateMessage)
+	want := discord.ComponentID(automix.HookTransitionStyleRoute, string(transition.CategoryVolumeIn), songID, discordtest.PanelMessageID, "1")
+	if got := discordtest.JSONAt(t, sent[0].Body, "data", "components", 0, "components", 0, "custom_id"); got != want {
+		t.Errorf("the incoming tab starts with %v, want %q", got, want)
+	}
+}
+
+func TestTheMixingSettingsButtonOpensTheMixingSettings(t *testing.T) {
+	automix.HookRegisterPanelRoutes()
+	fixture := panelFixture(t, 3)
+
+	if !discord.HandleComponentRoute(fixture.Session, fixture.Component(automix.HookMixingSettingsRoute)) {
+		t.Fatalf("the custom ID %q is not routed", automix.HookMixingSettingsRoute)
+	}
+
+	sent := fixture.Requests()
+	commandtest.WantSingleResponse(t, sent, discordgo.InteractionResponseChannelMessageWithSource)
+	if !discordtest.IsEphemeral(&sent[0]) {
+		t.Error("the mixing settings were not sent privately")
+	}
+	commandtest.WantReplyText(t, sent, messages.T(commandtest.GuildID).SettingsPanel.Categories["mixing"])
 }
 
 func TestTheAutoMixPanelCommand(t *testing.T) {
@@ -110,7 +147,7 @@ func TestPickingATransitionOpensItsEditor(t *testing.T) {
 				commandtest.WantReplyText(t, sent[:1], messages.T(commandtest.GuildID).AutoMixPanel.SongGone)
 				return
 			}
-			want := discord.ComponentID(automix.HookTransitionStyleRoute, (*automix.HookTransitionCategories)[0], songValue, discordtest.PanelMessageID, "1")
+			want := discord.ComponentID(automix.HookTransitionStyleRoute, string(transition.CategoryVolumeOut), songValue, discordtest.PanelMessageID, "1")
 			if got := discordtest.JSONAt(t, sent[0].Body, "data", "components", 0, "components", 0, "custom_id"); got != want {
 				t.Errorf("the editor routes to %v, want %q", got, want)
 			}
@@ -119,7 +156,7 @@ func TestPickingATransitionOpensItsEditor(t *testing.T) {
 }
 
 func TestChoosingATransitionStyle(t *testing.T) {
-	volumeStyle := firstStyle("volume")
+	volumeStyle := firstStyle(transition.CategoryVolumeOut)
 
 	for _, check := range []struct {
 		name         string
@@ -171,7 +208,7 @@ func TestChoosingATransitionStyle(t *testing.T) {
 			guildID := cmp.Or(check.guildID, commandtest.GuildID)
 			ic := discordtest.ComponentInteraction(guildID, automix.HookTransitionStyleRoute, discordtest.Member(guildID, commandtest.CallerID), check.style)
 
-			automix.HookChooseTransitionStyle(fixture.Session, ic, []string{"volume", check.songValue(fixture.Queue), discordtest.PanelMessageID, "1"})
+			automix.HookChooseTransitionStyle(fixture.Session, ic, []string{string(transition.CategoryVolumeOut), check.songValue(fixture.Queue), discordtest.PanelMessageID, "1"})
 
 			sent := fixture.Requests()
 			if len(sent) != check.wantRequests {
@@ -190,7 +227,7 @@ func TestChoosingATransitionStyle(t *testing.T) {
 			if refresh := sent[1]; refresh.Method != http.MethodPatch || refresh.Path != "/channels/"+discordtest.ChannelID+"/messages/"+discordtest.PanelMessageID {
 				t.Errorf("the panel refresh went to %s %s", refresh.Method, refresh.Path)
 			}
-			if saved, err := queue.GetQueue(commandtest.GuildID, true); err != nil || saved.Songs[0].AutoMixStyleVolume != check.style {
+			if saved, err := queue.GetQueue(commandtest.GuildID, true); err != nil || saved.Songs[0].AutoMixOverrides[string(transition.CategoryVolumeOut)] != check.style {
 				t.Errorf("the saved song style is wrong (err %v)", err)
 			}
 		})

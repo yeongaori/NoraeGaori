@@ -2,6 +2,7 @@
 
 package app
 
+var HookConvertStoredStyles = convertStoredStyles
 var HookForceExitAfter = forceExitAfter
 var HookIsDisconnected = &isDisconnected
 var HookIsShuttingDown = &isShuttingDown

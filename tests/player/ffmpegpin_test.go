@@ -222,7 +222,7 @@ func TestCrossfadeIncomingStreamKeepsTheOutgoingBuild(t *testing.T) {
 
 	builds.current = ffmpegBuild("2026.09.25.1845")
 	cs := player.HookNewCrossfadeState()
-	if planned := cs.HookPlan(guildPlayer, crossfadeEndState(), 100, crossfadeFade(), false, 128000); !planned {
+	if planned := cs.HookPlan(guildPlayer, crossfadeEndState(), 100, 0, crossfadeFade(), false, 128000); !planned {
 		t.Fatal("plan returned false, want an armed crossfade")
 	}
 

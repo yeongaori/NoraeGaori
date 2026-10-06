@@ -297,6 +297,31 @@ func CamelotDistance(a, b *TrackAnalysis) int {
 	return diff
 }
 
+func KeyTier(a, b *TrackAnalysis) int {
+	if a == nil || b == nil || a.KeyConfidence < KeyConfidenceFloor || b.KeyConfidence < KeyConfidenceFloor {
+		return 0
+	}
+	numberA := camelotPosition(a.Tonic, a.Minor)
+	numberB := camelotPosition(b.Tonic, b.Minor)
+	sameLetter := a.Minor == b.Minor
+
+	switch {
+	case sameLetter && (numberA == numberB || camelotSteps(numberA, numberB, 1)):
+		return 0
+	case numberA == numberB:
+		return 1
+	case camelotSteps(numberA, numberB, 1):
+		return 2
+	case sameLetter && camelotSteps(numberA, numberB, 2):
+		return 3
+	}
+	return 4
+}
+
+func camelotSteps(numberA, numberB, steps int) bool {
+	return numberB == (numberA+steps)%12 || numberA == (numberB+steps)%12
+}
+
 func estimateDownbeatPhase(novelty []float64, periodFrames, firstBeatFrames float64) int {
 	if periodFrames <= 0 || len(novelty) == 0 {
 		return 0

@@ -417,41 +417,41 @@ func TestAnalysisCarriesKeyData(t *testing.T) {
 	}
 }
 
-func measureProcessorFrameCost(recipe transition.Recipe, bothSides bool) time.Duration {
-	processor := transition.NewProcessor(recipe, 500, 0.5)
+func measureProcessorFrameCost(recipe *transition.Recipe, bothSides bool) time.Duration {
+	frames := 500
+	processor := transition.NewProcessor(recipe, &transition.Window{Frames: frames, PeriodSec: 0.5, Bars: 4})
 	aTone := &audiotest.ToneGenerator{Frequency: 220, Amplitude: 8000}
 	bTone := &audiotest.ToneGenerator{Frequency: 660, Amplitude: 8000}
 	aFrame := make([]int16, dsp.FrameSize*dsp.Channels)
 	bFrame := make([]int16, dsp.FrameSize*dsp.Channels)
 
-	frames := 500
 	start := time.Now()
 	for i := 0; i < frames; i++ {
 		aTone.Fill(aFrame)
 		progress := float64(i) / float64(frames)
 
 		if !bothSides {
-			processor.ProcessA(aFrame, progress)
+			processor.Fade(aFrame, progress, 1.0)
 			continue
 		}
 
 		bTone.Fill(bFrame)
-		aBuf := processor.ProcessA(aFrame, progress)
-		bBuf := processor.ProcessB(bFrame, progress)
-		processor.ApplyGains(aBuf, bBuf, progress, 1.0)
+		processor.Mix(aFrame, bFrame, progress, 1.0)
 	}
 
 	return time.Since(start) / time.Duration(frames)
 }
 
 func TestHeaviestRecipeFitsTheRealtimeBudget(t *testing.T) {
-	perFrame := measureProcessorFrameCost(transition.Recipe{
-		Volume: transition.VolumeCutInFadeOut,
-		EQ:     transition.EQThreeBandFade,
-		Filter: transition.FilterLowPassInHighPassOut,
-		Effect: transition.EffectEchoHalfCutEnd,
-		Loop:   transition.LoopFourBeats,
-	}, true)
+	recipe := transition.DefaultRecipe()
+	recipe.Out = transition.Side{
+		Volume: transition.VolumeSlow, EQ: transition.EQThreeBand, Filter: transition.FilterHighPass, FX: transition.FXReverbOutCenter,
+	}
+	recipe.In = transition.Side{
+		Volume: transition.VolumeFastAtEdge, EQ: transition.EQThreeBand, Filter: transition.FilterLowPass, FX: transition.FXPhaser,
+	}
+	recipe.Loop = transition.LoopSpinbackFourBeats
+	perFrame := measureProcessorFrameCost(&recipe, true)
 
 	if perFrame >= 4*time.Millisecond {
 		t.Errorf("%.3fms per 20ms frame (%.1f%% of realtime), want under 4ms",
@@ -461,9 +461,9 @@ func TestHeaviestRecipeFitsTheRealtimeBudget(t *testing.T) {
 
 func TestReverbFitsTheRealtimeBudget(t *testing.T) {
 	recipe := transition.DefaultRecipe()
-	recipe.Effect = transition.EffectReverbOutCenter
+	recipe.Out.FX = transition.FXReverbOutCenter
 
-	if perFrame := measureProcessorFrameCost(recipe, false); perFrame >= 4*time.Millisecond {
+	if perFrame := measureProcessorFrameCost(&recipe, false); perFrame >= 4*time.Millisecond {
 		t.Errorf("%.3fms per 20ms frame, want under 4ms", float64(perFrame.Microseconds())/1000)
 	}
 }

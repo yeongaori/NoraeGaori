@@ -8,6 +8,14 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+func categoryChoices() []*discordgo.ApplicationCommandOptionChoice {
+	choices := make([]*discordgo.ApplicationCommandOptionChoice, 0, len(commandCategories))
+	for _, category := range commandCategories {
+		choices = append(choices, &discordgo.ApplicationCommandOptionChoice{Name: string(category), Value: string(category)})
+	}
+	return choices
+}
+
 func Register(cmd func(string) messages.CommandStrings) {
 	for _, name := range []string{"fadein", "fadeout", "automix", "crossfade", "fadeonstop", "trimsilence"} {
 		settings.RegisterToggleCommand(cmd, name)
@@ -21,13 +29,7 @@ func Register(cmd func(string) messages.CommandStrings) {
 				Name:        "category",
 				Description: cmd("automixstyle").Options["category"],
 				Required:    false,
-				Choices: []*discordgo.ApplicationCommandOptionChoice{
-					{Name: "volume", Value: "volume"},
-					{Name: "eq", Value: "eq"},
-					{Name: "filter", Value: "filter"},
-					{Name: "effect", Value: "effect"},
-					{Name: "loop", Value: "loop"},
-				},
+				Choices:     categoryChoices(),
 			},
 			{
 				Type:        discordgo.ApplicationCommandOptionString,
@@ -61,4 +63,5 @@ func Register(cmd func(string) messages.CommandStrings) {
 	})
 	command.RegisterAliases("automixpanel", cmd("automixpanel"))
 	registerPanelRoutes()
+	reportMissingLabels()
 }

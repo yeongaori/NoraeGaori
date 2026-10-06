@@ -247,12 +247,7 @@ func analyzeStreamHead(ctx context.Context, streamURL string) (*analysis.TrackAn
 	if lead >= len(samples) {
 		return nil, fmt.Errorf("head is entirely silent")
 	}
-	head, err := analysis.AnalyzeTrackSamples(samples[lead:], analysis.SampleRate)
-	if err != nil {
-		return nil, err
-	}
-	head.FirstBeat += float64(lead) / analysis.SampleRate
-	return head, nil
+	return analysis.AnalyzeAfterLead(samples, lead, analysis.SampleRate)
 }
 
 func ClearPreCache(guildID string) {

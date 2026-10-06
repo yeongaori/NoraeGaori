@@ -128,16 +128,14 @@ func AddSongsBatch(guildID string, songs []*Song, position int) error {
 		batch := songs[batchStart:batchEnd]
 
 		query := `INSERT INTO songs (guild_id, url, title, duration, thumbnail, requested_by_id,
-			requested_by_tag, queue_position, uploader, is_live,
-			automix_style_volume, automix_style_eq, automix_style_filter,
-			automix_style_effect, automix_style_loop) VALUES `
+			requested_by_tag, queue_position, uploader, is_live, automix_overrides) VALUES `
 
 		values := []interface{}{}
 		for i, song := range batch {
 			if i > 0 {
 				query += ", "
 			}
-			query += "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+			query += "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 
 			isLiveInt := 0
 			if song.IsLive {
@@ -147,9 +145,7 @@ func AddSongsBatch(guildID string, songs []*Song, position int) error {
 			values = append(values,
 				guildID, song.URL, song.Title, song.Duration, song.Thumbnail,
 				song.RequestedByID, song.RequestedByTag, position+batchStart+i, song.Uploader, isLiveInt,
-				defaultAutoMixStyle(song.AutoMixStyleVolume), defaultAutoMixStyle(song.AutoMixStyleEQ),
-				defaultAutoMixStyle(song.AutoMixStyleFilter), defaultAutoMixStyle(song.AutoMixStyleEffect),
-				defaultAutoMixStyle(song.AutoMixStyleLoop),
+				EncodeOverrides(song.AutoMixOverrides),
 			)
 		}
 
@@ -213,15 +209,11 @@ func AddSong(guildID string, song *Song, position int) error {
 
 	_, err = database.DB.Exec(
 		`INSERT INTO songs (guild_id, url, title, duration, thumbnail, requested_by_id,
-		 requested_by_tag, queue_position, uploader, is_live,
-		 automix_style_volume, automix_style_eq, automix_style_filter,
-		 automix_style_effect, automix_style_loop)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 requested_by_tag, queue_position, uploader, is_live, automix_overrides)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		guildID, song.URL, song.Title, song.Duration, song.Thumbnail,
 		song.RequestedByID, song.RequestedByTag, position, song.Uploader, isLiveInt,
-		defaultAutoMixStyle(song.AutoMixStyleVolume), defaultAutoMixStyle(song.AutoMixStyleEQ),
-		defaultAutoMixStyle(song.AutoMixStyleFilter), defaultAutoMixStyle(song.AutoMixStyleEffect),
-		defaultAutoMixStyle(song.AutoMixStyleLoop),
+		EncodeOverrides(song.AutoMixOverrides),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to insert song: %w", err)

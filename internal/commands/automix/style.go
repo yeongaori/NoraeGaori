@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"noraegaori/internal/audio/transition"
 	"noraegaori/internal/discord"
+	"slices"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -32,17 +33,39 @@ func autoMixStyleOptionValue(options []*discordgo.ApplicationCommandInteractionD
 	return strings.ToLower(strings.TrimSpace(value))
 }
 
-func autoMixStyleFields(guildID string, categories []string) []*discordgo.MessageEmbedField {
+var commandCategories = slices.Concat(transition.StyleCategories(), transition.ShortcutCategories())
+
+func joinCategories(categories []transition.Category) string {
+	names := make([]string, 0, len(categories))
+	for _, category := range categories {
+		names = append(names, string(category))
+	}
+	return strings.Join(names, ", ")
+}
+
+func currentGuildStyle(overrides map[string]string, category transition.Category) string {
+	targets := transition.ShortcutTargets(category)
+	if len(targets) == 0 {
+		targets = []transition.Category{category}
+	}
+	values := make([]string, 0, len(targets))
+	for _, target := range targets {
+		value, ok := overrides[string(target)]
+		if !ok {
+			value = transition.StyleAuto
+		}
+		values = append(values, value)
+	}
+	return strings.Join(values, " / ")
+}
+
+func autoMixStyleFields(guildID string, categories []transition.Category) []*discordgo.MessageEmbedField {
+	overrides, _ := queue.GetAutoMixOverrides(guildID)
 	fields := make([]*discordgo.MessageEmbedField, 0, len(categories))
 	for _, category := range categories {
-		current, err := queue.GetAutoMixStyle(guildID, category)
-		if err != nil {
-			current = queue.AutoMixStyleAuto
-		}
-		values := transition.StyleValues(category)
 		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   category,
-			Value:  fmt.Sprintf("**%s**\n%s", current, strings.Join(values, ", ")),
+			Name:   string(category),
+			Value:  fmt.Sprintf("**%s**\n%s", currentGuildStyle(overrides, category), strings.Join(transition.StyleValues(category), ", ")),
 			Inline: false,
 		})
 	}
@@ -54,22 +77,23 @@ func HandleAutoMixStyle(s *discordgo.Session, i *discordgo.InteractionCreate) er
 	t := messages.T(guildID)
 	options := i.ApplicationCommandData().Options
 
-	category := autoMixStyleOptionValue(options, "category")
+	categoryName := autoMixStyleOptionValue(options, "category")
 	style := autoMixStyleOptionValue(options, "style")
 
-	if category == "" {
+	if categoryName == "" {
 		discord.RespondEmbed(s, i, &discordgo.MessageEmbed{
 			Color:       messages.ColorSuccess,
 			Title:       t.Settings.AutoMixStyleTitle,
 			Description: t.Settings.AutoMixStyleDesc,
-			Fields:      autoMixStyleFields(guildID, queue.AutoMixStyleCategories()),
+			Fields:      autoMixStyleFields(guildID, transition.StyleCategories()),
 		})
 		return nil
 	}
 
-	if transition.StyleValues(category) == nil {
+	category, _ := transition.ParseCategory(categoryName)
+	if !slices.Contains(commandCategories, category) {
 		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(t.Titles.Error,
-			fmt.Sprintf(t.Settings.AutoMixStyleInvalidCategory, category, strings.Join(queue.AutoMixStyleCategories(), ", "))))
+			fmt.Sprintf(t.Settings.AutoMixStyleInvalidCategory, categoryName, joinCategories(commandCategories))))
 		return nil
 	}
 
@@ -78,7 +102,7 @@ func HandleAutoMixStyle(s *discordgo.Session, i *discordgo.InteractionCreate) er
 			Color:       messages.ColorSuccess,
 			Title:       t.Settings.AutoMixStyleTitle,
 			Description: t.Settings.AutoMixStyleDesc,
-			Fields:      autoMixStyleFields(guildID, []string{category}),
+			Fields:      autoMixStyleFields(guildID, []transition.Category{category}),
 		})
 		return nil
 	}
@@ -90,7 +114,7 @@ func HandleAutoMixStyle(s *discordgo.Session, i *discordgo.InteractionCreate) er
 		return nil
 	}
 
-	if err := queue.SetAutoMixStyle(guildID, category, style); err != nil {
+	if err := queue.SetAutoMixOverrides(guildID, transition.ExpandLegacy(category, style)); err != nil {
 		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(t.Titles.Error, fmt.Sprintf(t.Settings.AutoMixStyleError, err)))
 		return err
 	}

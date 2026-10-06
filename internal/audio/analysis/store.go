@@ -2,6 +2,8 @@ package analysis
 
 import (
 	"database/sql"
+	"strconv"
+	"strings"
 	"time"
 
 	"noraegaori/internal/database"
@@ -9,7 +11,7 @@ import (
 )
 
 const (
-	analysisVersion       = 3
+	analysisVersion       = 4
 	SegmentHead           = "head"
 	SegmentTail           = "tail"
 	analysisRetentionDays = 90
@@ -54,12 +56,12 @@ func SaveTrackAnalysis(url, segment string, analysis *TrackAnalysis) error {
 
 	_, err := database.DB.Exec(
 		`INSERT OR REPLACE INTO track_analysis
-		 (url, segment, bpm, period_sec, first_beat, duration, tonic, minor,
-		  key_confidence, downbeat_phase, analysis_version, analyzed_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 (url, segment, bpm, period_sec, first_beat, duration, offset_sec, tonic, minor,
+		  key_confidence, downbeat_phase, beat_strength, bar_offsets, analysis_version, analyzed_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		url, segment, analysis.BPM, analysis.PeriodSec, analysis.FirstBeat,
-		analysis.Duration, analysis.Tonic, minor, analysis.KeyConfidence,
-		analysis.DownbeatPhase, analysisVersion, time.Now().Unix(),
+		analysis.Duration, analysis.Offset, analysis.Tonic, minor, analysis.KeyConfidence,
+		analysis.DownbeatPhase, analysis.BeatStrength, encodeOffsets(analysis.BarOffsets), analysisVersion, time.Now().Unix(),
 	)
 	if err != nil {
 		logger.Warnf("Failed to save %s analysis: %v", segment, err)
@@ -74,15 +76,16 @@ func LoadTrackAnalysis(url, segment string) *TrackAnalysis {
 
 	var analysis TrackAnalysis
 	var minor, version int
+	var offsets string
 
 	err := database.DB.QueryRow(
-		`SELECT bpm, period_sec, first_beat, duration, tonic, minor,
-		 key_confidence, downbeat_phase, analysis_version
+		`SELECT bpm, period_sec, first_beat, duration, offset_sec, tonic, minor,
+		 key_confidence, downbeat_phase, beat_strength, bar_offsets, analysis_version
 		 FROM track_analysis WHERE url = ? AND segment = ?`,
 		url, segment,
 	).Scan(&analysis.BPM, &analysis.PeriodSec, &analysis.FirstBeat,
-		&analysis.Duration, &analysis.Tonic, &minor, &analysis.KeyConfidence,
-		&analysis.DownbeatPhase, &version)
+		&analysis.Duration, &analysis.Offset, &analysis.Tonic, &minor, &analysis.KeyConfidence,
+		&analysis.DownbeatPhase, &analysis.BeatStrength, &offsets, &version)
 
 	if err == sql.ErrNoRows {
 		return nil
@@ -98,7 +101,32 @@ func LoadTrackAnalysis(url, segment string) *TrackAnalysis {
 	}
 
 	analysis.Minor = minor == 1
+	analysis.BarOffsets = decodeOffsets(offsets)
 	return &analysis
+}
+
+func encodeOffsets(offsets []float64) string {
+	parts := make([]string, len(offsets))
+	for i, offset := range offsets {
+		parts[i] = strconv.FormatFloat(offset, 'f', 5, 64)
+	}
+	return strings.Join(parts, ",")
+}
+
+func decodeOffsets(encoded string) []float64 {
+	if encoded == "" {
+		return nil
+	}
+	parts := strings.Split(encoded, ",")
+	offsets := make([]float64, 0, len(parts))
+	for _, part := range parts {
+		offset, err := strconv.ParseFloat(part, 64)
+		if err != nil {
+			return nil
+		}
+		offsets = append(offsets, offset)
+	}
+	return offsets
 }
 
 func Summarize(analysis *TrackAnalysis) (float64, string, string, bool) {

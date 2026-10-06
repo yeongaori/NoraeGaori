@@ -21,10 +21,13 @@ type TrackAnalysis struct {
 	PeriodSec     float64
 	FirstBeat     float64
 	Duration      float64
+	Offset        float64
 	Tonic         int
 	Minor         bool
 	KeyConfidence float64
 	DownbeatPhase int
+	BeatStrength  float64
+	BarOffsets    []float64
 }
 
 func onsetEnvelope(samples []float32, sampleRate float64) ([]float64, float64) {
@@ -124,15 +127,8 @@ func estimateTempo(novelty []float64, frameRate float64) (float64, float64) {
 		periodFrames = float64(scanMax)
 		escaped = "slower-than-band"
 	default:
-		yL := scores[bestLag-1]
-		yC := scores[bestLag]
-		yR := scores[bestLag+1]
-		denom := yL - 2*yC + yR
-		if denom < 0 {
-			delta := (0.5 * (yL - yR)) / denom
-			if math.Abs(delta) < 1 {
-				periodFrames = float64(bestLag) + delta
-			}
+		if delta := peakOffset(scores[bestLag-1], scores[bestLag], scores[bestLag+1]); math.Abs(delta) < 1 {
+			periodFrames = float64(bestLag) + delta
 		}
 	}
 
@@ -196,7 +192,7 @@ func AnalyzeTrackSamples(samples []float32, sampleRate float64) (*TrackAnalysis,
 		return nil, fmt.Errorf("flat onset envelope")
 	}
 
-	bpm, periodFrames := estimateTempo(novelty, frameRate)
+	_, periodFrames := estimateTempo(novelty, frameRate)
 	if periodFrames <= 0 || math.IsNaN(periodFrames) || math.IsInf(periodFrames, 0) {
 		return nil, fmt.Errorf("degenerate tempo estimate")
 	}
@@ -207,16 +203,53 @@ func AnalyzeTrackSamples(samples []float32, sampleRate float64) (*TrackAnalysis,
 	}
 
 	downbeatPhase := estimateDownbeatPhase(novelty, periodFrames, firstBeat*frameRate)
+	strength := beatStrength(novelty, periodFrames)
+	periodFrames, firstDownbeatFrames := refineGrid(novelty, periodFrames, firstBeat*frameRate+float64(downbeatPhase)*periodFrames)
+	firstBeatFrames, downbeatPhase := splitDownbeat(firstDownbeatFrames, periodFrames, downbeatPhase)
 	tonic, minor, keyConfidence := AnalyzeKey(samples, sampleRate)
 
 	return &TrackAnalysis{
-		BPM:           bpm,
-		PeriodSec:     periodSec,
-		FirstBeat:     firstBeat,
+		BPM:           60 * frameRate / periodFrames,
+		PeriodSec:     periodFrames / frameRate,
+		FirstBeat:     firstBeatFrames / frameRate,
 		Duration:      duration,
 		Tonic:         tonic,
 		Minor:         minor,
 		KeyConfidence: keyConfidence,
 		DownbeatPhase: downbeatPhase,
+		BeatStrength:  strength,
+		BarOffsets:    barOffsets(novelty, frameRate, periodFrames, firstBeatFrames+float64(downbeatPhase)*periodFrames),
 	}, nil
+}
+
+func AnalyzeAfterLead(samples []float32, lead int, sampleRate float64) (*TrackAnalysis, error) {
+	result, err := AnalyzeTrackSamples(samples[lead:], sampleRate)
+	if err != nil {
+		return nil, err
+	}
+	leadSeconds := float64(lead) / sampleRate
+	result.FirstBeat += leadSeconds
+	result.Duration += leadSeconds
+	return result, nil
+}
+
+func beatStrength(novelty []float64, periodFrames float64) float64 {
+	lag := int(math.Round(periodFrames))
+	var energy, matched float64
+	for i := lag; i < len(novelty); i++ {
+		energy += novelty[i] * novelty[i]
+		matched += novelty[i] * novelty[i-lag]
+	}
+	if energy <= 0 {
+		return 0
+	}
+	return matched / energy
+}
+
+func peakOffset(left, center, right float64) float64 {
+	denominator := left - 2*center + right
+	if denominator >= 0 {
+		return 0
+	}
+	return 0.5 * (left - right) / denominator
 }

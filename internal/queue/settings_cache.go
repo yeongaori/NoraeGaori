@@ -60,18 +60,3 @@ func readSetting[T any](guildID, name string, fallback T, pick func(*guildSettin
 	}
 	return pick(settings), nil
 }
-
-func autoMixStyleOf(settings *guildSettingsRow, category string) string {
-	switch category {
-	case "volume":
-		return settings.styleVolume
-	case "eq":
-		return settings.styleEQ
-	case "filter":
-		return settings.styleFilter
-	case "effect":
-		return settings.styleEffect
-	default:
-		return settings.styleLoop
-	}
-}

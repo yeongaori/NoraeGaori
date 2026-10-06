@@ -59,12 +59,13 @@ func RespondEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *d
 	})
 }
 
-func RespondEphemeralEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error {
+func RespondEphemeralEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, components ...discordgo.MessageComponent) error {
 	return s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Embeds: []*discordgo.MessageEmbed{embed},
-			Flags:  discordgo.MessageFlagsEphemeral,
+			Embeds:     []*discordgo.MessageEmbed{embed},
+			Components: components,
+			Flags:      discordgo.MessageFlagsEphemeral,
 		},
 	})
 }

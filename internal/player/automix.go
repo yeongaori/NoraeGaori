@@ -17,9 +17,10 @@ import (
 )
 
 const (
-	tailMarginSec            = 4.0
 	minUsableCrossfadeFrames = 100
 	fallbackSlideFrames      = 25
+	transitionLeadSec        = 2.0
+	minNextSongMarginSec     = 5.0
 )
 
 type PendingStream struct {
@@ -38,12 +39,14 @@ type crossfadeState struct {
 	handedOff       bool
 	cancelled       bool
 	trimSilence     bool
+	trimBLead       bool
 	bLoudSeen       bool
 	autoMix         bool
 	scope           *logger.Scoped
 	bStream         audioStream
 	nextSongID      int
-	startOffsetSec  float64
+	bSeekSec        float64
+	bTempo          ffmpeg.Tempo
 	transitionFrame int
 	crossfadeFrames int
 	minUsableFrames int
@@ -56,9 +59,9 @@ type crossfadeState struct {
 	mixFloat        []float64
 	limiter         dsp.Limiter
 	opusScratch     []byte
-	recipe          transition.Recipe
 	processor       *transition.Processor
 	beatLoop        *transition.BeatLoop
+	bLoop           *transition.BeatLoop
 	guildID         string
 	normalization   bool
 	bitrate         int
@@ -75,7 +78,6 @@ func newCrossfadeState() *crossfadeState {
 		mixBuf:      make([]int16, frameSize*channels),
 		mixFloat:    make([]float64, frameSize*channels),
 		opusScratch: make([]byte, maxOpusFrameBytes),
-		recipe:      transition.DefaultRecipe(),
 	}
 }
 
@@ -126,47 +128,81 @@ func analysisPeriodSec(a *analysis.TrackAnalysis) float64 {
 	return a.PeriodSec
 }
 
-func analysisFirstBeat(a *analysis.TrackAnalysis) float64 {
-	if a == nil {
-		return 0
-	}
-	return a.FirstBeat
-}
-
-func resolveSlideFrames(a *analysis.TrackAnalysis) int {
+func resolveSlideFrames(a *analysis.TrackAnalysis, beatmatched bool) int {
 	if a == nil {
 		return fallbackSlideFrames
 	}
 
-	slideFrames := int(math.Round(a.PeriodSec * dsp.FramesPerSecond))
+	beats := 1.0
+	if beatmatched {
+		beats = analysis.BarBeats
+	}
+	slideFrames := int(math.Round(beats * a.PeriodSec * dsp.FramesPerSecond))
 	if slideFrames < 1 {
 		return fallbackSlideFrames
 	}
 	return slideFrames
 }
 
-func resolveTransitionFrame(transitionFrame, maxStart, sentFrames, tailStartFrame int, beatAligned bool, loopBeats int, a *analysis.TrackAnalysis) int {
-	if beatAligned {
-		transitionFrame -= int(tailMarginSec * dsp.FramesPerSecond)
-		transitionFrame = snapTransitionToBeats(transitionFrame, tailStartFrame, loopBeats, a)
-	}
-	if transitionFrame > maxStart {
-		transitionFrame = maxStart
-	}
-	if transitionFrame < sentFrames+1 {
-		return sentFrames + 1
-	}
-	return transitionFrame
+type transitionPlacement struct {
+	transitionFrame int
+	crossfadeFrames int
+	bSeekSec        float64
+	bTempo          ffmpeg.Tempo
+	bars            int
+	beatmatched     bool
+	auto            *transition.Recipe
+	summary         string
 }
 
-func snapTransitionToBeats(transitionFrame, tailStartFrame, loopBeats int, a *analysis.TrackAnalysis) int {
-	if a == nil {
-		return transitionFrame
+func placeCrossfade(fade *fadeSettings, effectiveEnd, sentFrames int, nextSec float64) (transitionPlacement, bool) {
+	crossfadeFrames, crossfadeSec := transition.CrossfadeFrames(false, 0, fade.crossfadeSec, nil)
+	transitionFrame := effectiveEnd - crossfadeFrames
+	if crossfadeFrames < 1 || transitionFrame < sentFrames+1 {
+		return transitionPlacement{}, false
 	}
-	if loopBeats >= analysis.BarBeats {
-		return snapTransitionToBar(transitionFrame, tailStartFrame, a)
+	if nextSec > 0 && nextSec < crossfadeSec+minNextSongMarginSec {
+		return transitionPlacement{}, false
 	}
-	return snapTransitionToGrid(transitionFrame, tailStartFrame, a)
+	return transitionPlacement{
+		transitionFrame: transitionFrame,
+		crossfadeFrames: crossfadeFrames,
+		auto:            transition.PresetRecipe(transition.NoPreset),
+		summary:         "crossfade",
+	}, true
+}
+
+func placeAutoMix(pair *transition.Pair, originSec float64, effectiveEnd int) (transitionPlacement, bool) {
+	overlap, ok := transition.SelectOverlap(pair)
+	if !ok {
+		return transitionPlacement{}, false
+	}
+
+	startFrames := (overlap.StartA - originSec) * dsp.FramesPerSecond
+	transitionFrame := int(math.Floor(startFrames))
+	endFrame := min(effectiveEnd, int(math.Round((overlap.StartA+overlap.Length-originSec)*dsp.FramesPerSecond)))
+	if endFrame-transitionFrame < 1 {
+		return transitionPlacement{}, false
+	}
+
+	placement := transitionPlacement{
+		transitionFrame: transitionFrame,
+		crossfadeFrames: endFrame - transitionFrame,
+		bars:            overlap.Bars,
+		auto:            transition.PresetRecipe(overlap.Preset),
+		summary:         overlap.String(),
+	}
+	if overlap.Beatmatched {
+		subFrameSec := (startFrames - float64(transitionFrame)) / dsp.FramesPerSecond
+		placement.bSeekSec = math.Max(0, overlap.StartB-subFrameSec*overlap.SpeedB)
+		placement.bTempo = ffmpeg.Tempo{Speed: overlap.SpeedB, HoldSec: overlap.Length + ffmpeg.TempoSettleSec}
+		placement.beatmatched = true
+	}
+	return placement, true
+}
+
+func songSeconds(song *queue.Song) float64 {
+	return float64(youtube.ParseDurationToSeconds(song.Duration))
 }
 
 type crossfadePlan struct {
@@ -176,43 +212,26 @@ type crossfadePlan struct {
 	normalization   bool
 	bitrate         int
 	trimSilence     bool
+	trimBLead       bool
 	bStream         audioStream
 	nextSongID      int
-	startOffsetSec  float64
+	bSeekSec        float64
+	bTempo          ffmpeg.Tempo
 	transitionFrame int
 	crossfadeFrames int
 	minUsableFrames int
 	totalFrames     int
 	slideFrames     int
-	recipe          transition.Recipe
-	loopSamples     int
-	periodSec       float64
-	flatGains       bool
+	resolved        *transition.Resolved
+	window          transition.Window
 	description     string
 }
 
-func (cs *crossfadeState) buildPlan(player *GuildPlayer, es *ffmpeg.EndState, sentFrames int, fade fadeSettings, normalization bool, bitrate int) *crossfadePlan {
+func (cs *crossfadeState) buildPlan(player *GuildPlayer, es *ffmpeg.EndState, sentFrames int, originSec float64, fade *fadeSettings, normalization bool, bitrate int) *crossfadePlan {
 	if (!fade.autoMix && !fade.crossfade) || cs.armed {
 		return nil
 	}
 	if fade.repeatMode == queue.RepeatSingle {
-		return nil
-	}
-
-	var aAnal *analysis.TrackAnalysis
-	beatAligned := fade.autoMix
-	if fade.autoMix {
-		aAnal = es.Analysis
-	}
-
-	crossfadeFrames, crossfadeSec := transition.CrossfadeFrames(fade.autoMix, fade.autoMixBeats, fade.crossfadeSec, aAnal)
-	if crossfadeFrames < 1 {
-		return nil
-	}
-
-	effectiveEnd := es.TotalFrames - es.SilentTailFrames
-	maxStart := effectiveEnd - crossfadeFrames
-	if maxStart < sentFrames+1 {
 		return nil
 	}
 
@@ -222,27 +241,31 @@ func (cs *crossfadeState) buildPlan(player *GuildPlayer, es *ffmpeg.EndState, se
 		return nil
 	}
 
-	var bAnal *analysis.TrackAnalysis
-	if fade.autoMix {
-		bAnal = LookupAnalysis(guildID, next, analysis.SegmentHead)
-	}
+	effectiveEnd := es.TotalFrames - es.SilentTailFrames
 	scope := logger.Scope("Crossfade")
-	if beatAligned {
+	var aAnal, bAnal *analysis.TrackAnalysis
+	var placement transitionPlacement
+	var ok bool
+	if fade.autoMix {
 		scope = logger.Scope("AutoMix")
+		aAnal = es.Analysis
+		bAnal = LookupAnalysis(guildID, next, analysis.SegmentHead)
+		placement, ok = placeAutoMix(&transition.Pair{
+			From: transition.Track{
+				URL:      current.URL,
+				Duration: songSeconds(current),
+				End:      originSec + float64(effectiveEnd)/dsp.FramesPerSecond,
+				Analysis: aAnal,
+			},
+			To:            transition.Track{URL: next.URL, Duration: songSeconds(next), Analysis: bAnal},
+			MaxBeats:      fade.autoMixBeats,
+			EarliestStart: originSec + float64(sentFrames)/dsp.FramesPerSecond + transitionLeadSec,
+			Settings:      transition.ResolveSettings(songOverrides(current)),
+		}, originSec, effectiveEnd)
+	} else {
+		placement, ok = placeCrossfade(fade, effectiveEnd, sentFrames, songSeconds(next))
 	}
-
-	songOverrides := songTransitionOverrides(current)
-	recipe, _, styleSource := transition.ResolveStyles(aAnal, bAnal, fade.autoMix, fade.styleOverrides, songOverrides)
-
-	periodSec := analysisPeriodSec(aAnal)
-
-	loopStyle, loopSamples := transition.ClampLoopStyle(recipe.Loop, periodSec, crossfadeFrames)
-	recipe.Loop = loopStyle
-	loopBeats := transition.LoopBeatCount(recipe.Loop)
-
-	bDuration := youtube.ParseDurationToSeconds(next.Duration)
-	if bDuration > 0 && float64(bDuration) < crossfadeSec+5 {
-		scope.Debugf("next song too short for crossfade (%ds < %.1fs), skipping for guild: %s", bDuration, crossfadeSec+5, guildID)
+	if !ok {
 		return nil
 	}
 
@@ -250,39 +273,41 @@ func (cs *crossfadeState) buildPlan(player *GuildPlayer, es *ffmpeg.EndState, se
 		scope.Debugf("trimming %d silent tail frames, effective end %d of %d for guild: %s", es.SilentTailFrames, effectiveEnd, es.TotalFrames, guildID)
 	}
 
-	transitionFrame := resolveTransitionFrame(effectiveEnd-crossfadeFrames, maxStart, sentFrames, es.TailStartFrame, beatAligned, loopBeats, aAnal)
-	startOffsetSec := analysisFirstBeat(bAnal)
+	resolved := transition.ResolveStyles(placement.auto, fade.styleOverrides, songOverrides(current))
+	resolved.ClampRolls(analysisPeriodSec(aAnal), placement.crossfadeFrames)
 
-	bArgs := ffmpeg.Args(nextURL, startOffsetSec, normalization)
+	bArgs := ffmpeg.Args(nextURL, placement.bSeekSec, normalization, placement.bTempo)
 	bStream, err := player.startStream(bArgs, fade.autoMix || fade.trimSilence)
 	if err != nil {
 		scope.Debugf("failed to start next stream for guild %s: %v", guildID, err)
 		return nil
 	}
 
-	slideFrames := resolveSlideFrames(aAnal)
-	minUsableFrames := min(minUsableCrossfadeFrames, crossfadeFrames)
-
 	return &crossfadePlan{
-		autoMix:         beatAligned,
+		autoMix:         fade.autoMix,
 		scope:           scope,
 		guildID:         guildID,
 		normalization:   normalization,
 		bitrate:         bitrate,
 		trimSilence:     fade.trimSilence,
+		trimBLead:       fade.trimSilence && !placement.beatmatched,
 		bStream:         bStream,
 		nextSongID:      next.ID,
-		startOffsetSec:  startOffsetSec,
-		transitionFrame: transitionFrame,
-		crossfadeFrames: crossfadeFrames,
-		minUsableFrames: minUsableFrames,
+		bSeekSec:        placement.bSeekSec,
+		bTempo:          placement.bTempo,
+		transitionFrame: placement.transitionFrame,
+		crossfadeFrames: placement.crossfadeFrames,
+		minUsableFrames: min(minUsableCrossfadeFrames, placement.crossfadeFrames),
 		totalFrames:     effectiveEnd,
-		slideFrames:     slideFrames,
-		recipe:          recipe,
-		loopSamples:     loopSamples,
-		periodSec:       periodSec,
-		flatGains:       !fade.crossfade,
-		description:     fmt.Sprintf("recipe %s (%s) [%s]", recipe, describeTransitionInputs(aAnal, bAnal), describeStyleSources(styleSource)),
+		slideFrames:     resolveSlideFrames(aAnal, placement.beatmatched),
+		resolved:        resolved,
+		window: transition.Window{
+			Frames:    placement.crossfadeFrames,
+			PeriodSec: analysisPeriodSec(aAnal),
+			Bars:      placement.bars,
+		},
+		description: fmt.Sprintf("%s recipe %s (%s) [%s]", placement.summary, &resolved.Recipe,
+			describeTransitionInputs(aAnal, bAnal), describeStyleSources(resolved.Sources)),
 	}
 }
 
@@ -294,26 +319,25 @@ func (cs *crossfadeState) commit(p *crossfadePlan) {
 	cs.normalization = p.normalization
 	cs.bitrate = p.bitrate
 	cs.trimSilence = p.trimSilence
+	cs.trimBLead = p.trimBLead
 	cs.bStream = p.bStream
 	cs.nextSongID = p.nextSongID
-	cs.startOffsetSec = p.startOffsetSec
+	cs.bSeekSec = p.bSeekSec
+	cs.bTempo = p.bTempo
 	cs.transitionFrame = p.transitionFrame
 	cs.crossfadeFrames = p.crossfadeFrames
 	cs.minUsableFrames = p.minUsableFrames
 	cs.totalFrames = p.totalFrames
 	cs.slideFrames = p.slideFrames
-	cs.recipe = p.recipe
-	cs.beatLoop = nil
-	if p.loopSamples > 0 {
-		cs.beatLoop = transition.CaptureBeatLoop(p.loopSamples)
-	}
+	recipe := &p.resolved.Recipe
+	cs.beatLoop = transition.PrepareBeatLoop(recipe.Loop, p.window.PeriodSec, p.window.Frames)
+	cs.bLoop = transition.PrepareIncomingLoop(recipe.In.FX, p.window.PeriodSec, p.window.Frames)
 	cs.limiter = dsp.Limiter{}
-	cs.processor = transition.NewProcessor(p.recipe, p.crossfadeFrames, p.periodSec)
-	cs.processor.SetFlatGains(p.flatGains)
+	cs.processor = transition.NewProcessor(recipe, &p.window)
 }
 
-func (cs *crossfadeState) plan(player *GuildPlayer, es *ffmpeg.EndState, sentFrames int, fade fadeSettings, normalization bool, bitrate int) bool {
-	p := cs.buildPlan(player, es, sentFrames, fade, normalization, bitrate)
+func (cs *crossfadeState) plan(player *GuildPlayer, es *ffmpeg.EndState, sentFrames int, originSec float64, fade *fadeSettings, normalization bool, bitrate int) bool {
+	p := cs.buildPlan(player, es, sentFrames, originSec, fade, normalization, bitrate)
 	if p == nil {
 		return false
 	}
@@ -325,22 +349,16 @@ func (cs *crossfadeState) plan(player *GuildPlayer, es *ffmpeg.EndState, sentFra
 	return true
 }
 
-func songTransitionOverrides(song *queue.Song) transition.StyleOverrides {
+func songOverrides(song *queue.Song) map[string]string {
 	if song == nil {
-		return transition.StyleOverrides{}
+		return nil
 	}
-	return transition.StyleOverrides{
-		Volume: song.AutoMixStyleVolume,
-		EQ:     song.AutoMixStyleEQ,
-		Filter: song.AutoMixStyleFilter,
-		Effect: song.AutoMixStyleEffect,
-		Loop:   song.AutoMixStyleLoop,
-	}
+	return song.AutoMixOverrides
 }
 
-func describeStyleSources(source map[string]string) string {
+func describeStyleSources(source map[transition.Category]string) string {
 	parts := make([]string, 0, len(source))
-	for _, category := range []string{"volume", "eq", "filter", "effect", "loop"} {
+	for _, category := range transition.StyleCategories() {
 		parts = append(parts, fmt.Sprintf("%s:%s", category, source[category]))
 	}
 	return strings.Join(parts, " ")
@@ -352,10 +370,11 @@ func describeTransitionInputs(a, b *analysis.TrackAnalysis) string {
 	}
 	raw := math.Abs(b.BPM-a.BPM) / a.BPM
 	folded, factor := analysis.TempoDeltaFactor(a.BPM, b.BPM)
-	return fmt.Sprintf("bpmA=%.1f bpmB=%.1f delta=%.4f raw=%.4f factorB=%.1fx keyA=%s keyB=%s confA=%.4f confB=%.4f distance=%d",
+	return fmt.Sprintf("bpmA=%.1f bpmB=%.1f delta=%.4f raw=%.4f factorB=%.1fx keyA=%s keyB=%s confA=%.4f confB=%.4f tier=%d strengthA=%.3f strengthB=%.3f barsA=%d barsB=%d",
 		a.BPM, b.BPM, folded, raw, factor,
 		analysis.CamelotCode(a.Tonic, a.Minor), analysis.CamelotCode(b.Tonic, b.Minor),
-		a.KeyConfidence, b.KeyConfidence, analysis.CamelotDistance(a, b))
+		a.KeyConfidence, b.KeyConfidence, analysis.KeyTier(a, b),
+		a.BeatStrength, b.BeatStrength, len(a.BarOffsets), len(b.BarOffsets))
 }
 
 func (cs *crossfadeState) bReady() bool {
@@ -387,7 +406,8 @@ func (cs *crossfadeState) slideTransition(reason string) {
 func (cs *crossfadeState) startNextStreamRefetch(player *GuildPlayer) {
 	guildID := cs.guildID
 	songID := cs.nextSongID
-	startOffsetSec := cs.startOffsetSec
+	seekSec := cs.bSeekSec
+	tempo := cs.bTempo
 	normalization := cs.normalization
 	bitrate := cs.bitrate
 	collectTail := cs.trimSilence || cs.autoMix
@@ -419,7 +439,7 @@ func (cs *crossfadeState) startNextStreamRefetch(player *GuildPlayer) {
 			return
 		}
 
-		stream, err := player.startStream(ffmpeg.Args(freshURL, startOffsetSec, normalization), collectTail)
+		stream, err := player.startStream(ffmpeg.Args(freshURL, seekSec, normalization, tempo), collectTail)
 		if err != nil {
 			cs.scope.Debugf("refetched stream failed to start for guild %s: %v", guildID, err)
 			return
@@ -454,7 +474,7 @@ func (cs *crossfadeState) pullBFrame() []int16 {
 				return nil
 			}
 			cs.bFramesConsumed++
-			if cs.trimSilence && !cs.bLoudSeen {
+			if cs.trimBLead && !cs.bLoudSeen {
 				if dsp.FrameSilent(bf) {
 					cs.bLeadSkipFrames++
 					continue
@@ -468,19 +488,21 @@ func (cs *crossfadeState) pullBFrame() []int16 {
 	}
 }
 
+func (cs *crossfadeState) nextBFrame() []int16 {
+	bFrame := cs.pullBFrame()
+	if cs.bLoop != nil {
+		return cs.bLoop.Next(bFrame)
+	}
+	return bFrame
+}
+
 func (cs *crossfadeState) mixAndSend(player *GuildPlayer, conn voiceConnection, stopCh chan struct{}, aFrame, bFrame []int16, volume float64, enc *opus.Encoder) error {
 	progress := 0.0
 	if cs.crossfadeFrames > 0 {
 		progress = float64(cs.mixedFrames) / float64(cs.crossfadeFrames)
 	}
 
-	aBuf := cs.processor.ProcessA(aFrame, progress)
-	bBuf := cs.processor.ProcessB(bFrame, progress)
-	cs.processor.ApplyGains(aBuf, bBuf, progress, volume)
-
-	for i := range cs.mixFloat {
-		cs.mixFloat[i] = aBuf[i] + bBuf[i]
-	}
+	copy(cs.mixFloat, cs.processor.Mix(aFrame, bFrame, progress, volume))
 	cs.limiter.ProcessStereo(cs.mixFloat, dsp.FullScale*max(1, volume))
 	dsp.FloatToFrame(cs.mixFloat, cs.mixBuf)
 
@@ -498,7 +520,7 @@ func (cs *crossfadeState) mixAndSend(player *GuildPlayer, conn voiceConnection, 
 func (cs *crossfadeState) handoff(player *GuildPlayer, enc *opus.Encoder) {
 	var tail *transition.Tail
 	if cs.processor != nil {
-		tail = cs.processor.MakeHandoffTail(cs.processor.LastGain())
+		tail = cs.processor.MakeTail()
 	}
 
 	player.mu.Lock()
@@ -508,7 +530,7 @@ func (cs *crossfadeState) handoff(player *GuildPlayer, enc *opus.Encoder) {
 		Encoder:           enc,
 		FramesConsumed:    cs.bFramesConsumed,
 		LeadingSkipFrames: cs.bLeadSkipFrames,
-		StartOffsetSec:    cs.startOffsetSec,
+		StartOffsetSec:    cs.bSeekSec + cs.bTempo.Drift(),
 		Tail:              tail,
 	}
 	player.mu.Unlock()
@@ -553,7 +575,7 @@ func (cs *crossfadeState) consume(player *GuildPlayer, conn voiceConnection, sto
 		aFrame = cs.beatLoop.Next(pcmData)
 	}
 
-	bFrame := cs.pullBFrame()
+	bFrame := cs.nextBFrame()
 	if err := cs.mixAndSend(player, conn, stopCh, aFrame, bFrame, volume, enc); err != nil {
 		cs.abort()
 		return true, err
@@ -587,7 +609,7 @@ func (cs *crossfadeState) finishOnDrain(player *GuildPlayer, conn voiceConnectio
 			aFrame = cs.beatLoop.Next(nil)
 		}
 
-		bFrame := cs.pullBFrame()
+		bFrame := cs.nextBFrame()
 		if err := cs.mixAndSend(player, conn, stopCh, aFrame, bFrame, volume, enc); err != nil {
 			cs.abort()
 			return true, err

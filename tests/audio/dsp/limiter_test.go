@@ -178,6 +178,24 @@ func TestLimiterBecomesIdleAfterRelease(t *testing.T) {
 	}
 }
 
+func TestLimiterReleasesWithoutAGainStep(t *testing.T) {
+	var limiter dsp.Limiter
+	limiter.ProcessStereo(constantFrame(2*dsp.FullScale), dsp.FullScale)
+
+	previous := -1.0
+	for i := 0; i < 40; i++ {
+		frame := constantFrame(10000)
+		limiter.ProcessStereo(frame, dsp.FullScale)
+		for j := 0; j < len(frame); j += dsp.Channels {
+			gain := frame[j] / 10000
+			if previous >= 0 && math.Abs(gain-previous) > 1e-3 {
+				t.Fatalf("frame %d sample %d: gain stepped from %.5f to %.5f, want a smooth release all the way to idle", i, j/dsp.Channels, previous, gain)
+			}
+			previous = gain
+		}
+	}
+}
+
 func TestLimiterWatchesBothChannels(t *testing.T) {
 	var limiter dsp.Limiter
 	frame := make([]float64, dsp.FrameSize*dsp.Channels)

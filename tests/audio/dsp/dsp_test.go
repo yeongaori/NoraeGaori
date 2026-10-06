@@ -1,11 +1,11 @@
 package dsp_test
 
 import (
+	"math"
 	"noraegaori/tests/testutil/audiotest"
 	"testing"
 
 	"noraegaori/internal/audio/dsp"
-	"noraegaori/internal/audio/transition"
 )
 
 func TestBiquadLowpassShape(t *testing.T) {
@@ -32,37 +32,25 @@ func TestBiquadHighpassShape(t *testing.T) {
 	}
 }
 
-func TestBiquadLowShelfKillsBass(t *testing.T) {
-	setup := func(f *dsp.Biquad) { f.SetLowShelf(transition.EQLowFreq, transition.EQShelfQ, transition.EQKillDB) }
-	bass := audiotest.FilterResponse(setup, 60)
-	rest := audiotest.FilterResponse(setup, 6000)
+func TestBiquadBandpassPeaksAtItsCentre(t *testing.T) {
+	setup := func(f *dsp.Biquad) { f.SetBandpass(1000, 5) }
+	centre := audiotest.FilterResponse(setup, 1000)
+	away := audiotest.FilterResponse(setup, 4000)
 
-	if bass >= 0.05 {
-		t.Errorf("60Hz gain = %.4f, want < 0.05", bass)
+	if centre < 0.95 || centre > 1.05 {
+		t.Errorf("1000Hz gain = %.3f, want about 1", centre)
 	}
-	if rest <= 0.9 {
-		t.Errorf("6000Hz gain = %.3f, want > 0.9", rest)
-	}
-}
-
-func TestBiquadHighShelfKillsTreble(t *testing.T) {
-	setup := func(f *dsp.Biquad) { f.SetHighShelf(transition.EQHighFreq, transition.EQShelfQ, transition.EQKillDB) }
-	treble := audiotest.FilterResponse(setup, 12000)
-	rest := audiotest.FilterResponse(setup, 200)
-
-	if treble >= 0.05 {
-		t.Errorf("12000Hz gain = %.4f, want < 0.05", treble)
-	}
-	if rest <= 0.9 {
-		t.Errorf("200Hz gain = %.3f, want > 0.9", rest)
+	if away >= 0.1 {
+		t.Errorf("4000Hz gain = %.3f, want < 0.1", away)
 	}
 }
 
-func TestBiquadPeakingCutsMids(t *testing.T) {
-	setup := func(f *dsp.Biquad) { f.SetPeaking(transition.EQMidFreq, transition.EQMidQ, transition.EQKillDB) }
-
-	if gain := audiotest.FilterResponse(setup, transition.EQMidFreq); gain >= 0.1 {
-		t.Errorf("%.0fHz gain = %.4f, want < 0.1", transition.EQMidFreq, gain)
+func TestBiquadAllpassKeepsTheLevel(t *testing.T) {
+	for _, frequency := range []float64{100, 4000, 12000} {
+		gain := audiotest.FilterResponse(func(f *dsp.Biquad) { f.SetAllpass(4000, 0.707) }, frequency)
+		if gain < 0.98 || gain > 1.02 {
+			t.Errorf("%.0fHz gain = %.3f, want 1", frequency, gain)
+		}
 	}
 }
 
@@ -91,8 +79,8 @@ func TestBiquadExtremeParametersStayStable(t *testing.T) {
 		{"lowpass 0.1Hz", func(f *dsp.Biquad) { f.SetLowpass(0.1, 0.707) }},
 		{"lowpass 96000Hz", func(f *dsp.Biquad) { f.SetLowpass(96000, 0.707) }},
 		{"highpass 0Hz", func(f *dsp.Biquad) { f.SetHighpass(0, 0) }},
-		{"peaking negative Q", func(f *dsp.Biquad) { f.SetPeaking(1000, -5, -40) }},
-		{"lowshelf huge gain", func(f *dsp.Biquad) { f.SetLowShelf(250, 0.707, 120) }},
+		{"bandpass negative Q", func(f *dsp.Biquad) { f.SetBandpass(1000, -5) }},
+		{"allpass 96000Hz", func(f *dsp.Biquad) { f.SetAllpass(96000, 0.707) }},
 	}
 
 	for _, testCase := range cases {
@@ -116,118 +104,17 @@ func TestBiquadExtremeParametersStayStable(t *testing.T) {
 	}
 }
 
-func newEchoDelayLine() *dsp.DelayLine {
-	delay := dsp.NewDelayLine()
-	delay.SetDelaySeconds(0.1)
-	delay.Feedback = 0.5
-	delay.Wet = 1
-	delay.Dry = 1
-
-	impulse := make([]float64, dsp.FrameSize*dsp.Channels)
-	impulse[0] = 10000
-	impulse[1] = 10000
-	delay.ProcessStereo(impulse)
-
-	return delay
-}
-
-func TestDelayLineEchoTiming(t *testing.T) {
-	delay := newEchoDelayLine()
-	silent := make([]float64, dsp.FrameSize*dsp.Channels)
-
-	firstEchoFrame := 0
-	firstEchoPeak := 0.0
-	for frame := 1; frame <= 10; frame++ {
-		dsp.SilenceFloat(silent)
-		delay.ProcessStereo(silent)
-		if peak := audiotest.BufferPeak(silent); peak > 100 && firstEchoFrame == 0 {
-			firstEchoFrame = frame
-			firstEchoPeak = peak
+func TestDryWetFollowsTheSquareRootSineLaw(t *testing.T) {
+	cases := []struct{ level, dry, wet float64 }{
+		{0, 1, 0},
+		{0.5, 0.8409, 0.8409},
+		{1, 0, 1},
+	}
+	for _, want := range cases {
+		dry, wet := dsp.DryWet(want.level)
+		if math.Abs(dry-want.dry) > 1e-3 || math.Abs(wet-want.wet) > 1e-3 {
+			t.Errorf("DryWet(%.1f) = %.4f, %.4f, want %.4f, %.4f", want.level, dry, wet, want.dry, want.wet)
 		}
-	}
-
-	if firstEchoFrame != 5 {
-		t.Errorf("first echo at frame %d (peak %.0f), want frame 5 for 100ms", firstEchoFrame, firstEchoPeak)
-	}
-}
-
-func TestDelayLineFeedbackDecays(t *testing.T) {
-	delay := newEchoDelayLine()
-	silent := make([]float64, dsp.FrameSize*dsp.Channels)
-
-	for frame := 1; frame <= 10; frame++ {
-		dsp.SilenceFloat(silent)
-		delay.ProcessStereo(silent)
-	}
-
-	var peaks []float64
-	for frame := 0; frame < 20; frame++ {
-		dsp.SilenceFloat(silent)
-		delay.ProcessStereo(silent)
-		if peak := audiotest.BufferPeak(silent); peak > 1 {
-			peaks = append(peaks, peak)
-		}
-	}
-
-	if len(peaks) == 0 {
-		t.Fatal("no echo peaks observed")
-	}
-	for i := 1; i < len(peaks); i++ {
-		if peaks[i] > peaks[i-1]*1.05 {
-			t.Errorf("echo %d grew from %.1f to %.1f", i, peaks[i-1], peaks[i])
-		}
-	}
-}
-
-func newImpulsedReverb() (*dsp.Reverb, []float64) {
-	unit := dsp.NewReverb()
-
-	impulse := make([]float64, dsp.FrameSize*dsp.Channels)
-	impulse[0] = 20000
-	impulse[1] = 20000
-	unit.ProcessStereo(impulse, 0, 1)
-
-	return unit, make([]float64, dsp.FrameSize*dsp.Channels)
-}
-
-func TestReverbProducesBoundedTail(t *testing.T) {
-	unit, silent := newImpulsedReverb()
-
-	tailEnergy := 0.0
-	maxTailPeak := 0.0
-	for frame := 0; frame < 60; frame++ {
-		dsp.SilenceFloat(silent)
-		unit.ProcessStereo(silent, 0, 1)
-
-		if !audiotest.IsBufferFinite(silent) {
-			t.Fatalf("frame %d produced non-finite output", frame)
-		}
-		tailEnergy += audiotest.BufferRMS(silent)
-		if peak := audiotest.BufferPeak(silent); peak > maxTailPeak {
-			maxTailPeak = peak
-		}
-	}
-
-	if tailEnergy <= 0 {
-		t.Errorf("tail energy = %.1f, want > 0", tailEnergy)
-	}
-	if maxTailPeak >= 40000 {
-		t.Errorf("tail peak = %.0f, want < 40000", maxTailPeak)
-	}
-}
-
-func TestReverbTailDecaysToNearSilence(t *testing.T) {
-	unit, silent := newImpulsedReverb()
-
-	late := 0.0
-	for frame := 0; frame < 460; frame++ {
-		dsp.SilenceFloat(silent)
-		unit.ProcessStereo(silent, 0, 1)
-		late = audiotest.BufferRMS(silent)
-	}
-
-	if late >= 1 {
-		t.Errorf("rms after 460 frames = %.6f, want < 1", late)
 	}
 }
 

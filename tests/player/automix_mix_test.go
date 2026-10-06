@@ -19,11 +19,11 @@ func mixInPhaseTones(t *testing.T, amplitude, volume float64, frames int) []int1
 		t.Fatalf("opus encoder: %v", err)
 	}
 	recipe := transition.DefaultRecipe()
-	recipe.Volume = transition.VolumeOverlap
+	recipe.Apply(transition.ExpandLegacy(transition.ShortcutVolume, "overlap"))
 
 	cs := player.HookNewCrossfadeState()
 	*cs.HookCrossfadeFrames() = 200
-	*cs.HookProcessor() = transition.NewProcessor(recipe, 200, 0.5)
+	*cs.HookProcessor() = transition.NewProcessor(&recipe, &transition.Window{Frames: 200, PeriodSec: 0.5, Bars: 4})
 	conn := newMockVoiceConn()
 
 	aTone := &audiotest.ToneGenerator{Frequency: 440, Amplitude: amplitude}
@@ -74,16 +74,16 @@ func TestLoudOverlapIsLimitedJustBelowFullScale(t *testing.T) {
 func TestOverlapOfTwoQuietSongsKeepsItsLevel(t *testing.T) {
 	peaks := mixInPhaseTones(t, 6000, 1.0, 60)
 
-	if last := peaks[len(peaks)-1]; last < 10000 || last > 10300 {
-		t.Errorf("mid-mix peak = %d, want the unlimited 0.85+0.85 sum of about 10200", last)
+	if last := peaks[len(peaks)-1]; last < 11900 || last > 12000 {
+		t.Errorf("mid-mix peak = %d, want the plain unlimited sum of about 12000", last)
 	}
 }
 
 func TestHalfVolumeMixIsNotLimited(t *testing.T) {
 	peaks := mixInPhaseTones(t, 24000, 0.5, 60)
 
-	if last := peaks[len(peaks)-1]; last < 20200 || last > 20600 {
-		t.Errorf("mid-mix peak at 50%% volume = %d, want the unlimited 0.85*2*24000*0.5 = 20400", last)
+	if last := peaks[len(peaks)-1]; last < 23800 || last > 24000 {
+		t.Errorf("mid-mix peak at 50%% volume = %d, want the unlimited 2*24000*0.5 = 24000", last)
 	}
 }
 
@@ -95,13 +95,14 @@ func armLoopTransition(t *testing.T, guildID string, periodSec float64) (*player
 	next := stubAudioStream(t).(*fakeStream)
 	next.setEndState(&ffmpeg.EndState{TotalFrames: 1})
 
-	fade := *player.HookBuildFadeSettings(player.HookFadeSettingsFields{
+	fade := player.HookBuildFadeSettings(player.HookFadeSettingsFields{
 		AutoMix:      true,
 		Crossfade:    true,
 		AutoMixBeats: 16,
 		RepeatMode:   queue.RepeatOff,
-		StyleOverrides: transition.StyleOverrides{
-			Volume: "fadein_cutout", EQ: "none", Filter: "none", Effect: "none", Loop: "four_beats",
+		StyleOverrides: map[string]string{
+			"volume_out": "fast_at_end", "volume_in": "slow", "eq_out": "none", "eq_in": "none",
+			"filter_out": "none", "filter_in": "none", "fx_out": "none", "loop": "four_beats",
 		},
 	})
 	endState := &ffmpeg.EndState{
@@ -112,7 +113,7 @@ func armLoopTransition(t *testing.T, guildID string, periodSec float64) (*player
 
 	guildPlayer := player.GetPlayer(guildID)
 	cs := player.HookNewCrossfadeState()
-	if !cs.HookPlan(guildPlayer, endState, 100, fade, false, 128000) {
+	if !cs.HookPlan(guildPlayer, endState, 100, 0, fade, false, 128000) {
 		t.Fatal("plan returned false, want an armed loop transition")
 	}
 	defer func() {

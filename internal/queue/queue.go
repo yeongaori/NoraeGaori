@@ -19,33 +19,29 @@ const (
 )
 
 type Queue struct {
-	GuildID            string
-	TextChannelID      string
-	VoiceChannelID     string
-	Songs              []*Song
-	Volume             float64
-	RepeatMode         int
-	SponsorBlock       bool
-	ShowStartedTrack   bool
-	Normalization      bool
-	Paused             bool
-	Playing            bool
-	Loading            bool
-	FadeIn             bool
-	FadeOut            bool
-	AutoMix            bool
-	FadeOnStop         bool
-	FadeInDuration     float64
-	FadeOutDuration    float64
-	AutoMixBeats       int
-	Crossfade          bool
-	CrossfadeDuration  float64
-	TrimSilence        bool
-	AutoMixStyleVolume string
-	AutoMixStyleEQ     string
-	AutoMixStyleFilter string
-	AutoMixStyleEffect string
-	AutoMixStyleLoop   string
+	GuildID           string
+	TextChannelID     string
+	VoiceChannelID    string
+	Songs             []*Song
+	Volume            float64
+	RepeatMode        int
+	SponsorBlock      bool
+	ShowStartedTrack  bool
+	Normalization     bool
+	Paused            bool
+	Playing           bool
+	Loading           bool
+	FadeIn            bool
+	FadeOut           bool
+	AutoMix           bool
+	FadeOnStop        bool
+	FadeInDuration    float64
+	FadeOutDuration   float64
+	AutoMixBeats      int
+	Crossfade         bool
+	CrossfadeDuration float64
+	TrimSilence       bool
+	AutoMixOverrides  map[string]string
 }
 
 type queueCache struct {
@@ -120,11 +116,7 @@ type guildSettingsRow struct {
 	crossfade         bool
 	crossfadeDuration float64
 	trimSilence       bool
-	styleVolume       string
-	styleEQ           string
-	styleFilter       string
-	styleEffect       string
-	styleLoop         string
+	autoMixOverrides  map[string]string
 	autoLeave         bool
 	autoPause         bool
 	autoResume        bool
@@ -163,13 +155,8 @@ func defaultGuildSettingsRow() guildSettingsRow {
 		showStartedTrack:  true,
 		fadeInDuration:    3,
 		fadeOutDuration:   3,
-		autoMixBeats:      16,
+		autoMixBeats:      64,
 		crossfadeDuration: 8,
-		styleVolume:       AutoMixStyleAuto,
-		styleEQ:           AutoMixStyleAuto,
-		styleFilter:       AutoMixStyleAuto,
-		styleEffect:       AutoMixStyleAuto,
-		styleLoop:         AutoMixStyleAuto,
 		autoLeave:         true,
 		autoPause:         true,
 		autoResume:        true,
@@ -181,25 +168,23 @@ func loadGuildSettingsRow(guildID string) (guildSettingsRow, error) {
 	var repeat, sponsorblock, showStartedTrack, normalization int
 	var fadein, fadeout, automix, fadeOnStop, automixBeats, crossfade, trimSilence int
 	var fadeinDuration, fadeoutDuration, crossfadeDuration float64
-	var styleVolume, styleEQ, styleFilter, styleEffect, styleLoop string
+	var overrides string
 	var autoLeave, autoPause, autoResume int
 
 	err := database.DB.QueryRow(
 		`SELECT volume, repeat, sponsorblock, show_started_track, normalization,
 		 COALESCE(fadein, 0), COALESCE(fadeout, 0), COALESCE(automix, 0),
 		 COALESCE(fade_on_stop, 0), COALESCE(fadein_duration, 3),
-		 COALESCE(fadeout_duration, 3), COALESCE(automix_beats, 16),
+		 COALESCE(fadeout_duration, 3), COALESCE(automix_beats, 64),
 		 COALESCE(crossfade, 0), COALESCE(crossfade_duration, 8),
-		 COALESCE(trim_silence, 0), COALESCE(automix_style_volume, 'auto'),
-		 COALESCE(automix_style_eq, 'auto'), COALESCE(automix_style_filter, 'auto'),
-		 COALESCE(automix_style_effect, 'auto'), COALESCE(automix_style_loop, 'auto'),
+		 COALESCE(trim_silence, 0), COALESCE(automix_overrides, ''),
 		 COALESCE(auto_leave, 1), COALESCE(auto_pause, 1), COALESCE(auto_resume, 1)
 		 FROM guild_settings WHERE guild_id = ?`,
 		guildID,
 	).Scan(&volume, &repeat, &sponsorblock, &showStartedTrack, &normalization,
 		&fadein, &fadeout, &automix, &fadeOnStop, &fadeinDuration,
 		&fadeoutDuration, &automixBeats, &crossfade, &crossfadeDuration,
-		&trimSilence, &styleVolume, &styleEQ, &styleFilter, &styleEffect, &styleLoop,
+		&trimSilence, &overrides,
 		&autoLeave, &autoPause, &autoResume)
 
 	if err == sql.ErrNoRows {
@@ -230,11 +215,7 @@ func loadGuildSettingsRow(guildID string) (guildSettingsRow, error) {
 		crossfade:         crossfade == 1,
 		crossfadeDuration: crossfadeDuration,
 		trimSilence:       trimSilence == 1,
-		styleVolume:       styleVolume,
-		styleEQ:           styleEQ,
-		styleFilter:       styleFilter,
-		styleEffect:       styleEffect,
-		styleLoop:         styleLoop,
+		autoMixOverrides:  DecodeOverrides(overrides),
 		autoLeave:         autoLeave == 1,
 		autoPause:         autoPause == 1,
 		autoResume:        autoResume == 1,
@@ -245,9 +226,7 @@ func loadQueueSongs(guildID string) ([]*Song, error) {
 	rows, err := database.DB.Query(
 		`SELECT id, guild_id, url, title, duration, thumbnail, requested_by_id,
 		 requested_by_tag, queue_position, seek_time, uploader, is_live,
-		 COALESCE(automix_style_volume, 'auto'), COALESCE(automix_style_eq, 'auto'),
-		 COALESCE(automix_style_filter, 'auto'), COALESCE(automix_style_effect, 'auto'),
-		 COALESCE(automix_style_loop, 'auto')
+		 COALESCE(automix_overrides, '')
 		 FROM songs WHERE guild_id = ? ORDER BY queue_position ASC`,
 		guildID,
 	)
@@ -260,17 +239,18 @@ func loadQueueSongs(guildID string) ([]*Song, error) {
 	for rows.Next() {
 		var song Song
 		var isLive int
+		var overrides string
 		err := rows.Scan(
 			&song.ID, &song.GuildID, &song.URL, &song.Title, &song.Duration,
 			&song.Thumbnail, &song.RequestedByID, &song.RequestedByTag,
 			&song.QueuePosition, &song.SeekTime, &song.Uploader, &isLive,
-			&song.AutoMixStyleVolume, &song.AutoMixStyleEQ, &song.AutoMixStyleFilter,
-			&song.AutoMixStyleEffect, &song.AutoMixStyleLoop,
+			&overrides,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan song: %w", err)
 		}
 		song.IsLive = isLive == 1
+		song.AutoMixOverrides = DecodeOverrides(overrides)
 		songs = append(songs, &song)
 	}
 
@@ -300,32 +280,28 @@ func loadQueueFromDB(guildID string) (*Queue, error) {
 	}
 
 	return &Queue{
-		GuildID:            guildID,
-		TextChannelID:      row.textChannelID,
-		VoiceChannelID:     row.voiceChannelID,
-		Songs:              songs,
-		Volume:             settings.volume,
-		RepeatMode:         settings.repeat,
-		SponsorBlock:       settings.sponsorBlock,
-		ShowStartedTrack:   settings.showStartedTrack,
-		Normalization:      settings.normalization,
-		Paused:             row.paused,
-		Playing:            row.playing,
-		Loading:            row.loading,
-		FadeIn:             settings.fadeIn,
-		FadeOut:            settings.fadeOut,
-		AutoMix:            settings.autoMix,
-		FadeOnStop:         settings.fadeOnStop,
-		FadeInDuration:     settings.fadeInDuration,
-		FadeOutDuration:    settings.fadeOutDuration,
-		AutoMixBeats:       settings.autoMixBeats,
-		Crossfade:          settings.crossfade,
-		CrossfadeDuration:  settings.crossfadeDuration,
-		TrimSilence:        settings.trimSilence,
-		AutoMixStyleVolume: settings.styleVolume,
-		AutoMixStyleEQ:     settings.styleEQ,
-		AutoMixStyleFilter: settings.styleFilter,
-		AutoMixStyleEffect: settings.styleEffect,
-		AutoMixStyleLoop:   settings.styleLoop,
+		GuildID:           guildID,
+		TextChannelID:     row.textChannelID,
+		VoiceChannelID:    row.voiceChannelID,
+		Songs:             songs,
+		Volume:            settings.volume,
+		RepeatMode:        settings.repeat,
+		SponsorBlock:      settings.sponsorBlock,
+		ShowStartedTrack:  settings.showStartedTrack,
+		Normalization:     settings.normalization,
+		Paused:            row.paused,
+		Playing:           row.playing,
+		Loading:           row.loading,
+		FadeIn:            settings.fadeIn,
+		FadeOut:           settings.fadeOut,
+		AutoMix:           settings.autoMix,
+		FadeOnStop:        settings.fadeOnStop,
+		FadeInDuration:    settings.fadeInDuration,
+		FadeOutDuration:   settings.fadeOutDuration,
+		AutoMixBeats:      settings.autoMixBeats,
+		Crossfade:         settings.crossfade,
+		CrossfadeDuration: settings.crossfadeDuration,
+		TrimSilence:       settings.trimSilence,
+		AutoMixOverrides:  settings.autoMixOverrides,
 	}, nil
 }

@@ -6,7 +6,6 @@ import (
 	"io"
 	"noraegaori/internal/audio/analysis"
 	"noraegaori/internal/audio/dsp"
-	"noraegaori/internal/audio/transition"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -106,7 +105,7 @@ type fadeSettings struct {
 	crossfadeSec   float64
 	autoMixBeats   int
 	repeatMode     int
-	styleOverrides transition.StyleOverrides
+	styleOverrides map[string]string
 }
 
 var (
