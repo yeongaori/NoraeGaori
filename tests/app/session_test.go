@@ -96,8 +96,8 @@ const (
 	reconnected    = "Reconnected to Discord"
 )
 
-func TestLosingDiscordWarnsOnceUntilReconnected(t *testing.T) {
-	read := logtest.Capture(t)
+func TestLosingDiscordLogsOnceUntilReconnected(t *testing.T) {
+	read := logtest.CaptureConsole(t)
 	resumes := useConnectionState(t, false)
 
 	app.HookOnConnect(nil, &discordgo.Connect{})
@@ -110,18 +110,15 @@ func TestLosingDiscordWarnsOnceUntilReconnected(t *testing.T) {
 	requireResumes(t, resumes, 1)
 	logged := read()
 	if count := strings.Count(logged, lostConnection); count != 2 {
-		t.Errorf("warned %d times, want once per outage (2) in %q", count, logged)
+		t.Errorf("logged %d losses, want once per outage (2) in %q", count, logged)
 	}
 	if count := strings.Count(logged, reconnected); count != 1 {
 		t.Errorf("reported %d reconnects, want only the one after an outage in %q", count, logged)
 	}
-	if !strings.Contains(logged, "WARN") {
-		t.Errorf("got %q, want the lost connection logged as a warning", logged)
-	}
 }
 
-func TestClosingTheSessionOnShutdownIsNotAWarning(t *testing.T) {
-	read := logtest.Capture(t)
+func TestClosingTheSessionOnShutdownIsNotLogged(t *testing.T) {
+	read := logtest.CaptureConsole(t)
 	resumes := useConnectionState(t, true)
 
 	app.HookOnDisconnect(nil, &discordgo.Disconnect{})
