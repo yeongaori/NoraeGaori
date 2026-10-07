@@ -109,12 +109,12 @@ func onDisconnect(_ *discordgo.Session, _ *discordgo.Disconnect) {
 	if isShuttingDown() || isDisconnected.Swap(true) {
 		return
 	}
-	logger.Warn("Lost the connection to Discord, reconnecting")
+	logger.Debug("Lost the connection to Discord, reconnecting")
 }
 
 func onConnect(s *discordgo.Session, _ *discordgo.Connect) {
 	if isDisconnected.Swap(false) {
-		logger.Info("Reconnected to Discord")
+		logger.Debug("Reconnected to Discord")
 		go resumeAfterReconnect(s)
 	}
 }
