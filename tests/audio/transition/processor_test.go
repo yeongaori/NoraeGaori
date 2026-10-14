@@ -369,6 +369,68 @@ func TestJogwheelStaysFinitePastItsStop(t *testing.T) {
 	}
 }
 
+func TestSpinbackEngagesWithoutADropout(t *testing.T) {
+	frames := 200
+	processor := transition.NewProcessor(combinedRecipe(volumeStyle("overlap"), sideStyle(transition.CategoryLoop, "spinback_four_beats")), eightBarWindow(frames))
+	silent := make([]int16, dsp.FrameSize*dsp.Channels)
+	frame := make([]int16, dsp.FrameSize*dsp.Channels)
+
+	var left []float64
+	for i := 0; i < frames; i++ {
+		for sample := 0; sample < len(frame); sample += dsp.Channels {
+			position := float64(i*dsp.FrameSize + sample/dsp.Channels)
+			frame[sample] = int16(5000 + 3000*math.Sin(2*math.Pi*220*position/dsp.SampleRate))
+			frame[sample+1] = frame[sample]
+		}
+		mixed := processor.Mix(frame, silent, float64(i)/float64(frames), 1)
+		for sample := 0; sample < len(mixed); sample += dsp.Channels {
+			left = append(left, mixed[sample])
+		}
+	}
+
+	last := len(left) - 1
+	for last > 0 && left[last] == 0 {
+		last--
+	}
+	for i := 0; i < last; i++ {
+		if left[i] == 0 {
+			t.Fatalf("sample %d is silent before the record stops at %d, want the jog to keep reading its history", i, last)
+		}
+	}
+}
+
+func TestSpinbackStartsAtFullSpeed(t *testing.T) {
+	frames := 200
+	recipe := combinedRecipe(sideStyle(transition.CategoryVolumeOut, "fast_at_end"), sideStyle(transition.CategoryLoop, "spinback_four_beats"))
+	processor := transition.NewProcessor(recipe, eightBarWindow(frames))
+	tone := &audiotest.ToneGenerator{Frequency: 220, Amplitude: 9000}
+	frame := make([]int16, dsp.FrameSize*dsp.Channels)
+
+	var input, output []float64
+	for i := 0; i < frames*3/4; i++ {
+		tone.Fill(frame)
+		for sample := 0; sample < len(frame); sample += dsp.Channels {
+			input = append(input, float64(frame[sample]))
+		}
+		faded := processor.Fade(frame, float64(i)/float64(frames), 1)
+		for sample := 0; sample < len(faded); sample += dsp.Channels {
+			output = append(output, faded[sample])
+		}
+	}
+
+	engaged := 0
+	for engaged < len(input) && output[engaged] == input[engaged] {
+		engaged++
+	}
+	if engaged < 1 || engaged+1 >= len(input) {
+		t.Fatalf("the jogwheel engaged at sample %d of %d, want it inside the window", engaged, len(input))
+	}
+	if output[engaged] != input[engaged-1] || output[engaged+1] != input[engaged] {
+		t.Errorf("first jog samples = %v, %v, want the history played at full speed: %v, %v",
+			output[engaged], output[engaged+1], input[engaged-1], input[engaged])
+	}
+}
+
 func TestSpinbackRacesBackwards(t *testing.T) {
 	processor := transition.NewProcessor(combinedRecipe(volumeStyle("overlap"), effectStyle("spinback_one_beat")), eightBarWindow(200))
 	tone := &audiotest.ToneGenerator{Frequency: 100, Amplitude: 9000}

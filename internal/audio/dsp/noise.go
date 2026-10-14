@@ -14,7 +14,7 @@ const (
 
 type NoiseRiser struct {
 	state  uint64
-	band   Biquad
+	band   Filter
 	level  float64
 	primed bool
 }
@@ -38,8 +38,8 @@ func (n *NoiseRiser) Render(output []float64, colour float64) {
 	steps := len(output) / Channels
 	for i := 0; i+1 < len(output); i += Channels {
 		gain := n.level + (target-n.level)*float64(i/Channels+1)/float64(steps)
-		output[i] = n.band.stepLeft(n.next()) * gain
-		output[i+1] = n.band.stepRight(n.next()) * gain
+		output[i] = n.band.step(0, n.next()) * gain
+		output[i+1] = n.band.step(1, n.next()) * gain
 	}
 	n.level = target
 }

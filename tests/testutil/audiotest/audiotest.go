@@ -70,8 +70,8 @@ func IsBufferFinite(buf []float64) bool {
 	return true
 }
 
-func FilterResponse(setup func(*dsp.Biquad), frequency float64) float64 {
-	var filter dsp.Biquad
+func FilterResponse(setup func(*dsp.Filter), frequency float64) float64 {
+	var filter dsp.Filter
 	setup(&filter)
 	return ToneResponse(filter.ProcessStereo, frequency)
 }

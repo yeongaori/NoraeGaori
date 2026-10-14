@@ -179,14 +179,7 @@ func (e *deckEffect) applySend(block, wetOut []float64, start, end float64) {
 	}
 	e.send.Render(block, wetOut)
 	dry, wet := dsp.DryWet(e.amount.At(end))
-	steps := len(block) / dsp.Channels
-	for i := 0; i+1 < len(block); i += dsp.Channels {
-		blend := float64(i/dsp.Channels+1) / float64(steps)
-		dryGain := e.dryGain + (dry-e.dryGain)*blend
-		wetGain := e.wetGain + (wet-e.wetGain)*blend
-		block[i] = block[i]*dryGain + wetOut[i]*wetGain
-		block[i+1] = block[i+1]*dryGain + wetOut[i+1]*wetGain
-	}
+	dsp.MixWet(block, wetOut, e.dryGain, dry, e.wetGain, wet)
 	e.dryGain, e.wetGain = dry, wet
 }
 

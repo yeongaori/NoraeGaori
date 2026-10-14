@@ -11,95 +11,101 @@ const (
 	reverbHighCutoff      = 9000.0
 	reverbHighQ           = 0.5
 	reverbLevel           = 0.0057
+	reverbCombCount       = 8
+	reverbAllpassCount    = 4
 )
 
 var (
-	reverbLeftCombs      = []int{1214, 1293, 1390, 1476, 1548, 1623, 1695, 1760}
-	reverbRightCombs     = []int{1249, 1327, 1423, 1511, 1583, 1657, 1733, 1801}
-	reverbLeftAllpasses  = []int{605, 480, 371, 245}
-	reverbRightAllpasses = []int{617, 491, 383, 257}
+	reverbCombLengths = [Channels][reverbCombCount]int{
+		{1214, 1293, 1390, 1476, 1548, 1623, 1695, 1760},
+		{1249, 1327, 1423, 1511, 1583, 1657, 1733, 1801},
+	}
+	reverbAllpassLengths = [Channels][reverbAllpassCount]int{
+		{605, 480, 371, 245},
+		{617, 491, 383, 257},
+	}
 )
 
-type combFilter struct {
-	buffer   []float64
-	index    int
-	store    float64
-	feedback float64
-}
-
-func (c *combFilter) process(input float64) float64 {
-	output := c.buffer[c.index]
-	c.store = output*(1-reverbDamping) + c.store*reverbDamping
-	c.buffer[c.index] = input + c.store*c.feedback
-	c.index++
-	if c.index == len(c.buffer) {
-		c.index = 0
-	}
-	return output
-}
-
-type allpassFilter struct {
+type delayRing struct {
 	buffer []float64
 	index  int
 }
 
-func (a *allpassFilter) process(input float64) float64 {
-	buffered := a.buffer[a.index]
-	a.buffer[a.index] = input + buffered*reverbAllpassFeedback
-	a.index++
-	if a.index == len(a.buffer) {
-		a.index = 0
-	}
-	return buffered - input
+func (d *delayRing) read(window []float64) {
+	copied := copy(window, d.buffer[d.index:])
+	copy(window[copied:], d.buffer)
+}
+
+func (d *delayRing) write(window []float64) {
+	copied := copy(d.buffer[d.index:], window)
+	copy(d.buffer, window[copied:])
+	d.index = (d.index + len(window)) % len(d.buffer)
+}
+
+type combFilter struct {
+	delayRing
+	store    float64
+	feedback float64
 }
 
 type reverbChannel struct {
-	combs     []combFilter
-	allpasses []allpassFilter
+	combs     [reverbCombCount]combFilter
+	allpasses [reverbAllpassCount]delayRing
 }
 
-func buildReverbChannel(combLengths, allpassLengths []int) reverbChannel {
-	channel := reverbChannel{
-		combs:     make([]combFilter, len(combLengths)),
-		allpasses: make([]allpassFilter, len(allpassLengths)),
-	}
+func buildReverbChannel(combLengths [reverbCombCount]int, allpassLengths [reverbAllpassCount]int) reverbChannel {
+	var channel reverbChannel
 	for i, length := range combLengths {
 		channel.combs[i] = combFilter{
-			buffer:   make([]float64, length),
-			feedback: math.Pow(10, -3*float64(length)/(reverbDecaySeconds*SampleRate)),
+			delayRing: delayRing{buffer: make([]float64, length)},
+			feedback:  math.Pow(10, -3*float64(length)/(reverbDecaySeconds*SampleRate)),
 		}
 	}
 	for i, length := range allpassLengths {
-		channel.allpasses[i] = allpassFilter{buffer: make([]float64, length)}
+		channel.allpasses[i] = delayRing{buffer: make([]float64, length)}
 	}
 	return channel
 }
 
-func (c *reverbChannel) process(input float64) float64 {
-	var sum float64
+func (c *reverbChannel) process(sends [workSamples]float64, steps int) [workSamples]float64 {
+	var sums, window [workSamples]float64
 	for i := range c.combs {
-		sum += c.combs[i].process(input)
+		comb := &c.combs[i]
+		comb.read(window[:steps])
+		store, feedback := comb.store, comb.feedback
+		for step := 0; step < steps; step++ {
+			delayed := window[step]
+			store = delayed*(1-reverbDamping) + store*reverbDamping
+			window[step] = sends[step] + store*feedback
+			sums[step] += delayed
+		}
+		comb.write(window[:steps])
+		comb.store = store
 	}
 	for i := range c.allpasses {
-		sum = c.allpasses[i].process(sum)
+		allpass := &c.allpasses[i]
+		allpass.read(window[:steps])
+		for step := 0; step < steps; step++ {
+			buffered := window[step]
+			window[step] = sums[step] + buffered*reverbAllpassFeedback
+			sums[step] = buffered - sums[step]
+		}
+		allpass.write(window[:steps])
 	}
-	return sum
+	return sums
 }
 
 type Reverb struct {
-	predelay []float64
-	index    int
-	lowCut   Biquad
-	highCut  Biquad
-	left     reverbChannel
-	right    reverbChannel
+	predelay delayRing
+	lowCut   Filter
+	highCut  Filter
+	channels [Channels]reverbChannel
 }
 
 func PrepareReverb() *Reverb {
-	reverb := &Reverb{
-		predelay: make([]float64, int(reverbPredelaySeconds*SampleRate)),
-		left:     buildReverbChannel(reverbLeftCombs, reverbLeftAllpasses),
-		right:    buildReverbChannel(reverbRightCombs, reverbRightAllpasses),
+	reverb := &Reverb{predelay: delayRing{buffer: make([]float64, int(reverbPredelaySeconds*SampleRate))}}
+	for channel := range reverb.channels {
+		reverb.channels[channel] = buildReverbChannel(reverbCombLengths[channel], reverbAllpassLengths[channel])
 	}
 	reverb.lowCut.SetHighpass(reverbLowCutoff, butterworthQ)
 	reverb.highCut.SetLowpass(reverbHighCutoff, reverbHighQ)
@@ -107,16 +113,39 @@ func PrepareReverb() *Reverb {
 }
 
 func (r *Reverb) Render(input, output []float64) {
-	for i := 0; i+1 < len(input); i += Channels {
-		delayed := r.predelay[r.index]
-		r.predelay[r.index] = (input[i] + input[i+1]) / 2
-		r.index++
-		if r.index == len(r.predelay) {
-			r.index = 0
-		}
-
-		send := r.lowCut.stepLeft(delayed)
-		output[i] = r.highCut.stepLeft(r.left.process(send)) * reverbLevel
-		output[i+1] = r.highCut.stepRight(r.right.process(send)) * reverbLevel
+	for start := 0; start+1 < len(input); start += workLength {
+		end := min(start+workLength, len(input))
+		r.renderWork(input[start:end], output[start:end])
 	}
+}
+
+func (r *Reverb) renderWork(input, output []float64) {
+	var samples workBuffer
+	steps := copy(samples[:], input) / Channels
+
+	var sends, averages [workSamples]float64
+	r.predelay.read(sends[:steps])
+	for step := 0; step < steps; step++ {
+		averages[step] = (samples[step*Channels] + samples[step*Channels+1]) / 2
+	}
+	r.predelay.write(averages[:steps])
+
+	lowCut, lowState := r.lowCut.filterCoefficients, r.lowCut.states[0]
+	for step := 0; step < steps; step++ {
+		lowState, sends[step] = lowCut.next(lowState, sends[step])
+	}
+	r.lowCut.states[0] = lowState
+
+	highCut := r.highCut.filterCoefficients
+	for channel := range r.channels {
+		sums := r.channels[channel].process(sends, steps)
+		highState := r.highCut.states[channel]
+		for step := 0; step < steps; step++ {
+			var wet float64
+			highState, wet = highCut.next(highState, sums[step])
+			samples[step*Channels+channel] = wet * reverbLevel
+		}
+		r.highCut.states[channel] = highState
+	}
+	copy(output, samples[:steps*Channels])
 }

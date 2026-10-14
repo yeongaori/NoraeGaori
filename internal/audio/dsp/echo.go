@@ -15,7 +15,7 @@ type Echo struct {
 	delay    float64
 	target   float64
 	feedback float64
-	loop     Biquad
+	loop     Filter
 }
 
 func PrepareEcho(delaySeconds, feedback float64) *Echo {
@@ -44,8 +44,8 @@ func (e *Echo) Render(input, output []float64) {
 			e.delay = start + (e.target-start)*float64(i/Channels+1)/float64(steps)
 		}
 		delayedLeft, delayedRight := e.read()
-		e.left[e.index] = e.loop.stepLeft(input[i] + delayedLeft*e.feedback)
-		e.right[e.index] = e.loop.stepRight(input[i+1] + delayedRight*e.feedback)
+		e.left[e.index] = e.loop.step(0, input[i]+delayedLeft*e.feedback)
+		e.right[e.index] = e.loop.step(1, input[i+1]+delayedRight*e.feedback)
 		output[i] = delayedLeft
 		output[i+1] = delayedRight
 		e.index++

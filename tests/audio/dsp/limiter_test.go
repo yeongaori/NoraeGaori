@@ -72,6 +72,12 @@ func TestLimiterRampsDownBeforeASpike(t *testing.T) {
 	if early := frame[(spike-100)*dsp.Channels]; early != 10000 {
 		t.Errorf("before the hold and attack windows the level is %.1f, want untouched 10000", early)
 	}
+	if held := frame[(spike-48)*dsp.Channels]; math.Abs(held-2500) > 1e-6 {
+		t.Errorf("48 samples before the spike the level is %.4f, want the 2500 hold of a quarter gain", held)
+	}
+	if ramping := frame[(spike-49)*dsp.Channels]; ramping < 2600 {
+		t.Errorf("49 samples before the spike the level is %.1f, want still on the attack ramp above 2600", ramping)
+	}
 	for i := spike - 100; i < spike; i++ {
 		step := (frame[i*dsp.Channels] - frame[(i+1)*dsp.Channels]) / 10000
 		if i+1 != spike && step > 1.0/48+1e-9 {

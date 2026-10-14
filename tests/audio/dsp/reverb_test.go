@@ -83,6 +83,47 @@ func TestReverbWetSitsThirteenDecibelsUnderPinkNoise(t *testing.T) {
 	}
 }
 
+func TestReverbIgnoresHowTheInputIsSplit(t *testing.T) {
+	input := make([]float64, 40*dsp.FrameSize*dsp.Channels)
+	(&audiotest.PinkNoise{}).Fill(input, 8000)
+	whole := make([]float64, len(input))
+	dsp.PrepareReverb().Render(input, whole)
+
+	reverb := dsp.PrepareReverb()
+	split := make([]float64, len(input))
+	sizes := []int{2, 6, 128, 130, dsp.FrameSize * dsp.Channels, 62}
+	for start, turn := 0, 0; start < len(input); turn++ {
+		end := min(start+sizes[turn%len(sizes)], len(input))
+		reverb.Render(input[start:end], split[start:end])
+		start = end
+	}
+	for i := range whole {
+		if split[i] != whole[i] {
+			t.Fatalf("sample %d = %v when rendered in pieces, want %v as in one block", i, split[i], whole[i])
+		}
+	}
+}
+
+func TestReverbSendsTheAverageOfBothChannels(t *testing.T) {
+	leftOnly := make([]float64, 10*dsp.FrameSize*dsp.Channels)
+	(&audiotest.PinkNoise{}).Fill(leftOnly, 8000)
+	centred := make([]float64, len(leftOnly))
+	for i := 0; i < len(leftOnly); i += dsp.Channels {
+		centred[i], centred[i+1] = leftOnly[i]/2, leftOnly[i]/2
+		leftOnly[i+1] = 0
+	}
+
+	fromLeft := make([]float64, len(leftOnly))
+	fromCentre := make([]float64, len(leftOnly))
+	dsp.PrepareReverb().Render(leftOnly, fromLeft)
+	dsp.PrepareReverb().Render(centred, fromCentre)
+	for i := range fromLeft {
+		if fromLeft[i] != fromCentre[i] {
+			t.Fatalf("sample %d = %v from the left channel alone, want %v as from the same signal split across both", i, fromLeft[i], fromCentre[i])
+		}
+	}
+}
+
 func TestReverbCutsTheLows(t *testing.T) {
 	low := audiotest.ToneResponse(reverbWet(), 50)
 	mid := audiotest.ToneResponse(reverbWet(), 1000)

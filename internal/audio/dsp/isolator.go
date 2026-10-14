@@ -40,26 +40,59 @@ func interpolate(knots []Point, x float64) float64 {
 	return knots[len(knots)-1].Y
 }
 
+const (
+	isolatorLowFirst = iota
+	isolatorLowSecond
+	isolatorLowAlign
+	isolatorRestFirst
+	isolatorRestSecond
+	isolatorMidFirst
+	isolatorMidSecond
+	isolatorHighFirst
+	isolatorHighSecond
+	isolatorFilterCount
+)
+
+const (
+	isolatorInput = iota
+	isolatorLow
+	isolatorRest
+	isolatorMid
+	isolatorHigh
+	isolatorSignalCount
+)
+
+type isolatorRoute struct {
+	from int
+	to   int
+}
+
+var isolatorRoutes = [isolatorFilterCount]isolatorRoute{
+	isolatorLowFirst:   {isolatorInput, isolatorLow},
+	isolatorLowSecond:  {isolatorLow, isolatorLow},
+	isolatorLowAlign:   {isolatorLow, isolatorLow},
+	isolatorRestFirst:  {isolatorInput, isolatorRest},
+	isolatorRestSecond: {isolatorRest, isolatorRest},
+	isolatorMidFirst:   {isolatorRest, isolatorMid},
+	isolatorMidSecond:  {isolatorMid, isolatorMid},
+	isolatorHighFirst:  {isolatorRest, isolatorHigh},
+	isolatorHighSecond: {isolatorHigh, isolatorHigh},
+}
+
 type Isolator struct {
-	lowBand  [2]Biquad
-	restBand [2]Biquad
-	midBand  [2]Biquad
-	highBand [2]Biquad
-	lowAlign Biquad
-	low      []float64
-	mid      []float64
-	gains    [3]float64
-	ready    bool
+	filters [isolatorFilterCount]Filter
+	gains   [3]float64
+	ready   bool
 }
 
 func (iso *Isolator) prepare(gains [3]float64) {
-	for stage := range iso.lowBand {
-		iso.lowBand[stage].SetLowpass(isolatorLowCrossover, butterworthQ)
-		iso.restBand[stage].SetHighpass(isolatorLowCrossover, butterworthQ)
-		iso.midBand[stage].SetLowpass(isolatorHighCrossover, butterworthQ)
-		iso.highBand[stage].SetHighpass(isolatorHighCrossover, butterworthQ)
+	for stage := range isolatorLowAlign - isolatorLowFirst {
+		iso.filters[isolatorLowFirst+stage].SetLowpass(isolatorLowCrossover, butterworthQ)
+		iso.filters[isolatorRestFirst+stage].SetHighpass(isolatorLowCrossover, butterworthQ)
+		iso.filters[isolatorMidFirst+stage].SetLowpass(isolatorHighCrossover, butterworthQ)
+		iso.filters[isolatorHighFirst+stage].SetHighpass(isolatorHighCrossover, butterworthQ)
 	}
-	iso.lowAlign.SetAllpass(isolatorHighCrossover, butterworthQ)
+	iso.filters[isolatorLowAlign].SetAllpass(isolatorHighCrossover, butterworthQ)
 	iso.gains = gains
 	iso.ready = true
 }
@@ -72,32 +105,42 @@ func (iso *Isolator) Process(buf []float64, levels [3]float64) {
 	if !iso.ready {
 		iso.prepare(gains)
 	}
-	if cap(iso.low) < len(buf) {
-		iso.low = make([]float64, len(buf))
-		iso.mid = make([]float64, len(buf))
-	}
-	low := iso.low[:len(buf)]
-	mid := iso.mid[:len(buf)]
-	copy(low, buf)
-	for stage := range iso.lowBand {
-		iso.lowBand[stage].ProcessStereo(low)
-		iso.restBand[stage].ProcessStereo(buf)
-	}
-	iso.lowAlign.ProcessStereo(low)
-	copy(mid, buf)
-	for stage := range iso.midBand {
-		iso.midBand[stage].ProcessStereo(mid)
-		iso.highBand[stage].ProcessStereo(buf)
-	}
 
+	var coefficients [isolatorFilterCount]filterCoefficients
+	var states [Channels][isolatorFilterCount]filterState
+	for index := range iso.filters {
+		coefficients[index] = iso.filters[index].filterCoefficients
+		for channel := range states {
+			states[channel][index] = iso.filters[index].states[channel]
+		}
+	}
+	routes := isolatorRoutes
 	steps := len(buf) / Channels
-	for i := 0; i+1 < len(buf); i += Channels {
-		blend := float64(i/Channels+1) / float64(steps)
-		lowGain := iso.gains[0] + (gains[0]-iso.gains[0])*blend
-		midGain := iso.gains[1] + (gains[1]-iso.gains[1])*blend
-		highGain := iso.gains[2] + (gains[2]-iso.gains[2])*blend
-		buf[i] = low[i]*lowGain + mid[i]*midGain + buf[i]*highGain
-		buf[i+1] = low[i+1]*lowGain + mid[i+1]*midGain + buf[i+1]*highGain
+	from := iso.gains
+	var work workBuffer
+	for start := 0; start+1 < len(buf); start += workLength {
+		chunk := buf[start:min(start+workLength, len(buf))]
+		end := copy(work[:], chunk) &^ 1
+		for channel := range states {
+			for i := channel; i < end; i += Channels {
+				blend := float64((start+i)/Channels+1) / float64(steps)
+				lowGain := from[0] + (gains[0]-from[0])*blend
+				midGain := from[1] + (gains[1]-from[1])*blend
+				highGain := from[2] + (gains[2]-from[2])*blend
+				signals := [isolatorSignalCount]float64{isolatorInput: work[i]}
+				for index := range routes {
+					route := routes[index]
+					states[channel][index], signals[route.to] = coefficients[index].next(states[channel][index], signals[route.from])
+				}
+				work[i] = signals[isolatorLow]*lowGain + float64(signals[isolatorMid]*midGain) + signals[isolatorHigh]*highGain
+			}
+		}
+		copy(chunk, work[:end])
+	}
+	for index := range iso.filters {
+		for channel := range states {
+			iso.filters[index].states[channel] = states[channel][index]
+		}
 	}
 	iso.gains = gains
 }

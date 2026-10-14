@@ -22,7 +22,7 @@ type deckState struct {
 	curves   deckCurves
 	effect   *deckEffect
 	isolator dsp.Isolator
-	filter   dsp.Biquad
+	filter   dsp.Filter
 	buffer   []float64
 	gain     float64
 	primed   bool
@@ -70,9 +70,7 @@ func (t *Processor) Mix(aFrame, bFrame []int16, progress, volume float64) []floa
 	dsp.FrameToFloat(bFrame, t.incoming.buffer)
 	t.run(&t.outgoing, progress, volume)
 	t.run(&t.incoming, progress, volume)
-	for i := range t.mixBuffer {
-		t.mixBuffer[i] = t.outgoing.buffer[i] + t.incoming.buffer[i]
-	}
+	dsp.AddBuffers(t.mixBuffer, t.outgoing.buffer, t.incoming.buffer)
 	return t.mixBuffer
 }
 

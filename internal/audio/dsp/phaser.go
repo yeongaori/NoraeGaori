@@ -7,7 +7,28 @@ const (
 	phaserLowHz    = 300.0
 	phaserHighHz   = 3000.0
 	phaserFeedback = 0.6
+	phaserRatio    = phaserHighHz / phaserLowHz
 )
+
+var (
+	phaserLogRatio                   = math.Log(phaserRatio)
+	phaserRatioMantissa, phaserScale = splitPhaserRatio()
+)
+
+func splitPhaserRatio() (float64, float64) {
+	mantissa, exponent := math.Frexp(phaserRatio)
+	return mantissa, math.Ldexp(1, exponent)
+}
+
+func raisePhaserRatio(exponent float64) float64 {
+	switch {
+	case exponent > 0 && exponent < 0.5:
+		return math.Exp(exponent * phaserLogRatio)
+	case exponent > 0.5 && exponent < 1:
+		return math.Exp((exponent-1)*phaserLogRatio) * phaserRatioMantissa * phaserScale
+	}
+	return math.Pow(phaserRatio, exponent)
+}
 
 type allpassStage struct {
 	input  float64
@@ -31,7 +52,7 @@ func PreparePhaser(rateHz float64) *Phaser {
 }
 
 func PhaserFrequency(phase float64) float64 {
-	return phaserLowHz * math.Pow(phaserHighHz/phaserLowHz, (1+math.Sin(phase))/2)
+	return phaserLowHz * raisePhaserRatio((1+math.Sin(phase))/2)
 }
 
 func phaserCoefficient(phase float64) float64 {
@@ -41,24 +62,35 @@ func phaserCoefficient(phase float64) float64 {
 
 func (p *Phaser) Process(block []float64, from, to float64) {
 	steps := len(block) / Channels
-	for i := 0; i+1 < len(block); i += Channels {
-		mix := from + (to-from)*float64(i/Channels+1)/float64(steps)
-		wetLeft := p.left.run(block[i], phaserCoefficient(p.phase))
-		wetRight := p.right.run(block[i+1], phaserCoefficient(p.phase+math.Pi/2))
-		block[i] += mix * (wetLeft - block[i])
-		block[i+1] += mix * (wetRight - block[i+1])
-		p.phase = math.Mod(p.phase+p.step, 2*math.Pi)
+	left, right, phase, step := p.left, p.right, p.phase, p.step
+	var work workBuffer
+	for start := 0; start+1 < len(block); start += workLength {
+		chunk := block[start:min(start+workLength, len(block))]
+		end := copy(work[:], chunk) &^ 1
+		for i := 0; i < end; i += Channels {
+			mix := from + (to-from)*float64((start+i)/Channels+1)/float64(steps)
+			var wetLeft, wetRight float64
+			left, wetLeft = left.run(work[i], phaserCoefficient(phase))
+			right, wetRight = right.run(work[i+1], phaserCoefficient(phase+math.Pi/2))
+			work[i] += mix * (wetLeft - work[i])
+			work[i+1] += mix * (wetRight - work[i+1])
+			phase += step
+			if phase >= 2*math.Pi || phase <= -2*math.Pi {
+				phase = math.Mod(phase, 2*math.Pi)
+			}
+		}
+		copy(chunk, work[:end])
 	}
+	p.left, p.right, p.phase = left, right, phase
 }
 
-func (c *phaserChannel) run(input, coefficient float64) float64 {
+func (c phaserChannel) run(input, coefficient float64) (phaserChannel, float64) {
 	signal := input + c.feedback*phaserFeedback
 	for index := range c.stages {
-		stage := &c.stages[index]
-		output := coefficient*signal + stage.input - coefficient*stage.output
-		stage.input, stage.output = signal, output
+		output := coefficient*signal + c.stages[index].input - coefficient*c.stages[index].output
+		c.stages[index] = allpassStage{input: signal, output: output}
 		signal = output
 	}
 	c.feedback = signal
-	return signal
+	return c, signal
 }

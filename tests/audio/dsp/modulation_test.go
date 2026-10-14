@@ -30,6 +30,45 @@ func TestPhaserSweepsBetweenItsCorners(t *testing.T) {
 	if high := dsp.PhaserFrequency(math.Pi / 2); math.Abs(high-3000) > 1e-6 {
 		t.Errorf("highest sweep frequency = %.3f, want 3000 Hz", high)
 	}
+	for _, want := range []struct{ phase, frequency float64 }{{-math.Pi / 6, 533.4838230116768}, {math.Pi / 6, 1687.0239755710473}} {
+		if got := dsp.PhaserFrequency(want.phase); math.Abs(got-want.frequency) > 1e-6 {
+			t.Errorf("sweep frequency at phase %.4f = %.6f, want %.6f on the logarithmic sweep", want.phase, got, want.frequency)
+		}
+	}
+}
+
+func TestPhaserSweepsTheChannelsInQuadrature(t *testing.T) {
+	phaser := dsp.PreparePhaser(1)
+	phase := 0.0
+	var difference, level float64
+	for frame := 0; frame < 25; frame++ {
+		block := audiotest.SineFloatFrame(1000, 9000, &phase)
+		phaser.Process(block, 1, 1)
+		for i := 0; i < len(block); i += dsp.Channels {
+			difference += (block[i] - block[i+1]) * (block[i] - block[i+1])
+			level += block[i] * block[i]
+		}
+	}
+	if ratio := math.Sqrt(difference / level); ratio < 0.5 {
+		t.Errorf("left and right differ by %.3f of the level, want the right sweep a quarter cycle apart", ratio)
+	}
+}
+
+func TestPhaserKeepsASilentChannelSilent(t *testing.T) {
+	phaser := dsp.PreparePhaser(0.5)
+	block := make([]float64, dsp.FrameSize*dsp.Channels)
+	for frame := 0; frame < 5; frame++ {
+		for i := 0; i < len(block); i += dsp.Channels {
+			block[i] = 9000 * math.Sin(2*math.Pi*700*float64(frame*dsp.FrameSize+i/dsp.Channels)/dsp.SampleRate)
+			block[i+1] = 0
+		}
+		phaser.Process(block, 0.7, 0.7)
+		for i := 1; i < len(block); i += dsp.Channels {
+			if block[i] != 0 {
+				t.Fatalf("frame %d right sample %d = %v, want the silent channel untouched by the left", frame, i, block[i])
+			}
+		}
+	}
 }
 
 func TestPhaserNotchMovesAcrossATone(t *testing.T) {

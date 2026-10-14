@@ -22,7 +22,7 @@ var (
 	}
 )
 
-func (f *Biquad) SetKnob(knob float64) {
+func (f *Filter) SetKnob(knob float64) {
 	knob = ClampUnit(knob)
 	switch {
 	case math.Abs(knob-KnobCenter) <= knobBypassWidth:

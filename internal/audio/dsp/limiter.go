@@ -1,9 +1,6 @@
 package dsp
 
-import (
-	"math"
-	"slices"
-)
+import "math"
 
 const (
 	limiterAttackSamples = 48
@@ -18,6 +15,7 @@ type Limiter struct {
 	reduction float64
 	needs     []float64
 	targets   []float64
+	window    []int
 }
 
 func (l *Limiter) ProcessStereo(buf []float64, ceiling float64) {
@@ -25,9 +23,11 @@ func (l *Limiter) ProcessStereo(buf []float64, ceiling float64) {
 	if cap(l.targets) < steps {
 		l.needs = make([]float64, steps)
 		l.targets = make([]float64, steps)
+		l.window = make([]int, steps)
 	}
 	needs := l.needs[:steps]
 	targets := l.targets[:steps]
+	window := l.window[:steps]
 
 	for i := range needs {
 		peak := math.Max(math.Abs(buf[i*Channels]), math.Abs(buf[i*Channels+1]))
@@ -37,21 +37,30 @@ func (l *Limiter) ProcessStereo(buf []float64, ceiling float64) {
 		}
 	}
 
-	for i := range targets {
-		targets[i] = slices.Min(needs[i:min(i+limiterAttackSamples+1, steps)])
+	head, tail := 0, 0
+	for i := steps - 1; i >= 0; i-- {
+		for tail > head && needs[window[tail-1]] >= needs[i] {
+			tail--
+		}
+		window[tail] = i
+		tail++
+		for window[head] > i+limiterAttackSamples {
+			head++
+		}
+		targets[i] = needs[window[head]]
+		if i+1 < steps {
+			targets[i] = math.Min(targets[i], targets[i+1]+1.0/limiterAttackSamples)
+		}
 	}
 
-	for i := steps - 2; i >= 0; i-- {
-		targets[i] = math.Min(targets[i], targets[i+1]+1.0/limiterAttackSamples)
-	}
-
+	reduction := l.reduction
 	for i, target := range targets {
-		previous := 1 - l.reduction
-		gain := math.Min(1-l.reduction*limiterRelease, target)
+		previous := 1 - reduction
+		gain := math.Min(1-reduction*limiterRelease, target)
 		gain = math.Max(gain, previous-1.0/limiterAttackSamples)
-		l.reduction = 1 - gain
-		if l.reduction < limiterIdleReduction {
-			l.reduction = 0
+		reduction = 1 - gain
+		if reduction < limiterIdleReduction {
+			reduction = 0
 		}
 		if gain == 1 {
 			continue
@@ -63,6 +72,7 @@ func (l *Limiter) ProcessStereo(buf []float64, ceiling float64) {
 			buf[i*Channels+1] = softClip(buf[i*Channels+1], ceiling)
 		}
 	}
+	l.reduction = reduction
 }
 
 func (l *Limiter) IsIdle() bool {

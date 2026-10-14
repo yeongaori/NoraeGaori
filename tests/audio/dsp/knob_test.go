@@ -42,7 +42,7 @@ func TestKnobResonanceFollowsTheMeasuredTable(t *testing.T) {
 func TestCentredKnobIsTransparent(t *testing.T) {
 	for _, knob := range []float64{0.499, 0.5, 0.501} {
 		for _, frequency := range []float64{50, 15000} {
-			gain := audiotest.FilterResponse(func(f *dsp.Biquad) { f.SetKnob(knob) }, frequency)
+			gain := audiotest.FilterResponse(func(f *dsp.Filter) { f.SetKnob(knob) }, frequency)
 			if math.Abs(gain-1) > 1e-9 {
 				t.Errorf("knob %.3f at %.0fHz gain = %.6f, want bypass", knob, frequency, gain)
 			}
@@ -51,7 +51,7 @@ func TestCentredKnobIsTransparent(t *testing.T) {
 }
 
 func TestKnobBelowCentreLowPasses(t *testing.T) {
-	setup := func(f *dsp.Biquad) { f.SetKnob(0.25) }
+	setup := func(f *dsp.Filter) { f.SetKnob(0.25) }
 
 	if gain := audiotest.FilterResponse(setup, 200); gain < 0.95 {
 		t.Errorf("200Hz gain = %.3f, want the lows kept", gain)
@@ -62,7 +62,7 @@ func TestKnobBelowCentreLowPasses(t *testing.T) {
 }
 
 func TestKnobAboveCentreHighPasses(t *testing.T) {
-	setup := func(f *dsp.Biquad) { f.SetKnob(0.75) }
+	setup := func(f *dsp.Filter) { f.SetKnob(0.75) }
 
 	if gain := audiotest.FilterResponse(setup, 50); gain > 0.05 {
 		t.Errorf("50Hz gain = %.3f, want the lows cut", gain)
