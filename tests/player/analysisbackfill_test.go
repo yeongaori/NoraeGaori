@@ -474,6 +474,60 @@ func TestCleanupPreCacheWorkerCancelsTheRunningAnalysis(t *testing.T) {
 	}
 }
 
+func TestCachedPreCacheFieldsAreReadUnderTheLock(t *testing.T) {
+	const guildID = "precache-read"
+	songs := seedBackfillQueue(t, guildID, "3:00", "3:00")
+	enableAutoMix(t, guildID)
+	t.Cleanup(func() { player.ClearPreCache(guildID) })
+	installBackfillFake(t)
+	testutil.Swap(t, player.HookFetchStreamURL, func(url string, _ bool, _ int) (string, error) {
+		time.Sleep(10 * time.Millisecond)
+		return url, nil
+	})
+	finished := make(chan struct{}, 1)
+	testutil.Swap(t, player.HookStartAnalysisBackfill, func(string, int) {
+		finished <- struct{}{}
+	})
+
+	player.PreCacheNext(guildID, 128000)
+
+	stop := make(chan struct{})
+	var pollers sync.WaitGroup
+	defer func() {
+		close(stop)
+		pollers.Wait()
+	}()
+	for _, read := range []func(){
+		func() { player.GetCachedStreamURL(guildID, songs[1].ID) },
+		func() { player.GetCachedAnalysis(guildID, songs[1].ID) },
+	} {
+		pollers.Add(1)
+		go func() {
+			defer pollers.Done()
+			for {
+				read()
+				select {
+				case <-stop:
+					return
+				case <-time.After(time.Millisecond):
+				}
+			}
+		}()
+	}
+
+	select {
+	case <-finished:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("the pre-cache of %s did not finish", songs[1].Title)
+	}
+	if got := player.GetCachedStreamURL(guildID, songs[1].ID); got != songs[1].URL {
+		t.Errorf("cached stream URL = %q, want %q", got, songs[1].URL)
+	}
+	if player.GetCachedAnalysis(guildID, songs[1].ID) == nil {
+		t.Error("pre-cache did not keep the analysis it made")
+	}
+}
+
 func TestPendingCountsEachMark(t *testing.T) {
 	const guildID = "pending-counts"
 	player.HookMarkAnalysisPending(guildID, 7)

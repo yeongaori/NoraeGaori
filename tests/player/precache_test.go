@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"noraegaori/internal/audio/analysis"
 	"noraegaori/internal/player"
 	"noraegaori/internal/queue"
 	"noraegaori/tests/testutil"
@@ -167,5 +168,40 @@ func TestPreCacheNextStartsOneFetchPerSong(t *testing.T) {
 		if got != 1 {
 			t.Fatalf("round %d: got %d stream URL fetches for %s, want 1 per song", round, got, next.Title)
 		}
+	}
+}
+
+func TestCachedPreCacheExpiresAfterItsTTL(t *testing.T) {
+	const guildID = "precacheexpired"
+	const expiredURL = "https://example.invalid/expired"
+	const freshURL = "https://example.invalid/fresh"
+	t.Cleanup(func() { player.ClearPreCache(guildID) })
+
+	player.HookPreCacheStoreMu.Lock()
+	(*player.HookPreCacheStore)[guildID+"_1"] = &player.PreCache{
+		StreamURL: expiredURL,
+		SongID:    1,
+		Timestamp: time.Now().Add(-61 * time.Minute),
+		Analysis:  &analysis.TrackAnalysis{BPM: 120},
+	}
+	(*player.HookPreCacheStore)[guildID+"_2"] = &player.PreCache{
+		StreamURL: freshURL,
+		SongID:    2,
+		Timestamp: time.Now().Add(-59 * time.Minute),
+		Analysis:  &analysis.TrackAnalysis{BPM: 120},
+	}
+	player.HookPreCacheStoreMu.Unlock()
+
+	if player.GetPreCache(guildID, 1) != nil {
+		t.Error("got a pre-cache entry 61 minutes old, want it expired")
+	}
+	if got := player.GetCachedStreamURL(guildID, 1); got != "" {
+		t.Errorf("got stream URL %q from an expired entry, want none", got)
+	}
+	if player.GetCachedAnalysis(guildID, 1) != nil {
+		t.Error("got an analysis from an expired entry, want none")
+	}
+	if got := player.GetCachedStreamURL(guildID, 2); got != freshURL {
+		t.Errorf("got stream URL %q from a 59-minute-old entry, want %q", got, freshURL)
 	}
 }

@@ -148,12 +148,8 @@ func preCacheSong(ctx context.Context, guildID string, song *queue.Song, sponsor
 	return nil
 }
 
-func GetPreCache(guildID string, songID int) *PreCache {
-	cacheKey := fmt.Sprintf("%s_%d", guildID, songID)
-	preCacheStoreMu.RLock()
-	defer preCacheStoreMu.RUnlock()
-
-	cached, exists := preCacheStore[cacheKey]
+func lookupPreCacheLocked(guildID string, songID int) *PreCache {
+	cached, exists := preCacheStore[fmt.Sprintf("%s_%d", guildID, songID)]
 	if !exists {
 		return nil
 	}
@@ -165,16 +161,28 @@ func GetPreCache(guildID string, songID int) *PreCache {
 	return cached
 }
 
+func GetPreCache(guildID string, songID int) *PreCache {
+	preCacheStoreMu.RLock()
+	defer preCacheStoreMu.RUnlock()
+	return lookupPreCacheLocked(guildID, songID)
+}
+
 func GetCachedStreamURL(guildID string, songID int) string {
-	cache := GetPreCache(guildID, songID)
-	if cache == nil || cache.StreamURL == "" {
+	preCacheStoreMu.RLock()
+	defer preCacheStoreMu.RUnlock()
+
+	cache := lookupPreCacheLocked(guildID, songID)
+	if cache == nil {
 		return ""
 	}
 	return cache.StreamURL
 }
 
 func GetCachedAnalysis(guildID string, songID int) *analysis.TrackAnalysis {
-	cache := GetPreCache(guildID, songID)
+	preCacheStoreMu.RLock()
+	defer preCacheStoreMu.RUnlock()
+
+	cache := lookupPreCacheLocked(guildID, songID)
 	if cache == nil {
 		return nil
 	}
