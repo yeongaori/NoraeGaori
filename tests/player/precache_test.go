@@ -295,6 +295,7 @@ func TestPreCacheLogsHowLongAFailedAnalysisRan(t *testing.T) {
 
 func TestPreCacheDropsAResultCancelledDuringTheFetch(t *testing.T) {
 	const guildID = "precachedropped"
+	readLog := logtest.Capture(t)
 	setupPlayerDB(t, guildID, 2)
 	enableAutoMix(t, guildID)
 	t.Cleanup(func() { player.ClearPreCache(guildID) })
@@ -340,6 +341,9 @@ func TestPreCacheDropsAResultCancelledDuringTheFetch(t *testing.T) {
 	}
 	if analyses != 0 {
 		t.Errorf("got %d analyses, want 0 for a cancelled pre-cache", analyses)
+	}
+	if got := countLogLines(readLog(), "Dropped the stream URL for: "+next.Title); got != 1 {
+		t.Errorf("got %d dropped stream URL lines, want 1", got)
 	}
 }
 

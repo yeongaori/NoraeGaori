@@ -34,42 +34,43 @@ type PendingStream struct {
 }
 
 type crossfadeState struct {
-	armed            bool
-	active           bool
-	handedOff        bool
-	cancelled        bool
-	trimSilence      bool
-	trimBLead        bool
-	bLoudSeen        bool
-	autoMix          bool
-	scope            *logger.Scoped
-	bStream          audioStream
-	nextSongID       int
-	bSeekSec         float64
-	bTempo           ffmpeg.Tempo
-	transitionFrame  int
-	crossfadeFrames  int
-	minUsableFrames  int
-	totalFrames      int
-	slideFrames      int
-	mixedFrames      int
-	bFramesConsumed  int
-	bLeadSkipFrames  int
-	mixBuf           []int16
-	mixFloat         []float64
-	limiter          dsp.Limiter
-	opusScratch      []byte
-	processor        *transition.Processor
-	beatLoop         *transition.BeatLoop
-	bLoop            *transition.BeatLoop
-	guildID          string
-	normalization    bool
-	bitrate          int
-	bRetried         bool
-	hasLoggedURLWait bool
-	bRefetch         atomic.Pointer[streamRef]
-	bRefetching      atomic.Bool
-	bAborted         atomic.Bool
+	armed                bool
+	active               bool
+	handedOff            bool
+	cancelled            bool
+	trimSilence          bool
+	trimBLead            bool
+	bLoudSeen            bool
+	autoMix              bool
+	scope                *logger.Scoped
+	bStream              audioStream
+	nextSongID           int
+	bSeekSec             float64
+	bTempo               ffmpeg.Tempo
+	transitionFrame      int
+	crossfadeFrames      int
+	minUsableFrames      int
+	totalFrames          int
+	slideFrames          int
+	mixedFrames          int
+	bFramesConsumed      int
+	bLeadSkipFrames      int
+	mixBuf               []int16
+	mixFloat             []float64
+	limiter              dsp.Limiter
+	opusScratch          []byte
+	processor            *transition.Processor
+	beatLoop             *transition.BeatLoop
+	bLoop                *transition.BeatLoop
+	guildID              string
+	normalization        bool
+	bitrate              int
+	bRetried             bool
+	hasLoggedURLWait     bool
+	isWaitingForAnalysis bool
+	bRefetch             atomic.Pointer[streamRef]
+	bRefetching          atomic.Bool
+	bAborted             atomic.Bool
 }
 
 func newCrossfadeState() *crossfadeState {
@@ -256,7 +257,7 @@ func (cs *crossfadeState) buildPlan(player *GuildPlayer, es *ffmpeg.EndState, se
 	if fade.autoMix {
 		aAnal = es.Analysis
 		bAnal = LookupAnalysis(guildID, next, analysis.SegmentHead)
-		placement, ok = placeAutoMix(&transition.Pair{
+		pair := &transition.Pair{
 			From: transition.Track{
 				URL:      current.URL,
 				Duration: songSeconds(current),
@@ -267,7 +268,12 @@ func (cs *crossfadeState) buildPlan(player *GuildPlayer, es *ffmpeg.EndState, se
 			MaxBeats:      fade.autoMixBeats,
 			EarliestStart: originSec + float64(sentFrames)/dsp.FramesPerSecond + transitionLeadSec,
 			Settings:      transition.ResolveSettings(songOverrides(current)),
-		}, originSec, effectiveEnd)
+		}
+		remainingSec := float64(effectiveEnd-sentFrames) / dsp.FramesPerSecond
+		if bAnal == nil && cs.holdForAnalysis(scope, pair, next, fade, remainingSec, guildID) {
+			return nil
+		}
+		placement, ok = placeAutoMix(pair, originSec, effectiveEnd)
 	} else {
 		placement, ok = placeCrossfade(fade, effectiveEnd, sentFrames, songSeconds(next))
 	}
@@ -381,6 +387,28 @@ func describeTransitionInputs(a, b *analysis.TrackAnalysis) string {
 		analysis.FifthsCode(a.Tonic, a.Minor), analysis.FifthsCode(b.Tonic, b.Minor),
 		a.KeyConfidence, b.KeyConfidence, analysis.KeyTier(a, b),
 		a.BeatStrength, b.BeatStrength, len(a.BarOffsets), len(b.BarOffsets))
+}
+
+func (cs *crossfadeState) holdForAnalysis(scope *logger.Scoped, pair *transition.Pair, next *queue.Song, fade *fadeSettings, remainingSec float64, guildID string) bool {
+	if PendingAnalyses(guildID)[next.ID] == 0 {
+		return false
+	}
+
+	_, outroSec := transition.CrossfadeFrames(fade.autoMix, fade.autoMixBeats, fade.crossfadeSec, pair.From.Analysis)
+	deadlineSec := math.Max(pair.LongestOverlapSec(), outroSec) + transitionLeadSec
+	if remainingSec > deadlineSec {
+		if !cs.isWaitingForAnalysis {
+			cs.isWaitingForAnalysis = true
+			scope.Debugf("waiting for the head analysis of %s, %.1fs left, planning by %.1fs left for guild: %s", next.Title, remainingSec, deadlineSec, guildID)
+		}
+		return true
+	}
+
+	if cs.isWaitingForAnalysis {
+		cs.isWaitingForAnalysis = false
+		scope.Debugf("planning without the head analysis of %s, %.1fs left for guild: %s", next.Title, remainingSec, guildID)
+	}
+	return false
 }
 
 func describeAnalysisPresence(a *analysis.TrackAnalysis) string {

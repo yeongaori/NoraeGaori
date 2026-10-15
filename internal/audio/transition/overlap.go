@@ -234,6 +234,23 @@ func (t *Track) end() float64 {
 	return t.duration()
 }
 
+func (pair *Pair) LongestOverlapSec() float64 {
+	periodSec := 0.0
+	if pair.From.Analysis != nil {
+		periodSec = pair.From.Analysis.PeriodSec
+	}
+
+	longest := fallbackCapSec
+	if counts := pair.barCounts(); len(counts) > 0 {
+		longest = math.Max(longest, float64(counts[0]*analysis.BarBeats)*beatPeriod(periodSec))
+	}
+	longest = math.Min(longest, maxOverlapSec)
+	if duration := pair.From.duration(); duration > 0 {
+		longest = math.Min(longest, maxOverlapShare*duration)
+	}
+	return longest
+}
+
 func fitsTrack(length, duration float64) bool {
 	return length < maxOverlapSec && length <= maxOverlapShare*duration
 }

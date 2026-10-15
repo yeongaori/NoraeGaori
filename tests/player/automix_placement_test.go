@@ -219,3 +219,118 @@ func TestPlanLogsAMissingStreamURLOnce(t *testing.T) {
 		t.Errorf("got %d missing stream URL lines after a new session, want 2", got)
 	}
 }
+
+func TestPlanWaitsForAPendingHeadAnalysis(t *testing.T) {
+	setup := func(t *testing.T, guildID string, pendingIndex, beats int) (*player.HookCrossfadeState, *ffmpeg.EndState, *player.HookFadeSettings, *queue.Song) {
+		t.Helper()
+
+		q := seedCrossfadeQueue(t, guildID)
+		next := q.Songs[1]
+		pending := q.Songs[pendingIndex]
+		cacheNextStreamURL(t, guildID, next.ID, "https://example.invalid/next")
+		player.HookMarkAnalysisPending(guildID, pending.ID)
+		t.Cleanup(func() { player.HookClearAnalysisPending(guildID, pending.ID) })
+		captureStreamArgs(t)
+
+		tail := steadyBeat(128)
+		tail.Offset = 90
+		tail.Duration = 90
+		tail.FirstBeat = 0.2
+		endState := &ffmpeg.EndState{TotalFrames: 9000, TailStartFrame: 4500, Analysis: tail}
+		fade := player.HookBuildFadeSettings(player.HookFadeSettingsFields{
+			AutoMix: true, Crossfade: true, TrimSilence: true, AutoMixBeats: beats, RepeatMode: queue.RepeatOff,
+		})
+		cs := player.HookNewCrossfadeState()
+		t.Cleanup(cs.HookAbort)
+		return cs, endState, fade, next
+	}
+
+	t.Run("plenty of time", func(t *testing.T) {
+		const guildID = "placewait"
+		cs, endState, fade, _ := setup(t, guildID, 1, 64)
+
+		if cs.HookPlan(player.GetPlayer(guildID), endState, 100, 0, fade, false, 128000) {
+			t.Errorf("got a plan with %.1fs left and the head analysis pending, want a wait", float64(9000-100)/50)
+		}
+	})
+
+	t.Run("at the deadline", func(t *testing.T) {
+		const guildID = "placewaitdeadline"
+		readLog := logtest.Capture(t)
+		cs, endState, fade, _ := setup(t, guildID, 1, 64)
+
+		if !cs.HookPlan(player.GetPlayer(guildID), endState, 7400, 0, fade, false, 128000) {
+			t.Fatal("got no plan at the deadline, want one without the head analysis")
+		}
+		if want := "analysis unavailable (outgoing tail present, next head missing)"; !strings.Contains(readLog(), want) {
+			t.Errorf("got plan inputs without %q", want)
+		}
+	})
+
+	t.Run("analysis arrives", func(t *testing.T) {
+		const guildID = "placewaitarrives"
+		readLog := logtest.Capture(t)
+		cs, endState, fade, next := setup(t, guildID, 1, 64)
+
+		if cs.HookPlan(player.GetPlayer(guildID), endState, 100, 0, fade, false, 128000) {
+			t.Fatalf("got a plan with %.1fs left and the head analysis pending, want a wait", float64(9000-100)/50)
+		}
+		player.HookPreCacheStoreMu.Lock()
+		(*player.HookPreCacheStore)[fmt.Sprintf("%s_%d", guildID, next.ID)].Analysis = steadyBeat(125)
+		player.HookPreCacheStoreMu.Unlock()
+		player.HookClearAnalysisPending(guildID, next.ID)
+
+		cs.HookPlan(player.GetPlayer(guildID), endState, 150, 0, fade, false, 128000)
+		inputs := ""
+		for _, line := range strings.Split(readLog(), "\n") {
+			if strings.Contains(line, "recipe") {
+				inputs = line
+			}
+		}
+		if !strings.Contains(inputs, "bpmA=128.0 bpmB=125.0") {
+			t.Errorf("got plan inputs %q, want both BPMs once the analysis arrived", inputs)
+		}
+	})
+
+	t.Run("another song pending", func(t *testing.T) {
+		const guildID = "placewaitother"
+		cs, endState, fade, _ := setup(t, guildID, 0, 64)
+
+		if !cs.HookPlan(player.GetPlayer(guildID), endState, 100, 0, fade, false, 128000) {
+			t.Error("got no plan with only the playing song's analysis pending, want one")
+		}
+	})
+
+	t.Run("logs once", func(t *testing.T) {
+		const guildID = "placewaitlogs"
+		readLog := logtest.Capture(t)
+		cs, endState, fade, next := setup(t, guildID, 1, 64)
+
+		for range 3 {
+			cs.HookPlan(player.GetPlayer(guildID), endState, 100, 0, fade, false, 128000)
+		}
+		for range 2 {
+			cs.HookPlan(player.GetPlayer(guildID), endState, 8950, 0, fade, false, 128000)
+		}
+
+		log := readLog()
+		if got := countLogLines(log, "waiting for the head analysis of "+next.Title); got != 1 {
+			t.Errorf("got %d waiting lines over 3 plans, want 1", got)
+		}
+		if got := countLogLines(log, "planning without the head analysis of "+next.Title); got != 1 {
+			t.Errorf("got %d planning-without lines over 2 plans, want 1", got)
+		}
+	})
+
+	t.Run("outro longer than the overlap", func(t *testing.T) {
+		const guildID = "placewaitoutro"
+		cs, endState, fade, _ := setup(t, guildID, 1, 48)
+
+		if cs.HookPlan(player.GetPlayer(guildID), endState, 7850, 0, fade, false, 128000) {
+			t.Error("got a plan with 23.0s left before the outro deadline, want a wait")
+		}
+		if !cs.HookPlan(player.GetPlayer(guildID), endState, 7900, 0, fade, false, 128000) {
+			t.Error("got no plan at the outro deadline, want one")
+		}
+	})
+}

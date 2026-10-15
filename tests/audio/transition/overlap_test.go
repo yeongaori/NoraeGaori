@@ -9,6 +9,32 @@ import (
 	"noraegaori/internal/audio/transition"
 )
 
+func TestLongestOverlapSecFollowsTheBarsAndCaps(t *testing.T) {
+	period := func(seconds float64) *analysis.TrackAnalysis {
+		return &analysis.TrackAnalysis{PeriodSec: seconds}
+	}
+	cases := []struct {
+		name string
+		pair transition.Pair
+		want float64
+	}{
+		{"bar maths", transition.Pair{From: transition.Track{Duration: 300, Analysis: period(0.5)}, MaxBeats: 48}, 16},
+		{"35 s cap", transition.Pair{From: transition.Track{Duration: 300, Analysis: period(0.6)}, MaxBeats: 64}, 35},
+		{"20 % cap", transition.Pair{From: transition.Track{Duration: 100, Analysis: period(0.5)}, MaxBeats: 64}, 20},
+		{"fallback floor", transition.Pair{From: transition.Track{Duration: 300, Analysis: period(0.5)}, MaxBeats: 4}, 5},
+		{"unknown tempo", transition.Pair{From: transition.Track{Duration: 300}, MaxBeats: 64}, 32},
+		{"fixed bars setting", transition.Pair{From: transition.Track{Duration: 300, Analysis: period(0.5)}, MaxBeats: 64, Settings: transition.Settings{Bars: 4}}, 8},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := c.pair.LongestOverlapSec(); math.Abs(got-c.want) > 1e-9 {
+				t.Errorf("got %.2fs, want %.2fs", got, c.want)
+			}
+		})
+	}
+}
+
 func steadyAnalysis(bpm float64, tonic int) *analysis.TrackAnalysis {
 	track := &analysis.TrackAnalysis{
 		BPM:           bpm,
