@@ -83,17 +83,6 @@ func forceRemoveByUser(s *discordgo.Session, i *discordgo.InteractionCreate, q *
 		return nil
 	}
 
-	isNextSongRemoved := false
-	if len(q.Songs) > 1 {
-		nextSong := q.Songs[1]
-		for _, song := range userSongs {
-			if song.ID == nextSong.ID {
-				isNextSongRemoved = true
-				break
-			}
-		}
-	}
-
 	songIDs := make([]int, len(userSongs))
 	for i, song := range userSongs {
 		songIDs[i] = song.ID
@@ -105,9 +94,7 @@ func forceRemoveByUser(s *discordgo.Session, i *discordgo.InteractionCreate, q *
 		return err
 	}
 
-	if isNextSongRemoved {
-		player.CleanupPreCacheWorker(i.GuildID)
-	}
+	player.InvalidatePreCaches(i.GuildID, songIDs)
 
 	songLines := make([]string, 0, len(userSongs))
 	for _, song := range userSongs {
@@ -144,7 +131,6 @@ func forceRemoveByPosition(s *discordgo.Session, i *discordgo.InteractionCreate,
 	}
 
 	songToRemove := q.Songs[position-1]
-	isNextSongRemoved := len(q.Songs) > 1 && q.Songs[1].ID == songToRemove.ID
 
 	if err := queue.RemoveSong(i.GuildID, position-1); err != nil {
 		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
@@ -152,9 +138,7 @@ func forceRemoveByPosition(s *discordgo.Session, i *discordgo.InteractionCreate,
 		return err
 	}
 
-	if isNextSongRemoved {
-		player.CleanupPreCacheWorker(i.GuildID)
-	}
+	player.InvalidatePreCaches(i.GuildID, []int{songToRemove.ID})
 
 	embed := messages.CreateSuccessEmbed(messages.T(i.GuildID).Queue.SongsRemovedTitle,
 		fmt.Sprintf(messages.T(i.GuildID).Queue.SongRemoved, messages.EscapeMarkdown(songToRemove.Title)))

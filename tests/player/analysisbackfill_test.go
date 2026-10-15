@@ -372,6 +372,7 @@ func TestPreCacheMarksItsSongWhileAnalyzing(t *testing.T) {
 	const guildID = "precache-pending"
 	songs := seedBackfillQueue(t, guildID, "3:00", "3:00")
 	enableAutoMix(t, guildID)
+	cacheNextStreamURL(t, guildID, songs[1].ID, "")
 	fake := installBackfillFake(t)
 	release := make(chan struct{})
 	fake.analyze = func(context.Context, segmentRead) (*analysis.TrackAnalysis, error) {
@@ -448,7 +449,7 @@ func TestPreCacheSkippingTheNextSongStillAnalyzesThePlayingEnding(t *testing.T) 
 	}
 }
 
-func TestCleanupPreCacheWorkerCancelsTheRunningAnalysis(t *testing.T) {
+func TestInvalidatePreCachesCancelsTheRunningAnalysis(t *testing.T) {
 	const guildID = "precache-cancel"
 	songs := seedBackfillQueue(t, guildID, "3:00", "3:00")
 	enableAutoMix(t, guildID)
@@ -465,7 +466,7 @@ func TestCleanupPreCacheWorkerCancelsTheRunningAnalysis(t *testing.T) {
 
 	player.PreCacheNext(guildID, 128000)
 	waitForReads(t, fake, 1)
-	player.CleanupPreCacheWorker(guildID)
+	player.InvalidatePreCaches(guildID, []int{songs[1].ID})
 
 	select {
 	case <-finished:

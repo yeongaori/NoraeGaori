@@ -18,6 +18,7 @@ import (
 
 const (
 	preCacheTTL        = time.Hour
+	preCacheRetryDelay = 30 * time.Second
 	analysisHeadSecs   = 75
 	analysisReadMargin = 5
 	analysisReadChunk  = 32 * 1024
@@ -52,26 +53,46 @@ func PreCacheNext(guildID string, bitrate int) {
 
 	cacheKey := fmt.Sprintf("%s_%d", guildID, nextSong.ID)
 	preCacheStoreMu.Lock()
+	isRetry := false
 	if cached, exists := preCacheStore[cacheKey]; exists && time.Since(cached.Timestamp) < preCacheTTL {
-		preCacheStoreMu.Unlock()
-		logger.Debugf("Song already cached: %s", nextSong.Title)
-		return
+		if cached.FailedAt.IsZero() {
+			preCacheStoreMu.Unlock()
+			logger.Debugf("Song already cached: %s", nextSong.Title)
+			return
+		}
+		if time.Since(cached.FailedAt) < preCacheRetryDelay {
+			preCacheStoreMu.Unlock()
+			logger.Debugf("Song recently failed to pre-cache: %s", nextSong.Title)
+			return
+		}
+		isRetry = true
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	preCacheStore[cacheKey] = &PreCache{
+	claim := &PreCache{
 		SongID:     nextSong.ID,
 		Timestamp:  time.Now(),
 		CancelFunc: cancel,
 	}
+	preCacheStore[cacheKey] = claim
 	preCacheStoreMu.Unlock()
 
-	logger.Debugf("Starting pre-cache for: %s", nextSong.Title)
+	if isRetry {
+		logger.Debugf("Retrying pre-cache for: %s", nextSong.Title)
+	} else {
+		logger.Debugf("Starting pre-cache for: %s", nextSong.Title)
+	}
 
 	go func() {
 		defer cancel()
 
 		if err := preCacheSong(ctx, guildID, nextSong, q.SponsorBlock, bitrate); err != nil {
 			logger.Errorf("Failed to pre-cache %s: %v", nextSong.Title, err)
+			preCacheStoreMu.Lock()
+			if preCacheStore[cacheKey] == claim {
+				claim.FailedAt = time.Now()
+			}
+			preCacheStoreMu.Unlock()
+			logger.Debugf("Pre-cache of %s will retry in %.0fs", nextSong.Title, preCacheRetryDelay.Seconds())
 		}
 		startAnalysisBackfill(guildID, bitrate)
 	}()
@@ -88,16 +109,13 @@ func preCacheSong(ctx context.Context, guildID string, song *queue.Song, sponsor
 	cacheKey := fmt.Sprintf("%s_%d", guildID, song.ID)
 
 	preCacheStoreMu.Lock()
-	if cache, exists := preCacheStore[cacheKey]; exists {
-		cache.StreamURL = streamURL
-	} else {
-		preCacheStore[cacheKey] = &PreCache{
-			StreamURL: streamURL,
-			SongID:    song.ID,
-			Timestamp: time.Now(),
-		}
+	cache, exists := preCacheStore[cacheKey]
+	if !exists {
+		preCacheStoreMu.Unlock()
+		logger.Debugf("Dropped the stream URL for: %s (pre-cache cancelled while fetching)", song.Title)
+		return nil
 	}
-	cache := preCacheStore[cacheKey]
+	cache.StreamURL = streamURL
 	preCacheStoreMu.Unlock()
 
 	logger.Debugf("Cached stream URL for: %s (fetched in %.1fs)", song.Title, time.Since(fetchStart).Seconds())
@@ -307,24 +325,8 @@ func invalidatePreCacheSong(guildID string, songID int) {
 	}
 }
 
-func CleanupPreCacheWorker(guildID string) {
-	q, err := queue.GetQueue(guildID, false)
-	if err != nil || q == nil || len(q.Songs) < 2 {
-		return
-	}
-
-	nextSong := q.Songs[1]
-	cacheKey := fmt.Sprintf("%s_%d", guildID, nextSong.ID)
-
-	preCacheStoreMu.Lock()
-	defer preCacheStoreMu.Unlock()
-
-	if cache, exists := preCacheStore[cacheKey]; exists {
-		if cache.CancelFunc != nil {
-			cache.CancelFunc()
-			logger.Debugf("Cancelled pre-cache worker for: %s (song ID: %d)", nextSong.Title, nextSong.ID)
-		}
-		delete(preCacheStore, cacheKey)
-		logger.Debugf("Cleaned up pre-cache for guild: %s", guildID)
+func InvalidatePreCaches(guildID string, songIDs []int) {
+	for _, songID := range songIDs {
+		invalidatePreCacheSong(guildID, songID)
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -289,5 +290,182 @@ func TestPreCacheLogsHowLongAFailedAnalysisRan(t *testing.T) {
 
 	if failed := loggedSeconds(t, log, `Head analysis failed for Song 1 after ([0-9.]+)s: `); failed < 0.2 || failed >= 0.5 {
 		t.Errorf("got failed after %.1fs, want 0.2s to 0.5s", failed)
+	}
+}
+
+func TestPreCacheDropsAResultCancelledDuringTheFetch(t *testing.T) {
+	const guildID = "precachedropped"
+	setupPlayerDB(t, guildID, 2)
+	enableAutoMix(t, guildID)
+	t.Cleanup(func() { player.ClearPreCache(guildID) })
+	q, err := queue.GetQueue(guildID, true)
+	if err != nil || q == nil || len(q.Songs) != 2 {
+		t.Fatalf("queue not ready: %v", err)
+	}
+	next := q.Songs[1]
+
+	fetchStarted := make(chan struct{})
+	release := make(chan struct{})
+	testutil.Swap(t, player.HookFetchStreamURL, func(url string, _ bool, _ int) (string, error) {
+		close(fetchStarted)
+		<-release
+		return url, nil
+	})
+	analyses := 0
+	testutil.Swap(t, player.HookAnalyzeSegment, func(context.Context, string, float64, int) (*analysis.TrackAnalysis, error) {
+		analyses++
+		return &analysis.TrackAnalysis{BPM: 120, PeriodSec: 0.5, Duration: 75}, nil
+	})
+	finished := make(chan struct{}, 1)
+	testutil.Swap(t, player.HookStartAnalysisBackfill, func(string, int) {
+		finished <- struct{}{}
+	})
+
+	player.PreCacheNext(guildID, 128000)
+	select {
+	case <-fetchStarted:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("the pre-cache of %s did not start fetching", next.Title)
+	}
+	player.InvalidatePreCaches(guildID, []int{next.ID})
+	close(release)
+	select {
+	case <-finished:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("the pre-cache of %s did not finish", next.Title)
+	}
+
+	if player.GetPreCache(guildID, next.ID) != nil {
+		t.Errorf("got a pre-cache entry for %s after it was cancelled, want none", next.Title)
+	}
+	if analyses != 0 {
+		t.Errorf("got %d analyses, want 0 for a cancelled pre-cache", analyses)
+	}
+}
+
+func TestFailedPreCacheRetriesAfterTheDelay(t *testing.T) {
+	const guildID = "precacheretry"
+	setupPlayerDB(t, guildID, 2)
+	t.Cleanup(func() { player.ClearPreCache(guildID) })
+	q, err := queue.GetQueue(guildID, true)
+	if err != nil || q == nil || len(q.Songs) != 2 {
+		t.Fatalf("queue not ready: %v", err)
+	}
+	next := q.Songs[1]
+
+	fetches := 0
+	testutil.Swap(t, player.HookFetchStreamURL, func(url string, _ bool, _ int) (string, error) {
+		fetches++
+		if fetches == 1 {
+			return "", io.ErrUnexpectedEOF
+		}
+		return url, nil
+	})
+	finished := make(chan struct{}, 1)
+	testutil.Swap(t, player.HookStartAnalysisBackfill, func(string, int) {
+		finished <- struct{}{}
+	})
+	runPreCache := func() {
+		player.PreCacheNext(guildID, 128000)
+		select {
+		case <-finished:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("the pre-cache of %s did not finish", next.Title)
+		}
+	}
+	backdateFailure := func(age time.Duration) {
+		player.HookPreCacheStoreMu.Lock()
+		(*player.HookPreCacheStore)[fmt.Sprintf("%s_%d", guildID, next.ID)].FailedAt = time.Now().Add(-age)
+		player.HookPreCacheStoreMu.Unlock()
+	}
+
+	runPreCache()
+	if got := player.GetCachedStreamURL(guildID, next.ID); got != "" {
+		t.Errorf("got stream URL %q after a failed fetch, want none", got)
+	}
+
+	failed := player.GetPreCache(guildID, next.ID)
+	player.HookPreCacheStoreMu.Lock()
+	isFailureRecorded := failed != nil && !failed.FailedAt.IsZero()
+	player.HookPreCacheStoreMu.Unlock()
+	if !isFailureRecorded {
+		t.Error("got no failure time after a failed fetch, want one")
+	}
+
+	player.PreCacheNext(guildID, 128000)
+	if player.GetPreCache(guildID, next.ID) != failed {
+		t.Error("got a retry right after the failure, want none before 30s")
+	}
+
+	backdateFailure(29 * time.Second)
+	player.PreCacheNext(guildID, 128000)
+	if player.GetPreCache(guildID, next.ID) != failed {
+		t.Error("got a retry 29s after the failure, want none before 30s")
+	}
+
+	backdateFailure(31 * time.Second)
+	runPreCache()
+	if got := player.GetCachedStreamURL(guildID, next.ID); got != next.URL {
+		t.Errorf("got stream URL %q 31s after the failure, want %q", got, next.URL)
+	}
+
+	cached := player.GetPreCache(guildID, next.ID)
+	player.PreCacheNext(guildID, 128000)
+	if player.GetPreCache(guildID, next.ID) != cached {
+		t.Error("got a new pre-cache for a cached song, want it kept")
+	}
+}
+
+func TestStaleFailureLeavesTheNewerPreCacheAlone(t *testing.T) {
+	const guildID = "precachestalefailure"
+	setupPlayerDB(t, guildID, 2)
+	t.Cleanup(func() { player.ClearPreCache(guildID) })
+	q, err := queue.GetQueue(guildID, true)
+	if err != nil || q == nil || len(q.Songs) != 2 {
+		t.Fatalf("queue not ready: %v", err)
+	}
+	next := q.Songs[1]
+
+	staleStarted := make(chan struct{})
+	releaseStale := make(chan struct{})
+	var fetches atomic.Int32
+	testutil.Swap(t, player.HookFetchStreamURL, func(url string, _ bool, _ int) (string, error) {
+		if fetches.Add(1) == 1 {
+			close(staleStarted)
+			<-releaseStale
+			return "", io.ErrUnexpectedEOF
+		}
+		return url, nil
+	})
+	finished := make(chan struct{}, 2)
+	testutil.Swap(t, player.HookStartAnalysisBackfill, func(string, int) {
+		finished <- struct{}{}
+	})
+	waitForFinish := func() {
+		select {
+		case <-finished:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("the pre-cache of %s did not finish", next.Title)
+		}
+	}
+
+	player.PreCacheNext(guildID, 128000)
+	select {
+	case <-staleStarted:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("the pre-cache of %s did not start fetching", next.Title)
+	}
+	player.InvalidatePreCaches(guildID, []int{next.ID})
+	player.PreCacheNext(guildID, 128000)
+	waitForFinish()
+	close(releaseStale)
+	waitForFinish()
+
+	newer := player.GetPreCache(guildID, next.ID)
+	player.HookPreCacheStoreMu.Lock()
+	isMarked := newer != nil && !newer.FailedAt.IsZero()
+	player.HookPreCacheStoreMu.Unlock()
+	if isMarked {
+		t.Errorf("got a failure time on the newer pre-cache of %s, want none", next.Title)
 	}
 }

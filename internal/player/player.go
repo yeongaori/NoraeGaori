@@ -208,6 +208,7 @@ type PreCache struct {
 	Timestamp  time.Time
 	CancelFunc context.CancelFunc
 	Analysis   *analysis.TrackAnalysis
+	FailedAt   time.Time
 }
 
 func IsPlaybackActive(guildID string) bool {

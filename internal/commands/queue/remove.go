@@ -60,24 +60,11 @@ func ownedBy(songs []*queue.Song, userID string) bool {
 func removeSongs(guildID string, songs []*queue.Song) error {
 	songIDs := songIDsOf(songs)
 
-	q, err := queue.GetQueue(guildID, false)
-	isNextSongRemoved := false
-	if err == nil && q != nil && len(q.Songs) > 1 {
-		for _, songID := range songIDs {
-			if songID == q.Songs[1].ID {
-				isNextSongRemoved = true
-				break
-			}
-		}
-	}
-
 	if err := queue.RemoveSongsByIDs(guildID, songIDs); err != nil {
 		return err
 	}
 
-	if isNextSongRemoved {
-		player.CleanupPreCacheWorker(guildID)
-	}
+	player.InvalidatePreCaches(guildID, songIDs)
 	return nil
 }
 

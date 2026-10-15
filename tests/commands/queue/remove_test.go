@@ -7,6 +7,7 @@ import (
 	queuecommand "noraegaori/internal/commands/queue"
 	"noraegaori/internal/messages"
 	"noraegaori/tests/testutil/commandtest"
+	"noraegaori/tests/testutil/precachetest"
 	"noraegaori/tests/testutil/queuetest"
 )
 
@@ -16,6 +17,8 @@ func TestRemove(t *testing.T) {
 	invalidRange := func(locale *messages.Locale) string { return locale.Queue.InvalidRange }
 	songRemoved := func(locale *messages.Locale) string { return fmt.Sprintf(locale.Queue.SongRemoved, "Song 2") }
 	rangeRemoved := func(locale *messages.Locale) string { return fmt.Sprintf(locale.Queue.RangeRemoved, 2, 2, 3) }
+	nextCache := precachetest.Track(commandtest.GuildID)
+	laterCache := precachetest.Track(commandtest.GuildID)
 
 	commandtest.Run(t, "remove", queuecommand.HandleRemove, []commandtest.Case{
 		{
@@ -174,6 +177,28 @@ func TestRemove(t *testing.T) {
 			Options:    removeOption("2"),
 			WantText:   songRemoved,
 			Check:      commandtest.WantTitles("Song 1"),
+		},
+		{
+			Name:    "the next song's pre-cache",
+			Songs:   queuetest.SongsBy(caller, 3),
+			Options: removeOption("2"),
+			Prepare: func(t *testing.T) {
+				commandtest.Playing(t)
+				nextCache.CacheQueuedSongs(t)
+			},
+			WantText: songRemoved,
+			Check:    nextCache.WantCached("Song 3"),
+		},
+		{
+			Name:    "a later song's pre-cache",
+			Songs:   queuetest.SongsBy(caller, 3),
+			Options: removeOption("3"),
+			Prepare: func(t *testing.T) {
+				commandtest.Playing(t)
+				laterCache.CacheQueuedSongs(t)
+			},
+			WantText: func(locale *messages.Locale) string { return fmt.Sprintf(locale.Queue.SongRemoved, "Song 3") },
+			Check:    laterCache.WantCached("Song 2"),
 		},
 	})
 }

@@ -12,6 +12,7 @@ import (
 	"noraegaori/internal/queue"
 	"noraegaori/tests/testutil/commandtest"
 	"noraegaori/tests/testutil/discordtest"
+	"noraegaori/tests/testutil/precachetest"
 	"noraegaori/tests/testutil/queuetest"
 )
 
@@ -46,6 +47,8 @@ func TestForceRemove(t *testing.T) {
 	validRange := func(count int) func(*messages.Locale) string {
 		return func(locale *messages.Locale) string { return fmt.Sprintf(locale.Admin.EnterValidRange, count) }
 	}
+	positionCache := precachetest.Track(commandtest.GuildID)
+	userCache := precachetest.Track(commandtest.GuildID)
 
 	commandtest.Run(t, "forceremove", admin.HandleForceRemove, []commandtest.Case{
 		{
@@ -136,6 +139,30 @@ func TestForceRemove(t *testing.T) {
 				commandtest.ReplyContains("Song 3", "Song 4")(t, reply)
 				commandtest.WantTitles("Song 1", "Song 2")(t, reply)
 			},
+		},
+		{
+			Name:    "the next song's pre-cache",
+			Songs:   queuetest.SongsBy(caller, 3),
+			Options: targetOption("2"),
+			Prepare: func(t *testing.T) {
+				commandtest.Playing(t)
+				positionCache.CacheQueuedSongs(t)
+			},
+			WantText: func(locale *messages.Locale) string { return fmt.Sprintf(locale.Queue.SongRemoved, "Song 2") },
+			Check:    positionCache.WantCached("Song 3"),
+		},
+		{
+			Name:    "a user's songs including the next one's pre-cache",
+			Songs:   queuetest.Songs(caller, targetUserID, caller, targetUserID),
+			Options: targetOption(mention),
+			Prepare: func(t *testing.T) {
+				commandtest.Playing(t)
+				userCache.CacheQueuedSongs(t)
+			},
+			WantText: func(locale *messages.Locale) string {
+				return fmt.Sprintf(locale.Admin.DeleteCompleteDesc, stubUsername, 2)
+			},
+			Check: userCache.WantCached("Song 3"),
 		},
 	})
 }
