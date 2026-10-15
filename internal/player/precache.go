@@ -79,6 +79,7 @@ func PreCacheNext(guildID string, bitrate int) {
 
 func preCacheSong(ctx context.Context, guildID string, song *queue.Song, sponsorBlock bool, bitrate int) error {
 
+	fetchStart := time.Now()
 	streamURL, err := fetchStreamURL(song.URL, sponsorBlock, bitrate)
 	if err != nil {
 		return fmt.Errorf("failed to get stream URL: %w", err)
@@ -99,21 +100,26 @@ func preCacheSong(ctx context.Context, guildID string, song *queue.Song, sponsor
 	cache := preCacheStore[cacheKey]
 	preCacheStoreMu.Unlock()
 
-	logger.Debugf("Cached stream URL for: %s", song.Title)
+	logger.Debugf("Cached stream URL for: %s (fetched in %.1fs)", song.Title, time.Since(fetchStart).Seconds())
 
 	if automix, err := queue.GetAutoMix(guildID); err == nil && automix {
 		head := analysis.LoadTrackAnalysis(song.URL, analysis.SegmentHead)
 		reused := head != nil
+		source := "reused"
 
 		var analyzeErr error
+		var analyzeDuration time.Duration
 		if head == nil {
 			markAnalysisPending(guildID, song.ID)
 			analyzeErr = withAnalysisSlot(ctx, func() error {
+				analyzeStart := time.Now()
 				var err error
 				head, err = analyzeSegment(ctx, streamURL, 0, analysisHeadSecs)
+				analyzeDuration = time.Since(analyzeStart)
 				return err
 			})
 			clearAnalysisPending(guildID, song.ID)
+			source = fmt.Sprintf("analyzed in %.1fs", analyzeDuration.Seconds())
 		}
 
 		if analyzeErr == nil && head != nil {
@@ -128,11 +134,11 @@ func preCacheSong(ctx context.Context, guildID string, song *queue.Song, sponsor
 					logger.Warnf("Failed to save head analysis for %s: %v", song.Title, saveErr)
 				}
 			}
-			logger.Debugf("Analyzed head for: %s (BPM %.1f, key %s / %s, confidence %.3f, reused %v)",
+			logger.Debugf("Analyzed head for: %s (BPM %.1f, key %s / %s, confidence %.3f, %s)",
 				song.Title, head.BPM, analysis.KeyName(head.Tonic, head.Minor),
-				analysis.FifthsCode(head.Tonic, head.Minor), head.KeyConfidence, reused)
+				analysis.FifthsCode(head.Tonic, head.Minor), head.KeyConfidence, source)
 		} else {
-			logger.Debugf("Head analysis failed for %s: %v", song.Title, analyzeErr)
+			logger.Debugf("Head analysis failed for %s after %.1fs: %v", song.Title, analyzeDuration.Seconds(), analyzeErr)
 		}
 	}
 

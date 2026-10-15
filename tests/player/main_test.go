@@ -2,10 +2,15 @@ package player_test
 
 import (
 	"fmt"
+	"io"
+	"regexp"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
 
+	"noraegaori/internal/logger"
 	"noraegaori/internal/player"
 	"noraegaori/internal/queue"
 	"noraegaori/tests/testutil/localetest"
@@ -25,6 +30,9 @@ func TestMain(m *testing.M) {
 	*player.HookAnnounceAutoPause = func(*discordgo.Session, string, string) {}
 	*player.HookAnnouncePlaybackCrash = func(*discordgo.Session, string, *queue.Song) {}
 	*player.HookResumeAutoPaused = func(*discordgo.Session, string) {}
+	*logger.HookDebugMode = true
+	*logger.HookConsole = io.Discard
+	*logger.HookOutput = io.Discard
 
 	localetest.Run(m)
 }
@@ -44,4 +52,25 @@ func setupPlayerDB(t *testing.T, guildID string, songs int) {
 	}
 	queuetest.SeedWithVoice(t, guildID, "voice", seeded...)
 	t.Cleanup(func() { player.DeletePlayer(guildID) })
+}
+
+func loggedSeconds(t *testing.T, log, pattern string) float64 {
+	t.Helper()
+
+	match := regexp.MustCompile(pattern).FindStringSubmatch(log)
+	if match == nil {
+		t.Fatalf("no log line matches %q", pattern)
+	}
+	seconds, _ := strconv.ParseFloat(match[1], 64)
+	return seconds
+}
+
+func countLogLines(log, text string) int {
+	count := 0
+	for _, line := range strings.Split(log, "\n") {
+		if strings.Contains(line, text) {
+			count++
+		}
+	}
+	return count
 }

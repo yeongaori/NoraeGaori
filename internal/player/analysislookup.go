@@ -20,6 +20,19 @@ func LookupAnalysis(guildID string, song *queue.Song, segment string) *analysis.
 	return analysis.LoadTrackAnalysis(song.URL, segment)
 }
 
+func describeHeadAnalysis(guildID string, song *queue.Song) string {
+	if GetCachedAnalysis(guildID, song.ID) != nil {
+		return "cached"
+	}
+	if analysis.LoadTrackAnalysis(song.URL, analysis.SegmentHead) != nil {
+		return "stored"
+	}
+	if PendingAnalyses(guildID)[song.ID] > 0 {
+		return "pending"
+	}
+	return "missing"
+}
+
 func analysisDuration(track *analysis.TrackAnalysis) float64 {
 	if track == nil {
 		return 0

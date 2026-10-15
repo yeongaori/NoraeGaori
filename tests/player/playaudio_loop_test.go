@@ -1,7 +1,11 @@
 package player_test
 
 import (
+	"context"
+	"fmt"
+	"noraegaori/internal/audio/analysis"
 	"noraegaori/internal/audio/ffmpeg"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -9,6 +13,7 @@ import (
 	"noraegaori/internal/player"
 	"noraegaori/internal/queue"
 	"noraegaori/tests/testutil"
+	"noraegaori/tests/testutil/logtest"
 )
 
 func silentAudioStream(frames int) player.HookAudioStream {
@@ -209,5 +214,226 @@ func TestPlayAudioStopsRecheckingThePreCacheOnceTheEndIsPlanned(t *testing.T) {
 
 	if got := awaitPreCacheCalls(calls, 2); got != 2 {
 		t.Errorf("got %d pre-cache calls, want 2: the start and the end-of-stream plan, no rechecks after it", got)
+	}
+}
+
+func addNextSong(t *testing.T, guildID string, isLive bool) *queue.Song {
+	t.Helper()
+
+	if err := queue.AddSong(guildID, &queue.Song{
+		URL:            "https://youtube.com/watch?v=" + guildID + "1",
+		Title:          "Song 1",
+		Duration:       "3:00",
+		RequestedByID:  "user1",
+		RequestedByTag: "User#1234",
+		IsLive:         isLive,
+	}, -1); err != nil {
+		t.Fatal(err)
+	}
+	q, err := queue.GetQueue(guildID, true)
+	if err != nil || q == nil || len(q.Songs) != 2 {
+		t.Fatalf("queue not ready: %v", err)
+	}
+	return q.Songs[1]
+}
+
+func TestPlayAudioLogsTheNextSongsReadinessOnce(t *testing.T) {
+	cacheHead := func(t *testing.T, guildID string, next *queue.Song) {
+		cacheNextStreamURL(t, guildID, next.ID, "https://example.invalid/next")
+		player.HookPreCacheStoreMu.Lock()
+		(*player.HookPreCacheStore)[fmt.Sprintf("%s_%d", guildID, next.ID)].Analysis = &analysis.TrackAnalysis{BPM: 120}
+		player.HookPreCacheStoreMu.Unlock()
+	}
+	markPending := func(t *testing.T, guildID string, next *queue.Song) {
+		player.HookMarkAnalysisPending(guildID, next.ID)
+		t.Cleanup(func() { player.HookClearAnalysisPending(guildID, next.ID) })
+	}
+	cases := []struct {
+		name    string
+		isLive  bool
+		prepare func(t *testing.T, guildID string, next *queue.Song)
+		want    string
+	}{
+		{"cached", false, cacheHead, "stream URL cached, head analysis cached"},
+		{"cachedpending", false, func(t *testing.T, guildID string, next *queue.Song) {
+			cacheHead(t, guildID, next)
+			markPending(t, guildID, next)
+		}, "stream URL cached, head analysis cached"},
+		{"pending", false, func(t *testing.T, guildID string, next *queue.Song) {
+			cacheNextStreamURL(t, guildID, next.ID, "https://example.invalid/next")
+			markPending(t, guildID, next)
+		}, "stream URL cached, head analysis pending"},
+		{"stored", false, func(t *testing.T, _ string, next *queue.Song) {
+			if err := analysis.SaveTrackAnalysis(next.URL, analysis.SegmentHead, &analysis.TrackAnalysis{BPM: 120}); err != nil {
+				t.Fatal(err)
+			}
+		}, "stream URL missing, head analysis stored"},
+		{"missing", false, nil, "stream URL missing, head analysis missing"},
+		{"live", true, nil, "stream URL live, head analysis live"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			guildID := "loopreadiness" + c.name
+			readLog := logtest.Capture(t)
+			guildPlayer, _, song := newCharacterizationPlayer(t, guildID, func() player.HookAudioStream {
+				s := newFakeStream(ffmpeg.BufSize)
+				s.setEndState(&ffmpeg.EndState{TotalFrames: 300})
+				s.sendFrames(300)
+				return s
+			})
+			next := addNextSong(t, guildID, c.isLive)
+			if c.prepare != nil {
+				c.prepare(t, guildID, next)
+			}
+
+			if err := runPlayAudioWithFade(t, guildPlayer, song, player.HookFadeSettings{}); err != nil {
+				t.Fatalf("playAudio returned %v, want nil", err)
+			}
+
+			line := fmt.Sprintf("End of Song 0 known with 6.0s left; next song Song 1: %s for guild: %s", c.want, guildID)
+			if got := countLogLines(readLog(), line); got != 1 {
+				t.Errorf("got %d readiness lines matching %q, want 1", got, line)
+			}
+		})
+	}
+}
+
+func TestPlayAudioReadinessCountsOnlyTheAudibleRest(t *testing.T) {
+	const guildID = "loopreadinessresumed"
+	readLog := logtest.Capture(t)
+	resumed := newFakeStream(ffmpeg.BufSize)
+	resumed.setEndState(&ffmpeg.EndState{TotalFrames: 400, SilentTailFrames: 50})
+	resumed.sendFrames(300)
+	guildPlayer, _, song := newCharacterizationPlayer(t, guildID, func() player.HookAudioStream { return resumed })
+	addNextSong(t, guildID, false)
+
+	guildPlayer.HookMu().Lock()
+	guildPlayer.PendingStream = &player.PendingStream{SongID: song.ID, Stream: resumed, FramesConsumed: 100}
+	guildPlayer.HookMu().Unlock()
+
+	if err := runPlayAudioWithFade(t, guildPlayer, song, player.HookFadeSettings{}); err != nil {
+		t.Fatalf("playAudio returned %v, want nil", err)
+	}
+
+	line := fmt.Sprintf("End of Song 0 known with 5.0s left; next song Song 1: stream URL missing, head analysis missing for guild: %s", guildID)
+	if got := countLogLines(readLog(), line); got != 1 {
+		t.Errorf("got %d readiness lines matching %q, want 1", got, line)
+	}
+}
+
+func TestSongQueuedMidSongIsReadyBeforeTheEnd(t *testing.T) {
+	const guildID = "loopqueuedmidsong"
+	readLog := logtest.Capture(t)
+	loudFrame := func() []int16 {
+		frame := make([]int16, player.HookFrameSize*player.HookChannels)
+		for i := range frame {
+			frame[i] = 8000
+		}
+		return frame
+	}
+
+	current := newFakeStream(ffmpeg.BufSize)
+	var streams atomic.Int32
+	guildPlayer, mock, song := newCharacterizationPlayer(t, guildID, func() player.HookAudioStream {
+		if streams.Add(1) == 1 {
+			return current
+		}
+		next := newFakeStream(ffmpeg.BufSize)
+		go func() {
+			for {
+				select {
+				case <-next.stopChan:
+					return
+				case next.pcm <- loudFrame():
+				}
+			}
+		}()
+		t.Cleanup(next.Stop)
+		return next
+	})
+	enableAutoMix(t, guildID)
+	t.Cleanup(func() { player.ClearPreCache(guildID) })
+	t.Cleanup(func() { player.StopAnalysisBackfill(guildID) })
+
+	testutil.Swap(t, player.HookPreCacheNext, player.PreCacheNext)
+	testutil.Swap(t, player.HookAnalysisBackfillGap, 0)
+	testutil.Swap(t, player.HookFetchStreamURL, func(url string, _ bool, _ int) (string, error) {
+		time.Sleep(20 * time.Millisecond)
+		return url, nil
+	})
+	testutil.Swap(t, player.HookFetchBackfillStreamURL, func(_ context.Context, url string, _ bool, _ int) (string, error) {
+		return url, nil
+	})
+	testutil.Swap(t, player.HookAnalyzeSegment, func(_ context.Context, _ string, startSec float64, _ int) (*analysis.TrackAnalysis, error) {
+		time.Sleep(50 * time.Millisecond)
+		head := steadyBeat(125)
+		head.Offset = startSec
+		return head, nil
+	})
+
+	var sent atomic.Int64
+	stopDrain := make(chan struct{})
+	t.Cleanup(func() { close(stopDrain) })
+	go func() {
+		for {
+			select {
+			case <-stopDrain:
+				return
+			case <-mock.opusSend:
+				sent.Add(1)
+			}
+		}
+	}()
+
+	fade := *player.HookBuildFadeSettings(player.HookFadeSettingsFields{
+		AutoMix: true, Crossfade: true, TrimSilence: true, AutoMixBeats: 64, RepeatMode: queue.RepeatOff,
+	})
+	done := make(chan error, 1)
+	go func() {
+		done <- player.HookPlayAudio(guildPlayer, song, "fake://url", 0, false, 128000, make(chan struct{}, 1), fade, func(*queue.Song) {})
+	}()
+
+	pushed := 0
+	push := func(until int, isDone func() bool) {
+		for pushed < until && !isDone() {
+			for range 10 {
+				select {
+				case current.pcm <- loudFrame():
+					pushed++
+				case <-time.After(time.Second):
+					return
+				}
+			}
+			time.Sleep(2 * time.Millisecond)
+		}
+	}
+	never := func() bool { return false }
+
+	push(500, never)
+	next := addNextSong(t, guildID, false)
+	isReady := func() bool {
+		return player.GetCachedStreamURL(guildID, next.ID) != "" && player.GetCachedAnalysis(guildID, next.ID) != nil
+	}
+	push(7000, isReady)
+	if !isReady() {
+		t.Errorf("got %s not pre-cached when the end of %s was known, want URL and head analysis ready", next.Title, song.Title)
+	}
+
+	tail := steadyBeat(128)
+	tail.Offset = 90
+	tail.Duration = 90
+	tail.FirstBeat = 0.2
+	current.setEndState(&ffmpeg.EndState{TotalFrames: 9000, TailStartFrame: 4500, Analysis: tail})
+	push(9000, never)
+	close(current.pcm)
+
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("playAudio did not return")
+	}
+	if !strings.Contains(readLog(), "bpmA=128.0 bpmB=125.0") {
+		t.Error("got no AutoMix plan line, want one with both BPMs")
 	}
 }

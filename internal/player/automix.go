@@ -34,41 +34,42 @@ type PendingStream struct {
 }
 
 type crossfadeState struct {
-	armed           bool
-	active          bool
-	handedOff       bool
-	cancelled       bool
-	trimSilence     bool
-	trimBLead       bool
-	bLoudSeen       bool
-	autoMix         bool
-	scope           *logger.Scoped
-	bStream         audioStream
-	nextSongID      int
-	bSeekSec        float64
-	bTempo          ffmpeg.Tempo
-	transitionFrame int
-	crossfadeFrames int
-	minUsableFrames int
-	totalFrames     int
-	slideFrames     int
-	mixedFrames     int
-	bFramesConsumed int
-	bLeadSkipFrames int
-	mixBuf          []int16
-	mixFloat        []float64
-	limiter         dsp.Limiter
-	opusScratch     []byte
-	processor       *transition.Processor
-	beatLoop        *transition.BeatLoop
-	bLoop           *transition.BeatLoop
-	guildID         string
-	normalization   bool
-	bitrate         int
-	bRetried        bool
-	bRefetch        atomic.Pointer[streamRef]
-	bRefetching     atomic.Bool
-	bAborted        atomic.Bool
+	armed            bool
+	active           bool
+	handedOff        bool
+	cancelled        bool
+	trimSilence      bool
+	trimBLead        bool
+	bLoudSeen        bool
+	autoMix          bool
+	scope            *logger.Scoped
+	bStream          audioStream
+	nextSongID       int
+	bSeekSec         float64
+	bTempo           ffmpeg.Tempo
+	transitionFrame  int
+	crossfadeFrames  int
+	minUsableFrames  int
+	totalFrames      int
+	slideFrames      int
+	mixedFrames      int
+	bFramesConsumed  int
+	bLeadSkipFrames  int
+	mixBuf           []int16
+	mixFloat         []float64
+	limiter          dsp.Limiter
+	opusScratch      []byte
+	processor        *transition.Processor
+	beatLoop         *transition.BeatLoop
+	bLoop            *transition.BeatLoop
+	guildID          string
+	normalization    bool
+	bitrate          int
+	bRetried         bool
+	hasLoggedURLWait bool
+	bRefetch         atomic.Pointer[streamRef]
+	bRefetching      atomic.Bool
+	bAborted         atomic.Bool
 }
 
 func newCrossfadeState() *crossfadeState {
@@ -113,12 +114,7 @@ func nextCrossfadeCandidate(guildID string) (*queue.Song, *queue.Song, string) {
 		return nil, nil, ""
 	}
 
-	nextURL := GetCachedStreamURL(guildID, q.Songs[1].ID)
-	if nextURL == "" {
-		return nil, nil, ""
-	}
-
-	return q.Songs[0], q.Songs[1], nextURL
+	return q.Songs[0], q.Songs[1], GetCachedStreamURL(guildID, q.Songs[1].ID)
 }
 
 func analysisPeriodSec(a *analysis.TrackAnalysis) float64 {
@@ -243,11 +239,21 @@ func (cs *crossfadeState) buildPlan(player *GuildPlayer, es *ffmpeg.EndState, se
 
 	effectiveEnd := es.TotalFrames - es.SilentTailFrames
 	scope := logger.Scope("Crossfade")
+	if fade.autoMix {
+		scope = logger.Scope("AutoMix")
+	}
+	if nextURL == "" {
+		if !cs.hasLoggedURLWait {
+			cs.hasLoggedURLWait = true
+			scope.Debugf("next song %s has no cached stream URL yet for guild: %s", next.Title, guildID)
+		}
+		return nil
+	}
+
 	var aAnal, bAnal *analysis.TrackAnalysis
 	var placement transitionPlacement
 	var ok bool
 	if fade.autoMix {
-		scope = logger.Scope("AutoMix")
 		aAnal = es.Analysis
 		bAnal = LookupAnalysis(guildID, next, analysis.SegmentHead)
 		placement, ok = placeAutoMix(&transition.Pair{
@@ -366,7 +372,7 @@ func describeStyleSources(source map[transition.Category]string) string {
 
 func describeTransitionInputs(a, b *analysis.TrackAnalysis) string {
 	if a == nil || b == nil {
-		return "analysis unavailable"
+		return fmt.Sprintf("analysis unavailable (outgoing tail %s, next head %s)", describeAnalysisPresence(a), describeAnalysisPresence(b))
 	}
 	raw := math.Abs(b.BPM-a.BPM) / a.BPM
 	folded, factor := analysis.TempoDeltaFactor(a.BPM, b.BPM)
@@ -375,6 +381,13 @@ func describeTransitionInputs(a, b *analysis.TrackAnalysis) string {
 		analysis.FifthsCode(a.Tonic, a.Minor), analysis.FifthsCode(b.Tonic, b.Minor),
 		a.KeyConfidence, b.KeyConfidence, analysis.KeyTier(a, b),
 		a.BeatStrength, b.BeatStrength, len(a.BarOffsets), len(b.BarOffsets))
+}
+
+func describeAnalysisPresence(a *analysis.TrackAnalysis) string {
+	if a == nil {
+		return "missing"
+	}
+	return "present"
 }
 
 func (cs *crossfadeState) bReady() bool {

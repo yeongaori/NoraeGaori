@@ -13,6 +13,7 @@ import (
 	"noraegaori/internal/player"
 	"noraegaori/internal/queue"
 	"noraegaori/tests/testutil"
+	"noraegaori/tests/testutil/logtest"
 )
 
 func steadyBeat(bpm float64) *analysis.TrackAnalysis {
@@ -178,5 +179,43 @@ func TestIncomingRollIsArmedOnTheIncomingSong(t *testing.T) {
 	plain, _ := planAutoMix(t, "placenoroll", steadyBeat(125))
 	if *plain.HookIncomingLoop() != nil {
 		t.Error("a plan without an incoming roll armed one")
+	}
+}
+
+func TestPlanNamesTheSideWithoutAnalysis(t *testing.T) {
+	readLog := logtest.Capture(t)
+	planAutoMix(t, "placemissing", nil)
+
+	want := "analysis unavailable (outgoing tail present, next head missing)"
+	if !strings.Contains(readLog(), want) {
+		t.Errorf("got plan inputs without %q", want)
+	}
+}
+
+func TestPlanLogsAMissingStreamURLOnce(t *testing.T) {
+	const guildID = "placeurlwait"
+	readLog := logtest.Capture(t)
+	q := seedCrossfadeQueue(t, guildID)
+	endState := &ffmpeg.EndState{TotalFrames: 9000}
+	fade := player.HookBuildFadeSettings(player.HookFadeSettingsFields{AutoMix: true, Crossfade: true, AutoMixBeats: 64})
+
+	cs := player.HookNewCrossfadeState()
+	t.Cleanup(cs.HookAbort)
+	for attempt := range 3 {
+		if cs.HookPlan(player.GetPlayer(guildID), endState, 100, 0, fade, false, 128000) {
+			t.Fatalf("got plan %d armed, want no plan without a cached stream URL", attempt)
+		}
+	}
+
+	line := fmt.Sprintf("next song %s has no cached stream URL yet for guild: %s", q.Songs[1].Title, guildID)
+	if got := countLogLines(readLog(), line); got != 1 {
+		t.Errorf("got %d missing stream URL lines over 3 plans, want 1", got)
+	}
+
+	next := player.HookNewCrossfadeState()
+	t.Cleanup(next.HookAbort)
+	next.HookPlan(player.GetPlayer(guildID), endState, 100, 0, fade, false, 128000)
+	if got := countLogLines(readLog(), line); got != 2 {
+		t.Errorf("got %d missing stream URL lines after a new session, want 2", got)
 	}
 }

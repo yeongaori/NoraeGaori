@@ -2,12 +2,15 @@ package player_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"math"
 	"math/rand"
+	"regexp"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -16,6 +19,7 @@ import (
 	"noraegaori/internal/player"
 	"noraegaori/internal/queue"
 	"noraegaori/tests/testutil"
+	"noraegaori/tests/testutil/logtest"
 )
 
 type chunkedReader struct {
@@ -203,5 +207,87 @@ func TestCachedPreCacheExpiresAfterItsTTL(t *testing.T) {
 	}
 	if got := player.GetCachedStreamURL(guildID, 2); got != freshURL {
 		t.Errorf("got stream URL %q from a 59-minute-old entry, want %q", got, freshURL)
+	}
+}
+
+func runLoggedPreCache(t *testing.T, guildID string, prepare func(next *queue.Song), analyze func() (*analysis.TrackAnalysis, error)) string {
+	t.Helper()
+
+	readLog := logtest.Capture(t)
+	setupPlayerDB(t, guildID, 2)
+	enableAutoMix(t, guildID)
+	t.Cleanup(func() { player.ClearPreCache(guildID) })
+	q, err := queue.GetQueue(guildID, true)
+	if err != nil || q == nil || len(q.Songs) != 2 {
+		t.Fatalf("queue not ready: %v", err)
+	}
+	next := q.Songs[1]
+	if prepare != nil {
+		prepare(next)
+	}
+
+	testutil.Swap(t, player.HookFetchStreamURL, func(url string, _ bool, _ int) (string, error) {
+		time.Sleep(400 * time.Millisecond)
+		return url, nil
+	})
+	testutil.Swap(t, player.HookAnalyzeSegment, func(context.Context, string, float64, int) (*analysis.TrackAnalysis, error) {
+		return analyze()
+	})
+	finished := make(chan struct{}, 1)
+	testutil.Swap(t, player.HookStartAnalysisBackfill, func(string, int) {
+		finished <- struct{}{}
+	})
+
+	player.PreCacheNext(guildID, 128000)
+	select {
+	case <-finished:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("the pre-cache of %s did not finish", next.Title)
+	}
+	return readLog()
+}
+
+func TestPreCacheLogsHowLongTheFetchAndAnalysisTook(t *testing.T) {
+	log := runLoggedPreCache(t, "precachetimes", nil, func() (*analysis.TrackAnalysis, error) {
+		time.Sleep(200 * time.Millisecond)
+		return &analysis.TrackAnalysis{BPM: 120, PeriodSec: 0.5, Duration: 75}, nil
+	})
+
+	if fetched := loggedSeconds(t, log, `Cached stream URL for: Song 1 \(fetched in ([0-9.]+)s\)`); fetched < 0.4 || fetched >= 0.7 {
+		t.Errorf("got fetched in %.1fs, want 0.4s to 0.7s", fetched)
+	}
+	if analyzed := loggedSeconds(t, log, `Analyzed head for: Song 1 \(.*, analyzed in ([0-9.]+)s\)`); analyzed < 0.2 || analyzed >= 0.5 {
+		t.Errorf("got analyzed in %.1fs, want 0.2s to 0.5s", analyzed)
+	}
+}
+
+func TestPreCacheLogsAReusedHeadWithoutATime(t *testing.T) {
+	analyses := 0
+	storeHead := func(next *queue.Song) {
+		if err := analysis.SaveTrackAnalysis(next.URL, analysis.SegmentHead, &analysis.TrackAnalysis{BPM: 120, PeriodSec: 0.5, Duration: 75}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	log := runLoggedPreCache(t, "precachereused", storeHead, func() (*analysis.TrackAnalysis, error) {
+		analyses++
+		return &analysis.TrackAnalysis{BPM: 120, PeriodSec: 0.5, Duration: 75}, nil
+	})
+
+	if got := regexp.MustCompile(`Analyzed head for: Song 1 \(.*\)`).FindString(log); !strings.HasSuffix(got, ", reused)") {
+		t.Errorf("got head line %q, want it marked reused with no time", got)
+	}
+	if analyses != 0 {
+		t.Errorf("got %d analyses, want 0 for a stored head", analyses)
+	}
+}
+
+func TestPreCacheLogsHowLongAFailedAnalysisRan(t *testing.T) {
+	log := runLoggedPreCache(t, "precachefailed", nil, func() (*analysis.TrackAnalysis, error) {
+		time.Sleep(200 * time.Millisecond)
+		return nil, io.ErrUnexpectedEOF
+	})
+
+	if failed := loggedSeconds(t, log, `Head analysis failed for Song 1 after ([0-9.]+)s: `); failed < 0.2 || failed >= 0.5 {
+		t.Errorf("got failed after %.1fs, want 0.2s to 0.5s", failed)
 	}
 }

@@ -536,10 +536,12 @@ func (s *playbackSession) planEndOfStream() {
 	}
 
 	s.endPlanned = true
-	go preCacheNext(s.guildID, s.bitrate)
-	if nq, qErr := queue.GetQueue(s.guildID, false); qErr == nil && nq != nil {
+	nq, qErr := queue.GetQueue(s.guildID, false)
+	if qErr == nil && nq != nil {
 		s.fade = fadeSettingsFromQueue(nq)
 	}
+	s.logNextSongReadiness(nq, es)
+	go preCacheNext(s.guildID, s.bitrate)
 
 	if s.song.IsLive {
 		return
@@ -563,6 +565,26 @@ func (s *playbackSession) planEndOfStream() {
 		s.fadeOutStartFrame, s.fadeOutFrames = planFadeOutWindow(es.TotalFrames-es.SilentTailFrames, s.sentFrames, s.fade.fadeOutSec)
 		logger.Debugf("Fade-out window planned: start frame %d, %d frames (total %d, sent %d) for guild: %s", s.fadeOutStartFrame, s.fadeOutFrames, es.TotalFrames, s.sentFrames, s.guildID)
 	}
+}
+
+func (s *playbackSession) logNextSongReadiness(q *queue.Queue, es *ffmpeg.EndState) {
+	if s.song.IsLive || q == nil || len(q.Songs) < 2 {
+		return
+	}
+
+	next := q.Songs[1]
+	urlState, headState := "live", "live"
+	if !next.IsLive {
+		urlState = "missing"
+		if GetCachedStreamURL(s.guildID, next.ID) != "" {
+			urlState = "cached"
+		}
+		headState = describeHeadAnalysis(s.guildID, next)
+	}
+
+	remainingSec := float64(es.TotalFrames-s.frameOffset-es.SilentTailFrames-s.sentFrames) / dsp.FramesPerSecond
+	logger.Debugf("End of %s known with %.1fs left; next song %s: stream URL %s, head analysis %s for guild: %s",
+		s.song.Title, remainingSec, next.Title, urlState, headState, s.guildID)
 }
 
 func (s *playbackSession) originSec() float64 {
