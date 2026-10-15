@@ -4,12 +4,17 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"math/rand"
+	"sync"
 	"testing"
+	"time"
 
 	"noraegaori/internal/player"
+	"noraegaori/internal/queue"
+	"noraegaori/tests/testutil"
 )
 
 type chunkedReader struct {
@@ -116,5 +121,51 @@ func TestReadFloat32SamplesReportsReadFailure(t *testing.T) {
 	}
 	if samples != nil {
 		t.Errorf("samples = %v, want nil on failure", samples)
+	}
+}
+
+func TestPreCacheNextStartsOneFetchPerSong(t *testing.T) {
+	var mu sync.Mutex
+	fetches := make(map[string]int)
+	testutil.Swap(t, player.HookFetchStreamURL, func(url string, _ bool, _ int) (string, error) {
+		mu.Lock()
+		fetches[url]++
+		mu.Unlock()
+		return url, nil
+	})
+	finished := make(chan struct{}, 64)
+	testutil.Swap(t, player.HookStartAnalysisBackfill, func(string, int) {
+		finished <- struct{}{}
+	})
+
+	for round := range 20 {
+		guildID := fmt.Sprintf("precacheonefetch%d", round)
+		setupPlayerDB(t, guildID, 2)
+		t.Cleanup(func() { player.ClearPreCache(guildID) })
+
+		q, err := queue.GetQueue(guildID, true)
+		if err != nil || q == nil || len(q.Songs) != 2 {
+			t.Fatalf("queue not ready: %v", err)
+		}
+		next := q.Songs[1]
+
+		player.PreCacheNext(guildID, 128000)
+		if player.GetPreCache(guildID, next.ID) == nil {
+			t.Fatalf("round %d: got no pre-cache entry for %s when PreCacheNext returned, want it claimed before the fetch", round, next.Title)
+		}
+		player.PreCacheNext(guildID, 128000)
+
+		select {
+		case <-finished:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("round %d: the pre-cache of %s did not finish", round, next.Title)
+		}
+
+		mu.Lock()
+		got := fetches[next.URL]
+		mu.Unlock()
+		if got != 1 {
+			t.Fatalf("round %d: got %d stream URL fetches for %s, want 1 per song", round, got, next.Title)
+		}
 	}
 }

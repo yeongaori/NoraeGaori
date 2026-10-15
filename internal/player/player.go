@@ -47,9 +47,10 @@ const (
 
 	commandBufferSize = 10
 
-	healthyPlaybackFrames = 500
-	maxOpusFrameBytes     = 1500
-	framePacingWarnDelay  = 100 * time.Millisecond
+	healthyPlaybackFrames  = 500
+	preCacheIntervalFrames = 250
+	maxOpusFrameBytes      = 1500
+	framePacingWarnDelay   = 100 * time.Millisecond
 )
 
 type PlayerCommand struct {

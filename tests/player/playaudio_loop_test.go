@@ -2,11 +2,13 @@ package player_test
 
 import (
 	"noraegaori/internal/audio/ffmpeg"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"noraegaori/internal/player"
 	"noraegaori/internal/queue"
+	"noraegaori/tests/testutil"
 )
 
 func silentAudioStream(frames int) player.HookAudioStream {
@@ -151,5 +153,61 @@ func TestPlayAudioConsumesTheFadeInNextFlag(t *testing.T) {
 
 	if fadeInNext {
 		t.Error("FadeInNext was not consumed by playAudio")
+	}
+}
+
+func countPreCacheCalls(t *testing.T) *atomic.Int32 {
+	t.Helper()
+
+	calls := &atomic.Int32{}
+	held := make(chan struct{})
+	t.Cleanup(func() { close(held) })
+	testutil.Swap(t, player.HookPreCacheNext, func(string, int) {
+		calls.Add(1)
+		<-held
+	})
+	return calls
+}
+
+func awaitPreCacheCalls(calls *atomic.Int32, want int32) int32 {
+	deadline := time.Now().Add(2 * time.Second)
+	for calls.Load() < want && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	time.Sleep(50 * time.Millisecond)
+	return calls.Load()
+}
+
+func TestPlayAudioRechecksThePreCacheEveryInterval(t *testing.T) {
+	guildID := "looprecheck"
+	guildPlayer, _, song := newCharacterizationPlayer(t, guildID, func() player.HookAudioStream { return loudAudioStream(3*250 + 10) })
+	calls := countPreCacheCalls(t)
+
+	if err := runPlayAudioWithFade(t, guildPlayer, song, player.HookFadeSettings{}); err != nil {
+		t.Fatalf("playAudio returned %v, want nil", err)
+	}
+
+	if got := awaitPreCacheCalls(calls, 4); got != 4 {
+		t.Errorf("got %d pre-cache calls, want 4: the start plus one recheck per interval", got)
+	}
+}
+
+func TestPlayAudioStopsRecheckingThePreCacheOnceTheEndIsPlanned(t *testing.T) {
+	guildID := "looprecheckend"
+	frames := 3*250 + 10
+	guildPlayer, _, song := newCharacterizationPlayer(t, guildID, func() player.HookAudioStream {
+		s := newFakeStream(ffmpeg.BufSize)
+		s.setEndState(&ffmpeg.EndState{TotalFrames: frames})
+		s.sendFrames(frames)
+		return s
+	})
+	calls := countPreCacheCalls(t)
+
+	if err := runPlayAudioWithFade(t, guildPlayer, song, player.HookFadeSettings{}); err != nil {
+		t.Fatalf("playAudio returned %v, want nil", err)
+	}
+
+	if got := awaitPreCacheCalls(calls, 2); got != 2 {
+		t.Errorf("got %d pre-cache calls, want 2: the start and the end-of-stream plan, no rechecks after it", got)
 	}
 }

@@ -448,6 +448,32 @@ func TestPreCacheSkippingTheNextSongStillAnalyzesThePlayingEnding(t *testing.T) 
 	}
 }
 
+func TestCleanupPreCacheWorkerCancelsTheRunningAnalysis(t *testing.T) {
+	const guildID = "precache-cancel"
+	songs := seedBackfillQueue(t, guildID, "3:00", "3:00")
+	enableAutoMix(t, guildID)
+	t.Cleanup(func() { player.ClearPreCache(guildID) })
+	fake := installBackfillFake(t)
+	fake.analyze = func(ctx context.Context, _ segmentRead) (*analysis.TrackAnalysis, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	finished := make(chan struct{}, 1)
+	testutil.Swap(t, player.HookStartAnalysisBackfill, func(string, int) {
+		finished <- struct{}{}
+	})
+
+	player.PreCacheNext(guildID, 128000)
+	waitForReads(t, fake, 1)
+	player.CleanupPreCacheWorker(guildID)
+
+	select {
+	case <-finished:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("the running analysis of %s was not cancelled", songs[1].Title)
+	}
+}
+
 func TestPendingCountsEachMark(t *testing.T) {
 	const guildID = "pending-counts"
 	player.HookMarkAnalysisPending(guildID, 7)

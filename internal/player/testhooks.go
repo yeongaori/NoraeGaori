@@ -157,6 +157,7 @@ var HookShouldAutoPause = shouldAutoPause
 var HookShouldAutoResume = shouldAutoResume
 var HookSnapTransitionToBar = snapTransitionToBar
 var HookSnapTransitionToGrid = snapTransitionToGrid
+var HookStartAnalysisBackfill = &startAnalysisBackfill
 var HookStartPlaybackSession = startPlaybackSession
 var HookVoiceRejoinDelay = &voiceRejoinDelay
 var HookWaitBeforeRetry = waitBeforeRetry

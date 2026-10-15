@@ -419,6 +419,7 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 			} else if session.readyToReplan() {
 				session.replanTransition()
 			}
+			session.recheckPreCache()
 
 			session.publishTransitionArmed()
 
@@ -598,6 +599,13 @@ func (s *playbackSession) replanTransition() {
 		s.fadeOutStartFrame = 0
 		s.fadeOutFrames = 0
 	}
+}
+
+func (s *playbackSession) recheckPreCache() {
+	if s.endPlanned || s.sentFrames == 0 || s.sentFrames%preCacheIntervalFrames != 0 {
+		return
+	}
+	go preCacheNext(s.guildID, s.bitrate)
 }
 
 func (s *playbackSession) publishTransitionArmed() {

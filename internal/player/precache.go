@@ -24,8 +24,9 @@ const (
 )
 
 var (
-	preCacheNext   = PreCacheNext
-	analyzeSegment = analyzeStreamSegment
+	preCacheNext          = PreCacheNext
+	analyzeSegment        = analyzeStreamSegment
+	startAnalysisBackfill = StartAnalysisBackfill
 )
 
 func PreCacheNext(guildID string, bitrate int) {
@@ -39,45 +40,40 @@ func PreCacheNext(guildID string, bitrate int) {
 
 	if nextSong.IsLive {
 		logger.Debugf("Skipping pre-cache for live stream: %s", nextSong.Title)
-		StartAnalysisBackfill(guildID, bitrate)
+		startAnalysisBackfill(guildID, bitrate)
 		return
 	}
 
 	if nextSong.SeekTime > 0 {
 		logger.Debugf("Skipping pre-cache for song with seek time: %s", nextSong.Title)
-		StartAnalysisBackfill(guildID, bitrate)
+		startAnalysisBackfill(guildID, bitrate)
 		return
 	}
 
 	cacheKey := fmt.Sprintf("%s_%d", guildID, nextSong.ID)
-	preCacheStoreMu.RLock()
-	cached, exists := preCacheStore[cacheKey]
-	preCacheStoreMu.RUnlock()
-
-	if exists && time.Since(cached.Timestamp) < preCacheTTL {
+	preCacheStoreMu.Lock()
+	if cached, exists := preCacheStore[cacheKey]; exists && time.Since(cached.Timestamp) < preCacheTTL {
+		preCacheStoreMu.Unlock()
 		logger.Debugf("Song already cached: %s", nextSong.Title)
 		return
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	preCacheStore[cacheKey] = &PreCache{
+		SongID:     nextSong.ID,
+		Timestamp:  time.Now(),
+		CancelFunc: cancel,
+	}
+	preCacheStoreMu.Unlock()
 
 	logger.Debugf("Starting pre-cache for: %s", nextSong.Title)
 
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-
-		cacheKey := fmt.Sprintf("%s_%d", guildID, nextSong.ID)
-		preCacheStoreMu.Lock()
-		preCacheStore[cacheKey] = &PreCache{
-			SongID:     nextSong.ID,
-			Timestamp:  time.Now(),
-			CancelFunc: cancel,
-		}
-		preCacheStoreMu.Unlock()
 
 		if err := preCacheSong(ctx, guildID, nextSong, q.SponsorBlock, bitrate); err != nil {
 			logger.Errorf("Failed to pre-cache %s: %v", nextSong.Title, err)
 		}
-		StartAnalysisBackfill(guildID, bitrate)
+		startAnalysisBackfill(guildID, bitrate)
 	}()
 }
 
