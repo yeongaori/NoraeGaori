@@ -258,4 +258,4 @@ Service or any applicable copyright laws. Use at your own risk.
 
 ## License
 
-[PolyForm Noncommercial 1.0.0](LICENSE)
+[CC BY-NC-SA 4.0](LICENSE)
