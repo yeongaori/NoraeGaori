@@ -424,7 +424,8 @@ func (cs *crossfadeState) bReady() bool {
 
 func (cs *crossfadeState) bFailed() bool {
 	select {
-	case <-cs.bStream.Errs():
+	case err := <-cs.bStream.Errs():
+		cs.scope.Debugf("next stream failed for guild %s: %v", cs.guildID, err)
 		return true
 	default:
 		return false

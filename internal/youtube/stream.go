@@ -77,8 +77,9 @@ func (sp *StreamPipe) Close() error {
 			if err := sp.cmd.Process.Kill(); err != nil {
 				logger.Warnf("Failed to kill yt-dlp process: %v", err)
 			}
-
-			<-done
+			if err := <-done; err != nil {
+				logger.Debugf("yt-dlp process exited after kill: %v", err)
+			}
 		}
 		return fmt.Errorf("yt-dlp process did not exit gracefully")
 	case err := <-done:
