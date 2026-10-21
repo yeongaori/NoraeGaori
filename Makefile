@@ -1,4 +1,4 @@
-.PHONY: all build run clean test test-race test-repeat cover deps install help local lint format automixcheck
+.PHONY: all build run clean test test-race test-repeat cover deps install help local lint security format automixcheck
 
 ifeq ($(OS),Windows_NT)
     NULL := nul
@@ -142,6 +142,14 @@ lint:
 	@echo Running linter...
 	@which golangci-lint > /dev/null || (echo "\e[91mgolangci-lint not installed\e[0m" && exit 1)
 	@golangci-lint run
+
+## security: Run govulncheck and gosec
+security:
+	@echo Running govulncheck and gosec...
+	@which govulncheck > /dev/null || (echo "\e[91mgovulncheck not installed\e[0m" && exit 1)
+	@which gosec > /dev/null || (echo "\e[91mgosec not installed\e[0m" && exit 1)
+	@govulncheck -tags testhooks ./...
+	@gosec -tags testhooks -quiet ./...
 
 ## automixcheck: Run the AutoMix check harness
 automixcheck:
