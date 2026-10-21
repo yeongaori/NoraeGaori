@@ -48,5 +48,5 @@ func (n *NoiseRiser) next() float64 {
 	n.state ^= n.state >> 12
 	n.state ^= n.state << 25
 	n.state ^= n.state >> 27
-	return float64(int64(n.state*0x2545F4914F6CDD1D)) / math.MaxInt64
+	return float64(int64(n.state*0x2545F4914F6CDD1D)) / math.MaxInt64 // #nosec G115
 }

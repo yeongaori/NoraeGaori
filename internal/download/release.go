@@ -67,7 +67,7 @@ func request(url string) (*http.Response, error) {
 		return nil, fmt.Errorf("request to %s failed: %w", url, err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		return nil, &StatusError{URL: url, Code: resp.StatusCode, RateLimited: isRateLimitReply(resp)}
 	}
 	return resp, nil

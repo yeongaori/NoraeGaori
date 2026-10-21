@@ -356,7 +356,7 @@ func SkipToPosition(guildID string, targetIndex int) error {
 		}
 		songIDs = append(songIDs, id)
 	}
-	rows.Close()
+	_ = rows.Close()
 
 	if len(songIDs) == 0 {
 		return nil
@@ -369,7 +369,7 @@ func SkipToPosition(guildID string, targetIndex int) error {
 		args[i] = id
 	}
 
-	query := fmt.Sprintf(`DELETE FROM songs WHERE id IN (%s)`, strings.Join(placeholders, ","))
+	query := fmt.Sprintf(`DELETE FROM songs WHERE id IN (%s)`, strings.Join(placeholders, ",")) // #nosec G201
 	_, err = tx.Exec(query, args...)
 	if err != nil {
 		return fmt.Errorf("failed to delete songs: %w", err)
@@ -411,7 +411,7 @@ func RemoveSongsByIDs(guildID string, songIDs []int) error {
 		args[i+1] = id
 	}
 
-	query := fmt.Sprintf(`DELETE FROM songs WHERE guild_id = ? AND id IN (%s)`,
+	query := fmt.Sprintf(`DELETE FROM songs WHERE guild_id = ? AND id IN (%s)`, // #nosec G201
 		strings.Join(placeholders, ","))
 
 	result, err := tx.Exec(query, args...)
@@ -453,7 +453,7 @@ func reorderSongsAfterRemovalTx(tx *sql.Tx, guildID string) error {
 		}
 		songIDs = append(songIDs, id)
 	}
-	rows.Close()
+	_ = rows.Close()
 
 	for i, id := range songIDs {
 		_, err := tx.Exec(

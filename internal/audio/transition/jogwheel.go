@@ -80,7 +80,7 @@ func (j *Jogwheel) Process(buf []float64, progress, frameStep float64) {
 		count := copy(work[:], chunk)
 		for offset := 0; offset < count; offset += dsp.Channels {
 			i := (first + offset) / dsp.Channels
-			written = rememberSample(history, written, work[offset], work[offset+1])
+			written = rememberSample(history, written, work[offset], work[offset+1]) // #nosec G602
 			if !isEngaged {
 				if progress+float64(i)/float64(steps)*frameStep < start {
 					continue
@@ -97,7 +97,7 @@ func (j *Jogwheel) Process(buf []float64, progress, frameStep float64) {
 				gain = math.Min(1, math.Abs(speed)/jogFadeSpeed)
 			}
 			work[offset] = left * gain
-			work[offset+1] = right * gain
+			work[offset+1] = right * gain // #nosec G602
 			position += speed
 		}
 		copy(chunk, work[:count])

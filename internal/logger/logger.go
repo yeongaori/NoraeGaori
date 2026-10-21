@@ -64,7 +64,7 @@ func Initialize(debug bool) {
 	log.SetFlags(0)
 
 	var err error
-	errorLogFile, err = os.OpenFile("error.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	errorLogFile, err = os.OpenFile("error.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		fmt.Printf("Warning: Failed to open error.log: %v\n", err)
 	}
@@ -82,7 +82,7 @@ func SetLogFile(path string) {
 	progressLine = ""
 
 	if logFile != nil {
-		logFile.Close()
+		_ = logFile.Close()
 		logFile = nil
 	}
 	logFilePath = path
@@ -93,7 +93,7 @@ func SetLogFile(path string) {
 		return
 	}
 
-	f, err := os.OpenFile(path, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(path, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0600) // #nosec G304
 	if err != nil {
 		output = console
 		earlyBuf = nil
@@ -114,7 +114,7 @@ func SetLogFile(path string) {
 func Close() {
 	outMu.Lock()
 	if logFile != nil {
-		logFile.Close()
+		_ = logFile.Close()
 		logFile = nil
 	}
 	output = console
@@ -123,7 +123,7 @@ func Close() {
 	errorLogMu.Lock()
 	defer errorLogMu.Unlock()
 	if errorLogFile != nil {
-		errorLogFile.Close()
+		_ = errorLogFile.Close()
 	}
 }
 

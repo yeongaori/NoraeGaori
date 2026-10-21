@@ -63,13 +63,13 @@ func JoinVoice(session *discordgo.Session, guildID, channelID string) (voiceConn
 	if exists && existingVC != nil {
 		logger.Infof("Found stale session voice connection, disconnecting for guild: %s", guildID)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		existingVC.Disconnect(ctx)
+		_ = existingVC.Disconnect(ctx)
 		cancel()
 	}
 
 	if player.VoiceConn != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		player.VoiceConn.Disconnect(ctx)
+		_ = player.VoiceConn.Disconnect(ctx)
 		cancel()
 	}
 
@@ -98,7 +98,7 @@ func JoinVoice(session *discordgo.Session, guildID, channelID string) (voiceConn
 			return nil, fmt.Errorf("voice connection died: %v", vc.Err)
 		case <-timeout:
 			ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
-			vc.Disconnect(ctx2)
+			_ = vc.Disconnect(ctx2)
 			cancel2()
 			return nil, fmt.Errorf("timeout waiting for voice")
 		}

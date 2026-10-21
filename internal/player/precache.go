@@ -262,7 +262,7 @@ func analyzeStreamSegment(ctx context.Context, streamURL string, startSec float6
 	ffmpegBinary := dependency.AcquireFFmpeg()
 	defer ffmpegBinary.Release()
 
-	ffmpeg := exec.CommandContext(ctx, ffmpegBinary.Path, args...)
+	ffmpeg := exec.CommandContext(ctx, ffmpegBinary.Path, args...) // #nosec G204
 	stdout, err := ffmpeg.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)

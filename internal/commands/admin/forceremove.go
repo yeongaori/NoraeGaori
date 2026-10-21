@@ -153,7 +153,7 @@ func forceRemoveCurrent(s *discordgo.Session, i *discordgo.InteractionCreate, q 
 
 	err := player.Skip(s, i.GuildID)
 	if err != nil && err != player.ErrQueueEmpty {
-		discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
+		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
 			fmt.Sprintf(messages.T(i.GuildID).Admin.RemoveFailed, err)))
 		return nil
 	}
@@ -166,6 +166,6 @@ func forceRemoveCurrent(s *discordgo.Session, i *discordgo.InteractionCreate, q 
 
 	embed := messages.CreateSuccessEmbed(messages.T(i.GuildID).Queue.SongsRemovedTitle,
 		fmt.Sprintf(messages.T(i.GuildID).Queue.SongRemoved, messages.EscapeMarkdown(songTitle)))
-	discord.UpdateResponseEmbed(s, i, embed)
+	_ = discord.UpdateResponseEmbed(s, i, embed)
 	return nil
 }

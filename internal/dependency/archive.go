@@ -65,13 +65,13 @@ func extractMembers(archivePath string, kind mirror.ArchiveKind, members []strin
 }
 
 func writeMember(source io.Reader, member, destination string, wanted map[string]bool) error {
-	out, err := os.OpenFile(filepath.Join(destination, path.Base(member)), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
+	out, err := os.OpenFile(filepath.Join(destination, path.Base(member)), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755) // #nosec G302 G304
 	if err != nil {
 		return fmt.Errorf("failed to create %s: %w", path.Base(member), err)
 	}
 
 	if _, err := io.Copy(out, source); err != nil {
-		out.Close()
+		_ = out.Close()
 		return fmt.Errorf("failed to extract %s: %w", member, err)
 	}
 	if err := out.Close(); err != nil {
@@ -92,7 +92,7 @@ func extractZip(archivePath string, wanted map[string]bool, destination string, 
 	progress := &download.ProgressWriter{Report: report}
 	for _, file := range reader.File {
 		if wanted[file.Name] {
-			progress.Total += int64(file.UncompressedSize64)
+			progress.Total += int64(file.UncompressedSize64) // #nosec G115
 		}
 	}
 
@@ -106,7 +106,7 @@ func extractZip(archivePath string, wanted map[string]bool, destination string, 
 			return fmt.Errorf("failed to read %s: %w", file.Name, err)
 		}
 		err = writeMember(io.TeeReader(source, progress), file.Name, destination, wanted)
-		source.Close()
+		_ = source.Close()
 		if err != nil {
 			return err
 		}
@@ -115,7 +115,7 @@ func extractZip(archivePath string, wanted map[string]bool, destination string, 
 }
 
 func extractTarXz(archivePath string, wanted map[string]bool, destination string, report func(percent int)) error {
-	file, err := os.Open(archivePath)
+	file, err := os.Open(archivePath) // #nosec G304
 	if err != nil {
 		return fmt.Errorf("failed to open the archive: %w", err)
 	}

@@ -49,7 +49,7 @@ func HandleSearch(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 	if err != nil || len(results) == 0 {
 		embed := messages.CreateErrorEmbed(messages.T(i.GuildID).Queue.NoResultsTitle, messages.T(i.GuildID).Queue.NoResultsDesc)
-		discord.UpdateResponseEmbed(s, i, embed)
+		_ = discord.UpdateResponseEmbed(s, i, embed)
 		return nil
 	}
 
@@ -158,7 +158,7 @@ func (c *searchSelection) handle(s *discordgo.Session, i *discordgo.InteractionC
 
 	if i.Member.User.ID != c.original.Member.User.ID {
 		embed := messages.CreateWarningEmbed(messages.T(i.GuildID).Titles.NoPermission, messages.T(i.GuildID).Queue.OnlyRequester)
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Embeds: []*discordgo.MessageEmbed{embed},
@@ -199,7 +199,7 @@ func (c *searchSelection) handle(s *discordgo.Session, i *discordgo.InteractionC
 		searchSelectionsMu.Unlock()
 		logger.Debugf("Duplicate selection attempt ignored for search message: '%s'", c.searchMessageID)
 		embed := messages.CreateWarningEmbed(messages.T(i.GuildID).Queue.AlreadySelectedTitle, messages.T(i.GuildID).Queue.AlreadySelectedDesc)
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Embeds: []*discordgo.MessageEmbed{embed},
@@ -216,7 +216,7 @@ func (c *searchSelection) handle(s *discordgo.Session, i *discordgo.InteractionC
 
 	selectedResult := c.results[selectedIndex]
 
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredMessageUpdate,
 	})
 

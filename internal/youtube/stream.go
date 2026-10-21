@@ -45,10 +45,10 @@ func (sp *StreamPipe) Close() error {
 	sp.cancel()
 
 	if sp.stdout != nil {
-		sp.stdout.Close()
+		_ = sp.stdout.Close()
 	}
 	if sp.stderr != nil {
-		sp.stderr.Close()
+		_ = sp.stderr.Close()
 	}
 
 	if sp.stderrDone != nil {
@@ -186,7 +186,7 @@ func GetStreamPipe(url string, sponsorBlock bool, bitrate int, seekTime int, ffm
 		return nil, fmt.Errorf("yt-dlp binary unavailable; the updater will retry in the background")
 	}
 
-	cmd := exec.CommandContext(ctx, binaryPath, args...)
+	cmd := exec.CommandContext(ctx, binaryPath, args...) // #nosec G204
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

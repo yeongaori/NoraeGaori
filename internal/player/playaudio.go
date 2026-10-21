@@ -340,14 +340,14 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 		stream.Stop()
 		return fmt.Errorf("voice connection is nil")
 	}
-	conn.Speaking(true)
+	_ = conn.Speaking(true)
 	logger.Debugf("Speaking(true) completed for guild: %s", guildID)
 	defer func() {
 		player.mu.Lock()
 		handingOff := player.PendingStream != nil
 		player.mu.Unlock()
 		if !handingOff {
-			conn.Speaking(false)
+			_ = conn.Speaking(false)
 		}
 	}()
 

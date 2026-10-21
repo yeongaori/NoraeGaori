@@ -60,7 +60,7 @@ func HandleResume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 				messages.FormatBoldMaskedLink(currentSong.Title, currentSong.URL)),
 			Thumbnail: &discordgo.MessageEmbedThumbnail{URL: currentSong.Thumbnail},
 		}
-		discord.UpdateResponseEmbed(s, i, checkingEmbed)
+		_ = discord.UpdateResponseEmbed(s, i, checkingEmbed)
 
 		isStillLive, err := youtube.CheckIfLive(currentSong.URL)
 		if err != nil {
@@ -70,7 +70,7 @@ func HandleResume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 			logger.Infof("Live stream has ended, skipping to next song")
 
 			if err := queue.RemoveSong(i.GuildID, 0); err != nil {
-				discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.PlaybackStartError))
+				_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.PlaybackStartError))
 				return err
 			}
 
@@ -78,7 +78,7 @@ func HandleResume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 			if err != nil || q == nil || len(q.Songs) == 0 {
 				embed := messages.CreateWarningEmbed(messages.T(i.GuildID).Music.LiveEndedTitle,
 					messages.T(i.GuildID).Music.LiveEndedNoQueue)
-				discord.UpdateResponseEmbed(s, i, embed)
+				_ = discord.UpdateResponseEmbed(s, i, embed)
 				return nil
 			}
 
@@ -88,7 +88,7 @@ func HandleResume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 				Description: fmt.Sprintf(messages.T(i.GuildID).Music.LiveEndedSkip,
 					messages.FormatBoldMaskedLink(currentSong.Title, currentSong.URL)),
 			}
-			discord.UpdateResponseEmbed(s, i, skipEmbed)
+			_ = discord.UpdateResponseEmbed(s, i, skipEmbed)
 
 			go player.Play(s, i.GuildID)
 			return nil
@@ -97,7 +97,7 @@ func HandleResume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		logger.Debugf("Live stream is still live, proceeding with resume")
 
 		successEmbed := messages.CreateSuccessEmbed(messages.T(i.GuildID).Music.LiveStartTitle, messages.T(i.GuildID).Music.LiveStartDesc)
-		discord.UpdateResponseEmbed(s, i, successEmbed)
+		_ = discord.UpdateResponseEmbed(s, i, successEmbed)
 
 		go player.Play(s, i.GuildID)
 		return nil
@@ -114,7 +114,7 @@ func HandleResume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 				messages.FormatBoldMaskedLink(currentSong.Title, currentSong.URL), messages.T(i.GuildID).Descriptions.Loading),
 			Thumbnail: &discordgo.MessageEmbedThumbnail{URL: currentSong.Thumbnail},
 		}
-		discord.UpdateResponseEmbed(s, i, loadingEmbed)
+		_ = discord.UpdateResponseEmbed(s, i, loadingEmbed)
 
 		msg, err := discord.GetResponseMessage(s, i)
 		if err == nil {

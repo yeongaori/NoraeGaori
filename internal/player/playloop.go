@@ -27,7 +27,7 @@ func prepareVoiceConnection(session *discordgo.Session, player *GuildPlayer, gui
 		case <-conn.DeadChan():
 			logger.Warnf("Detected dead voice connection, will reconnect for guild: %s", guildID)
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			conn.Disconnect(ctx)
+			_ = conn.Disconnect(ctx)
 			cancel()
 			player.setVoice(nil, "")
 			conn = nil
@@ -47,7 +47,7 @@ func prepareVoiceConnection(session *discordgo.Session, player *GuildPlayer, gui
 	if !player.adoptVoice(vc, voiceChannelID) {
 		logger.Debugf("Session halted while joining voice, dropping the new connection for guild: %s", guildID)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		vc.Disconnect(ctx)
+		_ = vc.Disconnect(ctx)
 		cancel()
 		return errSessionHalted
 	}
@@ -470,7 +470,7 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 			logger.Warnf("Voice connection error detected, clearing dead connection for guild: %s", guildID)
 			if conn := player.currentVoice(); conn != nil {
 				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-				conn.Disconnect(ctx)
+				_ = conn.Disconnect(ctx)
 				cancel()
 				player.setVoice(nil, "")
 			}

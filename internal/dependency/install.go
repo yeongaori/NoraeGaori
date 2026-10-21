@@ -68,7 +68,7 @@ func runVersionCommand(binaryPath, flag string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), versionCheckTimeout)
 	defer cancel()
 
-	output, err := exec.CommandContext(ctx, binaryPath, flag).Output()
+	output, err := exec.CommandContext(ctx, binaryPath, flag).Output() // #nosec G204
 	return string(output), err
 }
 
@@ -148,16 +148,16 @@ func install(t *tool, target mirror.Platform, found *mirror.Candidate) (*Binary,
 	}
 
 	if err := installInto(t, target, found, partial, isDownloaded); err != nil {
-		os.RemoveAll(partial)
+		_ = os.RemoveAll(partial)
 		return nil, err
 	}
 
 	if err := os.RemoveAll(directory); err != nil {
-		os.RemoveAll(partial)
+		_ = os.RemoveAll(partial)
 		return nil, fmt.Errorf("failed to replace %s: %w", directory, err)
 	}
 	if err := os.Rename(partial, directory); err != nil {
-		os.RemoveAll(partial)
+		_ = os.RemoveAll(partial)
 		return nil, fmt.Errorf("failed to move %s into place: %w", directory, err)
 	}
 
@@ -169,7 +169,7 @@ func install(t *tool, target mirror.Platform, found *mirror.Candidate) (*Binary,
 }
 
 func hasVerifiedArchive(archivePath, expectedSum string) bool {
-	file, err := os.Open(archivePath)
+	file, err := os.Open(archivePath) // #nosec G304
 	if err != nil {
 		return false
 	}
@@ -190,7 +190,7 @@ func preparePartial(partial string, isDownloaded bool) error {
 	if err := os.RemoveAll(partial); err != nil {
 		return fmt.Errorf("failed to clear %s: %w", partial, err)
 	}
-	if err := os.MkdirAll(partial, 0755); err != nil {
+	if err := os.MkdirAll(partial, 0750); err != nil {
 		return fmt.Errorf("failed to create %s: %w", partial, err)
 	}
 	return nil

@@ -63,8 +63,12 @@ func TestLoadConfigCreatesDefaultWhenMissing(t *testing.T) {
 		t.Fatalf("LoadConfig returned %v, want nil", err)
 	}
 
-	if _, err := os.Stat(configPath); err != nil {
+	info, err := os.Stat(configPath)
+	if err != nil {
 		t.Fatalf("the default config file was not created: %v", err)
+	}
+	if info.Mode().Perm() != 0600 {
+		t.Errorf("got mode %v, want 0600 so only the bot user can read it", info.Mode().Perm())
 	}
 
 	want := rpc.DefaultConfig()

@@ -66,6 +66,14 @@ func TestLoadDefaultAdmins(t *testing.T) {
 	if config.HookAdminsConf.Load() == nil {
 		t.Fatal("Admins config should not be nil")
 	}
+
+	info, err := os.Stat(*config.HookAdminsPath)
+	if err != nil {
+		t.Fatalf("the default admins file is missing: %v", err)
+	}
+	if info.Mode().Perm() != 0600 {
+		t.Errorf("got mode %v, want 0600 so only the bot user can read it", info.Mode().Perm())
+	}
 }
 
 func TestSetPrefix(t *testing.T) {
@@ -209,6 +217,14 @@ func TestSaveAndLoadConfig(t *testing.T) {
 
 	if err := config.HookSaveConfig(config.HookConfig.Load()); err != nil {
 		t.Fatalf("Failed to save config: %v", err)
+	}
+
+	info, err := os.Stat(*config.HookConfigPath)
+	if err != nil {
+		t.Fatalf("the saved config is missing: %v", err)
+	}
+	if info.Mode().Perm() != 0600 {
+		t.Errorf("got mode %v, want 0600 so only the bot user can read it", info.Mode().Perm())
 	}
 
 	config.HookConfig.Store(nil)

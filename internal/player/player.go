@@ -198,7 +198,7 @@ func deleteLoadingMessageFor(session *discordgo.Session, guildID string) {
 		return
 	}
 
-	session.ChannelMessageDelete(lm.ChannelID, lm.ID)
+	_ = session.ChannelMessageDelete(lm.ChannelID, lm.ID)
 	DeleteLoadingMessage(guildID)
 }
 

@@ -224,7 +224,7 @@ func handlePlaybackError(session *discordgo.Session, guildID string, song *queue
 			song.RequestedByTag,
 			song.Thumbnail,
 		)
-		session.ChannelMessageEditEmbed(reconnectMsg.ChannelID, reconnectMsg.ID, failedEmbed)
+		_, _ = session.ChannelMessageEditEmbed(reconnectMsg.ChannelID, reconnectMsg.ID, failedEmbed)
 		reconnectNotices.remove(guildID)
 	} else {
 		announceSongError(session, guildID, song, messages.T(guildID).Player.MaxRetriesSkipping)

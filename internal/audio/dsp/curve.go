@@ -111,7 +111,7 @@ func bisectBlend(x float64, positionAt func(float64) float64) float64 {
 func blendCoordinate(coordinates [curveInlinePoints]float64, count int, u float64) float64 {
 	for size := count - 1; size > 0; size-- {
 		for i := 0; i < size; i++ {
-			coordinates[i] += (coordinates[i+1] - coordinates[i]) * u
+			coordinates[i] += (coordinates[i+1] - coordinates[i]) * u // #nosec G602
 		}
 	}
 	return coordinates[0]

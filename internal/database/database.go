@@ -18,7 +18,7 @@ var (
 func Initialize() error {
 
 	dataDir := "data"
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
+	if err := os.MkdirAll(dataDir, 0750); err != nil {
 		return fmt.Errorf("failed to create data directory: %w", err)
 	}
 

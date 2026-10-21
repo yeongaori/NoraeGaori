@@ -32,7 +32,7 @@ func ensureQueueForVoice(s *discordgo.Session, i *discordgo.InteractionCreate, q
 	}
 
 	if err := queue.CreateQueue(i.GuildID, i.ChannelID, voiceChannelID); err != nil {
-		discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.QueueCreateFailed))
+		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.QueueCreateFailed))
 		return err
 	}
 	return nil

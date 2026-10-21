@@ -35,6 +35,13 @@ func TestLoadEnvWritesTheTemplateWithoutAToken(t *testing.T) {
 	if !slices.Contains(strings.Split(string(content), "\n"), "DISCORD_BOT_TOKEN=your_bot_token_here") {
 		t.Errorf("got %q, want the token placeholder in the template", content)
 	}
+	info, err := os.Stat(".env")
+	if err != nil {
+		t.Fatalf("the template .env is missing: %v", err)
+	}
+	if info.Mode().Perm() != 0600 {
+		t.Errorf("got mode %v, want 0600 so only the bot user can read it", info.Mode().Perm())
+	}
 }
 
 func TestLoadEnvReadsAnExistingFile(t *testing.T) {

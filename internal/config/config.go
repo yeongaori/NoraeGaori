@@ -58,7 +58,7 @@ func OnReload(fn func()) {
 
 func Initialize() error {
 
-	if err := os.MkdirAll("config", 0755); err != nil {
+	if err := os.MkdirAll("config", 0750); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
@@ -186,7 +186,7 @@ func saveConfig(cfg *Config) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(configPath, data, 0644)
+	return os.WriteFile(configPath, data, 0600)
 }
 
 func saveAdmins(admins *AdminsConfig) error {
@@ -194,7 +194,7 @@ func saveAdmins(admins *AdminsConfig) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(adminsPath, data, 0644)
+	return os.WriteFile(adminsPath, data, 0600)
 }
 
 func isDuplicateWriteEvent(absPath string, fileInfo os.FileInfo) bool {

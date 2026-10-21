@@ -1,7 +1,7 @@
 package transition
 
 import (
-	"crypto/sha1"
+	"crypto/sha1" // #nosec G505
 	"encoding/binary"
 )
 
@@ -60,9 +60,9 @@ func PresetRecipe(preset int) *Recipe {
 func pickPreset(urlA, urlB string, bars, barA, barB int) int {
 	message := append([]byte(urlA), urlB...)
 	for _, value := range []int{bars, barA, barB} {
-		message = binary.LittleEndian.AppendUint32(message, uint32(int32(value)))
+		message = binary.LittleEndian.AppendUint32(message, uint32(int32(value))) // #nosec G115
 	}
-	sum := sha1.Sum(message)
+	sum := sha1.Sum(message) // #nosec G401
 	choice := binary.LittleEndian.Uint64(sum[:presetHashBytes])
 
 	table := longPresets

@@ -20,7 +20,7 @@ func HandleStatus(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	discord.DeferResponse(s, i)
 
 	loadingEmbed := messages.CreateWarningEmbed(messages.T(i.GuildID).Status.LoadingTitle, messages.T(i.GuildID).Status.LoadingDesc)
-	discord.UpdateResponseEmbed(s, i, loadingEmbed)
+	_ = discord.UpdateResponseEmbed(s, i, loadingEmbed)
 
 	logger.Debugf("Starting system info gathering")
 

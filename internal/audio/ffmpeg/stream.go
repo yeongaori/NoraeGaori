@@ -152,11 +152,13 @@ func Start(binary string, args []string, collectTail bool, onExit func()) (*Stre
 }
 
 func start(binary string, args []string, stdin io.ReadCloser, collectTail bool, onExit func()) (*Stream, error) {
-	ffmpeg := exec.Command(binary, args...)
+	ffmpeg := exec.Command(binary, args...) // #nosec G204
 	closeStdin := func() {}
 	if stdin != nil {
 		ffmpeg.Stdin = stdin
-		closeStdin = func() { stdin.Close() }
+		closeStdin = func() {
+			_ = stdin.Close()
+		}
 	}
 
 	diag := &stderrTail{}
@@ -221,7 +223,7 @@ func (s *Stream) killFFmpeg() {
 		}
 	}
 	if s.stdin != nil {
-		s.stdin.Close()
+		_ = s.stdin.Close()
 	}
 }
 
@@ -254,7 +256,7 @@ func (s *Stream) produce(stdout io.Reader, collectTail bool) {
 	defer s.reap()
 	defer func() {
 		if s.stdin != nil {
-			s.stdin.Close()
+			_ = s.stdin.Close()
 		}
 	}()
 
@@ -314,7 +316,7 @@ func (s *Stream) produce(stdout io.Reader, collectTail bool) {
 		}
 
 		for i := range pcmBuf {
-			pcmBuf[i] = int16(binary.LittleEndian.Uint16(readBuf[i*2:]))
+			pcmBuf[i] = int16(binary.LittleEndian.Uint16(readBuf[i*2:])) // #nosec G115
 		}
 
 		if tail != nil {

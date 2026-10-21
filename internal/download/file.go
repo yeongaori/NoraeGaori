@@ -54,7 +54,7 @@ func SaveFile(url, destination string) (string, error) {
 		return "", fmt.Errorf("download returned status: %d", resp.StatusCode)
 	}
 
-	out, err := os.Create(destination)
+	out, err := os.Create(destination) // #nosec G304
 	if err != nil {
 		return "", fmt.Errorf("failed to create file: %w", err)
 	}

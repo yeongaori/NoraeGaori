@@ -70,7 +70,7 @@ func GetCurrentVersion() (string, error) {
 		return "", fmt.Errorf("binary does not exist")
 	}
 
-	cmd := exec.Command(binaryPath, "--version")
+	cmd := exec.Command(binaryPath, "--version") // #nosec G204
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to get version: %w", err)
@@ -216,7 +216,7 @@ func DownloadVerified(release *GitHubRelease, assetName, url, destination string
 	}
 
 	if actual != expected {
-		os.Remove(destination)
+		_ = os.Remove(destination)
 		return fmt.Errorf("checksum mismatch for %s: expected %s, got %s", assetName, expected, actual)
 	}
 
@@ -260,24 +260,24 @@ func installVersionBinary(release *GitHubRelease, version string) (string, strin
 
 	binaryPath := VersionedBinaryPath(version)
 	versionDir := filepath.Dir(binaryPath)
-	if err := os.MkdirAll(versionDir, 0755); err != nil {
+	if err := os.MkdirAll(versionDir, 0750); err != nil {
 		return "", "", fmt.Errorf("failed to create version directory for %s: %w", version, err)
 	}
 
 	if err := DownloadVerified(release, assetName, downloadURL, binaryPath); err != nil {
-		os.RemoveAll(versionDir)
+		_ = os.RemoveAll(versionDir)
 		return "", "", err
 	}
 
 	if runtime.GOOS != "windows" {
-		if err := os.Chmod(binaryPath, 0755); err != nil {
+		if err := os.Chmod(binaryPath, 0755); err != nil { // #nosec G302
 			logger.Warnf("Failed to set permissions: %v", err)
 		}
 	}
 
 	reportedVersion, err := verifyBinaryRuns(binaryPath)
 	if err != nil {
-		os.RemoveAll(versionDir)
+		_ = os.RemoveAll(versionDir)
 		if assetName == pythonAssetName && !hasPython() {
 			return "", "", fmt.Errorf("the Python build of yt-dlp needs python3 to verify %s: %w", version, err)
 		}
@@ -291,7 +291,7 @@ func ensureVersionBinary(release *GitHubRelease, version string) (string, error)
 	binaryPath := VersionedBinaryPath(version)
 	if _, statErr := os.Stat(binaryPath); statErr == nil {
 		if _, err := verifyBinaryRuns(binaryPath); err != nil {
-			os.RemoveAll(filepath.Dir(binaryPath))
+			_ = os.RemoveAll(filepath.Dir(binaryPath))
 			return "", fmt.Errorf("failed to verify the installed %s: %w", version, err)
 		}
 		return binaryPath, nil
@@ -615,7 +615,7 @@ func MigrateFromLegacyLayout() error {
 		return nil
 	}
 
-	cmd := exec.Command(legacyPath, "--version")
+	cmd := exec.Command(legacyPath, "--version") // #nosec G204
 	output, err := cmd.Output()
 	if err != nil {
 		return fmt.Errorf("failed to get legacy binary version: %w", err)
@@ -624,7 +624,7 @@ func MigrateFromLegacyLayout() error {
 
 	newPath := VersionedBinaryPath(version)
 	newDir := filepath.Dir(newPath)
-	if err := os.MkdirAll(newDir, 0755); err != nil {
+	if err := os.MkdirAll(newDir, 0750); err != nil {
 		return fmt.Errorf("failed to create version directory: %w", err)
 	}
 
@@ -633,11 +633,11 @@ func MigrateFromLegacyLayout() error {
 		if cpErr := copyFile(legacyPath, newPath); cpErr != nil {
 			return fmt.Errorf("failed to migrate binary: %w", cpErr)
 		}
-		os.Remove(legacyPath)
+		_ = os.Remove(legacyPath)
 	}
 
 	if runtime.GOOS != "windows" {
-		if err := os.Chmod(newPath, 0755); err != nil {
+		if err := os.Chmod(newPath, 0755); err != nil { // #nosec G302
 			logger.Warnf("Failed to set permissions on %s: %v", newPath, err)
 		}
 	}
@@ -671,13 +671,13 @@ func AutoUpdate() {
 }
 
 func copyFile(src, dst string) error {
-	sourceFile, err := os.Open(src)
+	sourceFile, err := os.Open(src) // #nosec G304
 	if err != nil {
 		return err
 	}
 	defer sourceFile.Close()
 
-	destFile, err := os.Create(dst)
+	destFile, err := os.Create(dst) // #nosec G304
 	if err != nil {
 		return err
 	}

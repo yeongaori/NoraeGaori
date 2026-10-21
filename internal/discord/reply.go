@@ -20,7 +20,7 @@ func RespondError(s *discordgo.Session, i *discordgo.InteractionCreate, message 
 		}
 		return
 	}
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
 			Content: message,
@@ -36,7 +36,7 @@ func RespondSuccess(s *discordgo.Session, i *discordgo.InteractionCreate, messag
 		}
 		return
 	}
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
 			Content: message,
@@ -51,7 +51,7 @@ func RespondEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *d
 		}
 		return
 	}
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
 			Embeds: []*discordgo.MessageEmbed{embed},
@@ -113,7 +113,7 @@ func DeferResponse(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		}
 		return
 	}
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 	})
 }
@@ -125,7 +125,7 @@ func FollowUpMessage(s *discordgo.Session, i *discordgo.InteractionCreate, conte
 		}
 		return
 	}
-	s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
+	_, _ = s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
 		Content: content,
 	})
 }
@@ -137,7 +137,7 @@ func FollowUpEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *
 		}
 		return
 	}
-	s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
+	_, _ = s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
 		Embeds: []*discordgo.MessageEmbed{embed},
 	})
 }

@@ -16,7 +16,7 @@ func HandleForceSkip(s *discordgo.Session, i *discordgo.InteractionCreate) error
 
 	q, err := queue.GetQueue(i.GuildID, false)
 	if err != nil || q == nil || len(q.Songs) == 0 {
-		discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.NoSong, messages.T(i.GuildID).Errors.EmptyQueue))
+		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.NoSong, messages.T(i.GuildID).Errors.EmptyQueue))
 		return nil
 	}
 
@@ -27,7 +27,7 @@ func HandleForceSkip(s *discordgo.Session, i *discordgo.InteractionCreate) error
 	err = player.Skip(s, i.GuildID)
 	if err != nil && err != player.ErrQueueEmpty {
 		logger.Errorf("Failed to skip: %v", err)
-		discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Music.SkipFailedTitle, fmt.Sprintf(messages.T(i.GuildID).Music.SkipFailedDesc, err)))
+		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Music.SkipFailedTitle, fmt.Sprintf(messages.T(i.GuildID).Music.SkipFailedDesc, err)))
 		return nil
 	}
 
@@ -39,7 +39,7 @@ func HandleForceSkip(s *discordgo.Session, i *discordgo.InteractionCreate) error
 		embed := messages.CreateSuccessEmbed(messages.T(i.GuildID).Music.PlaybackEndedTitle,
 			fmt.Sprintf(template, messages.FormatMaskedLink(songTitle, songURL)))
 		messages.SetThumbnail(embed, songThumbnail)
-		discord.UpdateResponseEmbed(s, i, embed)
+		_ = discord.UpdateResponseEmbed(s, i, embed)
 
 		if stopErr := player.Stop(i.GuildID); stopErr != nil {
 			logger.Errorf("Failed to cleanup after queue empty: %v", stopErr)
@@ -50,6 +50,6 @@ func HandleForceSkip(s *discordgo.Session, i *discordgo.InteractionCreate) error
 	embed := messages.CreateSuccessEmbed(messages.T(i.GuildID).Titles.Skipped,
 		fmt.Sprintf(messages.T(i.GuildID).Music.ForceSkipped, messages.FormatMaskedLink(songTitle, songURL)))
 	messages.SetThumbnail(embed, songThumbnail)
-	discord.UpdateResponseEmbed(s, i, embed)
+	_ = discord.UpdateResponseEmbed(s, i, embed)
 	return nil
 }

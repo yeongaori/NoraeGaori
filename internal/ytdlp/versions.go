@@ -143,7 +143,7 @@ func (versionmanager *VersionManager) load() error {
 }
 
 func (versionmanager *VersionManager) persist() {
-	if err := os.MkdirAll(filepath.Dir(versionDataFile), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(versionDataFile), 0750); err != nil {
 		logger.Errorf("Failed to create data dir: %v", err)
 		return
 	}
@@ -155,7 +155,7 @@ func (versionmanager *VersionManager) persist() {
 	}
 
 	tmpFile := versionDataFile + ".tmp"
-	if err := os.WriteFile(tmpFile, data, 0644); err != nil {
+	if err := os.WriteFile(tmpFile, data, 0600); err != nil {
 		logger.Errorf("Failed to write temp state: %v", err)
 		return
 	}
@@ -259,7 +259,7 @@ func (versionmanager *VersionManager) HasUsableBinary() bool {
 
 	for _, path := range candidates {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		err := exec.CommandContext(ctx, path, "--version").Run()
+		err := exec.CommandContext(ctx, path, "--version").Run() // #nosec G204
 		cancel()
 		if err == nil {
 			return true
@@ -327,7 +327,7 @@ func (versionmanager *VersionManager) getCanaryIDs() []string {
 	if len(versionmanager.state.CanaryRing) > 0 {
 		ring := make([]string, len(versionmanager.state.CanaryRing))
 		copy(ring, versionmanager.state.CanaryRing)
-		rand.Shuffle(len(ring), func(i, j int) { ring[i], ring[j] = ring[j], ring[i] })
+		rand.Shuffle(len(ring), func(i, j int) { ring[i], ring[j] = ring[j], ring[i] }) // #nosec G404
 
 		count := canaryTestCount
 		if count > len(ring) {
@@ -697,7 +697,7 @@ func (versionmanager *VersionManager) testExtraction(binaryPath, videoID string)
 		args = append([]string{"--js-runtimes", rt}, args...)
 	}
 
-	cmd := exec.CommandContext(ctx, binaryPath, args...)
+	cmd := exec.CommandContext(ctx, binaryPath, args...) // #nosec G204
 	output, err := cmd.Output()
 
 	if err != nil {

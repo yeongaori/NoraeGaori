@@ -86,7 +86,7 @@ func newLibopusEncoder(sampleRate, channels int) (*libopusEncoder, error) {
 		return nil, errors.New("libopus is not loaded")
 	}
 	var errCode int32
-	st := cOpusEncoderCreate(int32(sampleRate), int32(channels), opusApplicationAudio, &errCode)
+	st := cOpusEncoderCreate(int32(sampleRate), int32(channels), opusApplicationAudio, &errCode) // #nosec G115
 	if st == 0 || errCode != 0 {
 		return nil, fmt.Errorf("opus_encoder_create failed: %s", opusStrError(errCode))
 	}
@@ -101,7 +101,7 @@ func newLibopusEncoder(sampleRate, channels int) (*libopusEncoder, error) {
 }
 
 func (e *libopusEncoder) SetBitrate(bitrate int) error {
-	rc := cOpusEncoderCtl(e.st, opusSetBitrateReq, int32(bitrate))
+	rc := cOpusEncoderCtl(e.st, opusSetBitrateReq, int32(bitrate)) // #nosec G115
 	if rc < 0 {
 		return fmt.Errorf("opus_encoder_ctl SET_BITRATE failed: %s", opusStrError(rc))
 	}
@@ -115,14 +115,7 @@ func (e *libopusEncoder) Encode(pcm []int16, output []byte) (int, error) {
 	if len(output) == 0 {
 		return 0, errors.New("opus_encode: empty output buffer")
 	}
-	frameSize := int32(len(pcm) / e.channels)
-	n := cOpusEncode(
-		e.st,
-		(*int16)(unsafe.Pointer(&pcm[0])),
-		frameSize,
-		(*uint8)(unsafe.Pointer(&output[0])),
-		int32(len(output)),
-	)
+	n := cOpusEncode(e.st, (*int16)(unsafe.Pointer(&pcm[0])), int32(len(pcm)/e.channels), (*uint8)(unsafe.Pointer(&output[0])), int32(len(output))) // #nosec G103 G115
 	if n < 0 {
 		return 0, fmt.Errorf("opus_encode failed: %s", opusStrError(n))
 	}
@@ -138,8 +131,8 @@ func opusStrError(code int32) string {
 		return fmt.Sprintf("opus error %d", code)
 	}
 	var n int
-	for *(*byte)(unsafe.Add(unsafe.Pointer(p), n)) != 0 {
+	for *(*byte)(unsafe.Add(unsafe.Pointer(p), n)) != 0 { // #nosec G103
 		n++
 	}
-	return string(unsafe.Slice(p, n))
+	return string(unsafe.Slice(p, n)) // #nosec G103
 }

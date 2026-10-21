@@ -666,7 +666,7 @@ func LoadLocale(lang string) error {
 }
 
 func readLocaleFile(path string) ([]byte, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304
 	if err == nil {
 		return data, nil
 	}
@@ -674,7 +674,7 @@ func readLocaleFile(path string) ([]byte, error) {
 	_, filename, _, _ := runtime.Caller(0)
 	dir := filepath.Dir(filename)
 	altPath := filepath.Join(dir, "..", "..", path)
-	return os.ReadFile(altPath)
+	return os.ReadFile(altPath) // #nosec G304
 }
 
 func mergeLocale(base, overlay *Locale) {

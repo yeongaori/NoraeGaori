@@ -98,7 +98,7 @@ type PinkNoise struct {
 
 func (p *PinkNoise) Fill(buf []float64, amplitude float64) {
 	if p.source == nil {
-		p.source = rand.New(rand.NewSource(7))
+		p.source = rand.New(rand.NewSource(7)) // #nosec G404
 	}
 	weights := [6][2]float64{{0.99886, 0.0555179}, {0.99332, 0.0750759}, {0.969, 0.153852}, {0.8665, 0.3104856}, {0.55, 0.5329522}, {-0.7616, -0.016898}}
 	for i := 0; i+1 < len(buf); i += dsp.Channels {
@@ -123,8 +123,8 @@ func SynthesizeJitteredClickTrack(bpm, seconds, sampleRate float64, accentEvery,
 	samples := make([]float32, total)
 	interval := 60 / bpm * sampleRate
 	burst := int(0.02 * sampleRate)
-	source := rand.New(rand.NewSource(11))
-	timing := rand.New(rand.NewSource(13))
+	source := rand.New(rand.NewSource(11)) // #nosec G404
+	timing := rand.New(rand.NewSource(13)) // #nosec G404
 
 	beat := 0
 	for position := 0.0; position < float64(total); position += interval {

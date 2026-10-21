@@ -26,7 +26,7 @@ DEBUG_MODE=false
 # Optional: discordgo library debug logging
 DISCORDGO_DEBUG=false
 `
-		if err := os.WriteFile(envPath, []byte(exampleEnv), 0644); err != nil {
+		if err := os.WriteFile(envPath, []byte(exampleEnv), 0600); err != nil {
 			return fmt.Errorf("failed to create .env file: %w", err)
 		}
 		logger.Warn("Created example .env file. Please configure it with your bot token.")

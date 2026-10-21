@@ -78,7 +78,7 @@ func LoadConfig() (*Config, error) {
 	configPath := filepath.Join("config", "rpcConfig.json")
 
 	configDir := filepath.Dir(configPath)
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+	if err := os.MkdirAll(configDir, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create config directory: %w", err)
 	}
 
@@ -91,7 +91,7 @@ func LoadConfig() (*Config, error) {
 			return nil, fmt.Errorf("failed to marshal default config: %w", err)
 		}
 
-		if err := os.WriteFile(configPath, data, 0644); err != nil {
+		if err := os.WriteFile(configPath, data, 0600); err != nil {
 			return nil, fmt.Errorf("failed to write default config: %w", err)
 		}
 
@@ -99,7 +99,7 @@ func LoadConfig() (*Config, error) {
 		return defaultCfg, nil
 	}
 
-	data, err := os.ReadFile(configPath)
+	data, err := os.ReadFile(configPath) // #nosec G304
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
@@ -230,7 +230,7 @@ type updater struct {
 
 func (u *updater) pickActivity() Activity {
 	if u.cfg.RandomizeRPC {
-		return u.cfg.Activities[rand.Intn(len(u.cfg.Activities))]
+		return u.cfg.Activities[rand.Intn(len(u.cfg.Activities))] // #nosec G404
 	}
 
 	return u.cfg.Activities[u.currentIndex]

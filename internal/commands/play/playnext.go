@@ -31,16 +31,16 @@ func HandlePlayNext(s *discordgo.Session, i *discordgo.InteractionCreate) error 
 	discord.DeferResponse(s, i)
 
 	searchEmbed := messages.CreateWarningEmbed(messages.T(i.GuildID).Titles.Searching, fmt.Sprintf(messages.T(i.GuildID).Descriptions.Searching, query))
-	discord.UpdateResponseEmbed(s, i, searchEmbed)
+	_ = discord.UpdateResponseEmbed(s, i, searchEmbed)
 
 	logger.Debugf("Searching for: %s", query)
 	song, err := youtube.Search(i.GuildID, query, i.Member.User.Username, i.Member.User.ID)
 	if err != nil {
 		if errors.Is(err, youtube.ErrUnsupportedYouTubeURL) {
-			discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.UnsupportedURL))
+			_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.UnsupportedURL))
 			return nil
 		}
-		discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.SongNotFound))
+		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.SongNotFound))
 		return err
 	}
 
@@ -57,9 +57,9 @@ func HandlePlayNext(s *discordgo.Session, i *discordgo.InteractionCreate) error 
 
 	if err := queue.AddSong(i.GuildID, queueSong, 1); err != nil {
 		if err.Error() == "song already in queue: "+song.Title {
-			discord.UpdateResponseEmbed(s, i, messages.CreateWarningEmbed(messages.T(i.GuildID).Titles.Duplicate, messages.T(i.GuildID).Errors.DuplicateSong))
+			_ = discord.UpdateResponseEmbed(s, i, messages.CreateWarningEmbed(messages.T(i.GuildID).Titles.Duplicate, messages.T(i.GuildID).Errors.DuplicateSong))
 		} else {
-			discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, fmt.Sprintf(messages.T(i.GuildID).Music.SongAddFailed, err)))
+			_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, fmt.Sprintf(messages.T(i.GuildID).Music.SongAddFailed, err)))
 		}
 		return err
 	}
@@ -74,7 +74,7 @@ func HandlePlayNext(s *discordgo.Session, i *discordgo.InteractionCreate) error 
 		song.Thumbnail,
 	)
 
-	discord.UpdateResponseEmbed(s, i, embed)
+	_ = discord.UpdateResponseEmbed(s, i, embed)
 
 	player.ResumeOrStart(s, i.GuildID)
 

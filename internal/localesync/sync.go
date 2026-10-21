@@ -17,7 +17,7 @@ type BaselineStore interface {
 }
 
 func Sync(dir string, shipped fs.FS, store BaselineStore) error {
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0750); err != nil {
 		return fmt.Errorf("failed to create %s: %w", dir, err)
 	}
 	names, _ := fs.Glob(shipped, "*.json")
@@ -43,7 +43,7 @@ func syncLocale(dir string, shipped fs.FS, name string, store BaselineStore) err
 	}
 
 	path := filepath.Join(dir, name)
-	userData, err := os.ReadFile(path)
+	userData, err := os.ReadFile(path) // #nosec G304
 	if errors.Is(err, fs.ErrNotExist) {
 		if err := writeFile(path, shippedData); err != nil {
 			return err
@@ -91,7 +91,7 @@ func loadBaseline(store BaselineStore, lang string) (*node, error) {
 
 func writeFile(path string, data []byte) error {
 	temporary := path + ".tmp"
-	if err := os.WriteFile(temporary, data, 0644); err != nil {
+	if err := os.WriteFile(temporary, data, 0600); err != nil {
 		return fmt.Errorf("failed to write %s: %w", temporary, err)
 	}
 	return os.Rename(temporary, path)

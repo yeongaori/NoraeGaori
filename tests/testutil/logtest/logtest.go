@@ -17,7 +17,7 @@ func Capture(t *testing.T) func() string {
 	t.Cleanup(func() { logger.SetLogFile("") })
 
 	return func() string {
-		content, err := os.ReadFile(path)
+		content, err := os.ReadFile(path) // #nosec G304
 		if err != nil {
 			t.Fatalf("failed to read the captured log: %v", err)
 		}

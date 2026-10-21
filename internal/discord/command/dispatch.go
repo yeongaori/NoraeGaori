@@ -120,7 +120,7 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if !config.IsAdmin(m.Author.ID) && !discord.IsGuildAdmin(s, m.GuildID, member) {
 			embed := messages.CreateErrorEmbed(messages.T(m.GuildID).Titles.NoPermission, messages.T(m.GuildID).Errors.AdminOnly)
 
-			s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
+			_, _ = s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
 				Embeds: []*discordgo.MessageEmbed{embed},
 				Reference: &discordgo.MessageReference{
 					MessageID: m.ID,
@@ -155,7 +155,7 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if messageResponder.Message == nil {
 			embed := messages.CreateErrorEmbed(messages.T(m.GuildID).Titles.Error, fmt.Sprintf(messages.T(m.GuildID).Errors.CommandExecutionError, err))
 
-			s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
+			_, _ = s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
 				Embeds: []*discordgo.MessageEmbed{embed},
 				Reference: &discordgo.MessageReference{
 					MessageID: m.ID,

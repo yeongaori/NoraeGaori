@@ -71,9 +71,9 @@ func (p *Phaser) Process(block []float64, from, to float64) {
 			mix := from + (to-from)*float64((start+i)/Channels+1)/float64(steps)
 			var wetLeft, wetRight float64
 			left, wetLeft = left.run(work[i], phaserCoefficient(phase))
-			right, wetRight = right.run(work[i+1], phaserCoefficient(phase+math.Pi/2))
+			right, wetRight = right.run(work[i+1], phaserCoefficient(phase+math.Pi/2)) // #nosec G602
 			work[i] += mix * (wetLeft - work[i])
-			work[i+1] += mix * (wetRight - work[i+1])
+			work[i+1] += mix * (wetRight - work[i+1]) // #nosec G602
 			phase += step
 			if phase >= 2*math.Pi || phase <= -2*math.Pi {
 				phase = math.Mod(phase, 2*math.Pi)

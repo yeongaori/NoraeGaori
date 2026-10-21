@@ -218,7 +218,7 @@ func sendSongErrorMessage(session *discordgo.Session, guildID string, song *queu
 		song.RequestedByTag,
 		song.Thumbnail,
 	)
-	session.ChannelMessageSendEmbed(q.TextChannelID, embed)
+	_, _ = session.ChannelMessageSendEmbed(q.TextChannelID, embed)
 }
 
 func sendPlaybackCrashMessage(session *discordgo.Session, guildID string, song *queue.Song) {

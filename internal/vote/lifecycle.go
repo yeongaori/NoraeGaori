@@ -16,7 +16,7 @@ func replyVoteInProgress(s *discordgo.Session, i *discordgo.InteractionCreate, t
 		description = fmt.Sprintf("%s\n%s", description, voteMessageURL(i.GuildID, snapshot.channelID, snapshot.messageID))
 	}
 
-	discord.UpdateResponseEmbed(s, i, messages.CreateWarningEmbed(title, description))
+	_ = discord.UpdateResponseEmbed(s, i, messages.CreateWarningEmbed(title, description))
 }
 
 type Request struct {
@@ -49,13 +49,13 @@ func Start(s *discordgo.Session, i *discordgo.InteractionCreate, request Request
 	}
 
 	tally := session.tally(voteThreshold{quorum: request.RequiredVotes, adders: adders})
-	discord.UpdateResponseEmbed(s, i, voteProgressEmbed(i.GuildID, request.Title, request.Description, request.Emoji, session.startTime, tally))
+	_ = discord.UpdateResponseEmbed(s, i, voteProgressEmbed(i.GuildID, request.Title, request.Description, request.Emoji, session.startTime, tally))
 
 	msg, err := discord.GetResponseMessage(s, i)
 	if err != nil || msg == nil {
 		logger.Errorf("Failed to get vote message: %v", err)
 		activeVotes.release(session)
-		discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.CommandExecutionError))
+		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.CommandExecutionError))
 		return nil
 	}
 

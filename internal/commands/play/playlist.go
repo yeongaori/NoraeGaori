@@ -22,7 +22,7 @@ var playlistLocks lockmap.Map
 func handlePurePlaylist(s *discordgo.Session, i *discordgo.InteractionCreate, playlistURL string, voiceState *discordgo.VoiceState) error {
 	playlistInfo, err := youtube.GetPlaylistInfo(playlistURL, i.Member.User.Username, i.Member.User.ID)
 	if err != nil {
-		discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.PlaylistInfoFailed))
+		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.PlaylistInfoFailed))
 		return err
 	}
 
@@ -35,7 +35,7 @@ func handlePurePlaylist(s *discordgo.Session, i *discordgo.InteractionCreate, pl
 		Footer:    &discordgo.MessageEmbedFooter{Text: messages.T(i.GuildID).Music.PlaylistConfirmFooter},
 	}
 
-	discord.UpdateResponseEmbed(s, i, confirmEmbed)
+	_ = discord.UpdateResponseEmbed(s, i, confirmEmbed)
 
 	msg, err := discord.GetResponseMessage(s, i)
 	if err != nil {
@@ -125,7 +125,7 @@ func handleVideoWithPlaylist(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	if q == nil {
 		if err := queue.CreateQueue(i.GuildID, i.ChannelID, voiceState.ChannelID); err != nil {
-			discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.QueueCreateFailed))
+			_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.QueueCreateFailed))
 			return err
 		}
 	}
@@ -139,7 +139,7 @@ func handleVideoWithPlaylist(s *discordgo.Session, i *discordgo.InteractionCreat
 	} else {
 		if err := queue.AddSong(i.GuildID, queueSongFrom(song), -1); err != nil {
 			if err.Error() != "song already in queue: "+song.Title {
-				discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, fmt.Sprintf(messages.T(i.GuildID).Music.SongAddFailed, err)))
+				_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, fmt.Sprintf(messages.T(i.GuildID).Music.SongAddFailed, err)))
 				return err
 			}
 			isDuplicate = true
@@ -148,7 +148,7 @@ func handleVideoWithPlaylist(s *discordgo.Session, i *discordgo.InteractionCreat
 		embed = videoWithPlaylistEmbed(i.GuildID, song, isDuplicate)
 	}
 
-	discord.UpdateResponseEmbed(s, i, embed)
+	_ = discord.UpdateResponseEmbed(s, i, embed)
 
 	msg, err := discord.GetResponseMessage(s, i)
 	if err != nil {
@@ -178,11 +178,11 @@ func handleVideoWithPlaylist(s *discordgo.Session, i *discordgo.InteractionCreat
 
 func editPromptEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, msg *discordgo.Message, embed *discordgo.MessageEmbed) {
 	if discord.IsMessageCommand(i) {
-		s.ChannelMessageEditEmbed(msg.ChannelID, msg.ID, embed)
+		_, _ = s.ChannelMessageEditEmbed(msg.ChannelID, msg.ID, embed)
 		return
 	}
 
-	s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+	_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 		Embeds: &[]*discordgo.MessageEmbed{embed},
 	})
 }

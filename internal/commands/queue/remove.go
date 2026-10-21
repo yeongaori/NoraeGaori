@@ -18,14 +18,14 @@ func HandleRemove(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 	options := i.ApplicationCommandData().Options
 	if len(options) == 0 {
-		discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Queue.EnterPosition))
+		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Queue.EnterPosition))
 		return nil
 	}
 	positionStr := options[0].StringValue()
 
 	q, err := queue.GetQueue(i.GuildID, false)
 	if err != nil || q == nil || len(q.Songs) == 0 {
-		discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.EmptyQueue, messages.T(i.GuildID).Descriptions.EmptyQueue))
+		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.EmptyQueue, messages.T(i.GuildID).Descriptions.EmptyQueue))
 		return nil
 	}
 
@@ -124,13 +124,13 @@ func applyRemoveVote(guildID string, songIDs []int, result func(removed int) *di
 func startRemoveVote(s *discordgo.Session, i *discordgo.InteractionCreate, songs []*queue.Song, description string, result func(removed int) *discordgo.MessageEmbed) error {
 	voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
 	if err != nil || voiceState.ChannelID == "" {
-		discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.EnterVoiceChannel))
+		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.EnterVoiceChannel))
 		return nil
 	}
 
 	requiredVotes, err := vote.RequiredInChannel(s, i.GuildID, voiceState.ChannelID, vote.ResolveWithFetch)
 	if err != nil {
-		discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.ServerInfoFailed))
+		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.ServerInfoFailed))
 		return err
 	}
 
@@ -154,11 +154,11 @@ func startRemoveVote(s *discordgo.Session, i *discordgo.InteractionCreate, songs
 
 func removeImmediately(s *discordgo.Session, i *discordgo.InteractionCreate, songs []*queue.Song, result func(removed int) *discordgo.MessageEmbed) error {
 	if err := removeSongs(i.GuildID, songs); err != nil {
-		discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, fmt.Sprintf(messages.T(i.GuildID).Queue.RemoveFailed, err)))
+		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, fmt.Sprintf(messages.T(i.GuildID).Queue.RemoveFailed, err)))
 		return err
 	}
 
-	discord.UpdateResponseEmbed(s, i, result(len(songs)))
+	_ = discord.UpdateResponseEmbed(s, i, result(len(songs)))
 	return nil
 }
 
@@ -184,7 +184,7 @@ func handleRemoveAll(s *discordgo.Session, i *discordgo.InteractionCreate, q *qu
 			description = messages.T(i.GuildID).Queue.OnlyCurrentSong
 		}
 
-		discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Queue.NoSongsToRemoveTitle, description))
+		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Queue.NoSongsToRemoveTitle, description))
 		return nil
 	}
 
@@ -197,7 +197,7 @@ func handleRemoveAll(s *discordgo.Session, i *discordgo.InteractionCreate, q *qu
 func handleRemoveRange(s *discordgo.Session, i *discordgo.InteractionCreate, q *queue.Queue, rangeStr string) error {
 	parts := strings.Split(rangeStr, "-")
 	if len(parts) != 2 {
-		discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Queue.InvalidRange))
+		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Queue.InvalidRange))
 		return nil
 	}
 
@@ -205,12 +205,12 @@ func handleRemoveRange(s *discordgo.Session, i *discordgo.InteractionCreate, q *
 	end, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
 
 	if err1 != nil || err2 != nil || start < 1 || end < start || start > len(q.Songs) {
-		discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Queue.InvalidRange))
+		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Queue.InvalidRange))
 		return nil
 	}
 
 	if start == 1 && (q.Playing || q.Loading) {
-		discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
+		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
 			messages.T(i.GuildID).Queue.RangeIncludesCurrent))
 		return nil
 	}
@@ -237,13 +237,13 @@ func handleRemoveRange(s *discordgo.Session, i *discordgo.InteractionCreate, q *
 func handleRemoveSingle(s *discordgo.Session, i *discordgo.InteractionCreate, q *queue.Queue, positionStr string) error {
 	position, err := strconv.Atoi(strings.TrimSpace(positionStr))
 	if err != nil || position < 1 || position > len(q.Songs) {
-		discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
+		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
 			fmt.Sprintf(messages.T(i.GuildID).Queue.EnterValidRange, len(q.Songs))))
 		return nil
 	}
 
 	if position == 1 && (q.Playing || q.Loading) {
-		discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
+		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
 			messages.T(i.GuildID).Queue.CannotRemoveCurrent))
 		return nil
 	}

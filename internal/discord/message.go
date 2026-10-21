@@ -202,11 +202,11 @@ func (mr *MessageResponse) SendMessage(content string) {
 }
 
 func (mr *MessageResponse) SendFollowUp(content string) {
-	mr.Session.ChannelMessageSend(mr.ChannelID, content)
+	_, _ = mr.Session.ChannelMessageSend(mr.ChannelID, content)
 }
 
 func (mr *MessageResponse) SendFollowUpEmbed(embed *discordgo.MessageEmbed) {
-	mr.Session.ChannelMessageSendEmbed(mr.ChannelID, embed)
+	_, _ = mr.Session.ChannelMessageSendEmbed(mr.ChannelID, embed)
 }
 
 func (mr *MessageResponse) SendEmbedWithComponents(embed *discordgo.MessageEmbed, components []discordgo.MessageComponent) (*discordgo.Message, error) {

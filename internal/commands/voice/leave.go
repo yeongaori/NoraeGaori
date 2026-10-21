@@ -22,7 +22,7 @@ func HandleLeave(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 	if err := suspendPlayback(i.GuildID); err != nil {
 		logger.Errorf("Failed to leave voice for guild %s: %v", i.GuildID, err)
-		discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Voice.LeaveFailedTitle, messages.T(i.GuildID).Voice.LeaveFailedDesc))
+		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Voice.LeaveFailedTitle, messages.T(i.GuildID).Voice.LeaveFailedDesc))
 		return nil
 	}
 
@@ -30,7 +30,7 @@ func HandleLeave(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	if hasQueuedSongs(i.GuildID) {
 		description = messages.T(i.GuildID).Voice.LeavePausedDesc
 	}
-	discord.UpdateResponseEmbed(s, i, messages.CreateSuccessEmbed(messages.T(i.GuildID).Voice.LeaveSuccessTitle, description))
+	_ = discord.UpdateResponseEmbed(s, i, messages.CreateSuccessEmbed(messages.T(i.GuildID).Voice.LeaveSuccessTitle, description))
 	return nil
 }
 
