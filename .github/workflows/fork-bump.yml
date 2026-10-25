@@ -1,0 +1,79 @@
+name: Fork Bump
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  bump:
+    name: Bump
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      BRANCH: deps/discordgo-fork
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          ref: dev
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Resolve fork version
+        id: fork
+        run: |
+          version=$(curl -fsSL https://proxy.golang.org/github.com/yeongaori/discordgo-fork/@v/master.info | jq -r .Version)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Update replace pin
+        id: pin
+        env:
+          VERSION: ${{ steps.fork.outputs.version }}
+        run: |
+          go mod edit -replace "github.com/bwmarrin/discordgo=github.com/yeongaori/discordgo-fork@$VERSION"
+          go mod tidy
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push branch
+        if: steps.pin.outputs.changed == 'true'
+        env:
+          VERSION: ${{ steps.fork.outputs.version }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -C "$BRANCH"
+          git commit -am "Bump discordgo fork to $VERSION"
+          git push --force origin "$BRANCH"
+
+      - name: Open pull request
+        if: steps.pin.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.fork.outputs.version }}
+        run: |
+          title="Bump discordgo fork to $VERSION"
+          body="Moves the discordgo replace pin to $VERSION from discordgo-fork master."
+          if [ -z "$(gh pr list --head "$BRANCH" --state open --json number -q '.[].number')" ]; then
+            gh pr create --base dev --head "$BRANCH" --title "$title" --body "$body"
+          else
+            gh pr edit "$BRANCH" --title "$title" --body "$body"
+          fi
+
+      - name: Run CI
+        if: steps.pin.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run ci.yml --ref "$BRANCH"
