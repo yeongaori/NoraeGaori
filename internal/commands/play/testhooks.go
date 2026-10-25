@@ -34,11 +34,15 @@ var HookBuildVideoChoiceName = buildVideoChoiceName
 var HookConfirmedByRequester = confirmedByRequester
 var HookExcludeVideo = excludeVideo
 var HookExpireSearchSelection = expireSearchSelection
+var HookHandlePlaylistConfirmationReaction = handlePlaylistConfirmationReaction
+var HookHandlePlaylistRestConfirmationReaction = handlePlaylistRestConfirmationReaction
 var HookIsLatestAutocompleteFetch = isLatestAutocompleteFetch
 var HookLoadAutocompleteChoices = loadAutocompleteChoices
 var HookLoadNearestAutocompleteChoices = loadNearestAutocompleteChoices
 var HookNormalizeAutocompleteQuery = normalizeAutocompleteQuery
 var HookParseSearchSelection = parseSearchSelection
+var HookPlaylistPromptExpiry = &playlistPromptExpiry
+var HookPlaylistTimeoutEmbed = playlistTimeoutEmbed
 var HookSaveAutocompleteChoices = saveAutocompleteChoices
 var HookSearchSelectionExpiry = &searchSelectionExpiry
 

@@ -19,6 +19,8 @@ import (
 
 var playlistLocks lockmap.Map
 
+var playlistPromptExpiry = 30 * time.Second
+
 func handlePurePlaylist(s *discordgo.Session, i *discordgo.InteractionCreate, playlistURL string, voiceState *discordgo.VoiceState) error {
 	playlistInfo, err := youtube.GetPlaylistInfo(playlistURL, i.Member.User.Username, i.Member.User.ID)
 	if err != nil {
@@ -113,6 +115,21 @@ func videoWithPlaylistEmbed(guildID string, song *youtube.Song, isDuplicate bool
 	}
 }
 
+func playlistTimeoutEmbed(guildID string, song *youtube.Song, isDuplicate bool) *discordgo.MessageEmbed {
+	if song == nil {
+		return messages.CreateWarningEmbed(messages.T(guildID).Music.PlaylistTimeoutTitle, messages.T(guildID).Music.PlaylistTimeoutDesc)
+	}
+
+	color, title, description := messages.ColorSuccess, messages.T(guildID).Titles.Added, ""
+	if isDuplicate {
+		color, title, description = messages.ColorWarning, messages.T(guildID).Titles.Duplicate, messages.T(guildID).Errors.DuplicateSong
+	}
+
+	embed := messages.CreateSongEmbed(guildID, color, title, description, song.Title, song.URL, song.Uploader, song.Duration, song.RequestedBy, song.Thumbnail)
+	embed.Footer = &discordgo.MessageEmbedFooter{Text: messages.T(guildID).Music.PlaylistTimeoutDesc}
+	return embed
+}
+
 func handleVideoWithPlaylist(s *discordgo.Session, i *discordgo.InteractionCreate, videoURL string, analysis *youtube.URLAnalysis, voiceState *discordgo.VoiceState) error {
 
 	song, videoErr := resolveVideoWithPlaylistFallback(i, analysis)
@@ -160,7 +177,8 @@ func handleVideoWithPlaylist(s *discordgo.Session, i *discordgo.InteractionCreat
 	if videoUnavailable {
 		excludeVideoID = ""
 	}
-	waitForConfirmation := handlePlaylistRestConfirmationReaction(s, i, msg, analysis.PlaylistID, excludeVideoID, voiceState)
+	timeoutEmbed := playlistTimeoutEmbed(i.GuildID, song, isDuplicate)
+	waitForConfirmation := handlePlaylistRestConfirmationReaction(s, i, msg, analysis.PlaylistID, excludeVideoID, voiceState, timeoutEmbed)
 	go waitForConfirmation()
 
 	err = s.MessageReactionAdd(msg.ChannelID, msg.ID, "⬇️")
@@ -240,7 +258,7 @@ func handlePlaylistConfirmationReaction(s *discordgo.Session, originalInteractio
 		select {
 		case <-confirmedChan:
 			logger.Debugf("Reaction confirmed, handler complete")
-		case <-time.After(30 * time.Second):
+		case <-time.After(playlistPromptExpiry):
 			logger.Debugf("Timeout reached, cancelling")
 			embed := messages.CreateWarningEmbed(messages.T(originalInteraction.GuildID).Music.PlaylistTimeoutTitle, messages.T(originalInteraction.GuildID).Music.PlaylistTimeoutDesc)
 			editPromptEmbed(s, originalInteraction, msg, embed)
@@ -292,7 +310,7 @@ func excludeVideo(videos []*youtube.Song, videoID string) []*youtube.Song {
 	return remaining
 }
 
-func handlePlaylistRestConfirmationReaction(s *discordgo.Session, originalInteraction *discordgo.InteractionCreate, msg *discordgo.Message, playlistID, videoID string, voiceState *discordgo.VoiceState) func() {
+func handlePlaylistRestConfirmationReaction(s *discordgo.Session, originalInteraction *discordgo.InteractionCreate, msg *discordgo.Message, playlistID, videoID string, voiceState *discordgo.VoiceState, timeoutEmbed *discordgo.MessageEmbed) func() {
 	logger.Debugf("Starting reaction handler for message %s in channel %s", msg.ID, msg.ChannelID)
 	logger.Debugf("Expecting reaction from user: %s", originalInteraction.Member.User.ID)
 
@@ -333,10 +351,9 @@ func handlePlaylistRestConfirmationReaction(s *discordgo.Session, originalIntera
 		select {
 		case <-confirmedChan:
 			logger.Debugf("Reaction confirmed, handler complete")
-		case <-time.After(30 * time.Second):
+		case <-time.After(playlistPromptExpiry):
 			logger.Debugf("Timeout reached, cancelling")
-			embed := messages.CreateWarningEmbed(messages.T(originalInteraction.GuildID).Music.PlaylistTimeoutTitle, messages.T(originalInteraction.GuildID).Music.PlaylistTimeoutDesc)
-			editPromptEmbed(s, originalInteraction, msg, embed)
+			editPromptEmbed(s, originalInteraction, msg, timeoutEmbed)
 			discord.ClearPromptReactions(s, msg.ChannelID, msg.ID, "⬇️")
 		}
 	}
