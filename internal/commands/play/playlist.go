@@ -227,7 +227,7 @@ func handlePlaylistConfirmationReaction(s *discordgo.Session, originalInteractio
 
 		editPromptEmbed(s, originalInteraction, msg, loadingEmbed)
 
-		discord.ClearPromptReactions(s, msg.ChannelID, msg.ID)
+		discord.ClearPromptReactions(s, msg.ChannelID, msg.ID, "✅")
 
 		go addPlaylistSongs(s, originalInteraction, playlistInfo, voiceState, msg.ID)
 	}
@@ -244,7 +244,7 @@ func handlePlaylistConfirmationReaction(s *discordgo.Session, originalInteractio
 			logger.Debugf("Timeout reached, cancelling")
 			embed := messages.CreateWarningEmbed(messages.T(originalInteraction.GuildID).Music.PlaylistTimeoutTitle, messages.T(originalInteraction.GuildID).Music.PlaylistTimeoutDesc)
 			editPromptEmbed(s, originalInteraction, msg, embed)
-			discord.ClearPromptReactions(s, msg.ChannelID, msg.ID)
+			discord.ClearPromptReactions(s, msg.ChannelID, msg.ID, "✅")
 		}
 	}
 }
@@ -312,7 +312,7 @@ func handlePlaylistRestConfirmationReaction(s *discordgo.Session, originalIntera
 		if err != nil {
 			errorEmbed := messages.CreateErrorEmbed(messages.T(originalInteraction.GuildID).Titles.Error, messages.T(originalInteraction.GuildID).Music.PlaylistInfoFailed)
 			editPromptEmbed(s, originalInteraction, msg, errorEmbed)
-			discord.ClearPromptReactions(s, msg.ChannelID, msg.ID)
+			discord.ClearPromptReactions(s, msg.ChannelID, msg.ID, "⬇️")
 			return
 		}
 
@@ -320,7 +320,7 @@ func handlePlaylistRestConfirmationReaction(s *discordgo.Session, originalIntera
 
 		editPromptEmbed(s, originalInteraction, msg, loadingEmbed)
 
-		discord.ClearPromptReactions(s, msg.ChannelID, msg.ID)
+		discord.ClearPromptReactions(s, msg.ChannelID, msg.ID, "⬇️")
 
 		go addPlaylistSongs(s, originalInteraction, playlistInfo, voiceState, msg.ID)
 	}
@@ -337,7 +337,7 @@ func handlePlaylistRestConfirmationReaction(s *discordgo.Session, originalIntera
 			logger.Debugf("Timeout reached, cancelling")
 			embed := messages.CreateWarningEmbed(messages.T(originalInteraction.GuildID).Music.PlaylistTimeoutTitle, messages.T(originalInteraction.GuildID).Music.PlaylistTimeoutDesc)
 			editPromptEmbed(s, originalInteraction, msg, embed)
-			discord.ClearPromptReactions(s, msg.ChannelID, msg.ID)
+			discord.ClearPromptReactions(s, msg.ChannelID, msg.ID, "⬇️")
 		}
 	}
 }

@@ -18,11 +18,12 @@ type recordedEdit struct {
 }
 
 type voteStubs struct {
-	mu      sync.Mutex
-	edits   []recordedEdit
-	added   []string
-	cleared []string
-	removed []string
+	mu            sync.Mutex
+	edits         []recordedEdit
+	added         []string
+	cleared       []string
+	clearedEmojis []string
+	removed       []string
 }
 
 func stubVoteEffects(t *testing.T) *voteStubs {
@@ -40,10 +41,11 @@ func stubVoteEffects(t *testing.T) *voteStubs {
 		defer stubs.mu.Unlock()
 		stubs.added = append(stubs.added, messageID)
 	})
-	testutil.Swap(t, &discord.ClearPromptReactions, func(s *discordgo.Session, channelID, messageID string) {
+	testutil.Swap(t, &discord.ClearPromptReactions, func(s *discordgo.Session, channelID, messageID, emoji string) {
 		stubs.mu.Lock()
 		defer stubs.mu.Unlock()
 		stubs.cleared = append(stubs.cleared, messageID)
+		stubs.clearedEmojis = append(stubs.clearedEmojis, emoji)
 	})
 	testutil.Swap(t, &discord.RemoveUserReaction, func(s *discordgo.Session, channelID, messageID, emoji, userID string) {
 		stubs.mu.Lock()
@@ -119,6 +121,11 @@ func TestAwaitVoteOutcomeRendersACancellation(t *testing.T) {
 	}
 	if cleared := stubs.clearedMessages(); len(cleared) != 1 || cleared[0] != *session.HookMessageID() {
 		t.Errorf("cleared = %v, want the vote message cleared once", cleared)
+	}
+	stubs.mu.Lock()
+	defer stubs.mu.Unlock()
+	if len(stubs.clearedEmojis) != 1 || stubs.clearedEmojis[0] != "⏭" {
+		t.Errorf("got cleared emojis %v, want [⏭]", stubs.clearedEmojis)
 	}
 }
 

@@ -101,5 +101,5 @@ func awaitVoteOutcome(s *discordgo.Session, session *Session) {
 		}
 	}
 
-	discord.ClearPromptReactions(s, session.channelID, session.messageID)
+	discord.ClearPromptReactions(s, session.channelID, session.messageID, session.emoji)
 }
