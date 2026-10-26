@@ -58,8 +58,9 @@ func editedPromptEmbed(t *testing.T, requests []discordtest.Request) map[string]
 func assertBotsReactionDropped(t *testing.T, requests []discordtest.Request, emoji string) {
 	t.Helper()
 
-	lines := []string{}
-	for _, request := range requests {
+	lines := make([]string, 0, len(requests))
+	for i := range requests {
+		request := &requests[i]
 		lines = append(lines, request.Method+" "+request.Path)
 	}
 	want := "DELETE " + promptReactionsPath + "/" + emoji + "/@me"

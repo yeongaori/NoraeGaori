@@ -17,7 +17,7 @@ func readOn(string) (string, error) {
 func TestThePickerStopsAtDiscordsOptionLimit(t *testing.T) {
 	specs := make([]settings.HookSettingSpec, 0, 30)
 	for index := range 30 {
-		specs = append(specs, *settings.HookBuildSettingSpec(settings.HookSettingSpecFields{Key: fmt.Sprintf("toggle%d", index), Category: settings.HookCategoryPlayback, Kind: settings.HookSettingToggle, Read: readOn}))
+		specs = append(specs, *settings.HookBuildSettingSpec(&settings.HookSettingSpecFields{Key: fmt.Sprintf("toggle%d", index), Category: settings.HookCategoryPlayback, Kind: settings.HookSettingToggle, Read: readOn}))
 	}
 	testutil.Swap(t, settings.HookSettingSpecs, specs)
 
@@ -36,7 +36,7 @@ func TestTheChoiceListStopsAtDiscordsOptionLimit(t *testing.T) {
 	for index := range 30 {
 		values = append(values, fmt.Sprintf("value%d", index))
 	}
-	spec := settings.HookBuildSettingSpec(settings.HookSettingSpecFields{Key: "manychoices", Kind: settings.HookSettingChoice, HasDefault: true, Options: func() []string { return values }})
+	spec := settings.HookBuildSettingSpec(&settings.HookSettingSpecFields{Key: "manychoices", Kind: settings.HookSettingChoice, HasDefault: true, Options: func() []string { return values }})
 
 	options := settings.HookChoiceOptions(checkGuildID, spec, "value3")
 
@@ -52,7 +52,7 @@ func TestTheChoiceListStopsAtDiscordsOptionLimit(t *testing.T) {
 }
 
 func TestTheDefaultCategoryFallsBackWhenNothingIsVisible(t *testing.T) {
-	testutil.Swap(t, settings.HookSettingSpecs, []settings.HookSettingSpec{*settings.HookBuildSettingSpec(settings.HookSettingSpecFields{Key: "secret", Category: settings.HookCategoryGeneral, Kind: settings.HookSettingText, AdminOnly: true})})
+	testutil.Swap(t, settings.HookSettingSpecs, []settings.HookSettingSpec{*settings.HookBuildSettingSpec(&settings.HookSettingSpecFields{Key: "secret", Category: settings.HookCategoryGeneral, Kind: settings.HookSettingText, AdminOnly: true})})
 
 	if got := settings.HookDefaultCategory(false); got != settings.HookCategoryPlayback {
 		t.Errorf("defaultCategory = %q with nothing visible, want %q", got, settings.HookCategoryPlayback)

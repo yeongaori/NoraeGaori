@@ -164,7 +164,7 @@ func TestChoiceValuesMustBeOnOffer(t *testing.T) {
 	language := specFor(t, "language")
 	repeat := specFor(t, "repeat")
 
-	for _, check := range []struct {
+	checks := []struct {
 		spec  *settings.HookSettingSpec
 		input string
 		want  string
@@ -176,7 +176,9 @@ func TestChoiceValuesMustBeOnOffer(t *testing.T) {
 		{repeat, "on", settings.HookValueRepeatAll, nil},
 		{repeat, "Single", settings.HookValueRepeatSingle, nil},
 		{repeat, settings.HookDefaultChoiceValue, "", *settings.HookErrUnknownValue},
-	} {
+	}
+	for i := range checks {
+		check := &checks[i]
 		got, err := settings.HookNormalizeValue(check.spec, check.input)
 		if got != check.want || !errors.Is(err, check.err) {
 			t.Errorf("%s %q normalized to (%q, %v), want (%q, %v)", *check.spec.HookKey(), check.input, got, err, check.want, check.err)

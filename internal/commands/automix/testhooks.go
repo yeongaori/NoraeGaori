@@ -57,11 +57,11 @@ var HookTurnEditorTab = turnEditorTab
 var HookTurnTransitionPage = turnTransitionPage
 var HookVoiceChannelBitrate = voiceChannelBitrate
 
-func HookBuildPanelLocation(fields HookPanelLocationFields) *panelLocation {
+func HookBuildPanelLocation(fields *HookPanelLocationFields) *panelLocation {
 	return &panelLocation{messageID: fields.MessageID, page: fields.Page}
 }
 
-func HookBuildPanelState(fields HookPanelStateFields) *panelState {
+func HookBuildPanelState(fields *HookPanelStateFields) *panelState {
 	return &panelState{
 		pairs:          fields.Pairs,
 		guildOverrides: fields.GuildOverrides,

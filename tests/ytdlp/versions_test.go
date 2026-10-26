@@ -20,7 +20,7 @@ func newTestVersionManager(t *testing.T) *ytdlp.VersionManager {
 
 	t.Chdir(t.TempDir())
 
-	return ytdlp.HookBuildVersionManager(ytdlp.HookVersionManagerFields{
+	return ytdlp.HookBuildVersionManager(&ytdlp.HookVersionManagerFields{
 		State: ytdlp.HookPersistedState{
 			Versions:   make(map[string]*ytdlp.VersionEntry),
 			CanaryRing: []string{},
@@ -241,7 +241,8 @@ func TestShouldRollbackHonoursThresholdAndWindow(t *testing.T) {
 		{"outside the window", recent(ytdlp.HookRollbackThreshold, 2*ytdlp.HookRollbackWindow), false},
 	}
 
-	for _, testCase := range cases {
+	for i := range cases {
+		testCase := &cases[i]
 		t.Run(testCase.name, func(t *testing.T) {
 			versionmanager := newTestVersionManager(t)
 			addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{

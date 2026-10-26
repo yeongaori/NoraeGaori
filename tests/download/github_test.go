@@ -23,17 +23,17 @@ type fakeGitHub struct {
 	web *releasetest.Server
 }
 
-func serveGitHub(t *testing.T) fakeGitHub {
+func serveGitHub(t *testing.T) *fakeGitHub {
 	t.Helper()
 
-	return fakeGitHub{api: releasetest.Serve(t), web: releasetest.Serve(t)}
+	return &fakeGitHub{api: releasetest.Serve(t), web: releasetest.Serve(t)}
 }
 
-func (gh fakeGitHub) repo(name string) download.GitHubRepo {
-	return download.GitHubRepo{APIURL: gh.api.URL(""), WebURL: gh.web.URL(""), Repo: name}
+func (gh *fakeGitHub) repo(name string) *download.GitHubRepo {
+	return &download.GitHubRepo{APIURL: gh.api.URL(""), WebURL: gh.web.URL(""), Repo: name}
 }
 
-func (gh fakeGitHub) publishWebRelease(repo string) {
+func (gh *fakeGitHub) publishWebRelease(repo string) {
 	gh.web.RedirectLatest(repo, "latest")
 	gh.web.Files["/"+repo+"/releases/download/latest/checksums.sha256"] = releasetest.SumA + "  " + linuxBuild + "\n" + releasetest.SumB + "  " + windowsBuild + "\n"
 	gh.web.PublishFeed(repo,
@@ -42,7 +42,7 @@ func (gh fakeGitHub) publishWebRelease(repo string) {
 	)
 }
 
-func (gh fakeGitHub) rateLimit(repo string) {
+func (gh *fakeGitHub) rateLimit(repo string) {
 	gh.api.RateLimit("/repos/" + repo + "/releases/latest")
 	gh.publishWebRelease(repo)
 }

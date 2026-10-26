@@ -96,7 +96,8 @@ func TestSetPrefix(t *testing.T) {
 		{"Long prefix", "verylongprefix", false},
 	}
 
-	for _, tc := range testCases {
+	for i := range testCases {
+		tc := &testCases[i]
 		t.Run(tc.name, func(t *testing.T) {
 			err := config.SetPrefix(tc.prefix)
 			if tc.expectErr && err == nil {
@@ -135,7 +136,8 @@ func TestIsAdmin(t *testing.T) {
 		{"Empty user ID", "", false},
 	}
 
-	for _, tc := range testCases {
+	for i := range testCases {
+		tc := &testCases[i]
 		t.Run(tc.name, func(t *testing.T) {
 			result := config.IsAdmin(tc.userID)
 			if result != tc.expected {

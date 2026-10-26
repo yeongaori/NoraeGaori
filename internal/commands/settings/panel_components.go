@@ -55,7 +55,7 @@ func categoryRow(view *panelView) discordgo.ActionsRow {
 		})
 	}
 
-	return selectRow(discordgo.SelectMenu{
+	return selectRow(&discordgo.SelectMenu{
 		CustomID:    discord.ComponentID(categoryRoute, discord.ViewArgument(view.isAdmin)),
 		Placeholder: panelStrings(view.guildID).CategoryPlaceholder,
 		Options:     options,
@@ -75,13 +75,13 @@ func settingRow(view *panelView) discordgo.ActionsRow {
 		})
 	}
 
-	return selectRow(discordgo.SelectMenu{
+	return selectRow(&discordgo.SelectMenu{
 		CustomID:    discord.ComponentID(pickRoute, discord.ViewArgument(view.isAdmin), view.category),
 		Placeholder: panelStrings(view.guildID).SettingPlaceholder,
 		Options:     options,
 	})
 }
 
-func selectRow(menu discordgo.SelectMenu) discordgo.ActionsRow {
-	return discordgo.ActionsRow{Components: []discordgo.MessageComponent{menu}}
+func selectRow(menu *discordgo.SelectMenu) discordgo.ActionsRow {
+	return discordgo.ActionsRow{Components: []discordgo.MessageComponent{*menu}}
 }

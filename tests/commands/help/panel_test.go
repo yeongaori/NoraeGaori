@@ -56,10 +56,12 @@ func paginationFooter(page, totalPages int) string {
 func TestHelpPagesClampAndKeepTheOpenersView(t *testing.T) {
 	setupHelpCommands(t)
 
-	for _, check := range []struct {
+	checks := []struct {
 		isAdmin    bool
 		totalPages int
-	}{{true, 3}, {false, 2}} {
+	}{{true, 3}, {false, 2}}
+	for i := range checks {
+		check := &checks[i]
 		embed, components, hasCommands := help.HookBuildHelpPage(helpCheckGuildID, check.isAdmin, 99)
 		if !hasCommands {
 			t.Fatalf("admin=%v found no commands", check.isAdmin)

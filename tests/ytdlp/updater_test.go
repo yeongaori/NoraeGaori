@@ -55,7 +55,8 @@ func TestPickAssetChoosesTheStandaloneBuildForEachPlatform(t *testing.T) {
 		{"linux", "arm", "yt-dlp"},
 	}
 
-	for _, c := range cases {
+	for i := range cases {
+		c := &cases[i]
 		got, err := ytdlp.HookPickAsset(release, c.goos, c.goarch)
 		if err != nil {
 			t.Errorf("%s/%s: got error %v, want %q", c.goos, c.goarch, err, c.want)

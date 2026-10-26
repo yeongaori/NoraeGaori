@@ -89,7 +89,7 @@ func installDirectory(toolName, version string) string {
 	return filepath.Join(libDirectory, toolName+"-"+version)
 }
 
-func installedBinary(t *tool, target mirror.Platform, version string) (*Binary, bool) {
+func installedBinary(t *tool, target *mirror.Platform, version string) (*Binary, bool) {
 	binaryPath, err := filepath.Abs(filepath.Join(installDirectory(t.name, version), target.Executable(t.name)))
 	if err != nil {
 		return nil, false
@@ -117,7 +117,7 @@ func installedVersions(toolName string) []string {
 	return versions
 }
 
-func newestInstalled(t *tool, target mirror.Platform) (*Binary, bool) {
+func newestInstalled(t *tool, target *mirror.Platform) (*Binary, bool) {
 	for _, version := range installedVersions(t.name) {
 		if binary, ok := installedBinary(t, target, version); ok {
 			return binary, true
@@ -126,13 +126,13 @@ func newestInstalled(t *tool, target mirror.Platform) (*Binary, bool) {
 	return nil, false
 }
 
-func installFunc(target mirror.Platform) acceptFunc {
+func installFunc(target *mirror.Platform) acceptFunc {
 	return func(t *tool, found *mirror.Candidate) (*Binary, error) {
 		return install(t, target, found)
 	}
 }
 
-func install(t *tool, target mirror.Platform, found *mirror.Candidate) (*Binary, error) {
+func install(t *tool, target *mirror.Platform, found *mirror.Candidate) (*Binary, error) {
 	if binary, ok := installedBinary(t, target, found.Version); ok {
 		return binary, nil
 	}
@@ -212,7 +212,7 @@ func clearPartialExcept(partial, keep string) error {
 	return nil
 }
 
-func installInto(t *tool, target mirror.Platform, found *mirror.Candidate, partial string, isDownloaded bool) error {
+func installInto(t *tool, target *mirror.Platform, found *mirror.Candidate, partial string, isDownloaded bool) error {
 	archivePath := filepath.Join(partial, archiveName)
 	if !isDownloaded {
 		sum, err := download.SaveFile(found.URL, archivePath)

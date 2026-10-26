@@ -110,7 +110,7 @@ func (d *deckState) shape(block []float64, start, middle, end, volume float64) {
 				levels[band] = curve.At(middle)
 			}
 		}
-		d.isolator.Process(block, levels)
+		d.isolator.Process(block, &levels)
 	}
 	if len(d.curves.filter) > 0 {
 		d.filter.SetKnob(d.curves.filter.At(middle))

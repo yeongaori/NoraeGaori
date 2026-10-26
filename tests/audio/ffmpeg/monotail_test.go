@@ -21,7 +21,8 @@ func TestMonoTailKeepsMostRecentSamples(t *testing.T) {
 		{capacity: 64, appends: 200},
 	}
 
-	for _, tc := range cases {
+	for i := range cases {
+		tc := &cases[i]
 		tail := ffmpeg.HookNewMonoTail(tc.capacity)
 		for i := 0; i < tc.appends; i++ {
 			tail.HookAppend(float32(i))

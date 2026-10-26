@@ -17,7 +17,7 @@ var (
 	denoSystems       = map[string]string{"linux": "unknown-linux-gnu", "windows": "pc-windows-msvc", "darwin": "apple-darwin"}
 )
 
-func denoAssetName(target Platform) (string, bool) {
+func denoAssetName(target *Platform) (string, bool) {
 	architecture, ok := denoArchitectures[target.GOARCH]
 	if !ok {
 		return "", false
@@ -29,7 +29,7 @@ func denoAssetName(target Platform) (string, bool) {
 	return fmt.Sprintf("deno-%s-%s.zip", architecture, system), true
 }
 
-func denoCandidate(version, url, sum string, target Platform) *Candidate {
+func denoCandidate(version, url, sum string, target *Platform) *Candidate {
 	return &Candidate{
 		Version: version,
 		URL:     url,
@@ -43,11 +43,11 @@ type DenoGitHub struct {
 	APIURL string
 }
 
-func (m DenoGitHub) Name() string {
+func (m *DenoGitHub) Name() string {
 	return "GitHub denoland/deno"
 }
 
-func (m DenoGitHub) Find(target Platform, accepts func(string) bool) (*Candidate, error) {
+func (m *DenoGitHub) Find(target *Platform, accepts func(string) bool) (*Candidate, error) {
 	release, err := download.FetchRelease(m.APIURL + "/repos/denoland/deno/releases/latest")
 	if err != nil {
 		return nil, err
@@ -74,11 +74,11 @@ type DenoCDN struct {
 	BaseURL string
 }
 
-func (m DenoCDN) Name() string {
+func (m *DenoCDN) Name() string {
 	return "dl.deno.land"
 }
 
-func (m DenoCDN) Find(target Platform, accepts func(string) bool) (*Candidate, error) {
+func (m *DenoCDN) Find(target *Platform, accepts func(string) bool) (*Candidate, error) {
 	latest, err := download.FetchBytes(m.BaseURL + "/release-latest.txt")
 	if err != nil {
 		return nil, err

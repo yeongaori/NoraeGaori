@@ -148,7 +148,7 @@ func correlation(a, b []float64) float64 {
 	return covariance / math.Sqrt(varianceA*varianceB)
 }
 
-func estimateKey(chroma [12]float64) (int, bool, float64) {
+func estimateKey(chroma *[12]float64) (int, bool, float64) {
 	rotated := make([]float64, 12)
 	major := keyMajorProfile[:]
 	minor := keyMinorProfile[:]
@@ -166,10 +166,12 @@ func estimateKey(chroma [12]float64) (int, bool, float64) {
 		majorScore := correlation(rotated, major)
 		minorScore := correlation(rotated, minor)
 
-		for _, candidate := range [2]struct {
+		candidates := [2]struct {
 			score float64
 			minor bool
-		}{{majorScore, false}, {minorScore, true}} {
+		}{{majorScore, false}, {minorScore, true}}
+		for i := range candidates {
+			candidate := &candidates[i]
 			if candidate.score > bestScore {
 				secondScore = bestScore
 				bestScore = candidate.score
@@ -194,7 +196,7 @@ func estimateKey(chroma [12]float64) (int, bool, float64) {
 	return bestTonic, bestMinor, confidence
 }
 
-func ChromaContrast(chroma [12]float64) float64 {
+func ChromaContrast(chroma *[12]float64) float64 {
 	var total float64
 	for _, v := range chroma {
 		total += v
@@ -219,13 +221,13 @@ func AnalyzeKey(samples []float32, sampleRate float64) (int, bool, float64) {
 		return 0, false, 0
 	}
 
-	contrast := ChromaContrast(chroma)
+	contrast := ChromaContrast(&chroma)
 	if contrast <= 0 {
 		logger.Debugf("rejected: flat chromagram across %d windows", windows)
 		return 0, false, 0
 	}
 
-	tonic, minor, gap := estimateKey(chroma)
+	tonic, minor, gap := estimateKey(&chroma)
 	if contrast < keyContrastFloor {
 		logger.Debugf("%s verdict=below-contrast gap=%.4f contrast=%.4f contrastFloor=%.4f windows=%d",
 			FifthsCode(tonic, minor), gap, contrast, keyContrastFloor, windows)

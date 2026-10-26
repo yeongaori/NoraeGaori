@@ -556,8 +556,8 @@ func checkSongsAvailability(songs []*youtube.Song) []youtube.BatchResult {
 
 func enqueueAvailableSongs(guildID string, songs []*youtube.Song, results []youtube.BatchResult, isProgressLogged bool) playlistOutcome {
 	var outcome playlistOutcome
-	for idx := range results {
-		result := &results[idx]
+	for i := range results {
+		result := &results[i]
 		song := songs[result.Index]
 
 		if !result.Available && ytdlpUpdater.IsDefinitiveUnavailableError(result.Error) {

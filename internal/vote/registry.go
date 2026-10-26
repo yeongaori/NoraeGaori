@@ -167,7 +167,8 @@ func (r *voteRegistry) cancel(guildID string, reason voteEndReason, kinds ...Kin
 	}
 	entry.mu.Unlock()
 
-	for _, vote := range ended {
+	for i := range ended {
+		vote := &ended[i]
 		r.unindexMessage(vote.messageID, vote.session)
 		vote.session.endWith(reason)
 	}

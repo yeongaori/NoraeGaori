@@ -117,7 +117,7 @@ func TestPlayAudioStopsOnSignal(t *testing.T) {
 	firstFrame := make(chan struct{}, 1)
 	done := make(chan error, 1)
 	go func() {
-		done <- player.HookPlayAudio(guildPlayer, song, "fake://url", 0, false, 128000, firstFrame, player.HookFadeSettings{}, func(*queue.Song) {})
+		done <- player.HookPlayAudio(guildPlayer, song, "fake://url", 0, false, 128000, firstFrame, &player.HookFadeSettings{}, func(*queue.Song) {})
 	}()
 
 	select {

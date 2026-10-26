@@ -280,7 +280,8 @@ type expectedStyle struct {
 
 func checkResolved(t *testing.T, resolved *transition.Resolved, wants []expectedStyle) {
 	t.Helper()
-	for _, want := range wants {
+	for i := range wants {
+		want := &wants[i]
 		if got := transition.StyleOf(&resolved.Recipe, want.category); got != want.style {
 			t.Errorf("%s = %q, want %q", want.category, got, want.style)
 		}
@@ -322,7 +323,8 @@ func TestStylePrecedenceSongOverGuildOverAuto(t *testing.T) {
 				{"unknown values fall back to auto", category.Override("not_a_real_style"), category.Override(""), autoStyle, "auto"},
 			}
 
-			for _, testCase := range cases {
+			for i := range cases {
+				testCase := &cases[i]
 				resolved := transition.ResolveStyles(autoRecipe, testCase.guild, testCase.song)
 				if got := transition.StyleOf(&resolved.Recipe, category); got != testCase.wantStyle {
 					t.Errorf("%s: style = %q, want %q", testCase.name, got, testCase.wantStyle)
@@ -417,7 +419,7 @@ func TestEveryVolumeStyleGivesTheOutroADistinctShape(t *testing.T) {
 
 func outroWindowFixture() (*ffmpeg.EndState, *player.HookFadeSettings, int) {
 	track := &analysis.TrackAnalysis{BPM: 128, PeriodSec: 60.0 / 128, Duration: 240}
-	fade := player.HookBuildFadeSettings(player.HookFadeSettingsFields{AutoMix: true, AutoMixBeats: 16, CrossfadeSec: 8})
+	fade := player.HookBuildFadeSettings(&player.HookFadeSettingsFields{AutoMix: true, AutoMixBeats: 16, CrossfadeSec: 8})
 	expectedFrames, _ := transition.CrossfadeFrames(true, 16, 8, track)
 
 	return &ffmpeg.EndState{TotalFrames: 12000, Analysis: track}, fade, expectedFrames
@@ -475,7 +477,7 @@ func TestOutroRefusesATrackTooShortToHoldIt(t *testing.T) {
 func TestOutroWindowStillResolvesWithoutAnalysis(t *testing.T) {
 	full, fade, _ := outroWindowFixture()
 
-	if _, _, ok := player.HookPlanOutroWindow(full, 100, player.HookBuildFadeSettings(player.HookFadeSettingsFields{AutoMix: false, AutoMixBeats: 16, CrossfadeSec: 8})); !ok {
+	if _, _, ok := player.HookPlanOutroWindow(full, 100, player.HookBuildFadeSettings(&player.HookFadeSettingsFields{AutoMix: false, AutoMixBeats: 16, CrossfadeSec: 8})); !ok {
 		t.Error("no window was planned with automix off")
 	}
 

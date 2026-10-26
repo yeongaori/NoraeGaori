@@ -127,7 +127,7 @@ func TestRateLimitNoticeIsPostedOnceAndEditedOnResume(t *testing.T) {
 	t.Cleanup(func() { player.HookRateLimitNotices.HookRemove(guildID) })
 	song, q := nowPlayingFixture(guildID, false)
 	sender := &fakeEmbedSender{}
-	guildPlayer := messages.T(guildID).Player
+	guildPlayer := &messages.T(guildID).Player
 
 	player.HookPostRateLimitNotice(sender, guildID, song)
 	player.HookPostRateLimitNotice(sender, guildID, song)

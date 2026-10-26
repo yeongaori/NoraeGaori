@@ -32,7 +32,7 @@ func HandleStop(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return stopImmediately(s, i)
 	}
 
-	return vote.Start(s, i, vote.Request{
+	return vote.Start(s, i, &vote.Request{
 		Kind:           vote.KindStop,
 		Title:          messages.T(i.GuildID).Titles.StopVote,
 		Emoji:          "⏹",
@@ -64,6 +64,6 @@ func applyStopVote(guildID string) func(*discordgo.Session, *vote.Session, vote.
 			return
 		}
 
-		vote.RenderResult(s, session, messages.CreateSuccessEmbed(messages.T(guildID).Music.StopSuccessTitle, messages.T(guildID).Music.StopSuccessDesc), tally)
+		vote.RenderResult(s, session, messages.CreateSuccessEmbed(messages.T(guildID).Music.StopSuccessTitle, messages.T(guildID).Music.StopSuccessDesc), &tally)
 	}
 }

@@ -98,7 +98,7 @@ func HookBuildPanelTarget(fields HookPanelTargetFields) *panelTarget {
 	return &panelTarget{isAdmin: fields.IsAdmin, category: fields.Category, key: fields.Key}
 }
 
-func HookBuildSettingArguments(fields HookSettingArgumentsFields) *settingArguments {
+func HookBuildSettingArguments(fields *HookSettingArgumentsFields) *settingArguments {
 	return &settingArguments{
 		value:       fields.Value,
 		hasValue:    fields.HasValue,
@@ -107,7 +107,7 @@ func HookBuildSettingArguments(fields HookSettingArgumentsFields) *settingArgume
 	}
 }
 
-func HookBuildSettingSpec(fields HookSettingSpecFields) *settingSpec {
+func HookBuildSettingSpec(fields *HookSettingSpecFields) *settingSpec {
 	return &settingSpec{
 		key:        fields.Key,
 		category:   fields.Category,

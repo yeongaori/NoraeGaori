@@ -24,7 +24,7 @@ func (target Platform) String() string {
 	return target.GOOS + "/" + target.GOARCH
 }
 
-func (target Platform) Executable(name string) string {
+func (target *Platform) Executable(name string) string {
 	if target.GOOS == "windows" {
 		return name + ".exe"
 	}
@@ -48,7 +48,7 @@ type Candidate struct {
 
 type Mirror interface {
 	Name() string
-	Find(target Platform, accepts func(version string) bool) (*Candidate, error)
+	Find(target *Platform, accepts func(version string) bool) (*Candidate, error)
 }
 
 func checksumFor(checksumFile []byte, assetName string) (string, error) {

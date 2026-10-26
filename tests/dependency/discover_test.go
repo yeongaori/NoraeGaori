@@ -45,14 +45,14 @@ func TestDiscoverFallsBackWhenDenoHasNoBuild(t *testing.T) {
 	node := stubTool("node", foundAt("nodejs", "22.23.3"))
 	accept, _ := acceptAs("lib")
 
-	binary, results := dependency.HookDiscover([]*dependency.HookTool{deno, node}, mirror.Platform{GOOS: "windows", GOARCH: "386"}, accept)
+	binary, results := dependency.HookDiscover([]*dependency.HookTool{deno, node}, &mirror.Platform{GOOS: "windows", GOARCH: "386"}, accept)
 	if binary == nil || binary.Tool != "node" {
 		t.Fatalf("got %+v, want node", binary)
 	}
 	if len(results) != 1 || *results[0].HookOutcome() != dependency.HookOutcomeNoBuild || *results[0].HookTool() != deno {
 		t.Errorf("got %+v, want deno recorded as having no build", results)
 	}
-	if got := results[0].HookDescribe(mirror.Platform{GOOS: "windows", GOARCH: "386"}); got != "deno has no build for windows/386" {
+	if got := results[0].HookDescribe(&mirror.Platform{GOOS: "windows", GOARCH: "386"}); got != "deno has no build for windows/386" {
 		t.Errorf("got %q, want the platform named", got)
 	}
 }
@@ -99,7 +99,8 @@ func TestDiscoverRecordsWhyEachToolFailed(t *testing.T) {
 	if len(results) != len(want) {
 		t.Fatalf("got %d results, want %d", len(results), len(want))
 	}
-	for i, result := range results {
+	for i := range results {
+		result := &results[i]
 		if *result.HookOutcome() != want[i] {
 			t.Errorf("result %d: got outcome %d, want %d", i, *result.HookOutcome(), want[i])
 		}

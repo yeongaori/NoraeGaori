@@ -77,7 +77,7 @@ func deliverNowPlaying(sender embedSender, guildID string, song *queue.Song, q *
 		}
 	}
 
-	player := messages.T(guildID).Player
+	player := &messages.T(guildID).Player
 	resolveNotice(sender, &reconnectNotices, guildID, song, player.StreamReconnectedTitle, player.StreamReconnectedDesc)
 	resolveNotice(sender, &rateLimitNotices, guildID, song, player.RateLimitClearedTitle, player.RateLimitClearedDesc)
 }
@@ -184,7 +184,7 @@ func sendPlaybackEndMessage(session *discordgo.Session, guildID, reason string, 
 }
 
 func playbackEndEmbed(guildID, reason string, isLeaving bool) *discordgo.MessageEmbed {
-	playerStrings := messages.T(guildID).Player
+	playerStrings := &messages.T(guildID).Player
 	description, footer, color := playerStrings.LeavingDefaultDesc, reason, messages.ColorInfo
 
 	switch reason {

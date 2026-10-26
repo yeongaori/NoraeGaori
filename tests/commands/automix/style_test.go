@@ -75,8 +75,9 @@ func wantStoredStyles(want map[transition.Category]string) func(t *testing.T, re
 }
 
 func joinedCommandCategories() string {
-	names := []string{}
-	for _, category := range append(transition.StyleCategories(), transition.ShortcutCategories()...) {
+	categories := append(transition.StyleCategories(), transition.ShortcutCategories()...)
+	names := make([]string, 0, len(categories))
+	for _, category := range categories {
 		names = append(names, string(category))
 	}
 	return strings.Join(names, ", ")

@@ -64,11 +64,11 @@ var HookRunVersionCommand = runVersionCommand
 var HookShowProgress = &showProgress
 var HookUpdateJsRuntime = updateJsRuntime
 
-func HookBuildBinary(fields HookBinaryFields) *Binary {
+func HookBuildBinary(fields *HookBinaryFields) *Binary {
 	return &Binary{Tool: fields.Tool, Path: fields.Path, isSystem: fields.IsSystem}
 }
 
-func HookBuildTool(fields HookToolFields) *tool {
+func HookBuildTool(fields *HookToolFields) *tool {
 	return &tool{
 		name:        fields.Name,
 		displayName: fields.DisplayName,
@@ -91,7 +91,7 @@ func (result *probeResult) HookTool() **tool {
 	return &result.tool
 }
 
-func (result probeResult) HookDescribe(target mirror.Platform) string {
+func (result *probeResult) HookDescribe(target *mirror.Platform) string {
 	return result.describe(target)
 }
 

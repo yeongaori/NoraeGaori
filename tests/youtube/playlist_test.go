@@ -77,7 +77,8 @@ func TestAnalyzeYouTubeURL(t *testing.T) {
 		},
 	}
 
-	for _, tc := range cases {
+	for i := range cases {
+		tc := &cases[i]
 		t.Run(tc.name, func(t *testing.T) {
 			got := youtube.AnalyzeYouTubeURL(tc.url)
 

@@ -50,7 +50,7 @@ func runPlayAudio(t *testing.T, guildPlayer *player.GuildPlayer, song *queue.Son
 
 	done := make(chan error, 1)
 	go func() {
-		done <- player.HookPlayAudio(guildPlayer, song, "fake://url", 0, false, 128000, firstFrameCh, player.HookFadeSettings{}, func(*queue.Song) {})
+		done <- player.HookPlayAudio(guildPlayer, song, "fake://url", 0, false, 128000, firstFrameCh, &player.HookFadeSettings{}, func(*queue.Song) {})
 	}()
 
 	select {

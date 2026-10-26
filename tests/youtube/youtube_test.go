@@ -82,14 +82,15 @@ func TestGetVideoInfoRejectsLinksWithNoVideoID(t *testing.T) {
 		{"open redirect", "https://www.youtube.com/redirect?q=http://attacker.example/"},
 	}
 
-	for _, tc := range cases {
+	for i := range cases {
+		tc := &cases[i]
 		t.Run(tc.name, func(t *testing.T) {
 			var initialized int64
 			testutil.Swap(t, youtube.HookInnertubeClient, nil)
 			testutil.Swap(t, youtube.HookInnertubeOnce, &sync.Once{})
 			testutil.Swap(t, youtube.HookInnertubeInit, func() {
 				atomic.AddInt64(&initialized, 1)
-				*youtube.HookInnertubeClient = youtube.HookBuildInnertubeClient(youtube.HookInnertubeClientFields{ClientName: "TEST"})
+				*youtube.HookInnertubeClient = youtube.HookBuildInnertubeClient(&youtube.HookInnertubeClientFields{ClientName: "TEST"})
 			})
 
 			song, err := youtube.GetVideoInfo("guild", tc.url, "requester", "requesterID")

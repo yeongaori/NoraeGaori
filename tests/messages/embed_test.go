@@ -23,7 +23,8 @@ func TestEscapeLinkText(t *testing.T) {
 		{"backslash", `path\to\file`, `path\\to\\file`},
 		{"mixed", `[MV] track || *bold*`, `［MV］ track || *bold*`},
 	}
-	for _, c := range cases {
+	for i := range cases {
+		c := &cases[i]
 		t.Run(c.name, func(t *testing.T) {
 			got := messages.EscapeLinkText(c.in)
 			if got != c.want {

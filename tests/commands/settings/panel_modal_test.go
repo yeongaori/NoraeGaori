@@ -61,13 +61,15 @@ func TestModalCarriesTheCurrentValueAndItsRoute(t *testing.T) {
 func TestTextModalAllowsAnEmptySubmissionButNumbersDoNot(t *testing.T) {
 	dbtest.Setup(t)
 
-	for _, check := range []struct {
+	checks := []struct {
 		key      string
 		required bool
 	}{
 		{"prefix", false},
 		{"volume", true},
-	} {
+	}
+	for i := range checks {
+		check := &checks[i]
 		spec := specFor(t, check.key)
 		response := settings.HookBuildSettingModal(checkGuildID, settings.HookBuildPanelTarget(settings.HookPanelTargetFields{IsAdmin: true, Category: *spec.HookCategory()}), spec)
 
@@ -116,10 +118,10 @@ func TestChoiceModalsOfferASelectWithTheCurrentValue(t *testing.T) {
 	if len(repeat.Options) != len(*settings.HookRepeatValues) {
 		t.Fatalf("the repeat select offers %d options, want %d", len(repeat.Options), len(*settings.HookRepeatValues))
 	}
-	for index, value := range *settings.HookRepeatValues {
-		option := repeat.Options[index]
+	for i, value := range *settings.HookRepeatValues {
+		option := &repeat.Options[i]
 		if option.Value != value || option.Label != settings.HookFormatSettingValue(checkGuildID, specFor(t, "repeat"), value) {
-			t.Errorf("repeat option %d = %+v, want %q", index, option, value)
+			t.Errorf("repeat option %d = %+v, want %q", i, *option, value)
 		}
 		if option.Default != (value == settings.HookValueRepeatSingle) {
 			t.Errorf("repeat option %q default=%v", value, option.Default)
@@ -132,8 +134,8 @@ func TestChoiceModalsOfferASelectWithTheCurrentValue(t *testing.T) {
 	}
 	for _, code := range messages.AvailableLocales() {
 		found := false
-		for _, option := range language.Options {
-			found = found || option.Value == code
+		for i := range language.Options {
+			found = found || language.Options[i].Value == code
 		}
 		if !found {
 			t.Errorf("locale %q is missing from the language select", code)

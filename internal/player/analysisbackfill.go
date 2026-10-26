@@ -176,7 +176,8 @@ func runAnalysisBackfillPass(ctx context.Context, guildID string, bitrate int) (
 	}()
 
 	analyzed := 0
-	for _, item := range items {
+	for i := range items {
+		item := &items[i]
 		if ctx.Err() != nil {
 			return analyzed, ctx.Err()
 		}
@@ -251,7 +252,7 @@ func (item *backfillItem) window() (float64, int) {
 	return 0, analysisHeadSecs
 }
 
-func analyzeBackfillItem(ctx context.Context, guildID string, item backfillItem, bitrate int) bool {
+func analyzeBackfillItem(ctx context.Context, guildID string, item *backfillItem, bitrate int) bool {
 	song := item.song
 	analyzed := false
 	if slotErr := withAnalysisSlot(ctx, func() error {

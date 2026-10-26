@@ -112,7 +112,8 @@ func autocompleteVideoResults(request command.AutocompleteRequest) []*discordgo.
 	}
 
 	choices := make([]*discordgo.ApplicationCommandOptionChoice, 0, command.MaxAutocompleteChoices)
-	for _, result := range results {
+	for i := range results {
+		result := &results[i]
 		if len(choices) >= command.MaxAutocompleteChoices {
 			break
 		}

@@ -71,7 +71,7 @@ func planAutoMixWith(t *testing.T, guildID string, incoming *analysis.TrackAnaly
 	tail.Duration = 90
 	tail.FirstBeat = 0.2
 	endState := &ffmpeg.EndState{TotalFrames: 9000, TailStartFrame: 4500, Analysis: tail}
-	fade := player.HookBuildFadeSettings(player.HookFadeSettingsFields{
+	fade := player.HookBuildFadeSettings(&player.HookFadeSettingsFields{
 		AutoMix: true, Crossfade: true, TrimSilence: true, AutoMixBeats: 64, RepeatMode: queue.RepeatOff,
 	})
 
@@ -122,7 +122,8 @@ func TestSessionOriginCountsTheSeekAndTheHandedOffFrames(t *testing.T) {
 		{12500, 0, 12.5},
 		{4300, 750, 19.3},
 	}
-	for _, c := range cases {
+	for i := range cases {
+		c := &cases[i]
 		if got := player.HookSessionOriginSec(c.baseOffsetMs, c.frameOffset); math.Abs(got-c.want) > 1e-9 {
 			t.Errorf("origin for seek %dms and %d handed-off frames = %.3fs, want %.3fs", c.baseOffsetMs, c.frameOffset, got, c.want)
 		}
@@ -197,7 +198,7 @@ func TestPlanLogsAMissingStreamURLOnce(t *testing.T) {
 	readLog := logtest.Capture(t)
 	q := seedCrossfadeQueue(t, guildID)
 	endState := &ffmpeg.EndState{TotalFrames: 9000}
-	fade := player.HookBuildFadeSettings(player.HookFadeSettingsFields{AutoMix: true, Crossfade: true, AutoMixBeats: 64})
+	fade := player.HookBuildFadeSettings(&player.HookFadeSettingsFields{AutoMix: true, Crossfade: true, AutoMixBeats: 64})
 
 	cs := player.HookNewCrossfadeState()
 	t.Cleanup(cs.HookAbort)
@@ -237,7 +238,7 @@ func TestPlanWaitsForAPendingHeadAnalysis(t *testing.T) {
 		tail.Duration = 90
 		tail.FirstBeat = 0.2
 		endState := &ffmpeg.EndState{TotalFrames: 9000, TailStartFrame: 4500, Analysis: tail}
-		fade := player.HookBuildFadeSettings(player.HookFadeSettingsFields{
+		fade := player.HookBuildFadeSettings(&player.HookFadeSettingsFields{
 			AutoMix: true, Crossfade: true, TrimSilence: true, AutoMixBeats: beats, RepeatMode: queue.RepeatOff,
 		})
 		cs := player.HookNewCrossfadeState()

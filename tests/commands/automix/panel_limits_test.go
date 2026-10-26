@@ -29,7 +29,7 @@ func checkSongs(count int, title string) []*queue.Song {
 }
 
 func checkPanelState(songs []*queue.Song, guildOverrides map[string]string, autoSelect bool) *automix.HookPanelState {
-	return automix.HookBuildPanelState(automix.HookPanelStateFields{
+	return automix.HookBuildPanelState(&automix.HookPanelStateFields{
 		Pairs:          automix.HookTransitionPairs(songs),
 		GuildOverrides: guildOverrides,
 		AutoSelect:     autoSelect,
@@ -80,7 +80,7 @@ func inspectComponents(components []discordgo.MessageComponent) (rows int, selec
 	return rows, selects, buttons
 }
 
-func checkSelectMenu(context string, menu discordgo.SelectMenu) []string {
+func checkSelectMenu(context string, menu *discordgo.SelectMenu) []string {
 	violations := []string{}
 
 	if len([]rune(menu.CustomID)) > automix.HookDiscordLabelLimit {
@@ -98,7 +98,8 @@ func checkSelectMenu(context string, menu discordgo.SelectMenu) []string {
 
 	seen := map[string]bool{}
 	defaults := 0
-	for _, option := range menu.Options {
+	for i := range menu.Options {
+		option := &menu.Options[i]
 		if label := []rune(option.Label); len(label) > automix.HookDiscordLabelLimit || len(label) == 0 {
 			violations = append(violations, fmt.Sprintf("%s: label %d chars", context, len(label)))
 		}
@@ -134,12 +135,14 @@ func checkEditor(t *testing.T, row *automix.HookTransitionRow, tab *automix.Hook
 	if len(buttons) != len(*automix.HookEditorTabs) {
 		t.Errorf("%s tab has %d buttons, want one per tab", tab.HookKey(), len(buttons))
 	}
-	for _, button := range buttons {
+	for i := range buttons {
+		button := &buttons[i]
 		if size := len([]rune(button.CustomID)); size > automix.HookDiscordLabelLimit {
 			t.Errorf("tab button custom id is %d chars, want at most %d", size, automix.HookDiscordLabelLimit)
 		}
 	}
-	for _, menu := range selects {
+	for i := range selects {
+		menu := &selects[i]
 		for _, violation := range checkSelectMenu(tab.HookKey()+" tab", menu) {
 			t.Error(violation)
 		}
@@ -178,7 +181,8 @@ func TestPanelAndEditorStayInsideDiscordLimits(t *testing.T) {
 		{"cjk titles", []*queue.Song{checkSong(1, cjkTitle), checkSong(2, cjkTitle), checkSong(3, cjkTitle)}},
 	}
 
-	for _, testCase := range cases {
+	for i := range cases {
+		testCase := &cases[i]
 		t.Run(testCase.name, func(t *testing.T) {
 			state := checkPanelState(testCase.songs, nil, true)
 			rows := automix.HookHydrateTransitionRows("check-guild", state, *state.HookPairs())
@@ -192,12 +196,14 @@ func TestPanelAndEditorStayInsideDiscordLimits(t *testing.T) {
 				if rowCount > 5 {
 					t.Errorf("page %d has %d action rows, want at most 5", page, rowCount)
 				}
-				for _, menu := range selects {
+				for i := range selects {
+					menu := &selects[i]
 					for _, violation := range checkSelectMenu(fmt.Sprintf("page %d list", page), menu) {
 						t.Error(violation)
 					}
 				}
-				for _, button := range buttons {
+				for i := range buttons {
+					button := &buttons[i]
 					if size := len([]rune(button.CustomID)); size > automix.HookDiscordLabelLimit {
 						t.Errorf("page %d button custom id is %d chars, want at most %d", page, size, automix.HookDiscordLabelLimit)
 					}
@@ -231,7 +237,7 @@ func fourSongPanel(t *testing.T) []*automix.HookTransitionRow {
 	return rows
 }
 
-var checkLocation = automix.HookBuildPanelLocation(automix.HookPanelLocationFields{MessageID: "123456789012345678", Page: 2})
+var checkLocation = automix.HookBuildPanelLocation(&automix.HookPanelLocationFields{MessageID: "123456789012345678", Page: 2})
 
 func TestPanelCustomIDsRouteToTheirPages(t *testing.T) {
 	rows := fourSongPanel(t)
@@ -247,9 +253,10 @@ func TestPanelCustomIDsRouteToTheirPages(t *testing.T) {
 	if len(buttons) != len(want) {
 		t.Fatalf("built %d buttons, want %d", len(buttons), len(want))
 	}
-	for index, button := range buttons {
-		if button.CustomID != want[index] {
-			t.Errorf("button %d routes to %q, want %q", index, button.CustomID, want[index])
+	for i := range buttons {
+		button := &buttons[i]
+		if button.CustomID != want[i] {
+			t.Errorf("button %d routes to %q, want %q", i, button.CustomID, want[i])
 		}
 	}
 }
@@ -263,7 +270,8 @@ func TestEditorCustomIDsRoundTripToTheirCategory(t *testing.T) {
 	for index := range *automix.HookEditorTabs {
 		tab := &(*automix.HookEditorTabs)[index]
 		_, selects, _ := inspectComponents(automix.HookCreateTransitionEditorComponents("check-guild", rows[0], tab, checkLocation))
-		for _, menu := range selects {
+		for i := range selects {
+			menu := &selects[i]
 			parts := strings.Split(menu.CustomID, ":")
 			if len(parts) != 5 || parts[0] != automix.HookTransitionStyleRoute || parts[2] != songArgument || parts[3] != *checkLocation.HookMessageID() || parts[4] != pageArgument {
 				t.Errorf("custom id %q does not match %s:<category>:%s:%s:%s", menu.CustomID, automix.HookTransitionStyleRoute, songArgument, *checkLocation.HookMessageID(), pageArgument)
@@ -288,11 +296,12 @@ func TestTabButtonsRouteToEachTab(t *testing.T) {
 	songArgument := strconv.Itoa((*rows[0].HookFromSong()).ID)
 	_, _, buttons := inspectComponents(automix.HookCreateTransitionEditorComponents("check-guild", rows[0], editorTab("incoming"), checkLocation))
 
-	for index, button := range buttons {
-		key := (*automix.HookEditorTabs)[index].HookKey()
+	for i := range buttons {
+		button := &buttons[i]
+		key := (*automix.HookEditorTabs)[i].HookKey()
 		want := strings.Join([]string{automix.HookTransitionTabRoute, key, songArgument, *checkLocation.HookMessageID(), "2"}, ":")
 		if button.CustomID != want {
-			t.Errorf("tab button %d routes to %q, want %q", index, button.CustomID, want)
+			t.Errorf("tab button %d routes to %q, want %q", i, button.CustomID, want)
 		}
 		if isCurrent := key == "incoming"; button.Disabled != isCurrent || (button.Style == discordgo.PrimaryButton) != isCurrent {
 			t.Errorf("tab %s disabled=%t style=%d, want only the open tab highlighted and disabled", key, button.Disabled, button.Style)
@@ -307,8 +316,9 @@ func TestOutroEditorHidesTheIncomingSide(t *testing.T) {
 	}
 
 	_, _, buttons := inspectComponents(automix.HookCreateTransitionEditorComponents("check-guild", rows[0], editorTab("outgoing"), checkLocation))
-	for index, button := range buttons {
-		if key := (*automix.HookEditorTabs)[index].HookKey(); key == "incoming" && !button.Disabled {
+	for i := range buttons {
+		button := &buttons[i]
+		if key := (*automix.HookEditorTabs)[i].HookKey(); key == "incoming" && !button.Disabled {
 			t.Error("the outro editor lets the incoming tab open, want it disabled")
 		}
 	}

@@ -43,7 +43,7 @@ func TestDeliverNowPlayingEditsLoadingMessage(t *testing.T) {
 	if len(sender.edits) != 1 {
 		t.Fatalf("want the loading message edited once, got %d edits", len(sender.edits))
 	}
-	edit := sender.edits[0]
+	edit := &sender.edits[0]
 	if edit.channelID != "loadingchannel" || edit.messageID != "loading" {
 		t.Errorf("edited the wrong message: channel=%s id=%s", edit.channelID, edit.messageID)
 	}
@@ -107,7 +107,7 @@ func TestDeliverNowPlayingPostsWithoutLoadingMessage(t *testing.T) {
 	if len(sender.sends) != 1 {
 		t.Fatalf("want one now playing message, got %d", len(sender.sends))
 	}
-	sent := sender.sends[0]
+	sent := &sender.sends[0]
 	if sent.channelID != q.TextChannelID {
 		t.Errorf("posted to %s, want %s", sent.channelID, q.TextChannelID)
 	}

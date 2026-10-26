@@ -20,7 +20,7 @@ type nodeRelease struct {
 	LTS     json.RawMessage `json:"lts"`
 }
 
-func (release nodeRelease) isLTS() bool {
+func (release *nodeRelease) isLTS() bool {
 	return len(release.LTS) > 0 && string(release.LTS) != "false"
 }
 
@@ -28,11 +28,11 @@ type NodeDist struct {
 	BaseURL string
 }
 
-func (m NodeDist) Name() string {
+func (m *NodeDist) Name() string {
 	return "nodejs.org"
 }
 
-func (m NodeDist) Find(target Platform, accepts func(string) bool) (*Candidate, error) {
+func (m *NodeDist) Find(target *Platform, accepts func(string) bool) (*Candidate, error) {
 	architecture, ok := nodeArchitectures[target.GOARCH]
 	if !ok {
 		return nil, ErrNoBuild
@@ -56,7 +56,8 @@ func (m NodeDist) Find(target Platform, accepts func(string) bool) (*Candidate, 
 		return nil, err
 	}
 
-	for _, release := range releases {
+	for i := range releases {
+		release := &releases[i]
 		version := strings.TrimPrefix(release.Version, "v")
 		if !release.isLTS() || !accepts(version) || !slices.Contains(release.Files, fileKey) {
 			continue

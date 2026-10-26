@@ -33,7 +33,7 @@ func cachedGuildSettings(guildID string) (*guildSettingsRow, error) {
 	if err != nil {
 		return nil, err
 	}
-	storeGuildSettings(guildID, generation, settings)
+	storeGuildSettings(guildID, generation, &settings)
 	return &settings, nil
 }
 
@@ -43,14 +43,14 @@ func settingsGeneration(guildID string) uint64 {
 	return settingsGenerations[guildID]
 }
 
-func storeGuildSettings(guildID string, generation uint64, settings guildSettingsRow) {
+func storeGuildSettings(guildID string, generation uint64, settings *guildSettingsRow) {
 	cacheMux.Lock()
 	defer cacheMux.Unlock()
 
 	if settingsGenerations[guildID] != generation {
 		return
 	}
-	settingsCache[guildID] = &settingsCacheEntry{settings: settings, db: database.DB, timestamp: time.Now()}
+	settingsCache[guildID] = &settingsCacheEntry{settings: *settings, db: database.DB, timestamp: time.Now()}
 }
 
 func readSetting[T any](guildID, name string, fallback T, pick func(*guildSettingsRow) T) (T, error) {

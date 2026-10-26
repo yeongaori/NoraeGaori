@@ -28,7 +28,7 @@ func TestFFmpegGitHubFindsTheLinuxTarball(t *testing.T) {
 	fake := releasetest.Serve(t)
 	publishFFmpegRelease(t, fake, "yt-dlp/FFmpeg-Builds", "2026-09-25T18:45:57Z")
 
-	found, err := mirror.FFmpegGitHub{APIURL: fake.URL(""), Repo: "yt-dlp/FFmpeg-Builds"}.Find(mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.AcceptAll)
+	found, err := (&mirror.FFmpegGitHub{APIURL: fake.URL(""), Repo: "yt-dlp/FFmpeg-Builds"}).Find(&mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.AcceptAll)
 	if err != nil {
 		t.Fatalf("Find returned %v, want nil", err)
 	}
@@ -46,7 +46,7 @@ func TestFFmpegGitHubFindsTheWindowsZip(t *testing.T) {
 	publishFFmpegRelease(t, fake, "BtbN/FFmpeg-Builds", "2026-09-27T13:23:55+09:00")
 	source := mirror.FFmpegGitHub{APIURL: fake.URL(""), Repo: "BtbN/FFmpeg-Builds"}
 
-	found, err := source.Find(mirror.Platform{GOOS: "windows", GOARCH: "amd64"}, releasetest.AcceptAll)
+	found, err := source.Find(&mirror.Platform{GOOS: "windows", GOARCH: "amd64"}, releasetest.AcceptAll)
 	if err != nil {
 		t.Fatalf("Find returned %v, want nil", err)
 	}
@@ -66,13 +66,13 @@ func TestFFmpegGitHubReportsNoBuild(t *testing.T) {
 	publishFFmpegRelease(t, fake, "BtbN/FFmpeg-Builds", "2026-09-27T13:23:55Z")
 	source := mirror.FFmpegGitHub{APIURL: fake.URL(""), Repo: "BtbN/FFmpeg-Builds"}
 
-	_, err := source.Find(mirror.Platform{GOOS: "windows", GOARCH: "386"}, releasetest.AcceptAll)
+	_, err := source.Find(&mirror.Platform{GOOS: "windows", GOARCH: "386"}, releasetest.AcceptAll)
 	releasetest.RequireErrorIs(t, err, mirror.ErrNoBuild)
 
-	_, err = source.Find(mirror.Platform{GOOS: "darwin", GOARCH: "arm64"}, releasetest.AcceptAll)
+	_, err = source.Find(&mirror.Platform{GOOS: "darwin", GOARCH: "arm64"}, releasetest.AcceptAll)
 	releasetest.RequireErrorIs(t, err, mirror.ErrNoBuild)
 
-	_, err = source.Find(mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.RejectAll)
+	_, err = source.Find(&mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.RejectAll)
 	releasetest.RequireErrorIs(t, err, mirror.ErrNoBuild)
 }
 
@@ -81,15 +81,15 @@ func TestFFmpegGitHubFailsWhenItCannotBeChecked(t *testing.T) {
 	publishFFmpegRelease(t, fake, "yt-dlp/FFmpeg-Builds", "yesterday")
 	source := mirror.FFmpegGitHub{APIURL: fake.URL(""), Repo: "yt-dlp/FFmpeg-Builds"}
 
-	_, err := source.Find(mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.AcceptAll)
+	_, err := source.Find(&mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.AcceptAll)
 	releasetest.RequireOtherError(t, err, mirror.ErrNoBuild)
 
 	publishFFmpegRelease(t, fake, "yt-dlp/FFmpeg-Builds", "2026-09-25T18:45:57Z")
 	fake.Status["/yt-dlp/FFmpeg-Builds/checksums.sha256"] = http.StatusNotFound
-	_, err = source.Find(mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.AcceptAll)
+	_, err = source.Find(&mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.AcceptAll)
 	releasetest.RequireOtherError(t, err, mirror.ErrNoBuild)
 
 	fake.Status["/repos/yt-dlp/FFmpeg-Builds/releases/latest"] = http.StatusInternalServerError
-	_, err = source.Find(mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.AcceptAll)
+	_, err = source.Find(&mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.AcceptAll)
 	releasetest.RequireOtherError(t, err, mirror.ErrNoBuild)
 }

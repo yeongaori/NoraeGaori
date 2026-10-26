@@ -76,7 +76,7 @@ func seedBackfillQueue(t *testing.T, guildID string, durations ...string) []*que
 
 func registerIdlePlayer(t *testing.T, guildID string) *player.GuildPlayer {
 	t.Helper()
-	guildPlayer := player.HookBuildGuildPlayer(player.HookGuildPlayerFields{GuildID: guildID, Volume: 1})
+	guildPlayer := player.HookBuildGuildPlayer(&player.HookGuildPlayerFields{GuildID: guildID, Volume: 1})
 	player.HookPlayersMu.Lock()
 	(*player.HookPlayers)[guildID] = guildPlayer
 	player.HookPlayersMu.Unlock()
@@ -354,7 +354,8 @@ func TestBackfillPlansNothingPastTheLimit(t *testing.T) {
 	if len(items) != player.HookAnalysisBackfillLimit {
 		t.Fatalf("planned %d items, want the limit of %d", len(items), player.HookAnalysisBackfillLimit)
 	}
-	for _, item := range items {
+	for i := range items {
+		item := &items[i]
 		if item.HookSong().ID > player.HookAnalysisBackfillLimit {
 			t.Errorf("planned song %d past the limit", item.HookSong().ID)
 		}
@@ -395,8 +396,8 @@ func TestPreCacheMarksItsSongWhileAnalyzing(t *testing.T) {
 	if got := player.PendingAnalyses(guildID); len(got) != 0 {
 		t.Errorf("pending after pre-cache = %v, want none", got)
 	}
-	if read := fake.snapshot()[0]; read.start != 0 || read.seconds != player.HookAnalysisHeadSecs {
-		t.Errorf("pre-cache read %+v, want the start of the song", read)
+	if read := &fake.snapshot()[0]; read.start != 0 || read.seconds != player.HookAnalysisHeadSecs {
+		t.Errorf("pre-cache read %+v, want the start of the song", *read)
 	}
 	if player.GetCachedAnalysis(guildID, songs[1].ID) == nil {
 		t.Error("pre-cache did not keep the analysis it made")
@@ -411,9 +412,10 @@ func TestPreCacheSkippingTheNextSongStillAnalyzesThePlayingEnding(t *testing.T) 
 		{"live next", &queue.Song{URL: "https://youtube.com/watch?v=precache-live-next", Title: "Live", IsLive: true}},
 		{"seeked next", &queue.Song{URL: "https://youtube.com/watch?v=precache-seek-next", Title: "Seeked", Duration: "3:00", SeekTime: 30000}},
 	}
-	for index, c := range cases {
+	for i := range cases {
+		c := &cases[i]
 		t.Run(c.name, func(t *testing.T) {
-			guildID := fmt.Sprintf("precache-skip-%d", index)
+			guildID := fmt.Sprintf("precache-skip-%d", i)
 			songs := seedBackfillQueue(t, guildID, "3:00")
 			c.next.RequestedByID, c.next.RequestedByTag = "user1", "User#1234"
 			if err := queue.AddSong(guildID, c.next, -1); err != nil {
@@ -442,8 +444,8 @@ func TestPreCacheSkippingTheNextSongStillAnalyzesThePlayingEnding(t *testing.T) 
 
 			player.PreCacheNext(guildID, 128000)
 			waitForReads(t, fake, 1)
-			if read := fake.snapshot()[0]; read.url != songs[0].URL || read.start != 90 {
-				t.Errorf("first read = %+v, want the playing song's ending from 90 s", read)
+			if read := &fake.snapshot()[0]; read.url != songs[0].URL || read.start != 90 {
+				t.Errorf("first read = %+v, want the playing song's ending from 90 s", *read)
 			}
 		})
 	}
@@ -619,7 +621,8 @@ func TestChooseTailPrefersTheLiveEndingUnlessTheStoredOneCoversMore(t *testing.T
 		{"stored covers barely more", live, &analysis.TrackAnalysis{Duration: 60 + player.HookStoredTailMarginSec}, live, true},
 		{"live covers more", live, &analysis.TrackAnalysis{Duration: 30}, live, true},
 	}
-	for _, c := range cases {
+	for i := range cases {
+		c := &cases[i]
 		want := c.want
 		if want == nil {
 			want = c.stored

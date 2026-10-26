@@ -184,9 +184,10 @@ func TestLeaveRacingAVoiceJoinDropsTheNewConnection(t *testing.T) {
 		},
 	}
 
-	for index, testCase := range cases {
+	for i := range cases {
+		testCase := &cases[i]
 		t.Run(testCase.name, func(t *testing.T) {
-			guildID := "leave-joining-" + string(rune('a'+index))
+			guildID := "leave-joining-" + string(rune('a'+i))
 			guildPlayer := preparedPlayer(t, guildID, 1)
 			guildPlayer.HookMu().Lock()
 			guildPlayer.VoiceConn = nil

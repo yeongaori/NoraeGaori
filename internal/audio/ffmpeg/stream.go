@@ -131,7 +131,7 @@ func Args(streamURL string, seekSeconds float64, normalization bool, tempo Tempo
 }
 
 func PipeArgs(normalization bool) []string {
-	args := []string{"-hide_banner", "-nostats", "-loglevel", "error", "-i", "pipe:0"}
+	args := []string{"-hide_banner", "-nostats", "-loglevel", "error", "-i", "pipe:0"} //nolint:prealloc
 	args = append(args, audioFilters(normalization, Tempo{})...)
 
 	args = append(args,

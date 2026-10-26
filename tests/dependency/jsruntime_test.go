@@ -30,7 +30,7 @@ func TestJsRuntimeArgNamesTheActiveRuntime(t *testing.T) {
 		t.Errorf("got %q with no runtime, want empty", got)
 	}
 
-	dependency.HookJsRuntimeSlot.HookReplace(dependency.HookBuildBinary(dependency.HookBinaryFields{Tool: "node", Path: "/usr/bin/node", IsSystem: true}))
+	dependency.HookJsRuntimeSlot.HookReplace(dependency.HookBuildBinary(&dependency.HookBinaryFields{Tool: "node", Path: "/usr/bin/node", IsSystem: true}))
 	if got := dependency.JsRuntimeArg(); got != "node" {
 		t.Errorf("got %q, want the bare name for a system runtime", got)
 	}
@@ -101,9 +101,9 @@ func TestPrepareJsRuntimeWarnsWhenDenoHasNoBuild(t *testing.T) {
 	resetState(t)
 	read := logtest.Capture(t)
 	usePath(t)
-	useJsRuntimes(t, dependency.HookBuildTool(dependency.HookToolFields{Name: "deno", DisplayName: "Deno", Mirrors: []mirror.Mirror{noBuildMirror("deno-github")}}),
-		dependency.HookBuildTool(dependency.HookToolFields{Name: "node", DisplayName: "Node.js", VersionFlag: "--version", Mirrors: []mirror.Mirror{installableRuntime(t, "node.exe", "22.23.3")}}))
-	windows386 := mirror.Platform{GOOS: "windows", GOARCH: "386"}
+	useJsRuntimes(t, dependency.HookBuildTool(&dependency.HookToolFields{Name: "deno", DisplayName: "Deno", Mirrors: []mirror.Mirror{noBuildMirror("deno-github")}}),
+		dependency.HookBuildTool(&dependency.HookToolFields{Name: "node", DisplayName: "Node.js", VersionFlag: "--version", Mirrors: []mirror.Mirror{installableRuntime(t, "node.exe", "22.23.3")}}))
+	windows386 := &mirror.Platform{GOOS: "windows", GOARCH: "386"}
 
 	dependency.HookPrepareJsRuntime(windows386)
 
@@ -124,8 +124,8 @@ func TestPrepareJsRuntimeWarnsWhenDenoIsUnreachable(t *testing.T) {
 	resetState(t)
 	read := logtest.Capture(t)
 	usePath(t)
-	useJsRuntimes(t, dependency.HookBuildTool(dependency.HookToolFields{Name: "deno", DisplayName: "Deno", Mirrors: []mirror.Mirror{unreachableMirror("deno-github")}}),
-		dependency.HookBuildTool(dependency.HookToolFields{Name: "node", DisplayName: "Node.js", VersionFlag: "--version", Mirrors: []mirror.Mirror{installableRuntime(t, "node", "24.14.1")}}))
+	useJsRuntimes(t, dependency.HookBuildTool(&dependency.HookToolFields{Name: "deno", DisplayName: "Deno", Mirrors: []mirror.Mirror{unreachableMirror("deno-github")}}),
+		dependency.HookBuildTool(&dependency.HookToolFields{Name: "node", DisplayName: "Node.js", VersionFlag: "--version", Mirrors: []mirror.Mirror{installableRuntime(t, "node", "24.14.1")}}))
 
 	dependency.HookPrepareJsRuntime(linuxAmd64)
 
@@ -156,7 +156,7 @@ func TestPrepareJsRuntimeWarnsWhenNothingIsAvailable(t *testing.T) {
 	usePath(t)
 	useJsRuntimes(t, stubTool("deno", noBuildMirror("deno-github")), stubTool("node", noBuildMirror("nodejs")))
 
-	dependency.HookPrepareJsRuntime(mirror.Platform{GOOS: "linux", GOARCH: "386"})
+	dependency.HookPrepareJsRuntime(&mirror.Platform{GOOS: "linux", GOARCH: "386"})
 
 	if got := dependency.JsRuntimeArg(); got != "" {
 		t.Errorf("got %q, want no runtime", got)

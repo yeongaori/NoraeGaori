@@ -23,7 +23,8 @@ func sendBatchedSkipNotice(s *discordgo.Session, guildID, channelID string, skip
 	}
 
 	lines := make([]string, 0, len(skipped))
-	for _, sk := range skipped {
+	for i := range skipped {
+		sk := &skipped[i]
 		var titlePart string
 		if sk.URL != "" {
 			titlePart = messages.FormatBoldMaskedLink(sk.Title, sk.URL)

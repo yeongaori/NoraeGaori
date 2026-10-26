@@ -213,7 +213,8 @@ func TestParseCommandOptions(t *testing.T) {
 		},
 	}
 
-	for _, tc := range testCases {
+	for i := range testCases {
+		tc := &testCases[i]
 		t.Run(tc.name, func(t *testing.T) {
 			options := discord.HookParseCommandOptions(tc.cmd.Options, tc.args)
 
@@ -320,7 +321,8 @@ func TestIsMessageCommand(t *testing.T) {
 		{"Message prefix only", "message_", true},
 	}
 
-	for _, tc := range testCases {
+	for i := range testCases {
+		tc := &testCases[i]
 		t.Run(tc.name, func(t *testing.T) {
 			interaction := &discordgo.InteractionCreate{
 				Interaction: &discordgo.Interaction{

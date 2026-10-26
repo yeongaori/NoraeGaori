@@ -163,7 +163,7 @@ var HookStartPlaybackSession = startPlaybackSession
 var HookVoiceRejoinDelay = &voiceRejoinDelay
 var HookWaitBeforeRetry = waitBeforeRetry
 
-func HookBuildGuildPlayer(fields HookGuildPlayerFields) *GuildPlayer {
+func HookBuildGuildPlayer(fields *HookGuildPlayerFields) *GuildPlayer {
 	return &GuildPlayer{
 		GuildID:          fields.GuildID,
 		Volume:           fields.Volume,
@@ -176,7 +176,7 @@ func HookBuildGuildPlayer(fields HookGuildPlayerFields) *GuildPlayer {
 	}
 }
 
-func HookBuildFadeSettings(fields HookFadeSettingsFields) *fadeSettings {
+func HookBuildFadeSettings(fields *HookFadeSettingsFields) *fadeSettings {
 	return &fadeSettings{
 		fadeIn:         fields.FadeIn,
 		autoMix:        fields.AutoMix,

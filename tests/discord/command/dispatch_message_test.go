@@ -193,7 +193,9 @@ func TestHandleMessageRunsAdminCommandsFromTheMessagesOwnRoles(t *testing.T) {
 	if !*called {
 		t.Error("an admin-only handler did not run for a member with the admin role")
 	}
-	for _, request := range requests() {
+	sent := requests()
+	for i := range sent {
+		request := &sent[i]
 		if strings.Contains(request.Path, "/members/") {
 			t.Errorf("requested %s %s, want no member lookup", request.Method, request.Path)
 		}

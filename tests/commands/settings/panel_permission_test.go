@@ -144,8 +144,9 @@ func TestThePanelIgnoresEmptyUnknownAndMismatchedSelections(t *testing.T) {
 }
 
 func TestLanguageChoicesCoverEveryAvailableLocale(t *testing.T) {
-	var values []string
-	for _, choice := range settings.BuildLanguageChoices() {
+	choices := settings.BuildLanguageChoices()
+	values := make([]string, 0, len(choices))
+	for _, choice := range choices {
 		value, _ := choice.Value.(string)
 		if choice.Name != value {
 			t.Errorf("choice %q is labelled %q, want its code", value, choice.Name)

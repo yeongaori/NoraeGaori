@@ -127,7 +127,8 @@ func TestBuildVideoChoiceName(t *testing.T) {
 		},
 	}
 
-	for _, testCase := range testCases {
+	for i := range testCases {
+		testCase := &testCases[i]
 		t.Run(testCase.name, func(t *testing.T) {
 			testCase.check(t, play.HookBuildVideoChoiceName(testCase.title, testCase.channel, testCase.duration))
 		})
@@ -148,7 +149,8 @@ func TestNormalizeAutocompleteQuery(t *testing.T) {
 		{"Korean is preserved", "뉴진스 노래", "뉴진스 노래"},
 	}
 
-	for _, testCase := range testCases {
+	for i := range testCases {
+		testCase := &testCases[i]
 		t.Run(testCase.name, func(t *testing.T) {
 			if got := play.HookNormalizeAutocompleteQuery(testCase.query); got != testCase.want {
 				t.Errorf("got %q, want %q", got, testCase.want)
@@ -250,7 +252,8 @@ func TestLoadNearestAutocompleteChoices(t *testing.T) {
 		{"Nothing cached returns nil", "suggest", "zz", ""},
 	}
 
-	for _, testCase := range testCases {
+	for i := range testCases {
+		testCase := &testCases[i]
 		t.Run(testCase.name, func(t *testing.T) {
 			got := play.HookLoadNearestAutocompleteChoices(testCase.kind, "en", testCase.query)
 			if testCase.want == "" {

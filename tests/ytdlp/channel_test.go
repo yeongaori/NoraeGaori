@@ -344,7 +344,7 @@ func TestAutoTriesNightlyWhenStableFailsItsCanary(t *testing.T) {
 	attempts := []string{}
 	testutil.Swap(t, ytdlp.HookUpdateChannelFn, func(channel string, force bool) (ytdlp.HookChannelOutcome, error) {
 		attempts = append(attempts, channel)
-		return *ytdlp.HookBuildChannelOutcome(ytdlp.HookChannelOutcomeFields{CanaryFailed: channel == config.YtDlpChannelStable}), nil
+		return *ytdlp.HookBuildChannelOutcome(&ytdlp.HookChannelOutcomeFields{CanaryFailed: channel == config.YtDlpChannelStable}), nil
 	})
 
 	if _, err := ytdlp.UpdateYtDlp(false); err != nil {
@@ -384,7 +384,7 @@ func TestAutoDropsTheStableErrorOnceNightlySucceeds(t *testing.T) {
 		if channel == config.YtDlpChannelStable {
 			return ytdlp.HookChannelOutcome{}, errors.New("stable release unreachable")
 		}
-		return *ytdlp.HookBuildChannelOutcome(ytdlp.HookChannelOutcomeFields{Updated: true}), nil
+		return *ytdlp.HookBuildChannelOutcome(&ytdlp.HookChannelOutcomeFields{Updated: true}), nil
 	})
 
 	updated, err := ytdlp.UpdateYtDlp(false)

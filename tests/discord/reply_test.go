@@ -272,7 +272,7 @@ func TestCheckUserInBotVoiceChannel(t *testing.T) {
 		callerID     = "caller"
 		voiceChannel = "voice-1"
 	)
-	errors := messages.T(guildID).Errors
+	errors := &messages.T(guildID).Errors
 
 	for name, check := range map[string]struct {
 		isInVoice     bool

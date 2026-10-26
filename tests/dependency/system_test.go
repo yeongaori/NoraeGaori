@@ -34,7 +34,8 @@ func TestSystemJsRuntimesFollowThePriority(t *testing.T) {
 		{"silent runtime skipped", map[string]string{"deno": "nothing", "node": "v22.23.3"}, "node"},
 	}
 
-	for _, c := range cases {
+	for i := range cases {
+		c := &cases[i]
 		t.Run(c.name, func(t *testing.T) {
 			usePath(t, fakeRuntimes(t, c.runtimes))
 

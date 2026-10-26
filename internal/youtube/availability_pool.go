@@ -142,7 +142,7 @@ func (p *AvailabilityPool) worker(id int) {
 				scope.Debugf("Scheduling retry for %s in %v (attempt %d/%d)",
 					job.URL, delay, job.RetryCount+1, p.maxRetries)
 
-				p.scheduleRetry(BatchJob{
+				p.scheduleRetry(&BatchJob{
 					URL:         job.URL,
 					Index:       job.Index,
 					RetryCount:  job.RetryCount + 1,
@@ -174,7 +174,7 @@ func (p *AvailabilityPool) backoffDelay(retryCount int) time.Duration {
 	return retryDelay(retryCount, p.retryDelay, p.maxRetryDelay)
 }
 
-func (p *AvailabilityPool) scheduleRetry(job BatchJob, delay time.Duration) {
+func (p *AvailabilityPool) scheduleRetry(job *BatchJob, delay time.Duration) {
 	p.retryMu.Lock()
 	select {
 	case <-p.done:
@@ -188,7 +188,7 @@ func (p *AvailabilityPool) scheduleRetry(job BatchJob, delay time.Duration) {
 	go p.awaitRetry(job, delay)
 }
 
-func (p *AvailabilityPool) awaitRetry(job BatchJob, delay time.Duration) {
+func (p *AvailabilityPool) awaitRetry(job *BatchJob, delay time.Duration) {
 	defer p.retryWg.Done()
 
 	timer := time.NewTimer(delay)
@@ -202,7 +202,7 @@ func (p *AvailabilityPool) awaitRetry(job BatchJob, delay time.Duration) {
 
 	select {
 	case <-p.done:
-	case p.retryJobs <- job:
+	case p.retryJobs <- *job:
 	}
 }
 

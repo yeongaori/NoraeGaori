@@ -53,13 +53,13 @@ func stubVoteEffects(t *testing.T) *voteStubs {
 		stubs.removed = append(stubs.removed, userID)
 	})
 
-	testutil.Swap(t, vote.HookAddersFor, func(string, vote.Target) []string { return nil })
+	testutil.Swap(t, vote.HookAddersFor, func(string, *vote.Target) []string { return nil })
 
 	return stubs
 }
 
 func (v *voteStubs) useAdders(adders []string) {
-	*vote.HookAddersFor = func(string, vote.Target) []string { return adders }
+	*vote.HookAddersFor = func(string, *vote.Target) []string { return adders }
 }
 
 func (v *voteStubs) shortenExpiry(t *testing.T, d time.Duration) {

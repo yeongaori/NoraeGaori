@@ -59,7 +59,7 @@ func resolveActivityName(name string) string {
 		return name
 	}
 	key := strings.TrimPrefix(name, "lang.")
-	rpc := messages.T().RPC
+	rpc := &messages.T().RPC
 	switch key {
 	case "activity_default_1":
 		return rpc.ActivityDefault1

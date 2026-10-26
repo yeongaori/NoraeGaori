@@ -11,7 +11,7 @@ const (
 
 func barOffsets(novelty []float64, frameRate, periodFrames, firstDownbeatFrames float64) []float64 {
 	reach := periodFrames * barSearchFraction
-	var offsets []float64
+	var offsets []float64 //nolint:prealloc
 	for start := firstDownbeatFrames; barFits(novelty, start, periodFrames); start += BarBeats * periodFrames {
 		offsets = append(offsets, bestBarShift(novelty, start, periodFrames, -reach, reach)/frameRate)
 	}

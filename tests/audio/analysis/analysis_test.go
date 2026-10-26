@@ -71,7 +71,8 @@ func TestFifthsWheelMapping(t *testing.T) {
 		{8, true, "1A"},
 	}
 
-	for _, testCase := range cases {
+	for i := range cases {
+		testCase := &cases[i]
 		got := analysis.FifthsCode(testCase.tonic, testCase.minor)
 		if got != testCase.want {
 			t.Errorf("%s = %s, want %s", analysis.KeyName(testCase.tonic, testCase.minor), got, testCase.want)
@@ -97,7 +98,8 @@ func TestFifthsDistanceSemantics(t *testing.T) {
 		{"unknown key", &analysis.TrackAnalysis{Tonic: 0, KeyConfidence: 0}, -1},
 	}
 
-	for _, testCase := range cases {
+	for i := range cases {
+		testCase := &cases[i]
 		if got := analysis.FifthsDistance(root, testCase.other); got != testCase.want {
 			t.Errorf("%s = %d, want %d", testCase.name, got, testCase.want)
 		}
@@ -160,7 +162,7 @@ func TestWhiteNoiseStaysBelowTheConfidenceFloor(t *testing.T) {
 		noiseChroma, _ := analysis.Chromagram(noise, analysis.SampleRate)
 		musicChroma, _ := analysis.Chromagram(music, analysis.SampleRate)
 		t.Errorf("confidence = %.4f, want < floor %.4f (chroma contrast %.3f vs music %.3f)",
-			confidence, analysis.KeyConfidenceFloor, analysis.ChromaContrast(noiseChroma), analysis.ChromaContrast(musicChroma))
+			confidence, analysis.KeyConfidenceFloor, analysis.ChromaContrast(&noiseChroma), analysis.ChromaContrast(&musicChroma))
 	}
 }
 
@@ -313,7 +315,8 @@ func TestTempoDeltaFoldsOctaveErrors(t *testing.T) {
 		{"loose double still folds", 200, 108, 0.08},
 	}
 
-	for _, testCase := range cases {
+	for i := range cases {
+		testCase := &cases[i]
 		if got := analysis.TempoDelta(testCase.bpmA, testCase.bpmB); math.Abs(got-testCase.want) > 0.0001 {
 			t.Errorf("%s: got %.4f, want %.4f", testCase.name, got, testCase.want)
 		}
@@ -331,7 +334,8 @@ func TestTempoDeltaRejectsNonPositiveInput(t *testing.T) {
 		{"negative first", -5, 128},
 	}
 
-	for _, testCase := range cases {
+	for i := range cases {
+		testCase := &cases[i]
 		if got := analysis.TempoDelta(testCase.bpmA, testCase.bpmB); got != 0 {
 			t.Errorf("%s: got %.4f, want 0", testCase.name, got)
 		}

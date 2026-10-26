@@ -223,7 +223,7 @@ func sendAutoPauseNotification(session *discordgo.Session, guildID, voiceChannel
 }
 
 func autoPauseEmbed(guildID, channelName string, isResumingAutomatically bool) *discordgo.MessageEmbed {
-	voiceStrings := messages.T(guildID).VoiceHandler
+	voiceStrings := &messages.T(guildID).VoiceHandler
 	description := voiceStrings.AutoPauseDesc
 	if isResumingAutomatically {
 		description = voiceStrings.AutoPauseResumeDesc

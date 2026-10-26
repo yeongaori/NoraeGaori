@@ -18,7 +18,7 @@ func TestFFmpegGitHubFallsBackToGitHubWeb(t *testing.T) {
 		releasetest.FeedEntry{Tag: "latest", Updated: "2026-09-25T18:45:57Z"},
 	)
 
-	found, err := mirror.FFmpegGitHub{APIURL: api.URL(""), WebURL: web.URL(""), Repo: repo}.Find(mirror.Platform{GOOS: "windows", GOARCH: "amd64"}, releasetest.AcceptAll)
+	found, err := (&mirror.FFmpegGitHub{APIURL: api.URL(""), WebURL: web.URL(""), Repo: repo}).Find(&mirror.Platform{GOOS: "windows", GOARCH: "amd64"}, releasetest.AcceptAll)
 	if err != nil {
 		t.Fatalf("Find returned %v, want the build found through github.com", err)
 	}
@@ -37,6 +37,6 @@ func TestFFmpegGitHubWithoutAFeedCannotDateTheBuild(t *testing.T) {
 	web.RedirectLatest(repo, "latest")
 	web.Files["/"+repo+"/releases/download/latest/checksums.sha256"] = releasetest.SumA + "  ffmpeg-master-latest-linux64-gpl.tar.xz\n"
 
-	_, err := mirror.FFmpegGitHub{APIURL: api.URL(""), WebURL: web.URL(""), Repo: repo}.Find(mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.AcceptAll)
+	_, err := (&mirror.FFmpegGitHub{APIURL: api.URL(""), WebURL: web.URL(""), Repo: repo}).Find(&mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.AcceptAll)
 	releasetest.RequireOtherError(t, err, mirror.ErrNoBuild)
 }

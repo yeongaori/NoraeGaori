@@ -32,7 +32,7 @@ func serveNode(t *testing.T) *releasetest.Server {
 func TestNodeDistPicksTheNewestLTSForLinux(t *testing.T) {
 	fake := serveNode(t)
 
-	found, err := mirror.NodeDist{BaseURL: fake.URL("")}.Find(mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, atLeast22)
+	found, err := (&mirror.NodeDist{BaseURL: fake.URL("")}).Find(&mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, atLeast22)
 	if err != nil {
 		t.Fatalf("Find returned %v, want nil", err)
 	}
@@ -50,7 +50,7 @@ func TestNodeDistPicksTheNewestLTSForLinux(t *testing.T) {
 func TestNodeDistSkipsReleasesWithoutThePlatform(t *testing.T) {
 	fake := serveNode(t)
 
-	found, err := mirror.NodeDist{BaseURL: fake.URL("")}.Find(mirror.Platform{GOOS: "windows", GOARCH: "386"}, atLeast22)
+	found, err := (&mirror.NodeDist{BaseURL: fake.URL("")}).Find(&mirror.Platform{GOOS: "windows", GOARCH: "386"}, atLeast22)
 	if err != nil {
 		t.Fatalf("Find returned %v, want nil", err)
 	}
@@ -66,13 +66,13 @@ func TestNodeDistReportsNoBuild(t *testing.T) {
 	fake := serveNode(t)
 	source := mirror.NodeDist{BaseURL: fake.URL("")}
 
-	_, err := source.Find(mirror.Platform{GOOS: "linux", GOARCH: "386"}, atLeast22)
+	_, err := source.Find(&mirror.Platform{GOOS: "linux", GOARCH: "386"}, atLeast22)
 	releasetest.RequireErrorIs(t, err, mirror.ErrNoBuild)
 
-	_, err = source.Find(mirror.Platform{GOOS: "linux", GOARCH: "riscv64"}, atLeast22)
+	_, err = source.Find(&mirror.Platform{GOOS: "linux", GOARCH: "riscv64"}, atLeast22)
 	releasetest.RequireErrorIs(t, err, mirror.ErrNoBuild)
 
-	_, err = source.Find(mirror.Platform{GOOS: "plan9", GOARCH: "amd64"}, atLeast22)
+	_, err = source.Find(&mirror.Platform{GOOS: "plan9", GOARCH: "amd64"}, atLeast22)
 	releasetest.RequireErrorIs(t, err, mirror.ErrNoBuild)
 }
 
@@ -81,14 +81,14 @@ func TestNodeDistFailsWhenItCannotBeChecked(t *testing.T) {
 	delete(fake.Files, "/v24.21.0/SHASUMS256.txt")
 	source := mirror.NodeDist{BaseURL: fake.URL("")}
 
-	_, err := source.Find(mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, atLeast22)
+	_, err := source.Find(&mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, atLeast22)
 	releasetest.RequireOtherError(t, err, mirror.ErrNoBuild)
 
 	fake.Files["/v24.21.0/SHASUMS256.txt"] = releasetest.SumA + "  node-v24.21.0-darwin-x64.tar.gz\n"
-	_, err = source.Find(mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, atLeast22)
+	_, err = source.Find(&mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, atLeast22)
 	releasetest.RequireOtherError(t, err, mirror.ErrNoBuild)
 
 	fake.Status["/index.json"] = http.StatusInternalServerError
-	_, err = source.Find(mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, atLeast22)
+	_, err = source.Find(&mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, atLeast22)
 	releasetest.RequireOtherError(t, err, mirror.ErrNoBuild)
 }

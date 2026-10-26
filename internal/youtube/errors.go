@@ -28,7 +28,7 @@ func parseYtDlpError(guildID string, err error) error {
 
 	errorLower := strings.ToLower(err.Error())
 
-	yt := messages.T(guildID).YouTube
+	yt := &messages.T(guildID).YouTube
 	errorMappings := []struct {
 		patterns []string
 		message  string
@@ -67,7 +67,8 @@ func parseYtDlpError(guildID string, err error) error {
 		},
 	}
 
-	for _, mapping := range errorMappings {
+	for i := range errorMappings {
+		mapping := &errorMappings[i]
 		for _, pattern := range mapping.patterns {
 			if strings.Contains(errorLower, pattern) {
 				return &VideoError{

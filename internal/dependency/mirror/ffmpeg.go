@@ -24,12 +24,12 @@ type FFmpegGitHub struct {
 	Repo   string
 }
 
-func (m FFmpegGitHub) Name() string {
+func (m *FFmpegGitHub) Name() string {
 	return "GitHub " + m.Repo
 }
 
-func (m FFmpegGitHub) Find(target Platform, accepts func(string) bool) (*Candidate, error) {
-	release, err := download.GitHubRepo{APIURL: m.APIURL, WebURL: m.WebURL, Repo: m.Repo}.FetchLatest("checksums.sha256")
+func (m *FFmpegGitHub) Find(target *Platform, accepts func(string) bool) (*Candidate, error) {
+	release, err := (&download.GitHubRepo{APIURL: m.APIURL, WebURL: m.WebURL, Repo: m.Repo}).FetchLatest("checksums.sha256")
 	if err != nil {
 		return nil, err
 	}

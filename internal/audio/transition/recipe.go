@@ -155,7 +155,8 @@ func buildCategoryValues() map[Category][]string {
 	}
 	for category, styles := range legacyStyles {
 		names := make([]string, 0, len(styles))
-		for _, style := range styles {
+		for i := range styles {
+			style := &styles[i]
 			names = append(names, style.name)
 		}
 		values[category] = withAuto(names)

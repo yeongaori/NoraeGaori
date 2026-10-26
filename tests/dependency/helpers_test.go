@@ -24,7 +24,7 @@ import (
 	"noraegaori/internal/dependency"
 )
 
-var linuxAmd64 = mirror.Platform{GOOS: "linux", GOARCH: "amd64"}
+var linuxAmd64 = &mirror.Platform{GOOS: "linux", GOARCH: "amd64"}
 
 func skipOnWindows(t *testing.T) {
 	t.Helper()
@@ -100,7 +100,7 @@ func (m *stubMirror) Name() string {
 	return m.label
 }
 
-func (m *stubMirror) Find(target mirror.Platform, accepts func(string) bool) (*mirror.Candidate, error) {
+func (m *stubMirror) Find(target *mirror.Platform, accepts func(string) bool) (*mirror.Candidate, error) {
 	m.calls.Add(1)
 	if m.err != nil {
 		return nil, m.err
@@ -120,7 +120,7 @@ func unreachableMirror(label string) *stubMirror {
 }
 
 func stubTool(name string, mirrors ...mirror.Mirror) *dependency.HookTool {
-	return dependency.HookBuildTool(dependency.HookToolFields{Name: name, DisplayName: name, VersionFlag: "--version", Mirrors: mirrors})
+	return dependency.HookBuildTool(&dependency.HookToolFields{Name: name, DisplayName: name, VersionFlag: "--version", Mirrors: mirrors})
 }
 
 func useJsRuntimes(t *testing.T, tools ...*dependency.HookTool) {
@@ -132,7 +132,7 @@ func useJsRuntimes(t *testing.T, tools ...*dependency.HookTool) {
 func useFFmpegTool(t *testing.T, mirrors ...mirror.Mirror) {
 	t.Helper()
 
-	testutil.Swap(t, dependency.HookFfmpegTool, dependency.HookBuildTool(dependency.HookToolFields{Name: "ffmpeg", DisplayName: "ffmpeg", VersionFlag: "-version", Mirrors: mirrors}))
+	testutil.Swap(t, dependency.HookFfmpegTool, dependency.HookBuildTool(&dependency.HookToolFields{Name: "ffmpeg", DisplayName: "ffmpeg", VersionFlag: "-version", Mirrors: mirrors}))
 }
 
 func sha256Hex(payload []byte) string {

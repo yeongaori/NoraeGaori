@@ -47,7 +47,7 @@ var HookPlaylistTimeoutEmbed = playlistTimeoutEmbed
 var HookSaveAutocompleteChoices = saveAutocompleteChoices
 var HookSearchSelectionExpiry = &searchSelectionExpiry
 
-func HookBuildSearchSelection(fields HookSearchSelectionFields) *searchSelection {
+func HookBuildSearchSelection(fields *HookSearchSelectionFields) *searchSelection {
 	return &searchSelection{
 		searchMessageID: fields.SearchMessageID,
 		original:        fields.Original,
@@ -71,8 +71,8 @@ func (c *searchSelection) HookPanelMsg() **discordgo.Message {
 func HookEnqueueAvailableSongs(guildID string, songs []*youtube.Song, results []youtube.BatchResult) (int, int, []string) {
 	outcome := enqueueAvailableSongs(guildID, songs, results, false)
 	skippedURLs := make([]string, 0, len(outcome.skippedSongs))
-	for idx := range outcome.skippedSongs {
-		skippedURLs = append(skippedURLs, outcome.skippedSongs[idx].URL)
+	for i := range outcome.skippedSongs {
+		skippedURLs = append(skippedURLs, outcome.skippedSongs[i].URL)
 	}
 	return outcome.added, outcome.skipped, skippedURLs
 }

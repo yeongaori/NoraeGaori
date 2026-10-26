@@ -29,7 +29,8 @@ func TestCompareVersionsComparesNumerically(t *testing.T) {
 		{"99999999999999999999.2", "1", 1},
 	}
 
-	for _, c := range cases {
+	for i := range cases {
+		c := &cases[i]
 		if got := dependency.HookCompareVersions(c.a, c.b); got != c.want {
 			t.Errorf("compareVersions(%q, %q) = %d, want %d", c.a, c.b, got, c.want)
 		}
@@ -37,7 +38,7 @@ func TestCompareVersionsComparesNumerically(t *testing.T) {
 }
 
 func TestToolAcceptsVersionsInsideItsBounds(t *testing.T) {
-	bun := dependency.HookBuildTool(dependency.HookToolFields{Minimum: "1.2.11", Maximum: "1.3.14"})
+	bun := dependency.HookBuildTool(&dependency.HookToolFields{Minimum: "1.2.11", Maximum: "1.3.14"})
 	cases := map[string]bool{"1.2.10": false, "1.2.11": true, "1.3.14": true, "1.3.15": false, "1.4.2": false}
 
 	for version, want := range cases {
@@ -149,7 +150,7 @@ func TestInstallUnpacksBothFFmpegBinariesFromATarball(t *testing.T) {
 		Members: []string{"bundle/bin/ffmpeg", "bundle/bin/ffprobe"},
 	}
 
-	binary, err := dependency.HookInstall(dependency.HookBuildTool(dependency.HookToolFields{Name: "ffmpeg", VersionFlag: "-version"}), linuxAmd64, found)
+	binary, err := dependency.HookInstall(dependency.HookBuildTool(&dependency.HookToolFields{Name: "ffmpeg", VersionFlag: "-version"}), linuxAmd64, found)
 	if err != nil {
 		t.Fatalf("install returned %v, want nil", err)
 	}

@@ -10,7 +10,8 @@ import (
 
 func TestNoiseRiserSweepsTheMeasuredBand(t *testing.T) {
 	cases := []struct{ colour, frequency float64 }{{0.62, 457}, {0.83, 6430}}
-	for _, want := range cases {
+	for i := range cases {
+		want := &cases[i]
 		if got := dsp.NoiseRiserFrequency(want.colour); math.Abs(got-want.frequency) > want.frequency*0.02 {
 			t.Errorf("colour %.2f centres at %.0f Hz, want about %.0f Hz", want.colour, got, want.frequency)
 		}

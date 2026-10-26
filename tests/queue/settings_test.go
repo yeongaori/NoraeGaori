@@ -29,7 +29,8 @@ func TestBoolSettingsRoundTrip(t *testing.T) {
 		{"TrimSilence", queue.SetTrimSilence, queue.GetTrimSilence, func(q *queue.Queue) bool { return q.TrimSilence }},
 	}
 
-	for _, tc := range cases {
+	for i := range cases {
+		tc := &cases[i]
 		t.Run(tc.name, func(t *testing.T) {
 			for _, want := range []bool{true, false} {
 				if err := tc.set(guildID, want); err != nil {
@@ -67,7 +68,8 @@ var voicePolicySettings = []struct {
 func wantVoicePolicy(t *testing.T, guildID, off string) {
 	t.Helper()
 
-	for _, setting := range voicePolicySettings {
+	for i := range voicePolicySettings {
+		setting := &voicePolicySettings[i]
 		got, err := setting.get(guildID)
 		if err != nil {
 			t.Fatalf("get %s: %v", setting.name, err)
@@ -92,7 +94,8 @@ func TestVoicePolicySettingsDefaultToOn(t *testing.T) {
 func TestVoicePolicySettingsRoundTripIndependently(t *testing.T) {
 	setupTestDB(t)
 
-	for _, setting := range voicePolicySettings {
+	for i := range voicePolicySettings {
+		setting := &voicePolicySettings[i]
 		t.Run(setting.name, func(t *testing.T) {
 			if err := setting.set("guild1", false); err != nil {
 				t.Fatalf("set off: %v", err)
@@ -125,7 +128,8 @@ func TestFloatSettingsRoundTrip(t *testing.T) {
 		{"CrossfadeDuration", queue.SetCrossfadeDuration, queue.GetCrossfadeDuration, func(q *queue.Queue) float64 { return q.CrossfadeDuration }, 4.0},
 	}
 
-	for _, tc := range cases {
+	for i := range cases {
+		tc := &cases[i]
 		t.Run(tc.name, func(t *testing.T) {
 			if err := tc.set(guildID, tc.value); err != nil {
 				t.Fatalf("set: %v", err)

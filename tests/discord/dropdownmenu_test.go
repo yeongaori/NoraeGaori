@@ -326,7 +326,7 @@ func TestDropdownMenuStringsAreLocalized(t *testing.T) {
 		if err := messages.LoadLocale(lang); err != nil {
 			t.Fatalf("failed to load %s: %v", lang, err)
 		}
-		strs := messages.T().DropdownMenu
+		strs := &messages.T().DropdownMenu
 		if !strings.Contains(strs.Current, "%s") {
 			t.Errorf("%s dropdown_menu.current %q has no %%s for the value", lang, strs.Current)
 		}
@@ -357,12 +357,13 @@ func TestAttachedDropdownButtonsFollowTheMenuThroughRedraws(t *testing.T) {
 	if len(sent) != 2 {
 		t.Fatalf("sent %d requests, want the reply and the redraw", len(sent))
 	}
-	for index, request := range sent {
+	for i := range sent {
+		request := &sent[i]
 		if got := discordtest.JSONAt(t, request.Body, "data", "components", 0, "components", 0, "custom_id"); got != discord.HookDropdownMenuPrefix+"test_buttons" {
-			t.Errorf("request %d first row holds %v, want the dropdown", index, got)
+			t.Errorf("request %d first row holds %v, want the dropdown", i, got)
 		}
 		if got := discordtest.JSONAt(t, request.Body, "data", "components", 1, "components", 0, "custom_id"); got != "test_open" {
-			t.Errorf("request %d second row holds %v, want the attached button", index, got)
+			t.Errorf("request %d second row holds %v, want the attached button", i, got)
 		}
 	}
 }

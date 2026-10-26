@@ -104,7 +104,8 @@ func (p *PinkNoise) Fill(buf []float64, amplitude float64) {
 	for i := 0; i+1 < len(buf); i += dsp.Channels {
 		white := p.source.Float64()*2 - 1
 		sum := p.rows[6] + white*0.5362
-		for row, weight := range weights {
+		for row := range weights {
+			weight := &weights[row]
 			p.rows[row] = weight[0]*p.rows[row] + white*weight[1]
 			sum += p.rows[row]
 		}

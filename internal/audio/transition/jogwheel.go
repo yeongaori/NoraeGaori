@@ -106,7 +106,7 @@ func (j *Jogwheel) Process(buf []float64, progress, frameStep float64) {
 	j.engaged, j.stopped = isEngaged, isStopped
 }
 
-func (m jogMotion) speedAt(elapsedSec float64) (float64, bool) {
+func (m *jogMotion) speedAt(elapsedSec float64) (float64, bool) {
 	if m.peak == 0 {
 		progress := elapsedSec / m.spanSec
 		if progress >= 1 {

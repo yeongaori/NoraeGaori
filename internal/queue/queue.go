@@ -272,7 +272,7 @@ func loadQueueFromDB(guildID string) (*Queue, error) {
 	if err != nil {
 		return nil, err
 	}
-	storeGuildSettings(guildID, generation, settings)
+	storeGuildSettings(guildID, generation, &settings)
 
 	songs, err := loadQueueSongs(guildID)
 	if err != nil {

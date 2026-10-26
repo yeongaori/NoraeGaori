@@ -33,7 +33,8 @@ func TestTogglesAndRepeatAcceptAnyCaseAndTheOnAlias(t *testing.T) {
 		{"repeat", "Single", settings.HookValueRepeatSingle},
 		{"repeat", "on", settings.HookValueRepeatAll},
 	}
-	for _, c := range cases {
+	for i := range cases {
+		c := &cases[i]
 		got, err := settings.HookNormalizeValue(specFor(t, c.key), c.input)
 		if err != nil || got != c.want {
 			t.Errorf("%s %q = (%q, %v), want %q", c.key, c.input, got, err, c.want)

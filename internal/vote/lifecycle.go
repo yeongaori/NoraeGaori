@@ -39,13 +39,13 @@ type Request struct {
 	OnPassed       func(s *discordgo.Session, session *Session, tally Tally)
 }
 
-func Start(s *discordgo.Session, i *discordgo.InteractionCreate, request Request) error {
+func Start(s *discordgo.Session, i *discordgo.InteractionCreate, request *Request) error {
 	session := newVoteSession(i.GuildID, request.Kind, request.Title, request.Emoji, request.VoiceChannelID, request.RequiredVotes)
 	session.description = request.Description
 	session.target = request.Target
 	session.onPassed = request.OnPassed
 
-	adders := addersFor(i.GuildID, request.Target)
+	adders := addersFor(i.GuildID, &request.Target)
 	session.castVote(voteBallot{
 		userID:    i.Member.User.ID,
 		countsFor: true,

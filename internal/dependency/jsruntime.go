@@ -14,8 +14,8 @@ var jsRuntimes = []*tool{
 		versionFlag: "--version",
 		minimum:     "2.3.0",
 		mirrors: []mirror.Mirror{
-			mirror.DenoGitHub{APIURL: mirror.GitHubAPI},
-			mirror.DenoCDN{BaseURL: "https://dl.deno.land"},
+			&mirror.DenoGitHub{APIURL: mirror.GitHubAPI},
+			&mirror.DenoCDN{BaseURL: "https://dl.deno.land"},
 		},
 	},
 	{
@@ -23,7 +23,7 @@ var jsRuntimes = []*tool{
 		displayName: "Node.js",
 		versionFlag: "--version",
 		minimum:     "22.0.0",
-		mirrors:     []mirror.Mirror{mirror.NodeDist{BaseURL: "https://nodejs.org/dist"}},
+		mirrors:     []mirror.Mirror{&mirror.NodeDist{BaseURL: "https://nodejs.org/dist"}},
 	},
 	{
 		name:        "bun",
@@ -31,7 +31,7 @@ var jsRuntimes = []*tool{
 		versionFlag: "--version",
 		minimum:     "1.2.11",
 		maximum:     "1.3.14",
-		mirrors:     []mirror.Mirror{mirror.BunGitHub{APIURL: mirror.GitHubAPI}},
+		mirrors:     []mirror.Mirror{&mirror.BunGitHub{APIURL: mirror.GitHubAPI}},
 	},
 }
 
@@ -55,7 +55,7 @@ func findJsRuntime(name string) (*tool, int) {
 	return nil, len(jsRuntimes)
 }
 
-func newestInstalledJsRuntime(target mirror.Platform) (*Binary, bool) {
+func newestInstalledJsRuntime(target *mirror.Platform) (*Binary, bool) {
 	for _, t := range jsRuntimes {
 		if binary, ok := newestInstalled(t, target); ok {
 			return binary, true
@@ -64,7 +64,7 @@ func newestInstalledJsRuntime(target mirror.Platform) (*Binary, bool) {
 	return nil, false
 }
 
-func prepareJsRuntime(target mirror.Platform) {
+func prepareJsRuntime(target *mirror.Platform) {
 	if binary, ok := findSystemJsRuntime(); ok {
 		jsRuntimeSlot.replace(binary)
 		announceSystemJsRuntime(binary)
@@ -88,7 +88,7 @@ func announceSystemJsRuntime(binary *Binary) {
 	logger.Warnf("Using the system %s %s for yt-dlp; install Deno for the best YouTube support", t.displayName, binary.Version)
 }
 
-func announceDownloadedJsRuntime(binary *Binary, results []probeResult, target mirror.Platform) {
+func announceDownloadedJsRuntime(binary *Binary, results []probeResult, target *mirror.Platform) {
 	if binary == nil {
 		logger.Warnf("No JavaScript runtime is available for %s; install Deno with the system package manager or from https://deno.com, since YouTube playback may fail or miss formats without one", target)
 		return

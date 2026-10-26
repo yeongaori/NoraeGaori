@@ -40,9 +40,10 @@ func TestQueueButtonsPageAndOpenTheMixPanel(t *testing.T) {
 	if len(buttons) != len(want) {
 		t.Fatalf("the row holds %d buttons, want %d", len(buttons), len(want))
 	}
-	for index, button := range buttons {
-		if button.CustomID != want[index] {
-			t.Errorf("button %d routes to %q, want %q", index, button.CustomID, want[index])
+	for i := range buttons {
+		button := &buttons[i]
+		if button.CustomID != want[i] {
+			t.Errorf("button %d routes to %q, want %q", i, button.CustomID, want[i])
 		}
 		if button.Disabled {
 			t.Errorf("button %q is disabled on a middle page", button.CustomID)

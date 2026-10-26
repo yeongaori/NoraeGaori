@@ -22,7 +22,7 @@ type GitHubRepo struct {
 
 var rateLimitWarnings sync.Map
 
-func (r GitHubRepo) FetchLatest(checksumAsset string, extraAssets ...string) (*Release, error) {
+func (r *GitHubRepo) FetchLatest(checksumAsset string, extraAssets ...string) (*Release, error) {
 	release, err := FetchRelease(r.APIURL + "/repos/" + r.Repo + "/releases/latest")
 	if err == nil || !IsRateLimited(err) {
 		return release, err
@@ -39,7 +39,7 @@ func (r GitHubRepo) FetchLatest(checksumAsset string, extraAssets ...string) (*R
 	return release, nil
 }
 
-func (r GitHubRepo) fetchLatestFromWeb(checksumAsset string, extraAssets []string) (*Release, error) {
+func (r *GitHubRepo) fetchLatestFromWeb(checksumAsset string, extraAssets []string) (*Release, error) {
 	tag, err := r.latestTag()
 	if err != nil {
 		return nil, err
@@ -64,7 +64,7 @@ func (r GitHubRepo) fetchLatestFromWeb(checksumAsset string, extraAssets []strin
 	return &Release{TagName: tag, PublishedAt: r.publishedAt(tag), Assets: assets}, nil
 }
 
-func (r GitHubRepo) latestTag() (string, error) {
+func (r *GitHubRepo) latestTag() (string, error) {
 	latestURL := r.WebURL + "/" + r.Repo + "/releases/latest"
 	req, err := http.NewRequest(http.MethodGet, latestURL, nil)
 	if err != nil {
@@ -97,7 +97,7 @@ type atomFeed struct {
 	} `xml:"entry"`
 }
 
-func (r GitHubRepo) publishedAt(tag string) string {
+func (r *GitHubRepo) publishedAt(tag string) string {
 	feedURL := r.WebURL + "/" + r.Repo + "/releases.atom"
 	body, err := FetchBytes(feedURL)
 	if err != nil {
@@ -110,7 +110,8 @@ func (r GitHubRepo) publishedAt(tag string) string {
 		logger.Debugf("No publish time for %s %s: %s is not a release feed: %v", r.Repo, tag, feedURL, err)
 		return ""
 	}
-	for _, entry := range feed.Entries {
+	for i := range feed.Entries {
+		entry := &feed.Entries[i]
 		if strings.HasSuffix(entry.ID, "/"+tag) {
 			return entry.Updated
 		}
@@ -119,6 +120,6 @@ func (r GitHubRepo) publishedAt(tag string) string {
 	return ""
 }
 
-func (r GitHubRepo) downloadURL(tag, name string) string {
+func (r *GitHubRepo) downloadURL(tag, name string) string {
 	return r.WebURL + "/" + r.Repo + "/releases/download/" + url.PathEscape(tag) + "/" + url.PathEscape(name)
 }

@@ -19,7 +19,7 @@ func effectiveStyle(row *automix.HookTransitionRow, category transition.Category
 func TestDescribeTrackCoversEveryAnalysisState(t *testing.T) {
 	panel := &messages.T("check-guild").AutoMixPanel
 
-	for _, check := range []struct {
+	checks := []struct {
 		name      string
 		track     *analysis.TrackAnalysis
 		analyzing bool
@@ -36,7 +36,9 @@ func TestDescribeTrackCoversEveryAnalysisState(t *testing.T) {
 			false,
 			fmt.Sprintf("%.1f BPM · %s (%s)", 128.0, analysis.KeyName(9, true), analysis.FifthsCode(9, true)),
 		},
-	} {
+	}
+	for i := range checks {
+		check := &checks[i]
 		if got := automix.HookDescribeTrack("check-guild", check.track, check.analyzing); got != check.want {
 			t.Errorf("%s: describeTrack = %q, want %q", check.name, got, check.want)
 		}
@@ -174,7 +176,7 @@ func TestGuildDefaultsApplyWhereTheSongDoesNotOverride(t *testing.T) {
 	if len(rows) < 2 {
 		t.Fatalf("got %d rows, want at least 2", len(rows))
 	}
-	for _, want := range []struct {
+	wants := []struct {
 		row      int
 		category transition.Category
 		style    string
@@ -183,7 +185,9 @@ func TestGuildDefaultsApplyWhereTheSongDoesNotOverride(t *testing.T) {
 		{0, transition.CategoryFilterOut, "low_pass", "song"},
 		{0, transition.CategoryFXOut, "reverb_out_end", "guild"},
 		{1, transition.CategoryFilterOut, "high_pass", "guild"},
-	} {
+	}
+	for i := range wants {
+		want := &wants[i]
 		if got := effectiveStyle(rows[want.row], want.category); got != want.style {
 			t.Errorf("row %d %s = %q, want %q", want.row, want.category, got, want.style)
 		}
@@ -219,7 +223,7 @@ func TestPanelHidesAutoSelectionWhenAutoMixIsOff(t *testing.T) {
 		t.Fatal("no rows built")
 	}
 
-	for _, want := range []struct {
+	wants := []struct {
 		category transition.Category
 		style    string
 		source   string
@@ -229,7 +233,9 @@ func TestPanelHidesAutoSelectionWhenAutoMixIsOff(t *testing.T) {
 		{transition.CategoryFXOut, "reverb_out_end", "song"},
 		{transition.CategoryEQOut, "bass_fast_one_bar_from_end", "guild"},
 		{transition.CategoryEQIn, "bass_fast_at_end", "guild"},
-	} {
+	}
+	for i := range wants {
+		want := &wants[i]
 		if got := effectiveStyle(rows[0], want.category); got != want.style {
 			t.Errorf("%s = %q, want %q", want.category, got, want.style)
 		}

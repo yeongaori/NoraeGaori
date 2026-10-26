@@ -93,7 +93,7 @@ func TestThePickerListsEverySettingWithItsCurrentValue(t *testing.T) {
 			t.Fatalf("category %q picker lists %d settings, want %d", category, len(menu.Options), len(specs))
 		}
 		for index, spec := range specs {
-			option := menu.Options[index]
+			option := &menu.Options[index]
 			if option.Value != *spec.HookKey() {
 				t.Errorf("picker option %d is %q, want %q", index, option.Value, *spec.HookKey())
 			}

@@ -95,7 +95,8 @@ func TestSingleBandSwapsLeaveTheOtherBands(t *testing.T) {
 		{"mid_fast", 1000},
 		{"hi_fast", 12000},
 	}
-	for _, c := range cases {
+	for i := range cases {
+		c := &cases[i]
 		processor := func() *transition.Processor { return shaped(sideStyle(transition.CategoryEQOut, c.style)) }
 		if level := steadyLevel(processor(), true, c.frequency, 0.4); math.Abs(level) > 0.5 {
 			t.Errorf("%s before the swap = %+.1f dB, want untouched", c.style, level)

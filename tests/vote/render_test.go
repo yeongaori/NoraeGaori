@@ -41,7 +41,7 @@ func TestRenderVoteResultAppendsTheRecomputedTally(t *testing.T) {
 	*session.HookMessageID() = "msg1"
 	*session.HookChannelID() = "chan1"
 
-	vote.RenderResult(&discordgo.Session{}, session, messages.CreateSuccessEmbed("Stopped", "done"), *vote.HookBuildTally(vote.HookTallyFields{Current: 2, Required: 2, Passed: true}))
+	vote.RenderResult(&discordgo.Session{}, session, messages.CreateSuccessEmbed("Stopped", "done"), vote.HookBuildTally(vote.HookTallyFields{Current: 2, Required: 2, Passed: true}))
 
 	edits := stubs.snapshotEdits()
 	if len(edits) != 1 {
@@ -118,7 +118,7 @@ func TestRenderVoteResultNotesAdderConsent(t *testing.T) {
 	*session.HookChannelID() = "chan1"
 
 	vote.RenderResult(&discordgo.Session{}, session, messages.CreateSuccessEmbed("Removed", "done"),
-		*vote.HookBuildTally(vote.HookTallyFields{Current: 1, Required: 3, AdderVotes: 1, AdderTotal: 1, Passed: true, ByAdderConsent: true}))
+		vote.HookBuildTally(vote.HookTallyFields{Current: 1, Required: 3, AdderVotes: 1, AdderTotal: 1, Passed: true, ByAdderConsent: true}))
 
 	edits := stubs.snapshotEdits()
 	if len(edits) != 1 {

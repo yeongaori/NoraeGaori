@@ -72,7 +72,8 @@ func TestTogglesWithANumberSettingGetItsLimits(t *testing.T) {
 		{name: "automix", option: "beats", min: 4, max: 64},
 	}
 
-	for _, testCase := range cases {
+	for i := range cases {
+		testCase := &cases[i]
 		registered := registeredToggle(t, testCase.name)
 
 		if len(registered.Options) != 2 {

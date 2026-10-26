@@ -85,7 +85,7 @@ type Isolator struct {
 	ready   bool
 }
 
-func (iso *Isolator) prepare(gains [3]float64) {
+func (iso *Isolator) prepare(gains *[3]float64) {
 	for stage := range isolatorLowAlign - isolatorLowFirst {
 		iso.filters[isolatorLowFirst+stage].SetLowpass(isolatorLowCrossover, butterworthQ)
 		iso.filters[isolatorRestFirst+stage].SetHighpass(isolatorLowCrossover, butterworthQ)
@@ -93,17 +93,17 @@ func (iso *Isolator) prepare(gains [3]float64) {
 		iso.filters[isolatorHighFirst+stage].SetHighpass(isolatorHighCrossover, butterworthQ)
 	}
 	iso.filters[isolatorLowAlign].SetAllpass(isolatorHighCrossover, butterworthQ)
-	iso.gains = gains
+	iso.gains = *gains
 	iso.ready = true
 }
 
-func (iso *Isolator) Process(buf []float64, levels [3]float64) {
+func (iso *Isolator) Process(buf []float64, levels *[3]float64) {
 	var gains [3]float64
 	for band, level := range levels {
 		gains[band] = EQGain(level)
 	}
 	if !iso.ready {
-		iso.prepare(gains)
+		iso.prepare(&gains)
 	}
 
 	var coefficients [isolatorFilterCount]filterCoefficients

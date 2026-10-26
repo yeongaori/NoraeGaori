@@ -249,7 +249,7 @@ func (c *InnertubeClient) GetVideoInfo(guildID, url, requesterName, requesterID 
 		}
 	}
 
-	vd := resp.VideoDetails
+	vd := &resp.VideoDetails
 
 	var durationStr string
 	var isLive bool
@@ -325,7 +325,7 @@ func (c *InnertubeClient) CheckVideoAvailability(guildID, url string) (*Availabi
 func classifyRestriction(guildID, status, reason string, msgs []string) string {
 	reasonLower := strings.ToLower(reason)
 	messagesStr := strings.ToLower(strings.Join(msgs, " "))
-	yt := messages.T(guildID).YouTube
+	yt := &messages.T(guildID).YouTube
 
 	switch status {
 	case "LOGIN_REQUIRED":

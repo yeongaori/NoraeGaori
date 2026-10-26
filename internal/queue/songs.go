@@ -111,15 +111,11 @@ func AddSongsBatch(guildID string, songs []*Song, position int) error {
 		batch := songs[batchStart:batchEnd]
 
 		query := `INSERT INTO songs (guild_id, url, title, duration, thumbnail, requested_by_id,
-			requested_by_tag, queue_position, uploader, is_live, automix_overrides) VALUES `
+			requested_by_tag, queue_position, uploader, is_live, automix_overrides) VALUES ` +
+			strings.TrimSuffix(strings.Repeat("(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?), ", len(batch)), ", ")
 
-		values := []interface{}{}
+		values := make([]interface{}, 0, len(batch)*11)
 		for i, song := range batch {
-			if i > 0 {
-				query += ", "
-			}
-			query += "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-
 			values = append(values,
 				guildID, song.URL, song.Title, song.Duration, song.Thumbnail,
 				song.RequestedByID, song.RequestedByTag, position+batchStart+i, song.Uploader, boolToInt(song.IsLive),

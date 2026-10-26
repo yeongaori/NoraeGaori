@@ -47,7 +47,7 @@ func recordSearchEditRequests(t *testing.T) *[]string {
 func newPseudoSearchSelection(t *testing.T) *play.HookSearchSelection {
 	t.Helper()
 
-	return play.HookBuildSearchSelection(play.HookSearchSelectionFields{
+	return play.HookBuildSearchSelection(&play.HookSearchSelectionFields{
 		SearchMessageID: "g1_u1_1",
 		Original: &discordgo.InteractionCreate{
 			Interaction: &discordgo.Interaction{

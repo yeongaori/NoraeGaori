@@ -75,7 +75,7 @@ func TestRemoveRetiredRetriesAFailedRemoval(t *testing.T) {
 func TestReplaceNeverRetiresSystemBinariesOrTheSamePath(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
-	system := dependency.HookBuildBinary(dependency.HookBinaryFields{Tool: "ffmpeg", Path: "/usr/bin/ffmpeg", IsSystem: true})
+	system := dependency.HookBuildBinary(&dependency.HookBinaryFields{Tool: "ffmpeg", Path: "/usr/bin/ffmpeg", IsSystem: true})
 	dependency.HookFfmpegSlot.HookReplace(system)
 	dependency.HookFfmpegSlot.HookReplace(installedFFmpeg(t, "2026.09.25.1845"))
 

@@ -11,7 +11,7 @@ import (
 
 func TestPausedDescriptionFollowsAutoLeave(t *testing.T) {
 	dbtest.Setup(t)
-	descriptions := messages.T("g1").Descriptions
+	descriptions := &messages.T("g1").Descriptions
 
 	if got := playback.HookPausedDescription("g1"); got != descriptions.Paused {
 		t.Errorf("default pause reply = %q, want the leaving text", got)

@@ -32,7 +32,7 @@ func Search(guildID, query string, requesterName, requesterID string) (*Song, er
 		return nil, fmt.Errorf("no results found for: %s", query)
 	}
 
-	video := response.Results[0]
+	video := &response.Results[0]
 	videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", video.VideoID)
 
 	return GetVideoInfo(guildID, videoURL, requesterName, requesterID)

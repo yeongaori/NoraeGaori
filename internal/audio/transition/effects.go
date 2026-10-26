@@ -125,14 +125,14 @@ func prepareEffect(style FXStyle, isOutgoing bool, window *Window) *deckEffect {
 	return effect
 }
 
-func (s effectSpec) windowStart() float64 {
+func (s *effectSpec) windowStart() float64 {
 	if s.atEnd {
 		return atEndStart
 	}
 	return 0.5
 }
 
-func (s effectSpec) amountCurve(isOutgoing bool, peak float64) dsp.Curve {
+func (s *effectSpec) amountCurve(isOutgoing bool, peak float64) dsp.Curve {
 	if !isOutgoing {
 		if s.atEnd {
 			return cutAtEnd(0.5, peak)

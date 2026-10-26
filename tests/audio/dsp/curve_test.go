@@ -10,7 +10,9 @@ import (
 func TestStepPointsRenderAsTheMeasuredCubicBlend(t *testing.T) {
 	curve := dsp.Curve{{Start: 0, End: 1, Points: []dsp.Point{{X: 0, Y: 1}, {X: 0.5, Y: 1}, {X: 0.5, Y: 0.25}, {X: 1, Y: 0.25}}}}
 
-	for _, want := range []struct{ x, y float64 }{{0.297, 0.883}, {0.5, 0.625}, {0.703, 0.367}} {
+	wants := []struct{ x, y float64 }{{0.297, 0.883}, {0.5, 0.625}, {0.703, 0.367}}
+	for i := range wants {
+		want := &wants[i]
 		if got := curve.At(want.x); math.Abs(got-want.y) > 0.005 {
 			t.Errorf("At(%.3f) = %.4f, want %.3f", want.x, got, want.y)
 		}
@@ -20,7 +22,9 @@ func TestStepPointsRenderAsTheMeasuredCubicBlend(t *testing.T) {
 func TestTwoPointSegmentIsLinear(t *testing.T) {
 	curve := dsp.Curve{{Start: 0.2, End: 0.6, Points: []dsp.Point{{X: 0, Y: 0}, {X: 1, Y: 1}}}}
 
-	for _, want := range []struct{ x, y float64 }{{0.3, 0.25}, {0.4, 0.5}, {0.5, 0.75}} {
+	wants := []struct{ x, y float64 }{{0.3, 0.25}, {0.4, 0.5}, {0.5, 0.75}}
+	for i := range wants {
+		want := &wants[i]
 		if got := curve.At(want.x); math.Abs(got-want.y) > 1e-6 {
 			t.Errorf("At(%.1f) = %.6f, want %.2f", want.x, got, want.y)
 		}
@@ -30,10 +34,12 @@ func TestTwoPointSegmentIsLinear(t *testing.T) {
 func TestRampSettlesOnTheFortyStepBisection(t *testing.T) {
 	curve := dsp.Curve{{Start: 0, End: 1, Points: []dsp.Point{{X: 0, Y: 0}, {X: 1, Y: 1}}}}
 
-	for _, want := range []struct{ x, y float64 }{
+	wants := []struct{ x, y float64 }{
 		{0.25, 549755813887.0 / 2199023255552},
 		{0.3, 659706976665.0 / 2199023255552},
-	} {
+	}
+	for i := range wants {
+		want := &wants[i]
 		if got := curve.At(want.x); got != want.y {
 			t.Errorf("At(%v) = %v, want exactly %v", want.x, got, want.y)
 		}
@@ -43,7 +49,9 @@ func TestRampSettlesOnTheFortyStepBisection(t *testing.T) {
 func TestTwoPointSegmentEndingEarlyStretchesItsLine(t *testing.T) {
 	curve := dsp.Curve{{Start: 0, End: 1, Points: []dsp.Point{{X: 0, Y: 0}, {X: 0.5, Y: 1}}}}
 
-	for _, want := range []struct{ x, y float64 }{{0.1, 0.2}, {0.25, 0.5}, {0.4, 0.8}, {0.7, 1}} {
+	wants := []struct{ x, y float64 }{{0.1, 0.2}, {0.25, 0.5}, {0.4, 0.8}, {0.7, 1}}
+	for i := range wants {
+		want := &wants[i]
 		if got := curve.At(want.x); math.Abs(got-want.y) > 1e-9 {
 			t.Errorf("At(%.2f) = %.12f, want %.1f", want.x, got, want.y)
 		}
@@ -79,7 +87,9 @@ func TestCurveHoldsItsEndsOutsideTheSegments(t *testing.T) {
 		{Start: 0.5, End: 1, Points: []dsp.Point{{X: 0, Y: 1}, {X: 1, Y: 0}}},
 	}
 
-	for _, want := range []struct{ x, y float64 }{{-1, 1}, {0.25, 1}, {0.5, 1}, {0.75, 0.5}, {1, 0}, {2, 0}} {
+	wants := []struct{ x, y float64 }{{-1, 1}, {0.25, 1}, {0.5, 1}, {0.75, 0.5}, {1, 0}, {2, 0}}
+	for i := range wants {
+		want := &wants[i]
 		if got := curve.At(want.x); math.Abs(got-want.y) > 1e-6 {
 			t.Errorf("At(%.2f) = %.6f, want %.2f", want.x, got, want.y)
 		}

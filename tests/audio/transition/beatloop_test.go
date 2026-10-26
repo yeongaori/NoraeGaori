@@ -28,7 +28,7 @@ func sineFrame(start int, frequency, amplitude float64) []int16 {
 }
 
 func runBeatLoop(loop *transition.BeatLoop, frames int, source func(int) []int16) []int16 {
-	output := []int16{}
+	output := make([]int16, 0, dsp.FrameSize*frames)
 	for i := 0; i < frames; i++ {
 		frame := loop.Next(source(i * dsp.FrameSize))
 		for pair := 0; pair < dsp.FrameSize; pair++ {
@@ -195,7 +195,8 @@ func TestRollHalvesTheLoopFromTheSameStart(t *testing.T) {
 		{36, 500, start + (16*dsp.FrameSize+500)%1200},
 		{39, 900, start + (19*dsp.FrameSize+900)%1200},
 	}
-	for _, c := range cases {
+	for i := range cases {
+		c := &cases[i]
 		if got := int(output[c.frame*dsp.FrameSize+c.pair]); got != c.want {
 			t.Errorf("frame %d pair %d = %d, want %d", c.frame, c.pair, got, c.want)
 		}
@@ -212,7 +213,8 @@ type loopProbe struct {
 
 func checkLoopProbes(t *testing.T, output []int16, probes []loopProbe) {
 	t.Helper()
-	for _, probe := range probes {
+	for i := range probes {
+		probe := &probes[i]
 		if got := int(output[probe.frame*dsp.FrameSize+probe.pair]); got != counted(probe.want) {
 			t.Errorf("frame %d pair %d = %d, want %d", probe.frame, probe.pair, got, counted(probe.want))
 		}

@@ -97,7 +97,8 @@ type FeedEntry struct {
 func (fake *Server) PublishFeed(repo string, entries ...FeedEntry) {
 	var feed strings.Builder
 	feed.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n" + `<feed xmlns="http://www.w3.org/2005/Atom">` + "\n")
-	for _, entry := range entries {
+	for i := range entries {
+		entry := &entries[i]
 		fmt.Fprintf(&feed, "  <entry><id>tag:github.com,2008:Repository/1/%s</id><updated>%s</updated></entry>\n", entry.Tag, entry.Updated)
 	}
 	feed.WriteString("</feed>\n")

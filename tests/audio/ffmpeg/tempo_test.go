@@ -62,7 +62,8 @@ func TestTempoDriftCountsTheSourceTimeGainedOrLost(t *testing.T) {
 		{ffmpeg.Tempo{Speed: 1, HoldSec: 10}, 0},
 		{ffmpeg.Tempo{}, 0},
 	}
-	for _, c := range cases {
+	for i := range cases {
+		c := &cases[i]
 		if got := c.tempo.Drift(); math.Abs(got-c.drift) > 1e-9 {
 			t.Errorf("%+v drifts %.4f s, want %.4f s", c.tempo, got, c.drift)
 		}

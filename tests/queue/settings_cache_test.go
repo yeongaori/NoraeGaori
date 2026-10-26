@@ -49,7 +49,8 @@ func TestAStaleLoadIsNotCachedAfterAnInvalidation(t *testing.T) {
 
 	generation := queue.HookSettingsGeneration("guild1")
 	queue.InvalidateCache("guild1")
-	queue.HookStoreGuildSettings("guild1", generation, queue.HookDefaultGuildSettingsRow())
+	settings := queue.HookDefaultGuildSettingsRow()
+	queue.HookStoreGuildSettings("guild1", generation, &settings)
 
 	queue.HookCacheMux.RLock()
 	_, isCached := (*queue.HookSettingsCache)["guild1"]
@@ -128,7 +129,8 @@ func TestSettingGettersReadEveryDefault(t *testing.T) {
 		{"fade on stop", must(queue.GetFadeOnStop(guildID)), *defaults.HookFadeOnStop()},
 		{"trim silence", must(queue.GetTrimSilence(guildID)), *defaults.HookTrimSilence()},
 	}
-	for _, check := range checks {
+	for i := range checks {
+		check := &checks[i]
 		if check.got != check.want {
 			t.Errorf("%s = %v, want the default %v", check.name, check.got, check.want)
 		}

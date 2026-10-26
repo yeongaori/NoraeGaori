@@ -95,7 +95,7 @@ func armLoopTransition(t *testing.T, guildID string, periodSec float64) (*player
 	next := stubAudioStream(t).(*fakeStream)
 	next.setEndState(&ffmpeg.EndState{TotalFrames: 1})
 
-	fade := player.HookBuildFadeSettings(player.HookFadeSettingsFields{
+	fade := player.HookBuildFadeSettings(&player.HookFadeSettingsFields{
 		AutoMix:      true,
 		Crossfade:    true,
 		AutoMixBeats: 16,

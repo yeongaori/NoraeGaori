@@ -95,7 +95,8 @@ func releasesURL(channel string) string {
 }
 
 func GetLatestRelease(channel string) (*GitHubRelease, error) {
-	return latestReleaseRepo(channel).FetchLatest(checksumAssetName, checksumSigAssetName)
+	repo := latestReleaseRepo(channel)
+	return repo.FetchLatest(checksumAssetName, checksumSigAssetName)
 }
 
 func GetReleases(channel string, perPage int) ([]*GitHubRelease, error) {

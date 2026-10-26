@@ -40,7 +40,8 @@ func legacyNames(category transition.Category) []string {
 
 func combinedRecipe(choices ...styleChoice) *transition.Recipe {
 	recipe := transition.DefaultRecipe()
-	for _, choice := range choices {
+	for i := range choices {
+		choice := &choices[i]
 		recipe.Apply(transition.ExpandLegacy(choice.category, choice.style))
 	}
 	return &recipe
@@ -98,7 +99,8 @@ func TestVolumeStylesFollowTheirCurves(t *testing.T) {
 		{"smooth", 0.5, 0.6411, 0.6411},
 		{"smooth", 0.25, 0.9289, 0.1699},
 	}
-	for _, c := range cases {
+	for i := range cases {
+		c := &cases[i]
 		out, in := volumeOnly(c.style).Gains(c.progress)
 		if math.Abs(out-c.out) > 1e-3 || math.Abs(in-c.in) > 1e-3 {
 			t.Errorf("%s at %.5f = (%.4f, %.4f), want (%.4f, %.4f)", c.style, c.progress, out, in, c.out, c.in)
@@ -147,7 +149,8 @@ func TestBassSwapTradesTheLowsAtTheMiddle(t *testing.T) {
 	}{
 		{true, 0.4, false}, {true, 0.6, true}, {false, 0.4, true}, {false, 0.6, false},
 	}
-	for _, c := range cases {
+	for i := range cases {
+		c := &cases[i]
 		level := steadyLevel(shaped(eqStyle("center_bass_swap")), c.outgoing, 50, c.progress)
 		if c.killed && level > -30 {
 			t.Errorf("outgoing=%t at %.1f keeps 50Hz at %+.1f dB, want it killed", c.outgoing, c.progress, level)
@@ -406,7 +409,8 @@ func TestSpinbackStartsAtFullSpeed(t *testing.T) {
 	tone := &audiotest.ToneGenerator{Frequency: 220, Amplitude: 9000}
 	frame := make([]int16, dsp.FrameSize*dsp.Channels)
 
-	var input, output []float64
+	input := make([]float64, 0, len(frame)/dsp.Channels*(frames*3/4))
+	output := make([]float64, 0, len(frame)/dsp.Channels*(frames*3/4))
 	for i := 0; i < frames*3/4; i++ {
 		tone.Fill(frame)
 		for sample := 0; sample < len(frame); sample += dsp.Channels {

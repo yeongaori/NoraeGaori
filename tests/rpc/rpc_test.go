@@ -140,7 +140,8 @@ func TestDefaultConfigIsUsable(t *testing.T) {
 		t.Fatal("the default config has no activities")
 	}
 
-	for _, activity := range cfg.Activities {
+	for i := range cfg.Activities {
+		activity := &cfg.Activities[i]
 		if _, ok := rpc.ActivityTypeMap[activity.Type]; !ok {
 			t.Errorf("default activity %q has type %q, which is not in ActivityTypeMap", activity.Name, activity.Type)
 		}
@@ -186,7 +187,7 @@ func TestResolveActivityNameMapsEachLocaleKey(t *testing.T) {
 		t.Fatalf("failed to load the English locale: %v", err)
 	}
 
-	rpcStrings := messages.T().RPC
+	rpcStrings := &messages.T().RPC
 	cases := map[string]string{
 		"lang.activity_default_1": rpcStrings.ActivityDefault1,
 		"lang.activity_default_2": rpcStrings.ActivityDefault2,

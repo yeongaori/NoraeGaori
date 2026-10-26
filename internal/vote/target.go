@@ -15,7 +15,7 @@ type Target struct {
 	SongIDs []int
 }
 
-func AffectedSongs(q *queue.Queue, target Target) []*queue.Song {
+func AffectedSongs(q *queue.Queue, target *Target) []*queue.Song {
 	if q == nil || len(q.Songs) == 0 {
 		return nil
 	}
@@ -41,7 +41,7 @@ func AffectedSongs(q *queue.Queue, target Target) []*queue.Song {
 	}
 }
 
-var addersFor = func(guildID string, target Target) []string {
+var addersFor = func(guildID string, target *Target) []string {
 	q, err := queue.GetQueue(guildID, false)
 	if err != nil {
 		return nil

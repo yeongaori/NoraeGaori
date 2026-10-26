@@ -378,7 +378,7 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 	}
 	for {
 		logger.Debugf("Calling playAudio for: %s (seekTime: %d, volume: %g, normalization: %v)", song.Title, seekTime, q.Volume, normalization)
-		err := playAudio(player, song, streamURL, seekTime, normalization, voiceChannelBitrate, firstFrameCh, fade, announceNext)
+		err := playAudio(player, song, streamURL, seekTime, normalization, voiceChannelBitrate, firstFrameCh, &fade, announceNext)
 		if err == nil {
 			break
 		}

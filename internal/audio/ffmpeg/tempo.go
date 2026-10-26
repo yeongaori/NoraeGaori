@@ -34,9 +34,10 @@ func (t Tempo) steps() []float64 {
 }
 
 func (t Tempo) filter() string {
-	commands := make([]string, 0)
+	speeds := t.steps()
+	commands := make([]string, 0, len(speeds))
 	sourceTime := t.Speed * t.HoldSec
-	for _, speed := range t.steps() {
+	for _, speed := range speeds {
 		commands = append(commands, fmt.Sprintf("%.4f atempo tempo %.4f", sourceTime, speed))
 		sourceTime += speed * tempoStepSec
 	}

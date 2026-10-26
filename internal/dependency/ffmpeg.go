@@ -13,8 +13,8 @@ var ffmpegTool = &tool{
 	displayName: "ffmpeg",
 	versionFlag: "-version",
 	mirrors: []mirror.Mirror{
-		mirror.FFmpegGitHub{APIURL: mirror.GitHubAPI, WebURL: mirror.GitHubWeb, Repo: "yt-dlp/FFmpeg-Builds"},
-		mirror.FFmpegGitHub{APIURL: mirror.GitHubAPI, WebURL: mirror.GitHubWeb, Repo: "BtbN/FFmpeg-Builds"},
+		&mirror.FFmpegGitHub{APIURL: mirror.GitHubAPI, WebURL: mirror.GitHubWeb, Repo: "yt-dlp/FFmpeg-Builds"},
+		&mirror.FFmpegGitHub{APIURL: mirror.GitHubAPI, WebURL: mirror.GitHubWeb, Repo: "BtbN/FFmpeg-Builds"},
 	},
 }
 
@@ -42,7 +42,7 @@ func FFmpegLocationArgs(binary *Binary) []string {
 	return []string{"--ffmpeg-location", filepath.Dir(binary.Path)}
 }
 
-func prepareFFmpeg(target mirror.Platform) error {
+func prepareFFmpeg(target *mirror.Platform) error {
 	if binary, ok := findSystemFFmpeg(); ok {
 		ffmpegSlot.replace(binary)
 		logger.Infof("Using the system ffmpeg at %s", binary.Path)

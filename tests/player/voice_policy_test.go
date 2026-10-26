@@ -432,9 +432,10 @@ func TestAutoResumeIgnoresJoinsThatShouldNotResume(t *testing.T) {
 		},
 	}
 
-	for index, testCase := range cases {
+	for i := range cases {
+		testCase := &cases[i]
 		t.Run(testCase.name, func(t *testing.T) {
-			guildID := fmt.Sprintf("autoresume-ignore-%d", index)
+			guildID := fmt.Sprintf("autoresume-ignore-%d", i)
 			guildPlayer := autoPausedPlayer(t, guildID, "voice")
 			resumes := countAutoResumes(t)
 			if testCase.prepare != nil {
@@ -507,8 +508,10 @@ func TestTheQueueEndNoticeIsSentBeforeTheQueueIsCleared(t *testing.T) {
 	}
 
 	want := messages.T(guildID).Player.QueueFinishedDesc
+	requested := requests()
 	var sent []string
-	for _, request := range requests() {
+	for i := range requested {
+		request := &requested[i]
 		if request.Method == http.MethodPost && request.Path == "/channels/text/messages" {
 			sent = append(sent, fmt.Sprint(discordtest.JSONAt(t, request.Body, "embeds", 0, "description")))
 		}
@@ -531,9 +534,10 @@ func TestPrepareVoiceConnectionRejoinsOnlyForAnotherChannel(t *testing.T) {
 		{name: "another channel", current: "voice", target: "elsewhere", wantJoins: 1},
 	}
 
-	for index, testCase := range cases {
+	for i := range cases {
+		testCase := &cases[i]
 		t.Run(testCase.name, func(t *testing.T) {
-			guildID := fmt.Sprintf("prepare-voice-%d", index)
+			guildID := fmt.Sprintf("prepare-voice-%d", i)
 			guildPlayer := preparedPlayer(t, guildID, 1)
 			guildPlayer.HookMu().Lock()
 			guildPlayer.VoiceChannelID = testCase.current
@@ -558,7 +562,7 @@ func TestPrepareVoiceConnectionRejoinsOnlyForAnotherChannel(t *testing.T) {
 }
 
 func TestPlaybackEndEmbedOnlyMentionsLeavingWhenLeaving(t *testing.T) {
-	playerStrings := messages.T("g1").Player
+	playerStrings := &messages.T("g1").Player
 
 	cases := []struct {
 		reason      string
@@ -573,7 +577,8 @@ func TestPlaybackEndEmbedOnlyMentionsLeavingWhenLeaving(t *testing.T) {
 		{"error", false, playerStrings.LeavingErrorDesc, playerStrings.StayingFooter, messages.ColorError},
 	}
 
-	for _, testCase := range cases {
+	for i := range cases {
+		testCase := &cases[i]
 		embed := player.HookPlaybackEndEmbed("g1", testCase.reason, testCase.isLeaving)
 		if embed.Description != testCase.description || embed.Footer.Text != testCase.footer || embed.Color != testCase.color {
 			t.Errorf("%s leaving=%v: got %q / %q / %#x, want %q / %q / %#x", testCase.reason, testCase.isLeaving,
@@ -583,7 +588,7 @@ func TestPlaybackEndEmbedOnlyMentionsLeavingWhenLeaving(t *testing.T) {
 }
 
 func TestTheAutoPauseNoticeFollowsAutoResume(t *testing.T) {
-	voiceStrings := messages.T("g1").VoiceHandler
+	voiceStrings := &messages.T("g1").VoiceHandler
 
 	for _, isResuming := range []bool{true, false} {
 		t.Run(fmt.Sprintf("autoresume=%t", isResuming), func(t *testing.T) {
@@ -598,8 +603,10 @@ func TestTheAutoPauseNoticeFollowsAutoResume(t *testing.T) {
 			if isResuming {
 				want = fmt.Sprintf(voiceStrings.AutoPauseResumeDesc, "Lounge")
 			}
+			requested := requests()
 			var sent []string
-			for _, request := range requests() {
+			for i := range requested {
+				request := &requested[i]
 				if request.Method == http.MethodPost && request.Path == "/channels/text/messages" {
 					sent = append(sent, fmt.Sprint(discordtest.JSONAt(t, request.Body, "embeds", 0, "description")))
 				}
@@ -612,7 +619,7 @@ func TestTheAutoPauseNoticeFollowsAutoResume(t *testing.T) {
 }
 
 func TestAutoPauseEmbedDescribesHowPlaybackComesBack(t *testing.T) {
-	voiceStrings := messages.T("g1").VoiceHandler
+	voiceStrings := &messages.T("g1").VoiceHandler
 
 	if got := player.HookAutoPauseEmbed("g1", "Lounge", false).Description; got != fmt.Sprintf(voiceStrings.AutoPauseDesc, "Lounge") {
 		t.Errorf("manual-resume description = %q", got)

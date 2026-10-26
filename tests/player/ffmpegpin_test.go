@@ -113,7 +113,8 @@ func TestStartStreamRunsThePinnedBuild(t *testing.T) {
 		t.Fatalf("startStream returned %v, want nil", err)
 	}
 
-	for i, stream := range *spawned {
+	for i := range *spawned {
+		stream := &(*spawned)[i]
 		if stream.binary != old.Path {
 			t.Errorf("stream %d ran %q, want the pinned %q", i, stream.binary, old.Path)
 		}

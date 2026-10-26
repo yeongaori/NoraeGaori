@@ -76,7 +76,8 @@ func TestAddSong(t *testing.T) {
 		},
 	}
 
-	for _, tc := range testCases {
+	for i := range testCases {
+		tc := &testCases[i]
 		t.Run(tc.name, func(t *testing.T) {
 			err := queue.AddSong(tc.guildID, tc.song, tc.position)
 			if tc.expectErr && err == nil {
@@ -126,7 +127,8 @@ func TestRemoveSong(t *testing.T) {
 		{"Remove out of bounds", 100, true},
 	}
 
-	for _, tc := range testCases {
+	for i := range testCases {
+		tc := &testCases[i]
 		t.Run(tc.name, func(t *testing.T) {
 			err := queue.RemoveSong(guildID, tc.position)
 			if tc.expectErr && err == nil {
@@ -169,7 +171,8 @@ func TestSwapSongs(t *testing.T) {
 		{"Swap negative position", -1, 1, true},
 	}
 
-	for _, tc := range testCases {
+	for i := range testCases {
+		tc := &testCases[i]
 		t.Run(tc.name, func(t *testing.T) {
 			err := queue.SwapSongs(guildID, tc.pos1, tc.pos2)
 			if tc.expectErr && err == nil {
@@ -211,7 +214,8 @@ func TestMoveSong(t *testing.T) {
 		{"Move out of bounds", 0, 100, true},
 	}
 
-	for _, tc := range testCases {
+	for i := range testCases {
+		tc := &testCases[i]
 		t.Run(tc.name, func(t *testing.T) {
 			err := queue.MoveSong(guildID, tc.from, tc.to)
 			if tc.expectErr && err == nil {
@@ -241,7 +245,8 @@ func TestSetVolume(t *testing.T) {
 		{"Invalid volume > 1000", 1500, true},
 	}
 
-	for _, tc := range testCases {
+	for i := range testCases {
+		tc := &testCases[i]
 		t.Run(tc.name, func(t *testing.T) {
 			err := queue.SetVolume(guildID, tc.volume)
 			if tc.expectErr && err == nil {

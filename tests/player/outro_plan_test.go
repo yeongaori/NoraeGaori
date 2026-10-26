@@ -15,7 +15,7 @@ func outroEndState() *ffmpeg.EndState {
 }
 
 func outroFade(overrides map[string]string) *player.HookFadeSettings {
-	return player.HookBuildFadeSettings(player.HookFadeSettingsFields{
+	return player.HookBuildFadeSettings(&player.HookFadeSettingsFields{
 		AutoMix: true, Crossfade: true, AutoMixBeats: 64, RepeatMode: queue.RepeatOff, StyleOverrides: overrides,
 	})
 }

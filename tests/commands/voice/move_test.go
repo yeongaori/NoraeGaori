@@ -81,7 +81,8 @@ func TestJoinWithoutAPlayingSessionOnlyJoins(t *testing.T) {
 		{name: "the bot is not in voice", isActive: true},
 	}
 
-	for _, testCase := range cases {
+	for i := range cases {
+		testCase := &cases[i]
 		t.Run(testCase.name, func(t *testing.T) {
 			probe := stubPlayer(t, testCase.isActive, nil, nil)
 			fixture := voiceFixture(t, testCase.botChannelID)

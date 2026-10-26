@@ -18,7 +18,8 @@ func TestParseSeekPosition(t *testing.T) {
 		{"1:30.5", 90500},
 		{"61", 61000},
 	}
-	for _, c := range valid {
+	for i := range valid {
+		c := &valid[i]
 		got, err := playback.HookParseSeekPosition(c.in)
 		if err != nil {
 			t.Errorf("parseSeekPosition(%q) unexpected error: %v", c.in, err)

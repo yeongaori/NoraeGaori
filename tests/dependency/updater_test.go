@@ -35,7 +35,7 @@ func TestPrepareStopsWhenFFmpegHasNoBuild(t *testing.T) {
 	deno := installableRuntime(t, "deno", "2.9.7")
 	useJsRuntimes(t, stubTool("deno", deno))
 
-	err := dependency.HookPrepareFFmpeg(mirror.Platform{GOOS: "linux", GOARCH: "386"})
+	err := dependency.HookPrepareFFmpeg(&mirror.Platform{GOOS: "linux", GOARCH: "386"})
 	if err == nil || !strings.Contains(err.Error(), "no download exists for linux/386; install it with the system package manager") {
 		t.Errorf("got %v, want the no-build error with an install hint", err)
 	}
@@ -170,8 +170,8 @@ func TestCheckUpdatesReplacesFFmpegOnceAWeekHasPassed(t *testing.T) {
 func TestCheckUpdatesLeavesSystemBinariesAlone(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
-	ffmpeg := dependency.HookBuildBinary(dependency.HookBinaryFields{Tool: "ffmpeg", Path: "/usr/bin/ffmpeg", IsSystem: true})
-	node := dependency.HookBuildBinary(dependency.HookBinaryFields{Tool: "node", Path: "/usr/bin/node", IsSystem: true})
+	ffmpeg := dependency.HookBuildBinary(&dependency.HookBinaryFields{Tool: "ffmpeg", Path: "/usr/bin/ffmpeg", IsSystem: true})
+	node := dependency.HookBuildBinary(&dependency.HookBinaryFields{Tool: "node", Path: "/usr/bin/node", IsSystem: true})
 	dependency.HookFfmpegSlot.HookReplace(ffmpeg)
 	dependency.HookJsRuntimeSlot.HookReplace(node)
 	ffmpegMirror := installableFFmpeg(t, "2026.09.25.1845")

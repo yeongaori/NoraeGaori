@@ -224,7 +224,7 @@ func adjustEndStateForOffset(es *ffmpeg.EndState, frameOffset int) *ffmpeg.EndSt
 	}
 }
 
-func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime int, normalization bool, bitrate int, firstFrameCh chan<- struct{}, fade fadeSettings, announceNext func(*queue.Song)) error {
+func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime int, normalization bool, bitrate int, firstFrameCh chan<- struct{}, fade *fadeSettings, announceNext func(*queue.Song)) error {
 	logger.Debugf("Entered function for guild: %s", player.GuildID)
 
 	stopCh := player.StopChan
@@ -378,7 +378,7 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 		baseOffsetMs:   baseOffsetMs,
 		frameOffset:    frameOffset,
 		resumeMode:     resumeMode,
-		fade:           fade,
+		fade:           *fade,
 		volumeBuf:      make([]int16, frameSize*channels),
 		opusScratch:    make([]byte, maxOpusFrameBytes),
 		skipLeading:    fade.trimSilence && !resumeMode && seekTime == 0,

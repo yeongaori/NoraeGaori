@@ -27,7 +27,7 @@ func currentThreshold(s *discordgo.Session, session *Session) voteThreshold {
 		quorum = session.requiredVotes
 	}
 
-	return voteThreshold{quorum: quorum, adders: addersFor(session.guildID, session.target)}
+	return voteThreshold{quorum: quorum, adders: addersFor(session.guildID, &session.target)}
 }
 
 func onVoteReactionAdd(s *discordgo.Session, r *discordgo.MessageReactionAdd) {

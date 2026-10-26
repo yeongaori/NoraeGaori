@@ -31,7 +31,7 @@ func TestDenoGitHubFindsTheLinuxBuild(t *testing.T) {
 	fake := releasetest.Serve(t)
 	publishDenoRelease(t, fake, "v2.9.7", "sha256:"+releasetest.SumA)
 
-	found, err := mirror.DenoGitHub{APIURL: fake.URL("")}.Find(mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.AcceptAll)
+	found, err := (&mirror.DenoGitHub{APIURL: fake.URL("")}).Find(&mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.AcceptAll)
 	if err != nil {
 		t.Fatalf("Find returned %v, want nil", err)
 	}
@@ -50,7 +50,7 @@ func TestDenoGitHubReadsThePowerShellChecksumOnWindows(t *testing.T) {
 	fake := releasetest.Serve(t)
 	publishDenoRelease(t, fake, "v2.9.7", "")
 
-	found, err := mirror.DenoGitHub{APIURL: fake.URL("")}.Find(mirror.Platform{GOOS: "windows", GOARCH: "amd64"}, releasetest.AcceptAll)
+	found, err := (&mirror.DenoGitHub{APIURL: fake.URL("")}).Find(&mirror.Platform{GOOS: "windows", GOARCH: "amd64"}, releasetest.AcceptAll)
 	if err != nil {
 		t.Fatalf("Find returned %v, want nil", err)
 	}
@@ -67,16 +67,16 @@ func TestDenoGitHubReportsNoBuild(t *testing.T) {
 	publishDenoRelease(t, fake, "v2.9.7", "")
 	source := mirror.DenoGitHub{APIURL: fake.URL("")}
 
-	_, err := source.Find(mirror.Platform{GOOS: "linux", GOARCH: "386"}, releasetest.AcceptAll)
+	_, err := source.Find(&mirror.Platform{GOOS: "linux", GOARCH: "386"}, releasetest.AcceptAll)
 	releasetest.RequireErrorIs(t, err, mirror.ErrNoBuild)
 
-	_, err = source.Find(mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.RejectAll)
+	_, err = source.Find(&mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.RejectAll)
 	releasetest.RequireErrorIs(t, err, mirror.ErrNoBuild)
 
-	_, err = source.Find(mirror.Platform{GOOS: "plan9", GOARCH: "amd64"}, releasetest.AcceptAll)
+	_, err = source.Find(&mirror.Platform{GOOS: "plan9", GOARCH: "amd64"}, releasetest.AcceptAll)
 	releasetest.RequireErrorIs(t, err, mirror.ErrNoBuild)
 
-	_, err = source.Find(mirror.Platform{GOOS: "linux", GOARCH: "riscv64"}, releasetest.AcceptAll)
+	_, err = source.Find(&mirror.Platform{GOOS: "linux", GOARCH: "riscv64"}, releasetest.AcceptAll)
 	releasetest.RequireErrorIs(t, err, mirror.ErrNoBuild)
 }
 
@@ -85,7 +85,7 @@ func TestDenoGitHubRejectsAChecksumFileForAnotherAsset(t *testing.T) {
 	publishDenoRelease(t, fake, "v2.9.7", "")
 	fake.Files["/deno/deno-x86_64-unknown-linux-gnu.zip.sha256sum"] = releasetest.SumA + "  deno-aarch64-unknown-linux-gnu.zip\n"
 
-	_, err := mirror.DenoGitHub{APIURL: fake.URL("")}.Find(mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.AcceptAll)
+	_, err := (&mirror.DenoGitHub{APIURL: fake.URL("")}).Find(&mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.AcceptAll)
 	releasetest.RequireOtherError(t, err, mirror.ErrNoBuild)
 }
 
@@ -94,10 +94,10 @@ func TestDenoGitHubFailsClosedOnBadChecksums(t *testing.T) {
 	publishDenoRelease(t, fake, "v2.9.7", "sha256:"+releasetest.SumB)
 	source := mirror.DenoGitHub{APIURL: fake.URL("")}
 
-	_, err := source.Find(mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.AcceptAll)
+	_, err := source.Find(&mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.AcceptAll)
 	releasetest.RequireOtherError(t, err, mirror.ErrNoBuild)
 
-	_, err = source.Find(mirror.Platform{GOOS: "linux", GOARCH: "arm64"}, releasetest.AcceptAll)
+	_, err = source.Find(&mirror.Platform{GOOS: "linux", GOARCH: "arm64"}, releasetest.AcceptAll)
 	releasetest.RequireOtherError(t, err, mirror.ErrNoBuild)
 }
 
@@ -106,7 +106,7 @@ func TestDenoGitHubFailsWhenTheChecksumCannotBeFetched(t *testing.T) {
 	publishDenoRelease(t, fake, "v2.9.7", "")
 	fake.Status["/deno/deno-x86_64-unknown-linux-gnu.zip.sha256sum"] = http.StatusBadGateway
 
-	_, err := mirror.DenoGitHub{APIURL: fake.URL("")}.Find(mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.AcceptAll)
+	_, err := (&mirror.DenoGitHub{APIURL: fake.URL("")}).Find(&mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.AcceptAll)
 	releasetest.RequireOtherError(t, err, mirror.ErrNoBuild)
 }
 
@@ -114,7 +114,7 @@ func TestDenoGitHubFailsWhenTheAPIFails(t *testing.T) {
 	fake := releasetest.Serve(t)
 	fake.Status["/repos/denoland/deno/releases/latest"] = http.StatusInternalServerError
 
-	_, err := mirror.DenoGitHub{APIURL: fake.URL("")}.Find(mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.AcceptAll)
+	_, err := (&mirror.DenoGitHub{APIURL: fake.URL("")}).Find(&mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.AcceptAll)
 	releasetest.RequireOtherError(t, err, mirror.ErrNoBuild)
 }
 
@@ -123,7 +123,7 @@ func TestDenoCDNFindsTheBuild(t *testing.T) {
 	fake.Files["/release-latest.txt"] = "v2.9.7\n"
 	fake.Files["/release/v2.9.7/deno-x86_64-pc-windows-msvc.zip.sha256sum"] = powerShellSum
 
-	found, err := mirror.DenoCDN{BaseURL: fake.URL("")}.Find(mirror.Platform{GOOS: "windows", GOARCH: "amd64"}, releasetest.AcceptAll)
+	found, err := (&mirror.DenoCDN{BaseURL: fake.URL("")}).Find(&mirror.Platform{GOOS: "windows", GOARCH: "amd64"}, releasetest.AcceptAll)
 	if err != nil {
 		t.Fatalf("Find returned %v, want nil", err)
 	}
@@ -140,13 +140,13 @@ func TestDenoCDNReportsNoBuildForAMissingChecksum(t *testing.T) {
 	fake.Files["/release-latest.txt"] = "v2.9.7\n"
 	source := mirror.DenoCDN{BaseURL: fake.URL("")}
 
-	_, err := source.Find(mirror.Platform{GOOS: "windows", GOARCH: "386"}, releasetest.AcceptAll)
+	_, err := source.Find(&mirror.Platform{GOOS: "windows", GOARCH: "386"}, releasetest.AcceptAll)
 	releasetest.RequireErrorIs(t, err, mirror.ErrNoBuild)
 
-	_, err = source.Find(mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.AcceptAll)
+	_, err = source.Find(&mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.AcceptAll)
 	releasetest.RequireErrorIs(t, err, mirror.ErrNoBuild)
 
-	_, err = source.Find(mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.RejectAll)
+	_, err = source.Find(&mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.RejectAll)
 	releasetest.RequireErrorIs(t, err, mirror.ErrNoBuild)
 }
 
@@ -157,14 +157,14 @@ func TestDenoCDNFailsWhenItCannotBeChecked(t *testing.T) {
 	fake.Files["/release/v2.9.7/deno-aarch64-unknown-linux-gnu.zip.sha256sum"] = releasetest.SumA + "  other.zip\n"
 	source := mirror.DenoCDN{BaseURL: fake.URL("")}
 
-	_, err := source.Find(mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.AcceptAll)
+	_, err := source.Find(&mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.AcceptAll)
 	releasetest.RequireOtherError(t, err, mirror.ErrNoBuild)
 
-	_, err = source.Find(mirror.Platform{GOOS: "linux", GOARCH: "arm64"}, releasetest.AcceptAll)
+	_, err = source.Find(&mirror.Platform{GOOS: "linux", GOARCH: "arm64"}, releasetest.AcceptAll)
 	releasetest.RequireOtherError(t, err, mirror.ErrNoBuild)
 
 	fake.Status["/release-latest.txt"] = http.StatusInternalServerError
-	_, err = source.Find(mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.AcceptAll)
+	_, err = source.Find(&mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, releasetest.AcceptAll)
 	releasetest.RequireOtherError(t, err, mirror.ErrNoBuild)
 }
 

@@ -98,7 +98,8 @@ func TestVoteEndDescriptionCoversEveryReason(t *testing.T) {
 		{vote.HookVoteEndQueueEnded, "The queue is empty, so this vote has ended."},
 	}
 
-	for _, testCase := range cases {
+	for i := range cases {
+		testCase := &cases[i]
 		if got := vote.HookVoteEndDescription("", testCase.reason); got != testCase.want {
 			t.Errorf("voteEndDescription(%v) = %q, want %q", testCase.reason, got, testCase.want)
 		}

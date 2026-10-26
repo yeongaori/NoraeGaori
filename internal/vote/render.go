@@ -52,7 +52,7 @@ func RenderFailure(s *discordgo.Session, session *Session, title, description st
 	editVoteMessage(s, session.channelID, session.messageID, messages.CreateErrorEmbed(title, description))
 }
 
-func RenderResult(s *discordgo.Session, session *Session, embed *discordgo.MessageEmbed, tally Tally) {
+func RenderResult(s *discordgo.Session, session *Session, embed *discordgo.MessageEmbed, tally *Tally) {
 	messages.AddField(embed, messages.T(session.guildID).Fields.VoteResult, fmt.Sprintf("%d/%d", tally.current, tally.required), true)
 	if tally.byAdderConsent {
 		messages.SetFooter(embed, messages.T(session.guildID).Votes.AllAddersAgreed)

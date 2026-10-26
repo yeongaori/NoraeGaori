@@ -143,7 +143,8 @@ func TestKeyTiersFollowTheFifthsRules(t *testing.T) {
 		{"two numbers away 10B", keyed(2, false), 3},
 		{"far away 2B", keyed(6, false), 4},
 	}
-	for _, c := range cases {
+	for i := range cases {
+		c := &cases[i]
 		if got := analysis.KeyTier(cMajor, c.other); got != c.tier {
 			t.Errorf("8B against %s = tier %d, want %d", c.name, got, c.tier)
 		}

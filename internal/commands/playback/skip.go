@@ -66,7 +66,7 @@ func applySkipVote(guildID string, skipped *queue.Song) func(*discordgo.Session,
 			return
 		}
 
-		vote.RenderResult(s, session, embed, tally)
+		vote.RenderResult(s, session, embed, &tally)
 
 		if queueEnded {
 			stopAfterEmptyQueue(guildID)
@@ -99,7 +99,7 @@ func HandleSkip(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return skipImmediately(s, i, skipped)
 	}
 
-	return vote.Start(s, i, vote.Request{
+	return vote.Start(s, i, &vote.Request{
 		Kind:           vote.KindSkip,
 		Title:          messages.T(i.GuildID).Titles.SkipVote,
 		Emoji:          "⏭",

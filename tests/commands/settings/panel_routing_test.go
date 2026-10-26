@@ -18,7 +18,8 @@ func TestPanelArgumentsCarryTheViewCategoryAndKey(t *testing.T) {
 		{[]string{"admin", settings.HookCategoryGeneral, "language"}, *settings.HookBuildPanelTarget(settings.HookPanelTargetFields{IsAdmin: true, Category: settings.HookCategoryGeneral, Key: "language"})},
 	}
 
-	for _, check := range checks {
+	for i := range checks {
+		check := &checks[i]
 		got, isValid := settings.HookParsePanelArguments(check.arguments)
 		if !isValid || got != check.want {
 			t.Errorf("parsePanelArguments(%v) = (%+v, %v), want %+v", check.arguments, got, isValid, check.want)

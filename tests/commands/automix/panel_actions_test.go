@@ -118,14 +118,16 @@ func TestTurningATransitionPage(t *testing.T) {
 func TestPickingATransitionOpensItsEditor(t *testing.T) {
 	panelEditPath := "/channels/" + discordtest.ChannelID + "/messages/" + discordtest.PanelMessageID
 
-	for _, check := range []struct {
+	checks := []struct {
 		name       string
 		songValue  func(*queue.Queue) string
 		wantEditor bool
 	}{
 		{"a queued song", firstSongID, true},
 		{"a song that left the queue", missingSongID, false},
-	} {
+	}
+	for i := range checks {
+		check := &checks[i]
 		t.Run(check.name, func(t *testing.T) {
 			fixture := panelFixture(t, 3)
 			songValue := check.songValue(fixture.Queue)
@@ -158,7 +160,7 @@ func TestPickingATransitionOpensItsEditor(t *testing.T) {
 func TestChoosingATransitionStyle(t *testing.T) {
 	volumeStyle := firstStyle(transition.CategoryVolumeOut)
 
-	for _, check := range []struct {
+	checks := []struct {
 		name         string
 		guildID      string
 		songValue    func(*queue.Queue) string
@@ -202,7 +204,9 @@ func TestChoosingATransitionStyle(t *testing.T) {
 			wantText:     func(locale *messages.Locale) string { return locale.AutoMixPanel.SongGone },
 			wantClosed:   true,
 		},
-	} {
+	}
+	for i := range checks {
+		check := &checks[i]
 		t.Run(check.name, func(t *testing.T) {
 			fixture := panelFixture(t, 3)
 			guildID := cmp.Or(check.guildID, commandtest.GuildID)
@@ -224,7 +228,7 @@ func TestChoosingATransitionStyle(t *testing.T) {
 			if !check.wantSaved {
 				return
 			}
-			if refresh := sent[1]; refresh.Method != http.MethodPatch || refresh.Path != "/channels/"+discordtest.ChannelID+"/messages/"+discordtest.PanelMessageID {
+			if refresh := &sent[1]; refresh.Method != http.MethodPatch || refresh.Path != "/channels/"+discordtest.ChannelID+"/messages/"+discordtest.PanelMessageID {
 				t.Errorf("the panel refresh went to %s %s", refresh.Method, refresh.Path)
 			}
 			if saved, err := queue.GetQueue(commandtest.GuildID, true); err != nil || saved.Songs[0].AutoMixOverrides[string(transition.CategoryVolumeOut)] != check.style {
@@ -271,7 +275,7 @@ func TestTheAutoMixMenuButtonOpensThePanel(t *testing.T) {
 		t.Errorf("button label = %q, want %q", button.Label, want)
 	}
 
-	for _, check := range []struct {
+	checks := []struct {
 		name          string
 		songCount     int
 		wantEphemeral bool
@@ -279,7 +283,9 @@ func TestTheAutoMixMenuButtonOpensThePanel(t *testing.T) {
 	}{
 		{"an empty queue", 0, true, func(locale *messages.Locale) string { return locale.AutoMixPanel.EmptyTitle }},
 		{"a queue with transitions", 3, false, func(locale *messages.Locale) string { return locale.AutoMixPanel.Title }},
-	} {
+	}
+	for i := range checks {
+		check := &checks[i]
 		t.Run(check.name, func(t *testing.T) {
 			fixture := panelFixture(t, check.songCount)
 

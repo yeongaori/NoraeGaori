@@ -15,7 +15,7 @@ func TestGetInnertubeClientInitializesExactlyOnce(t *testing.T) {
 	testutil.Swap(t, youtube.HookInnertubeOnce, &sync.Once{})
 	testutil.Swap(t, youtube.HookInnertubeInit, func() {
 		atomic.AddInt64(&calls, 1)
-		*youtube.HookInnertubeClient = youtube.HookBuildInnertubeClient(youtube.HookInnertubeClientFields{ClientName: "TEST"})
+		*youtube.HookInnertubeClient = youtube.HookBuildInnertubeClient(&youtube.HookInnertubeClientFields{ClientName: "TEST"})
 	})
 
 	const goroutines = 32
@@ -64,7 +64,8 @@ func TestExtractVideoIDHandlesEveryURLShapeTheBotStores(t *testing.T) {
 		{"not a video URL", "https://example.com/song.mp3", ""},
 	}
 
-	for _, test := range tests {
+	for i := range tests {
+		test := &tests[i]
 		t.Run(test.name, func(t *testing.T) {
 			if got := youtube.HookExtractVideoID(test.url); got != test.want {
 				t.Errorf("got %q, want %q", got, test.want)

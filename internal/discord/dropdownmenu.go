@@ -127,8 +127,8 @@ func renderDropdownMenu(guildID, key string, menu *DropdownMenu) (*discordgo.Mes
 }
 
 func isOptionOffered(options []discordgo.SelectMenuOption, value string) bool {
-	for _, option := range options {
-		if option.Value == value {
+	for i := range options {
+		if options[i].Value == value {
 			return true
 		}
 	}

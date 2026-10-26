@@ -20,7 +20,8 @@ func TestFormatDurationShowsHoursOnlyWhenNeeded(t *testing.T) {
 		{36000, "10:00:00"},
 	}
 
-	for _, tc := range cases {
+	for i := range cases {
+		tc := &cases[i]
 		if got := messages.FormatDuration(tc.seconds); got != tc.want {
 			t.Errorf("FormatDuration(%d): got %q, want %q", tc.seconds, got, tc.want)
 		}

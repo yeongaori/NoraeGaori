@@ -61,7 +61,9 @@ func stubReplies(t *testing.T, postStatuses []int, recent string) *replyStub {
 
 func (stub *replyStub) count(method, path string) int {
 	count := 0
-	for _, request := range stub.requests() {
+	sent := stub.requests()
+	for i := range sent {
+		request := &sent[i]
 		if request.Method == method && (path == "" || request.Path == path) {
 			count++
 		}

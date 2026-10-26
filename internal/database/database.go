@@ -169,7 +169,8 @@ func runMigrations() error {
 		{"track_analysis", "bar_offsets", "TEXT DEFAULT ''"},
 	}
 
-	for _, m := range migrations {
+	for i := range migrations {
+		m := &migrations[i]
 		columnExists, err := ColumnExists(m.table, m.column)
 		if err != nil {
 			return err

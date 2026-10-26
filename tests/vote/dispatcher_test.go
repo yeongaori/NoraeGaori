@@ -32,7 +32,8 @@ func TestVoteForReactionRoutesOnlyItsOwnMessage(t *testing.T) {
 		{"a different emoji", "u1", "msg1", "❤", false},
 	}
 
-	for _, testCase := range cases {
+	for i := range cases {
+		testCase := &cases[i]
 		got := vote.HookVoteForReaction(session, testCase.userID, testCase.messageID, testCase.emoji) != nil
 		if got != testCase.want {
 			t.Errorf("%s: got %v, want %v", testCase.name, got, testCase.want)

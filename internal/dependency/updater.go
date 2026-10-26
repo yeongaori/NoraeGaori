@@ -11,18 +11,18 @@ const ffmpegMinimumUpdateGap = 7 * 24 * time.Hour
 
 func Prepare() error {
 	target := currentPlatform()
-	if err := prepareFFmpeg(target); err != nil {
+	if err := prepareFFmpeg(&target); err != nil {
 		return err
 	}
-	prepareJsRuntime(target)
+	prepareJsRuntime(&target)
 	return nil
 }
 
 func CheckUpdates() {
 	removeRetired()
 	target := currentPlatform()
-	updateFFmpeg(target)
-	updateJsRuntime(target)
+	updateFFmpeg(&target)
+	updateJsRuntime(&target)
 }
 
 func isFFmpegUpdateDue(installed, latest string) bool {
@@ -34,7 +34,7 @@ func isFFmpegUpdateDue(installed, latest string) bool {
 	return latestAt.Sub(installedAt) >= ffmpegMinimumUpdateGap
 }
 
-func updateFFmpeg(target mirror.Platform) {
+func updateFFmpeg(target *mirror.Platform) {
 	current := ffmpegSlot.current()
 	if current == nil || current.isSystem {
 		return
@@ -57,7 +57,7 @@ func updateFFmpeg(target mirror.Platform) {
 	logger.Infof("Updated ffmpeg from build %s to %s; each server switches at its next playback gap", current.Version, binary.Version)
 }
 
-func updateJsRuntime(target mirror.Platform) {
+func updateJsRuntime(target *mirror.Platform) {
 	current := jsRuntimeSlot.current()
 	if current != nil && current.isSystem {
 		return

@@ -14,7 +14,8 @@ const reactionsPath = "/channels/chan1/messages/msg1/reactions"
 
 func requestLines(requests []discordtest.Request) []string {
 	lines := make([]string, 0, len(requests))
-	for _, request := range requests {
+	for i := range requests {
+		request := &requests[i]
 		lines = append(lines, request.Method+" "+request.Path)
 	}
 	return lines

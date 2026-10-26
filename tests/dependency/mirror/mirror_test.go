@@ -8,10 +8,10 @@ import (
 )
 
 func TestPlatformNamesExecutables(t *testing.T) {
-	if got := (mirror.Platform{GOOS: "windows", GOARCH: "386"}).Executable("deno"); got != "deno.exe" {
+	if got := (&mirror.Platform{GOOS: "windows", GOARCH: "386"}).Executable("deno"); got != "deno.exe" {
 		t.Errorf("got %q, want deno.exe on windows", got)
 	}
-	if got := (mirror.Platform{GOOS: "linux", GOARCH: "arm64"}).Executable("deno"); got != "deno" {
+	if got := (&mirror.Platform{GOOS: "linux", GOARCH: "arm64"}).Executable("deno"); got != "deno" {
 		t.Errorf("got %q, want deno on linux", got)
 	}
 	if got := (mirror.Platform{GOOS: "linux", GOARCH: "arm64"}).String(); got != "linux/arm64" {
@@ -21,11 +21,11 @@ func TestPlatformNamesExecutables(t *testing.T) {
 
 func TestMirrorsNameTheirSource(t *testing.T) {
 	names := map[string]mirror.Mirror{
-		"GitHub denoland/deno":        mirror.DenoGitHub{},
-		"dl.deno.land":                mirror.DenoCDN{},
-		"nodejs.org":                  mirror.NodeDist{},
-		"GitHub oven-sh/bun":          mirror.BunGitHub{},
-		"GitHub yt-dlp/FFmpeg-Builds": mirror.FFmpegGitHub{Repo: "yt-dlp/FFmpeg-Builds"},
+		"GitHub denoland/deno":        &mirror.DenoGitHub{},
+		"dl.deno.land":                &mirror.DenoCDN{},
+		"nodejs.org":                  &mirror.NodeDist{},
+		"GitHub oven-sh/bun":          &mirror.BunGitHub{},
+		"GitHub yt-dlp/FFmpeg-Builds": &mirror.FFmpegGitHub{Repo: "yt-dlp/FFmpeg-Builds"},
 	}
 
 	for want, m := range names {

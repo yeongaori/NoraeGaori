@@ -19,32 +19,32 @@ func requestersOf(songs []*queue.Song) []string {
 func TestAffectedSongsFollowsTheScope(t *testing.T) {
 	q := queuetest.QueueOf("a", "b", "c", "b")
 
-	current := vote.AffectedSongs(q, vote.Target{Scope: vote.ScopeCurrentSong})
+	current := vote.AffectedSongs(q, &vote.Target{Scope: vote.ScopeCurrentSong})
 	if len(current) != 1 || current[0].RequestedByID != "a" {
 		t.Errorf("current-song scope = %v, want the head of the queue", requestersOf(current))
 	}
 
-	whole := vote.AffectedSongs(q, vote.Target{Scope: vote.ScopeWholeQueue})
+	whole := vote.AffectedSongs(q, &vote.Target{Scope: vote.ScopeWholeQueue})
 	if len(whole) != 4 {
 		t.Errorf("whole-queue scope covered %d songs, want 4", len(whole))
 	}
 
-	picked := vote.AffectedSongs(q, vote.Target{Scope: vote.ScopeSongs, SongIDs: []int{2, 4}})
+	picked := vote.AffectedSongs(q, &vote.Target{Scope: vote.ScopeSongs, SongIDs: []int{2, 4}})
 	if len(picked) != 2 || picked[0].ID != 2 || picked[1].ID != 4 {
 		t.Errorf("song scope = %v, want songs 2 and 4", picked)
 	}
 }
 
 func TestAffectedSongsIgnoresUnknownIDsAndEmptyQueues(t *testing.T) {
-	if songs := vote.AffectedSongs(nil, vote.Target{Scope: vote.ScopeWholeQueue}); songs != nil {
+	if songs := vote.AffectedSongs(nil, &vote.Target{Scope: vote.ScopeWholeQueue}); songs != nil {
 		t.Errorf("a nil queue produced %v, want nothing", songs)
 	}
 
-	if songs := vote.AffectedSongs(queuetest.QueueOf(), vote.Target{Scope: vote.ScopeCurrentSong}); songs != nil {
+	if songs := vote.AffectedSongs(queuetest.QueueOf(), &vote.Target{Scope: vote.ScopeCurrentSong}); songs != nil {
 		t.Errorf("an empty queue produced %v, want nothing", songs)
 	}
 
-	songs := vote.AffectedSongs(queuetest.QueueOf("a", "b"), vote.Target{Scope: vote.ScopeSongs, SongIDs: []int{99}})
+	songs := vote.AffectedSongs(queuetest.QueueOf("a", "b"), &vote.Target{Scope: vote.ScopeSongs, SongIDs: []int{99}})
 	if len(songs) != 0 {
 		t.Errorf("an unknown song id matched %v, want nothing", requestersOf(songs))
 	}

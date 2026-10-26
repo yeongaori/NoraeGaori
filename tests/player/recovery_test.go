@@ -266,9 +266,10 @@ func TestPanicCausedByATeardownIsLeftToThatCommand(t *testing.T) {
 		},
 	}
 
-	for index, testCase := range cases {
+	for i := range cases {
+		testCase := &cases[i]
 		t.Run(testCase.name, func(t *testing.T) {
-			guildID := "recover-teardown-" + string(rune('a'+index))
+			guildID := "recover-teardown-" + string(rune('a'+i))
 			setupPlayerDB(t, guildID, 2)
 			markStoredActive(t, guildID)
 			probe := probeRecovery(t)

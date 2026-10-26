@@ -28,8 +28,8 @@ func startInteraction(guildID string) *discordgo.InteractionCreate {
 	}
 }
 
-func startRequest() vote.Request {
-	return vote.Request{Kind: vote.KindSkip, Title: "Skip vote", Description: "Skip the song?", Emoji: "⏭", VoiceChannelID: "voice1", RequiredVotes: 2}
+func startRequest() *vote.Request {
+	return &vote.Request{Kind: vote.KindSkip, Title: "Skip vote", Description: "Skip the song?", Emoji: "⏭", VoiceChannelID: "voice1", RequiredVotes: 2}
 }
 
 func waitUntil(t *testing.T, condition func() bool, failure string) {

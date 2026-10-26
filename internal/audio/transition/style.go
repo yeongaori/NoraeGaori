@@ -122,7 +122,8 @@ type named[T comparable] struct {
 type catalogue[T comparable] []named[T]
 
 func (c catalogue[T]) lookup(name string) (T, bool) {
-	for _, entry := range c {
+	for i := range c {
+		entry := &c[i]
 		if entry.name == name {
 			return entry.value, true
 		}
@@ -142,7 +143,8 @@ func (c catalogue[T]) nameOf(value T) string {
 
 func (c catalogue[T]) names() []string {
 	names := make([]string, 0, len(c))
-	for _, entry := range c {
+	for i := range c {
+		entry := &c[i]
 		names = append(names, entry.name)
 	}
 	return names

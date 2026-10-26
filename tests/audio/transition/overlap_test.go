@@ -26,7 +26,8 @@ func TestLongestOverlapSecFollowsTheBarsAndCaps(t *testing.T) {
 		{"fixed bars setting", transition.Pair{From: transition.Track{Duration: 300, Analysis: period(0.5)}, MaxBeats: 64, Settings: transition.Settings{Bars: 4}}, 8},
 	}
 
-	for _, c := range cases {
+	for i := range cases {
+		c := &cases[i]
 		t.Run(c.name, func(t *testing.T) {
 			if got := c.pair.LongestOverlapSec(); math.Abs(got-c.want) > 1e-9 {
 				t.Errorf("got %.2fs, want %.2fs", got, c.want)
@@ -240,7 +241,8 @@ func TestFallbackShrinksForShortTracks(t *testing.T) {
 		{36, 36, 3, true},
 		{30, 300, 0, false},
 	}
-	for _, c := range cases {
+	for i := range cases {
+		c := &cases[i]
 		pair := &transition.Pair{
 			From: transition.Track{URL: "a", Duration: c.durationA, End: c.durationA},
 			To:   transition.Track{URL: "b", Duration: c.durationB},
@@ -394,7 +396,8 @@ func TestForcedLengthStretchesTheFallback(t *testing.T) {
 		{"no analysis", func(p *transition.Pair) { p.From.Analysis = nil }, 8},
 		{"short song", func(p *transition.Pair) { p.From = outgoingTrack(40, 128, 0) }, 5},
 	}
-	for _, c := range cases {
+	for i := range cases {
+		c := &cases[i]
 		pair := beatPair()
 		pair.Settings = transition.Settings{Bars: 4, Beatmatch: transition.BeatmatchOff}
 		c.change(pair)

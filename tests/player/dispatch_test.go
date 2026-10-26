@@ -12,7 +12,7 @@ import (
 )
 
 func newTestPlayer(guildID string, handler func(player.PlayerCommand) error) *player.GuildPlayer {
-	p := player.HookBuildGuildPlayer(player.HookGuildPlayerFields{
+	p := player.HookBuildGuildPlayer(&player.HookGuildPlayerFields{
 		GuildID:          guildID,
 		Volume:           1.0,
 		StopChan:         make(chan struct{}),

@@ -118,7 +118,8 @@ func CaptureBeatLoop(lengthSamples int) *BeatLoop {
 
 func captureStages(stages []loopStage) *BeatLoop {
 	longest := 0
-	for _, stage := range stages {
+	for i := range stages {
+		stage := &stages[i]
 		longest = max(longest, stage.length)
 	}
 	return &BeatLoop{

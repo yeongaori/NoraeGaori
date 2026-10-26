@@ -83,7 +83,8 @@ func TestFilterExtremeParametersStayStable(t *testing.T) {
 		{"allpass 96000Hz", func(f *dsp.Filter) { f.SetAllpass(96000, 0.707) }},
 	}
 
-	for _, testCase := range cases {
+	for i := range cases {
+		testCase := &cases[i]
 		t.Run(testCase.name, func(t *testing.T) {
 			var filter dsp.Filter
 			testCase.setup(&filter)
@@ -110,7 +111,8 @@ func TestDryWetFollowsTheSquareRootSineLaw(t *testing.T) {
 		{0.5, 0.8409, 0.8409},
 		{1, 0, 1},
 	}
-	for _, want := range cases {
+	for i := range cases {
+		want := &cases[i]
 		dry, wet := dsp.DryWet(want.level)
 		if math.Abs(dry-want.dry) > 1e-3 || math.Abs(wet-want.wet) > 1e-3 {
 			t.Errorf("DryWet(%.1f) = %.4f, %.4f, want %.4f, %.4f", want.level, dry, wet, want.dry, want.wet)
@@ -123,10 +125,12 @@ func TestFloatToFrameClamps(t *testing.T) {
 	dst := make([]int16, len(src))
 	dsp.FloatToFrame(src, dst)
 
-	for _, want := range []struct {
+	wants := []struct {
 		index int
 		value int16
-	}{{0, 32767}, {1, -32768}, {2, 100}, {4, 0}} {
+	}{{0, 32767}, {1, -32768}, {2, 100}, {4, 0}}
+	for i := range wants {
+		want := &wants[i]
 		if dst[want.index] != want.value {
 			t.Errorf("dst[%d] = %d, want %d (full: %v)", want.index, dst[want.index], want.value, dst)
 		}
@@ -137,10 +141,12 @@ func TestFrameToFloatZeroPads(t *testing.T) {
 	out := make([]float64, 5)
 	dsp.FrameToFloat([]int16{1000, -1000, 32767}, out)
 
-	for _, want := range []struct {
+	wants := []struct {
 		index int
 		value float64
-	}{{0, 1000}, {2, 32767}, {3, 0}, {4, 0}} {
+	}{{0, 1000}, {2, 32767}, {3, 0}, {4, 0}}
+	for i := range wants {
+		want := &wants[i]
 		if out[want.index] != want.value {
 			t.Errorf("out[%d] = %g, want %g (full: %v)", want.index, out[want.index], want.value, out)
 		}

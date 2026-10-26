@@ -21,7 +21,8 @@ func TestParseDurationToSeconds(t *testing.T) {
 		{"10:00", 600},
 		{"garbage", 0},
 	}
-	for _, c := range cases {
+	for i := range cases {
+		c := &cases[i]
 		if got := youtube.ParseDurationToSeconds(c.in); got != c.want {
 			t.Errorf("ParseDurationToSeconds(%q) = %d, want %d", c.in, got, c.want)
 		}

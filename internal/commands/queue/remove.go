@@ -117,7 +117,7 @@ func applyRemoveVote(guildID string, songIDs []int, result func(removed int) *di
 			return
 		}
 
-		vote.RenderResult(s, session, result(len(songs)), tally)
+		vote.RenderResult(s, session, result(len(songs)), &tally)
 	}
 }
 
@@ -139,7 +139,7 @@ func startRemoveVote(s *discordgo.Session, i *discordgo.InteractionCreate, songs
 		return removeImmediately(s, i, songs, result)
 	}
 
-	return vote.Start(s, i, vote.Request{
+	return vote.Start(s, i, &vote.Request{
 		Kind:           vote.KindRemove,
 		Title:          messages.T(i.GuildID).Titles.RemoveVote,
 		Description:    description,

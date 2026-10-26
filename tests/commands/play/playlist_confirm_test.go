@@ -47,7 +47,8 @@ func TestConfirmedByRequesterAcceptsOnlyTheRequester(t *testing.T) {
 		{"a bystander", discordtest.ReactionAdd("", "bystander", "msg1", "⬇️"), false},
 	}
 
-	for _, testCase := range cases {
+	for i := range cases {
+		testCase := &cases[i]
 		got := play.HookConfirmedByRequester(session, testCase.reaction, msg, interaction)
 		if got != testCase.want {
 			t.Errorf("%s: got %v, want %v", testCase.name, got, testCase.want)

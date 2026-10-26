@@ -30,7 +30,9 @@ func TestPhaserSweepsBetweenItsCorners(t *testing.T) {
 	if high := dsp.PhaserFrequency(math.Pi / 2); math.Abs(high-3000) > 1e-6 {
 		t.Errorf("highest sweep frequency = %.3f, want 3000 Hz", high)
 	}
-	for _, want := range []struct{ phase, frequency float64 }{{-math.Pi / 6, 533.4838230116768}, {math.Pi / 6, 1687.0239755710473}} {
+	wants := []struct{ phase, frequency float64 }{{-math.Pi / 6, 533.4838230116768}, {math.Pi / 6, 1687.0239755710473}}
+	for i := range wants {
+		want := &wants[i]
 		if got := dsp.PhaserFrequency(want.phase); math.Abs(got-want.frequency) > 1e-6 {
 			t.Errorf("sweep frequency at phase %.4f = %.6f, want %.6f on the logarithmic sweep", want.phase, got, want.frequency)
 		}

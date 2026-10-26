@@ -65,7 +65,7 @@ func (s *Segment) valueAt(x float64) float64 {
 		xs[i], ys[i] = point.X, point.Y
 	}
 	count := len(points)
-	if isLevel(ys, count) {
+	if isLevel(&ys, count) {
 		return ys[0]
 	}
 	if count == 2 && xs[0] == 0 && xs[1] == 1 && x > 0 && x < 1 {
@@ -77,7 +77,7 @@ func (s *Segment) valueAt(x float64) float64 {
 	return blendCoordinate(ys, count, u)
 }
 
-func isLevel(values [curveInlinePoints]float64, count int) bool {
+func isLevel(values *[curveInlinePoints]float64, count int) bool {
 	level := values[0]
 	if math.IsInf(level, 0) || math.IsNaN(level) || (level == 0 && math.Signbit(level)) {
 		return false

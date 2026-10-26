@@ -13,7 +13,8 @@ func allCategories() []transition.Category {
 
 func overridesOf(choices ...styleChoice) map[string]string {
 	overrides := make(map[string]string, len(choices))
-	for _, choice := range choices {
+	for i := range choices {
+		choice := &choices[i]
 		overrides[string(choice.category)] = choice.style
 	}
 	return overrides
@@ -155,7 +156,8 @@ func TestCombinedStylesExpandToTheirSidePairs(t *testing.T) {
 		{transition.ShortcutEffect, "auto", overridesOf(sideStyle(transition.CategoryFXOut, "auto"))},
 		{transition.CategoryFXIn, "phaser", overridesOf(sideStyle(transition.CategoryFXIn, "phaser"))},
 	}
-	for _, c := range cases {
+	for i := range cases {
+		c := &cases[i]
 		got := transition.ExpandLegacy(c.category, c.value)
 		if len(got) != len(c.want) {
 			t.Errorf("%s %q expands to %v, want %v", c.category, c.value, got, c.want)
@@ -299,7 +301,8 @@ func TestLoopBeatCounts(t *testing.T) {
 		{transition.LoopNone, 0},
 	}
 
-	for _, count := range counts {
+	for i := range counts {
+		count := &counts[i]
 		recipe := transition.Recipe{Loop: count.style}
 		if got := transition.LoopBeatCount(count.style); got != count.want {
 			t.Errorf("%s = %d beats, want %d", transition.StyleOf(&recipe, transition.CategoryLoop), got, count.want)
@@ -332,7 +335,8 @@ func TestLoopsMustFitTheOverlap(t *testing.T) {
 		{"two_beats", 0, "none"},
 		{"spinback_one_beat", 0, "spinback_one_beat"},
 	}
-	for _, c := range cases {
+	for i := range cases {
+		c := &cases[i]
 		if got := clampedStyle(transition.CategoryLoop, c.loop, 0.5, c.frames); got != c.want {
 			t.Errorf("%s over %d frames = %s, want %s", c.loop, c.frames, got, c.want)
 		}
@@ -354,7 +358,8 @@ func TestIncomingRollsMustFitTheOverlap(t *testing.T) {
 		{"slip_roll", 24, "none"},
 		{"phaser", 1, "phaser"},
 	}
-	for _, c := range cases {
+	for i := range cases {
+		c := &cases[i]
 		if got := clampedStyle(transition.CategoryFXIn, c.fx, 0.5, c.frames); got != c.want {
 			t.Errorf("incoming %s over %d frames = %s, want %s", c.fx, c.frames, got, c.want)
 		}
@@ -373,7 +378,7 @@ func TestOutroRecipeLeavesTheSongAlone(t *testing.T) {
 }
 
 func TestOnlyOutgoingChoicesChangeTheOutro(t *testing.T) {
-	for _, c := range []struct {
+	cases := []struct {
 		overrides map[string]string
 		isDefault bool
 	}{
@@ -382,7 +387,9 @@ func TestOnlyOutgoingChoicesChangeTheOutro(t *testing.T) {
 		{transition.CategoryEQOut.Override("hi_fast"), false},
 		{transition.CategoryLoop.Override("vinyl_stop_end"), false},
 		{transition.CategoryFXOut.Override("phaser"), false},
-	} {
+	}
+	for i := range cases {
+		c := &cases[i]
 		resolved := transition.ResolveStyles(transition.OutroRecipe(), c.overrides, nil)
 		if got := resolved.Recipe.IsOutroDefault(); got != c.isDefault {
 			t.Errorf("overrides %v give an outro default of %t, want %t", c.overrides, got, c.isDefault)

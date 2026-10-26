@@ -54,11 +54,11 @@ var HookUpdateFromChannel = updateFromChannel
 var HookVersionMgr = &versionMgr
 var HookYtdlpSigningKey = &ytdlpSigningKey
 
-func HookBuildChannelOutcome(fields HookChannelOutcomeFields) *channelOutcome {
+func HookBuildChannelOutcome(fields *HookChannelOutcomeFields) *channelOutcome {
 	return &channelOutcome{updated: fields.Updated, canaryFailed: fields.CanaryFailed}
 }
 
-func HookBuildVersionManager(fields HookVersionManagerFields) *VersionManager {
+func HookBuildVersionManager(fields *HookVersionManagerFields) *VersionManager {
 	return &VersionManager{state: fields.State}
 }
 

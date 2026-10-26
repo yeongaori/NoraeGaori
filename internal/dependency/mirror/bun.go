@@ -21,11 +21,11 @@ type BunGitHub struct {
 	APIURL string
 }
 
-func (m BunGitHub) Name() string {
+func (m *BunGitHub) Name() string {
 	return "GitHub oven-sh/bun"
 }
 
-func (m BunGitHub) Find(target Platform, accepts func(string) bool) (*Candidate, error) {
+func (m *BunGitHub) Find(target *Platform, accepts func(string) bool) (*Candidate, error) {
 	architecture, ok := bunArchitectures[target.GOARCH]
 	if !ok {
 		return nil, ErrNoBuild

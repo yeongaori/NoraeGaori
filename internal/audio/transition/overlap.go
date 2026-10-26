@@ -368,7 +368,7 @@ func assignFronts(candidates []candidate) {
 			}
 			dominated := false
 			for j := range candidates {
-				if !assigned[j] && j != i && dominates(candidates[j], candidates[i]) {
+				if !assigned[j] && j != i && dominates(&candidates[j], &candidates[i]) {
 					dominated = true
 					break
 				}
@@ -385,7 +385,7 @@ func assignFronts(candidates []candidate) {
 	}
 }
 
-func dominates(x, y candidate) bool {
+func dominates(x, y *candidate) bool {
 	if x.position < y.position || x.key < y.key {
 		return false
 	}

@@ -80,7 +80,7 @@ func failingAudioStream(t *testing.T) {
 }
 
 func crossfadeFade() *player.HookFadeSettings {
-	return player.HookBuildFadeSettings(player.HookFadeSettingsFields{Crossfade: true, CrossfadeSec: 6, RepeatMode: queue.RepeatOff})
+	return player.HookBuildFadeSettings(&player.HookFadeSettingsFields{Crossfade: true, CrossfadeSec: 6, RepeatMode: queue.RepeatOff})
 }
 
 func crossfadeEndState() *ffmpeg.EndState {
@@ -199,7 +199,7 @@ func TestCrossfadePlanRefusesEveryGuard(t *testing.T) {
 	}{
 		{
 			name:     "neither automix nor crossfade",
-			fade:     player.HookBuildFadeSettings(player.HookFadeSettingsFields{CrossfadeSec: 6}),
+			fade:     player.HookBuildFadeSettings(&player.HookFadeSettingsFields{CrossfadeSec: 6}),
 			cacheURL: "https://example.invalid/next",
 			streamOK: true,
 		},
@@ -212,7 +212,7 @@ func TestCrossfadePlanRefusesEveryGuard(t *testing.T) {
 		},
 		{
 			name:     "repeat single",
-			fade:     player.HookBuildFadeSettings(player.HookFadeSettingsFields{Crossfade: true, CrossfadeSec: 6, RepeatMode: queue.RepeatSingle}),
+			fade:     player.HookBuildFadeSettings(&player.HookFadeSettingsFields{Crossfade: true, CrossfadeSec: 6, RepeatMode: queue.RepeatSingle}),
 			cacheURL: "https://example.invalid/next",
 			streamOK: true,
 		},
@@ -237,7 +237,8 @@ func TestCrossfadePlanRefusesEveryGuard(t *testing.T) {
 		},
 	}
 
-	for _, testCase := range cases {
+	for i := range cases {
+		testCase := &cases[i]
 		t.Run(testCase.name, func(t *testing.T) {
 			if testCase.cacheURL != "" {
 				cacheNextStreamURL(t, guildID, nextID, testCase.cacheURL)

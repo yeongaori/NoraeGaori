@@ -43,11 +43,11 @@ var HookSaveVersionResult = saveVersionResult
 var HookStreamPipeArgs = streamPipeArgs
 var HookYtCircuitBreaker = &ytCircuitBreaker
 
-func HookBuildCircuitBreaker(fields HookCircuitBreakerFields) *circuitBreaker {
+func HookBuildCircuitBreaker(fields *HookCircuitBreakerFields) *circuitBreaker {
 	return &circuitBreaker{state: fields.State, lastFailureTime: fields.LastFailureTime}
 }
 
-func HookBuildInnertubeClient(fields HookInnertubeClientFields) *InnertubeClient {
+func HookBuildInnertubeClient(fields *HookInnertubeClientFields) *InnertubeClient {
 	return &InnertubeClient{clientName: fields.ClientName}
 }
 

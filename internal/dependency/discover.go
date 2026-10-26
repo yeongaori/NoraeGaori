@@ -46,7 +46,7 @@ type probeResult struct {
 	err     error
 }
 
-func (result probeResult) describe(target mirror.Platform) string {
+func (result *probeResult) describe(target *mirror.Platform) string {
 	switch result.outcome {
 	case outcomeUnreachable:
 		return fmt.Sprintf("%s mirrors are unreachable (%v)", result.tool.displayName, result.err)
@@ -59,7 +59,7 @@ func (result probeResult) describe(target mirror.Platform) string {
 
 type acceptFunc func(t *tool, found *mirror.Candidate) (*Binary, error)
 
-func probeTool(t *tool, target mirror.Platform, accept acceptFunc) (*Binary, probeResult) {
+func probeTool(t *tool, target *mirror.Platform, accept acceptFunc) (*Binary, probeResult) {
 	result := probeResult{tool: t, outcome: outcomeNoBuild}
 
 	for _, m := range t.mirrors {
@@ -87,7 +87,7 @@ func probeTool(t *tool, target mirror.Platform, accept acceptFunc) (*Binary, pro
 	return nil, result
 }
 
-func discover(tools []*tool, target mirror.Platform, accept acceptFunc) (*Binary, []probeResult) {
+func discover(tools []*tool, target *mirror.Platform, accept acceptFunc) (*Binary, []probeResult) {
 	results := make([]probeResult, 0, len(tools))
 	for _, t := range tools {
 		binary, result := probeTool(t, target, accept)

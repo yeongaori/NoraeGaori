@@ -27,8 +27,8 @@ func TestDurationLabelMarksLiveAndUnknown(t *testing.T) {
 		{"a video with no details", &ytdlp.ExtractedInfo{}, "Unknown", false},
 	}
 
-	for idx := range cases {
-		tc := &cases[idx]
+	for i := range cases {
+		tc := &cases[i]
 		label, isLive := youtube.HookDurationLabel(tc.info)
 		if label != tc.wantLabel || isLive != tc.wantIsLive {
 			t.Errorf("%s: got (%q, %v), want (%q, %v)", tc.name, label, isLive, tc.wantLabel, tc.wantIsLive)
@@ -50,8 +50,8 @@ func TestLastThumbnailPicksTheLargest(t *testing.T) {
 		{"no thumbnails", &ytdlp.ExtractedInfo{}, ""},
 	}
 
-	for idx := range cases {
-		tc := &cases[idx]
+	for i := range cases {
+		tc := &cases[i]
 		if got := youtube.HookLastThumbnail(tc.info); got != tc.want {
 			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)
 		}

@@ -88,7 +88,8 @@ func TestRequiredVotesInChannelIgnoresBotsAndOtherChannels(t *testing.T) {
 		},
 	}
 
-	for _, testCase := range cases {
+	for i := range cases {
+		testCase := &cases[i]
 		session := sessionWithGuild(t, testCase.states, testCase.members)
 
 		got, err := vote.RequiredInChannel(session, "g", "voice", vote.ResolveWithFetch)

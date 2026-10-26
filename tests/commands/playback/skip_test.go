@@ -39,7 +39,7 @@ func TestSkipResultEmbedSwitchesOnAnEmptiedQueue(t *testing.T) {
 func TestSkipResultEmbedOnlyMentionsLeavingWhenTheBotLeaves(t *testing.T) {
 	song := &queue.Song{Title: "Song", URL: "https://example.com/song"}
 	link := messages.FormatMaskedLink(song.Title, song.URL)
-	music := messages.T("g1").Music
+	music := &messages.T("g1").Music
 
 	if got := playback.HookSkipResultEmbed("g1", song, true, false).Description; got != fmt.Sprintf(music.PlaybackEndedSkip, link) {
 		t.Errorf("leaving description = %q, want the leaving text", got)
@@ -78,7 +78,7 @@ func TestSkippingTheLastSongEndsThePendingStopVote(t *testing.T) {
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 	t.Cleanup(func() { vote.CancelForEndedPlayback(guildID) })
 
-	stopVote := vote.Request{Kind: vote.KindStop, Title: "Stop vote", Emoji: "⏹", VoiceChannelID: "voice", RequiredVotes: 2}
+	stopVote := &vote.Request{Kind: vote.KindStop, Title: "Stop vote", Emoji: "⏹", VoiceChannelID: "voice", RequiredVotes: 2}
 	if err := vote.Start(session, discordtest.SlashInteraction(guildID, "stop", discordtest.Member(guildID, "voter")), stopVote); err != nil {
 		t.Fatalf("failed to start the stop vote: %v", err)
 	}
@@ -90,7 +90,9 @@ func TestSkippingTheLastSongEndsThePendingStopVote(t *testing.T) {
 	queueEnded := messages.T(guildID).Votes.QueueEnded
 	deadline := time.Now().Add(2 * time.Second)
 	for {
-		for _, request := range requests() {
+		sent := requests()
+		for i := range sent {
+			request := &sent[i]
 			if strings.Contains(string(request.RawBody), queueEnded) {
 				return
 			}

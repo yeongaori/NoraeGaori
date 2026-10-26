@@ -32,7 +32,8 @@ func TestParseYouTubeURLAcceptsEveryShapeUsersSend(t *testing.T) {
 		{name: "channel handle", url: "https://www.youtube.com/@somechannel/videos"},
 	}
 
-	for _, tc := range cases {
+	for i := range cases {
+		tc := &cases[i]
 		t.Run(tc.name, func(t *testing.T) {
 			parsed, ok := youtube.HookParseYouTubeURL(tc.url)
 			if !ok {
@@ -64,7 +65,8 @@ func TestParseYouTubeURLRejectsHostsTheBotMustNeverFetch(t *testing.T) {
 		{"unrelated media url", "https://example.com/song.mp3"},
 	}
 
-	for _, tc := range cases {
+	for i := range cases {
+		tc := &cases[i]
 		t.Run(tc.name, func(t *testing.T) {
 			if _, ok := youtube.HookParseYouTubeURL(tc.url); ok {
 				t.Errorf("parseYouTubeURL(%q) accepted a host outside the allowlist", tc.url)

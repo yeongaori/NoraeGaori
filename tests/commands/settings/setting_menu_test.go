@@ -62,7 +62,8 @@ func TestSettingMenusShowTheStoredValueAndAcceptRepeatedPicks(t *testing.T) {
 				t.Errorf("%s after picking %q shows %q", key, picked, refreshed.Current)
 			}
 			defaults := 0
-			for _, option := range refreshed.Options {
+			for i := range refreshed.Options {
+				option := &refreshed.Options[i]
 				if option.Default {
 					defaults++
 					if option.Value != picked {

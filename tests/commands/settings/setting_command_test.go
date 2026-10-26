@@ -66,7 +66,8 @@ func TestParseSettingArgumentsReadsValuesAndNumbers(t *testing.T) {
 		{"no options", "fadeonstop", nil, "", "", ""},
 	}
 
-	for _, c := range cases {
+	for i := range cases {
+		c := &cases[i]
 		arguments := settings.HookParseSettingArguments(specFor(t, c.key), c.options)
 		if *arguments.HookHasValue() != (c.value != "") || *arguments.HookValue() != c.value {
 			t.Errorf("%s: value = (%q, %v), want %q", c.name, *arguments.HookValue(), *arguments.HookHasValue(), c.value)
@@ -188,12 +189,12 @@ func TestApplySettingArgumentsNamesTheSettingThatFailedToSave(t *testing.T) {
 	dbtest.CloseUntilCleanup(t)
 	spec := specFor(t, "automix")
 
-	if failed, err := settings.HookApplySettingArguments(checkGuildID, spec, settings.HookBuildSettingArguments(settings.HookSettingArgumentsFields{Value: settings.HookValueOn, HasValue: true})); err == nil || failed != spec {
+	if failed, err := settings.HookApplySettingArguments(checkGuildID, spec, settings.HookBuildSettingArguments(&settings.HookSettingArgumentsFields{Value: settings.HookValueOn, HasValue: true})); err == nil || failed != spec {
 		t.Errorf("state write failure = (%v, %v), want the automix spec and an error", failed, err)
 	}
 
 	beats := specFor(t, "automix_beats")
-	if failed, err := settings.HookApplySettingArguments(checkGuildID, spec, settings.HookBuildSettingArguments(settings.HookSettingArgumentsFields{Number: beats, NumberValue: "16"})); err == nil || failed != beats {
+	if failed, err := settings.HookApplySettingArguments(checkGuildID, spec, settings.HookBuildSettingArguments(&settings.HookSettingArgumentsFields{Number: beats, NumberValue: "16"})); err == nil || failed != beats {
 		t.Errorf("number write failure = (%v, %v), want the automix_beats spec and an error", failed, err)
 	}
 }

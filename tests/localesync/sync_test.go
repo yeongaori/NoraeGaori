@@ -455,10 +455,12 @@ func TestSyncReproducesTheShippedLocalesByteForByte(t *testing.T) {
 }
 
 func TestSyncContinuesPastAFailingLocale(t *testing.T) {
-	for _, test := range []struct{ broken, healthy string }{
+	tests := []struct{ broken, healthy string }{
 		{broken: "en.json", healthy: "ko.json"},
 		{broken: "ko.json", healthy: "en.json"},
-	} {
+	}
+	for i := range tests {
+		test := &tests[i]
 		t.Run(test.broken, func(t *testing.T) {
 			dir := t.TempDir()
 			writeUserLocale(t, dir, test.broken, `not json`)
@@ -597,13 +599,15 @@ func TestSyncReportsAnUnreadableUserLocale(t *testing.T) {
 }
 
 func TestSyncReportsAFailedWrite(t *testing.T) {
-	for _, test := range []struct {
+	tests := []struct {
 		name string
 		user string
 	}{
 		{name: "creating a missing file"},
 		{name: "updating an existing file", user: `{"player": {}}`},
-	} {
+	}
+	for i := range tests {
+		test := &tests[i]
 		t.Run(test.name, func(t *testing.T) {
 			dir := t.TempDir()
 			if test.user != "" {

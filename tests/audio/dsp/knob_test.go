@@ -20,7 +20,8 @@ func TestKnobCutoffsSpanTheMeasuredRange(t *testing.T) {
 		{"high-pass open", dsp.HighpassKnobFrequency(0.5), 20},
 		{"high-pass closed", dsp.HighpassKnobFrequency(1), 9000},
 	}
-	for _, c := range cases {
+	for i := range cases {
+		c := &cases[i]
 		if math.Abs(c.got-c.want) > c.want*1e-9 {
 			t.Errorf("%s = %.2f Hz, want %.2f Hz", c.name, c.got, c.want)
 		}
@@ -32,7 +33,8 @@ func TestKnobResonanceFollowsTheMeasuredTable(t *testing.T) {
 		{0.48, 0.70}, {0.35, 2.20}, {0.05, 0.65}, {0.01, 0.65}, {0.335, 2.15},
 		{0.52, 0.70}, {0.85, 1.95}, {0.98, 0.80}, {1, 0.80},
 	}
-	for _, want := range cases {
+	for i := range cases {
+		want := &cases[i]
 		if got := dsp.KnobQ(want.knob); math.Abs(got-want.q) > 1e-9 {
 			t.Errorf("KnobQ(%.3f) = %.3f, want %.3f", want.knob, got, want.q)
 		}
