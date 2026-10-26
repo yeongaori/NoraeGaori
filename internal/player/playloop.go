@@ -256,116 +256,170 @@ func endPlayback(session *discordgo.Session, guildID, reason string) error {
 	return stopInternal(guildID, isLeaving)
 }
 
+type songPlayback struct {
+	session       *discordgo.Session
+	player        *GuildPlayer
+	song          *queue.Song
+	queue         *queue.Queue
+	guildID       string
+	bitrate       int
+	streamURL     string
+	hasPending    bool
+	seekTime      int
+	normalization bool
+	fade          fadeSettings
+	abort         func()
+}
+
 func playSingleSong(session *discordgo.Session, guildID string) playResult {
-
-	q, err := queue.GetQueue(guildID, true)
-	if err != nil {
-		logger.Errorf("Failed to get queue: %v", err)
-		if stopErr := endPlayback(session, guildID, "error"); stopErr != nil {
-			logger.Errorf("Failed to stop player for %s: %v", guildID, stopErr)
-		}
+	p := songPlayback{session: session, guildID: guildID}
+	if result, ok := p.loadCurrentSong(); !ok {
+		return result
+	}
+	if !p.claimPlayer() || !p.joinVoiceForSong() {
 		return playStop
 	}
 
-	if q == nil || len(q.Songs) == 0 {
-		logger.Debugf("Queue is empty for guild: %s", guildID)
-		if err := endPlayback(session, guildID, "empty"); err != nil {
-			logger.Errorf("Failed to cleanup: %v", err)
-		}
-		return playStop
-	}
+	logger.Infof("Starting playback: %s", p.song.Title)
 
-	player := GetPlayer(guildID)
-	song := q.Songs[0]
+	p.bitrate = lookupVoiceChannelBitrate(session, p.queue.VoiceChannelID)
 
-	player.mu.Lock()
-	if player.halted {
-		player.mu.Unlock()
-		return playStop
-	}
-	player.Volume = float64(q.Volume) / 100.0
+	p.song.SetState(queue.SongStateLoading)
 
-	player.StopChan = make(chan struct{})
-	player.mu.Unlock()
-	logger.Debugf("Set initial volume to %.0f%% (%.2f) for guild: %s", q.Volume, player.Volume, guildID)
-
-	if err := prepareVoiceConnection(session, player, guildID, q.VoiceChannelID); err != nil {
-		if errors.Is(err, errSessionHalted) {
-			return playStop
-		}
-		if isDiscordUnreachable(err) {
-			logger.Warnf("Voice is unreachable, playback resumes once Discord reconnects: %v", err)
-			markAwaitingDiscord(guildID)
-			return playStop
-		}
-		logger.Errorf("Failed to join voice: %v", err)
-		return playStop
-	}
-
-	if !markPlayerLoading(player, guildID) {
-		return playStop
-	}
-
-	logger.Infof("Starting playback: %s", song.Title)
-
-	voiceChannelBitrate := lookupVoiceChannelBitrate(session, q.VoiceChannelID)
-
-	song.SetState(queue.SongStateLoading)
-
-	streamURL, hasPending, streamErr := resolveSongStreamURL(player, song, guildID, q.SponsorBlock, voiceChannelBitrate)
+	streamURL, hasPending, streamErr := resolveSongStreamURL(p.player, p.song, guildID, p.queue.SponsorBlock, p.bitrate)
 	if streamErr != nil {
-		logger.Errorf("Failed to get stream URL: %v", streamErr)
-
-		select {
-		case <-player.StopChan:
-			logger.Debugf("Stop signal received during stream URL fetch, stopping: %s", song.Title)
-			return playStop
-		default:
-		}
-
-		shouldRetry := handlePlaybackError(session, guildID, song, streamErr)
-		if shouldRetry {
-			if hasStaleStop(player, song) {
-				return playStop
-			}
-			if !waitBeforeRetry(player, streamErr, retryDelay) {
-				logger.Debugf("Stop signal received while waiting to retry: %s", song.Title)
-				return playStop
-			}
-			return playContinue
-		}
-
-		dropFailedSong(guildID)
-		return playContinue
+		return p.handleStreamURLError(streamErr)
 	}
+	p.streamURL = streamURL
+	p.hasPending = hasPending
 
-	if player.isHalted() {
-		logger.Debugf("Session halted while loading, stopping: %s", song.Title)
-		return playStop
-	}
-
-	qRecheck, err := queue.GetQueue(guildID, false)
-	if err != nil || qRecheck == nil || len(qRecheck.Songs) == 0 {
-		logger.Debugf("Queue empty after loading, song was likely skipped: %s", song.Title)
-		return playStop
-	}
-
-	if qRecheck.Songs[0].ID != song.ID {
-		logger.Debugf("Song changed while loading (was: %s, now: %s), restarting", song.Title, qRecheck.Songs[0].Title)
-		return playContinue
+	if isCurrent, result := p.isStillCurrentSong(); !isCurrent {
+		return result
 	}
 
 	firstFrameCh := make(chan struct{}, 1)
 	abortCh := make(chan struct{})
 	var abortOnce sync.Once
-	abortPlayback := func() { abortOnce.Do(func() { close(abortCh) }) }
-	defer abortPlayback()
+	p.abort = func() { abortOnce.Do(func() { close(abortCh) }) }
+	defer p.abort()
 
-	go announceOnFirstFrame(session, player, song, q, guildID, hasPending, firstFrameCh, abortCh)
+	go announceOnFirstFrame(session, p.player, p.song, p.queue, guildID, p.hasPending, firstFrameCh, abortCh)
 
-	seekTime := song.SeekTime
-	normalization := q.Normalization
-	fade := fadeSettingsFromQueue(q)
+	if result, isDone := p.playUntilDone(firstFrameCh); !isDone {
+		return result
+	}
+	p.abort()
+	logger.Debugf("playAudio completed successfully for: %s", p.song.Title)
+
+	return p.finishSong()
+}
+
+func (p *songPlayback) loadCurrentSong() (playResult, bool) {
+	q, err := queue.GetQueue(p.guildID, true)
+	if err != nil {
+		logger.Errorf("Failed to get queue: %v", err)
+		if stopErr := endPlayback(p.session, p.guildID, "error"); stopErr != nil {
+			logger.Errorf("Failed to stop player for %s: %v", p.guildID, stopErr)
+		}
+		return playStop, false
+	}
+
+	if q == nil || len(q.Songs) == 0 {
+		logger.Debugf("Queue is empty for guild: %s", p.guildID)
+		if err := endPlayback(p.session, p.guildID, "empty"); err != nil {
+			logger.Errorf("Failed to cleanup: %v", err)
+		}
+		return playStop, false
+	}
+
+	p.queue = q
+	p.player = GetPlayer(p.guildID)
+	p.song = q.Songs[0]
+	return playContinue, true
+}
+
+func (p *songPlayback) claimPlayer() bool {
+	player := p.player
+	player.mu.Lock()
+	if player.halted {
+		player.mu.Unlock()
+		return false
+	}
+	player.Volume = float64(p.queue.Volume) / 100.0
+
+	player.StopChan = make(chan struct{})
+	player.mu.Unlock()
+	logger.Debugf("Set initial volume to %.0f%% (%.2f) for guild: %s", p.queue.Volume, player.Volume, p.guildID)
+	return true
+}
+
+func (p *songPlayback) joinVoiceForSong() bool {
+	if err := prepareVoiceConnection(p.session, p.player, p.guildID, p.queue.VoiceChannelID); err != nil {
+		if errors.Is(err, errSessionHalted) {
+			return false
+		}
+		if isDiscordUnreachable(err) {
+			logger.Warnf("Voice is unreachable, playback resumes once Discord reconnects: %v", err)
+			markAwaitingDiscord(p.guildID)
+			return false
+		}
+		logger.Errorf("Failed to join voice: %v", err)
+		return false
+	}
+
+	return markPlayerLoading(p.player, p.guildID)
+}
+
+func (p *songPlayback) handleStreamURLError(streamErr error) playResult {
+	logger.Errorf("Failed to get stream URL: %v", streamErr)
+
+	select {
+	case <-p.player.StopChan:
+		logger.Debugf("Stop signal received during stream URL fetch, stopping: %s", p.song.Title)
+		return playStop
+	default:
+	}
+
+	shouldRetry := handlePlaybackError(p.session, p.guildID, p.song, streamErr)
+	if shouldRetry {
+		if hasStaleStop(p.player, p.song) {
+			return playStop
+		}
+		if !waitBeforeRetry(p.player, streamErr, retryDelay) {
+			logger.Debugf("Stop signal received while waiting to retry: %s", p.song.Title)
+			return playStop
+		}
+		return playContinue
+	}
+
+	dropFailedSong(p.guildID)
+	return playContinue
+}
+
+func (p *songPlayback) isStillCurrentSong() (bool, playResult) {
+	if p.player.isHalted() {
+		logger.Debugf("Session halted while loading, stopping: %s", p.song.Title)
+		return false, playStop
+	}
+
+	qRecheck, err := queue.GetQueue(p.guildID, false)
+	if err != nil || qRecheck == nil || len(qRecheck.Songs) == 0 {
+		logger.Debugf("Queue empty after loading, song was likely skipped: %s", p.song.Title)
+		return false, playStop
+	}
+
+	if qRecheck.Songs[0].ID != p.song.ID {
+		logger.Debugf("Song changed while loading (was: %s, now: %s), restarting", p.song.Title, qRecheck.Songs[0].Title)
+		return false, playContinue
+	}
+	return true, playContinue
+}
+
+func (p *songPlayback) playUntilDone(firstFrameCh chan struct{}) (playResult, bool) {
+	p.seekTime = p.song.SeekTime
+	p.normalization = p.queue.Normalization
+	p.fade = fadeSettingsFromQueue(p.queue)
+	session, guildID := p.session, p.guildID
 	announceNext := func(next *queue.Song) {
 		nq, err := queue.GetQueue(guildID, false)
 		if err != nil || nq == nil {
@@ -377,122 +431,146 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 		announceNowPlaying(session, guildID, next, nq)
 	}
 	for {
-		logger.Debugf("Calling playAudio for: %s (seekTime: %d, volume: %g, normalization: %v)", song.Title, seekTime, q.Volume, normalization)
-		err := playAudio(player, song, streamURL, seekTime, normalization, voiceChannelBitrate, firstFrameCh, &fade, announceNext)
+		logger.Debugf("Calling playAudio for: %s (seekTime: %d, volume: %g, normalization: %v)", p.song.Title, p.seekTime, p.queue.Volume, p.normalization)
+		err := playAudio(p.player, p.song, p.streamURL, p.seekTime, p.normalization, p.bitrate, firstFrameCh, &p.fade, announceNext)
 		if err == nil {
-			break
+			return playContinue, true
 		}
 
-		player.mu.Lock()
-		if player.halted {
-			player.TogglingNorm = false
-			player.Seeking = false
-			player.mu.Unlock()
-			logger.Debugf("Session halted during playback of: %s", song.Title)
-			return playStop
-		}
-		toggling := player.TogglingNorm
-		seeking := player.Seeking
-		if toggling {
-			player.TogglingNorm = false
-
-			seekTime = int(time.Since(player.PlaybackStart).Milliseconds())
-			player.StopChan = make(chan struct{})
-		}
-		if seeking {
-			player.Seeking = false
-
-			seekTime = player.SeekTargetMs
-			song.SeekTime = seekTime
-			player.FadeInNext = true
-			player.StopChan = make(chan struct{})
-		}
-		player.mu.Unlock()
-
-		restartReason := ""
-		if toggling {
-			normalization = reloadNormalization(guildID, normalization)
-			restartReason = "normalization toggle"
-		} else if seeking {
-			reloadVolumeAndFade(player, guildID, &fade)
-			restartReason = "seek"
+		restartReason, isHalted := p.takeRestartRequest()
+		if isHalted {
+			return playStop, false
 		}
 
 		if restartReason != "" {
-			restartURL, restartErr := resolveRestartStreamURL(guildID, song, q.SponsorBlock, voiceChannelBitrate, streamURL)
-			if restartErr != nil {
-				logger.Warnf("Failed to resolve stream URL for %s: %v", restartReason, restartErr)
-				return playContinue
+			if !p.restart(restartReason) {
+				return playContinue, false
 			}
-			streamURL = restartURL
-			logger.Debugf("Restarting FFmpeg for %s at %dms: %s", restartReason, seekTime, song.Title)
 			continue
 		}
 
 		if err.Error() == "playback stopped by user" {
-			logger.Debugf("Playback stopped by user for: %s", song.Title)
+			logger.Debugf("Playback stopped by user for: %s", p.song.Title)
 
+			return playStop, false
+		}
+
+		p.saveCrashPosition()
+		return p.handlePlaybackFailure(err), false
+	}
+}
+
+func (p *songPlayback) takeRestartRequest() (string, bool) {
+	player := p.player
+	player.mu.Lock()
+	if player.halted {
+		player.TogglingNorm = false
+		player.Seeking = false
+		player.mu.Unlock()
+		logger.Debugf("Session halted during playback of: %s", p.song.Title)
+		return "", true
+	}
+	toggling := player.TogglingNorm
+	seeking := player.Seeking
+	if toggling {
+		player.TogglingNorm = false
+
+		p.seekTime = int(time.Since(player.PlaybackStart).Milliseconds())
+		player.StopChan = make(chan struct{})
+	}
+	if seeking {
+		player.Seeking = false
+
+		p.seekTime = player.SeekTargetMs
+		p.song.SeekTime = p.seekTime
+		player.FadeInNext = true
+		player.StopChan = make(chan struct{})
+	}
+	player.mu.Unlock()
+
+	restartReason := ""
+	if toggling {
+		p.normalization = reloadNormalization(p.guildID, p.normalization)
+		restartReason = "normalization toggle"
+	} else if seeking {
+		reloadVolumeAndFade(player, p.guildID, &p.fade)
+		restartReason = "seek"
+	}
+	return restartReason, false
+}
+
+func (p *songPlayback) restart(restartReason string) bool {
+	restartURL, restartErr := resolveRestartStreamURL(p.guildID, p.song, p.queue.SponsorBlock, p.bitrate, p.streamURL)
+	if restartErr != nil {
+		logger.Warnf("Failed to resolve stream URL for %s: %v", restartReason, restartErr)
+		return false
+	}
+	p.streamURL = restartURL
+	logger.Debugf("Restarting FFmpeg for %s at %dms: %s", restartReason, p.seekTime, p.song.Title)
+	return true
+}
+
+func (p *songPlayback) saveCrashPosition() {
+	p.player.mu.Lock()
+	currentPosition := int(time.Since(p.player.PlaybackStart).Milliseconds())
+	p.player.mu.Unlock()
+
+	if currentPosition > p.song.SeekTime+1000 {
+		p.song.SeekTime = currentPosition
+		logger.Infof("Crash recovery: will resume from position %dms for: %s", currentPosition, p.song.Title)
+
+		if err := queue.UpdateSongSeekTime(p.guildID, p.song.ID, currentPosition); err != nil {
+			logger.Warnf("Failed to update seek time in database: %v", err)
+		}
+	}
+}
+
+func (p *songPlayback) handlePlaybackFailure(err error) playResult {
+	isStreamStall := strings.Contains(err.Error(), "stream stalled")
+	if isStreamStall {
+		announceReconnect(p.session, p.guildID, p.song)
+	}
+
+	isVoiceError := isVoiceConnectionError(err.Error())
+	if isVoiceError {
+		logger.Warnf("Voice connection error detected, clearing dead connection for guild: %s", p.guildID)
+		if conn := p.player.currentVoice(); conn != nil {
+			_ = disconnectVoice(conn, 2*time.Second)
+			p.player.setVoice(nil, "")
+		}
+	}
+
+	logger.Errorf("Playback error: %v", err)
+	shouldRetry := handlePlaybackError(p.session, p.guildID, p.song, err)
+	if shouldRetry {
+		if hasStaleStop(p.player, p.song) {
 			return playStop
 		}
 
-		player.mu.Lock()
-		currentPosition := int(time.Since(player.PlaybackStart).Milliseconds())
-		player.mu.Unlock()
-
-		if currentPosition > song.SeekTime+1000 {
-			song.SeekTime = currentPosition
-			logger.Infof("Crash recovery: will resume from position %dms for: %s", currentPosition, song.Title)
-
-			if err := queue.UpdateSongSeekTime(guildID, song.ID, currentPosition); err != nil {
-				logger.Warnf("Failed to update seek time in database: %v", err)
-			}
-		}
-
-		isStreamStall := strings.Contains(err.Error(), "stream stalled")
-		if isStreamStall {
-			announceReconnect(session, guildID, song)
-		}
-
-		isVoiceError := isVoiceConnectionError(err.Error())
+		delay := retryDelay
 		if isVoiceError {
-			logger.Warnf("Voice connection error detected, clearing dead connection for guild: %s", guildID)
-			if conn := player.currentVoice(); conn != nil {
-				_ = disconnectVoice(conn, 2*time.Second)
-				player.setVoice(nil, "")
-			}
+			logger.Infof("Waiting 3 seconds before reconnecting voice for guild: %s", p.guildID)
+			delay = 3 * time.Second
+		} else {
+			invalidatePreCacheSong(p.guildID, p.song.ID)
 		}
-
-		logger.Errorf("Playback error: %v", err)
-		shouldRetry := handlePlaybackError(session, guildID, song, err)
-		if shouldRetry {
-			if hasStaleStop(player, song) {
-				return playStop
-			}
-
-			delay := retryDelay
-			if isVoiceError {
-				logger.Infof("Waiting 3 seconds before reconnecting voice for guild: %s", guildID)
-				delay = 3 * time.Second
-			} else {
-				invalidatePreCacheSong(guildID, song.ID)
-			}
-			isRetrying := waitBeforeRetry(player, err, delay)
-			abortPlayback()
-			if !isRetrying {
-				logger.Debugf("Stop signal received while waiting to retry: %s", song.Title)
-				return playStop
-			}
-			return playContinue
+		isRetrying := waitBeforeRetry(p.player, err, delay)
+		p.abort()
+		if !isRetrying {
+			logger.Debugf("Stop signal received while waiting to retry: %s", p.song.Title)
+			return playStop
 		}
-
-		dropFailedSong(guildID)
-		dismissLoadingMessage(session, guildID)
-		abortPlayback()
 		return playContinue
 	}
-	abortPlayback()
-	logger.Debugf("playAudio completed successfully for: %s", song.Title)
 
+	dropFailedSong(p.guildID)
+	dismissLoadingMessage(p.session, p.guildID)
+	p.abort()
+	return playContinue
+}
+
+func (p *songPlayback) finishSong() playResult {
+	player := p.player
 	player.mu.Lock()
 	player.Playing = false
 	advanced := player.AutoMixAdvanced
@@ -500,22 +578,22 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 	player.mu.Unlock()
 
 	if advanced {
-		go preCacheNext(guildID, voiceChannelBitrate)
+		go preCacheNext(p.guildID, p.bitrate)
 		return playContinue
 	}
 
-	song.ResetRetry()
-	song.SetState(queue.SongStateCompleted)
-	clearRetryCount(guildID, song.URL)
-	clearAnnounced(guildID)
+	p.song.ResetRetry()
+	p.song.SetState(queue.SongStateCompleted)
+	clearRetryCount(p.guildID, p.song.URL)
+	clearAnnounced(p.guildID)
 
-	if err := queue.SetPlaying(guildID, false); err != nil {
+	if err := queue.SetPlaying(p.guildID, false); err != nil {
 		logger.Errorf("Failed to clear playing state after song finish: %v", err)
 	}
 
-	advanceQueueAfterSong(guildID, song)
+	advanceQueueAfterSong(p.guildID, p.song)
 
-	go preCacheNext(guildID, voiceChannelBitrate)
+	go preCacheNext(p.guildID, p.bitrate)
 
 	return playContinue
 }

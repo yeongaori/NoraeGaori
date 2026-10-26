@@ -52,34 +52,9 @@ func PreCacheNext(guildID string, bitrate int) {
 	}
 
 	cacheKey := preCacheKey(guildID, nextSong.ID)
-	preCacheStoreMu.Lock()
-	isRetry := false
-	if cached, exists := preCacheStore[cacheKey]; exists && time.Since(cached.Timestamp) < preCacheTTL {
-		if cached.FailedAt.IsZero() {
-			preCacheStoreMu.Unlock()
-			logger.Debugf("Song already cached: %s", nextSong.Title)
-			return
-		}
-		if time.Since(cached.FailedAt) < preCacheRetryDelay {
-			preCacheStoreMu.Unlock()
-			logger.Debugf("Song recently failed to pre-cache: %s", nextSong.Title)
-			return
-		}
-		isRetry = true
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	claim := &PreCache{
-		SongID:     nextSong.ID,
-		Timestamp:  time.Now(),
-		CancelFunc: cancel,
-	}
-	preCacheStore[cacheKey] = claim
-	preCacheStoreMu.Unlock()
-
-	if isRetry {
-		logger.Debugf("Retrying pre-cache for: %s", nextSong.Title)
-	} else {
-		logger.Debugf("Starting pre-cache for: %s", nextSong.Title)
+	ctx, cancel, claim, ok := claimPreCache(cacheKey, nextSong)
+	if !ok {
+		return
 	}
 
 	go func() {
@@ -121,45 +96,88 @@ func preCacheSong(ctx context.Context, guildID string, song *queue.Song, sponsor
 	logger.Debugf("Cached stream URL for: %s (fetched in %.1fs)", song.Title, time.Since(fetchStart).Seconds())
 
 	if automix, err := queue.GetAutoMix(guildID); err == nil && automix {
-		head := analysis.LoadTrackAnalysis(song.URL, analysis.SegmentHead)
-		reused := head != nil
-		source := "reused"
-
-		var analyzeErr error
-		var analyzeDuration time.Duration
-		if head == nil {
-			markAnalysisPending(guildID, song.ID)
-			analyzeErr = withAnalysisSlot(ctx, func() error {
-				analyzeStart := time.Now()
-				var err error
-				head, err = analyzeSegment(ctx, streamURL, 0, analysisHeadSecs)
-				analyzeDuration = time.Since(analyzeStart)
-				return err
-			})
-			clearAnalysisPending(guildID, song.ID)
-			source = fmt.Sprintf("analyzed in %.1fs", analyzeDuration.Seconds())
-		}
-
-		if analyzeErr == nil && head != nil {
-			preCacheStoreMu.Lock()
-			if entry, exists := preCacheStore[cacheKey]; exists {
-				entry.Analysis = head
-			}
-			preCacheStoreMu.Unlock()
-
-			if !reused {
-				if saveErr := analysis.SaveTrackAnalysis(song.URL, analysis.SegmentHead, head); saveErr != nil {
-					logger.Warnf("Failed to save head analysis for %s: %v", song.Title, saveErr)
-				}
-			}
-			logger.Debugf("Analyzed head for: %s (BPM %.1f, key %s / %s, confidence %.3f, %s)",
-				song.Title, head.BPM, analysis.KeyName(head.Tonic, head.Minor),
-				analysis.FifthsCode(head.Tonic, head.Minor), head.KeyConfidence, source)
-		} else {
-			logger.Debugf("Head analysis failed for %s after %.1fs: %v", song.Title, analyzeDuration.Seconds(), analyzeErr)
-		}
+		analyzeHeadForPreCache(ctx, guildID, song, streamURL, cacheKey)
 	}
 
+	scheduleCacheExpiry(cacheKey, cache, song)
+
+	return nil
+}
+
+func claimPreCache(cacheKey string, nextSong *queue.Song) (context.Context, context.CancelFunc, *PreCache, bool) {
+	preCacheStoreMu.Lock()
+	isRetry := false
+	if cached, exists := preCacheStore[cacheKey]; exists && time.Since(cached.Timestamp) < preCacheTTL {
+		if cached.FailedAt.IsZero() {
+			preCacheStoreMu.Unlock()
+			logger.Debugf("Song already cached: %s", nextSong.Title)
+			return nil, nil, nil, false
+		}
+		if time.Since(cached.FailedAt) < preCacheRetryDelay {
+			preCacheStoreMu.Unlock()
+			logger.Debugf("Song recently failed to pre-cache: %s", nextSong.Title)
+			return nil, nil, nil, false
+		}
+		isRetry = true
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	claim := &PreCache{
+		SongID:     nextSong.ID,
+		Timestamp:  time.Now(),
+		CancelFunc: cancel,
+	}
+	preCacheStore[cacheKey] = claim
+	preCacheStoreMu.Unlock()
+
+	if isRetry {
+		logger.Debugf("Retrying pre-cache for: %s", nextSong.Title)
+	} else {
+		logger.Debugf("Starting pre-cache for: %s", nextSong.Title)
+	}
+	return ctx, cancel, claim, true
+}
+
+func analyzeHeadForPreCache(ctx context.Context, guildID string, song *queue.Song, streamURL, cacheKey string) {
+	head := analysis.LoadTrackAnalysis(song.URL, analysis.SegmentHead)
+	reused := head != nil
+	source := "reused"
+
+	var analyzeErr error
+	var analyzeDuration time.Duration
+	if head == nil {
+		markAnalysisPending(guildID, song.ID)
+		analyzeErr = withAnalysisSlot(ctx, func() error {
+			analyzeStart := time.Now()
+			var err error
+			head, err = analyzeSegment(ctx, streamURL, 0, analysisHeadSecs)
+			analyzeDuration = time.Since(analyzeStart)
+			return err
+		})
+		clearAnalysisPending(guildID, song.ID)
+		source = fmt.Sprintf("analyzed in %.1fs", analyzeDuration.Seconds())
+	}
+
+	if analyzeErr == nil && head != nil {
+		preCacheStoreMu.Lock()
+		if entry, exists := preCacheStore[cacheKey]; exists {
+			entry.Analysis = head
+		}
+		preCacheStoreMu.Unlock()
+
+		if !reused {
+			if saveErr := analysis.SaveTrackAnalysis(song.URL, analysis.SegmentHead, head); saveErr != nil {
+				logger.Warnf("Failed to save head analysis for %s: %v", song.Title, saveErr)
+			}
+		}
+		logger.Debugf("Analyzed head for: %s (BPM %.1f, key %s / %s, confidence %.3f, %s)",
+			song.Title, head.BPM, analysis.KeyName(head.Tonic, head.Minor),
+			analysis.FifthsCode(head.Tonic, head.Minor), head.KeyConfidence, source)
+	} else {
+		logger.Debugf("Head analysis failed for %s after %.1fs: %v", song.Title, analyzeDuration.Seconds(), analyzeErr)
+	}
+}
+
+func scheduleCacheExpiry(cacheKey string, cache *PreCache, song *queue.Song) {
 	time.AfterFunc(preCacheTTL, func() {
 		preCacheStoreMu.Lock()
 		if cached, exists := preCacheStore[cacheKey]; exists && cached.Timestamp.Equal(cache.Timestamp) {
@@ -168,8 +186,6 @@ func preCacheSong(ctx context.Context, guildID string, song *queue.Song, sponsor
 		}
 		preCacheStoreMu.Unlock()
 	})
-
-	return nil
 }
 
 func preCacheKey(guildID string, songID int) string {

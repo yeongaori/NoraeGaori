@@ -279,45 +279,12 @@ func (s *Stream) produce(stdout io.Reader, collectTail bool) {
 			readErr <- err
 		}()
 
-		if !stallTimer.Stop() {
-			select {
-			case <-stallTimer.C:
-			default:
-			}
-		}
-		stallTimer.Reset(StallTimeout)
-
-		var err error
-		select {
-		case err = <-readErr:
-		case <-stallTimer.C:
-			s.killFFmpeg()
-			s.errChan <- fmt.Errorf("stream stalled: no data received for %v (after %d frames)", StallTimeout, frameCount)
-			return
-		case <-s.stopChan:
-			s.killFFmpeg()
-			s.errChan <- fmt.Errorf("playback stopped by user")
+		err, isRead := s.awaitRead(readErr, stallTimer, frameCount)
+		if !isRead || s.finishRead(err, frameCount, tail) {
 			return
 		}
 
-		if err == io.EOF || err == io.ErrUnexpectedEOF {
-			waitErr := s.wait()
-			if waitErr != nil && frameCount == 0 {
-				s.errChan <- fmt.Errorf("ffmpeg produced no audio: %w%s", waitErr, s.Diagnostics())
-				return
-			}
-			s.finishEndState(frameCount, tail)
-			return
-		}
-		if err != nil {
-			s.killFFmpeg()
-			s.errChan <- fmt.Errorf("pcm read error: %w", err)
-			return
-		}
-
-		for i := range pcmBuf {
-			pcmBuf[i] = int16(binary.LittleEndian.Uint16(readBuf[i*2:])) // #nosec G115
-		}
+		decodeFrame(pcmBuf, readBuf)
 
 		if tail != nil {
 			appendTail(tail, pcmBuf)
@@ -332,6 +299,53 @@ func (s *Stream) produce(stdout io.Reader, collectTail bool) {
 		}
 
 		frameCount++
+	}
+}
+
+func (s *Stream) awaitRead(readErr <-chan error, stallTimer *time.Timer, frameCount int) (error, bool) {
+	if !stallTimer.Stop() {
+		select {
+		case <-stallTimer.C:
+		default:
+		}
+	}
+	stallTimer.Reset(StallTimeout)
+
+	select {
+	case err := <-readErr:
+		return err, true
+	case <-stallTimer.C:
+		s.killFFmpeg()
+		s.errChan <- fmt.Errorf("stream stalled: no data received for %v (after %d frames)", StallTimeout, frameCount)
+		return nil, false
+	case <-s.stopChan:
+		s.killFFmpeg()
+		s.errChan <- fmt.Errorf("playback stopped by user")
+		return nil, false
+	}
+}
+
+func (s *Stream) finishRead(err error, frameCount int, tail *monoTail) bool {
+	if err == io.EOF || err == io.ErrUnexpectedEOF {
+		waitErr := s.wait()
+		if waitErr != nil && frameCount == 0 {
+			s.errChan <- fmt.Errorf("ffmpeg produced no audio: %w%s", waitErr, s.Diagnostics())
+			return true
+		}
+		s.finishEndState(frameCount, tail)
+		return true
+	}
+	if err != nil {
+		s.killFFmpeg()
+		s.errChan <- fmt.Errorf("pcm read error: %w", err)
+		return true
+	}
+	return false
+}
+
+func decodeFrame(pcmBuf []int16, readBuf []byte) {
+	for i := range pcmBuf {
+		pcmBuf[i] = int16(binary.LittleEndian.Uint16(readBuf[i*2:])) // #nosec G115
 	}
 }
 

@@ -119,8 +119,25 @@ func beatmatchedOverlap(pair *Pair) (Overlap, bool) {
 		return Overlap{}, false
 	}
 
-	durationA := pair.From.duration()
-	durationB := pair.To.duration()
+	gridA, gridB := beatGrids(pair, speedB)
+
+	best, ok := rankCandidates(collectCandidates(pair, gridA, gridB, isForced))
+	if !ok {
+		return Overlap{}, false
+	}
+	return Overlap{
+		Beatmatched: true,
+		Bars:        best.bars,
+		StartA:      correctedStart(a, best.startA),
+		StartB:      correctedStart(b, best.startB),
+		Length:      float64(best.bars) * gridA.barLength,
+		SpeedB:      speedB,
+		Preset:      pickPreset(pair.From.URL, pair.To.URL, best.bars, best.barA, best.barB),
+	}, true
+}
+
+func beatGrids(pair *Pair, speedB float64) (grid, grid) {
+	a, b := pair.From.Analysis, pair.To.Analysis
 	gridA := grid{
 		firstDownbeat: a.FirstDownbeat(),
 		barLength:     a.BarLength(),
@@ -133,6 +150,13 @@ func beatmatchedOverlap(pair *Pair) (Overlap, bool) {
 		lowest:        b.Offset + b.FirstBeat,
 		highest:       b.Offset + b.Duration,
 	}
+	return gridA, gridB
+}
+
+func collectCandidates(pair *Pair, gridA, gridB grid, isForced bool) []candidate {
+	a, b := pair.From.Analysis, pair.To.Analysis
+	durationA := pair.From.duration()
+	durationB := pair.To.duration()
 	keyTier := analysis.KeyTier(a, b)
 
 	var candidates []candidate
@@ -163,20 +187,7 @@ func beatmatchedOverlap(pair *Pair) (Overlap, bool) {
 			}
 		}
 	}
-
-	best, ok := rankCandidates(candidates)
-	if !ok {
-		return Overlap{}, false
-	}
-	return Overlap{
-		Beatmatched: true,
-		Bars:        best.bars,
-		StartA:      correctedStart(a, best.startA),
-		StartB:      correctedStart(b, best.startB),
-		Length:      float64(best.bars) * gridA.barLength,
-		SpeedB:      speedB,
-		Preset:      pickPreset(pair.From.URL, pair.To.URL, best.bars, best.barA, best.barB),
-	}, true
+	return candidates
 }
 
 func beatmatchSpeed(a, b *analysis.TrackAnalysis, isForced bool) (float64, bool) {

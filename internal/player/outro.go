@@ -60,20 +60,14 @@ func (os *outroState) plan(player *GuildPlayer, es *ffmpeg.EndState, sentFrames 
 	}
 
 	guildID := player.GuildID
-	q, err := queue.GetQueue(guildID, true)
-	if err != nil || q == nil || len(q.Songs) == 0 {
-		return false
-	}
-	if len(q.Songs) > 1 {
-		return false
-	}
-	if q.Songs[0].IsLive {
+	song := soleQueuedSong(guildID)
+	if song == nil {
 		return false
 	}
 
 	effectiveEnd := es.TotalFrames - es.SilentTailFrames
 
-	resolved := transition.ResolveStyles(transition.OutroRecipe(), fade.styleOverrides, songOverrides(q.Songs[0]))
+	resolved := transition.ResolveStyles(transition.OutroRecipe(), fade.styleOverrides, songOverrides(song))
 	recipe := &resolved.Recipe
 	if recipe.IsOutroDefault() {
 		return false
@@ -82,13 +76,7 @@ func (os *outroState) plan(player *GuildPlayer, es *ffmpeg.EndState, sentFrames 
 	periodSec := analysisPeriodSec(trackAnalysis)
 	resolved.ClampRolls(periodSec, outroFrames)
 
-	if trackAnalysis != nil {
-		if transition.LoopBeatCount(recipe.Loop) >= analysis.BarBeats {
-			startFrame = snapTransitionToBar(startFrame, es.TailStartFrame, trackAnalysis)
-		} else {
-			startFrame = snapTransitionToGrid(startFrame, es.TailStartFrame, trackAnalysis)
-		}
-	}
+	startFrame = snapOutroStart(startFrame, es, recipe)
 	if startFrame < sentFrames+1 {
 		startFrame = sentFrames + 1
 	}
@@ -110,6 +98,31 @@ func (os *outroState) plan(player *GuildPlayer, es *ffmpeg.EndState, sentFrames 
 	logger.Debugf("recipe %s (%s) [%s] for guild: %s", recipe,
 		describeOutroInput(trackAnalysis), describeStyleSources(resolved.Sources), guildID)
 	return true
+}
+
+func soleQueuedSong(guildID string) *queue.Song {
+	q, err := queue.GetQueue(guildID, true)
+	if err != nil || q == nil || len(q.Songs) == 0 {
+		return nil
+	}
+	if len(q.Songs) > 1 {
+		return nil
+	}
+	if q.Songs[0].IsLive {
+		return nil
+	}
+	return q.Songs[0]
+}
+
+func snapOutroStart(startFrame int, es *ffmpeg.EndState, recipe *transition.Recipe) int {
+	trackAnalysis := es.Analysis
+	if trackAnalysis == nil {
+		return startFrame
+	}
+	if transition.LoopBeatCount(recipe.Loop) >= analysis.BarBeats {
+		return snapTransitionToBar(startFrame, es.TailStartFrame, trackAnalysis)
+	}
+	return snapTransitionToGrid(startFrame, es.TailStartFrame, trackAnalysis)
 }
 
 func outroBars(frames int, periodSec float64) int {
