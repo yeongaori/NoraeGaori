@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"database/sql"
 	"fmt"
 
 	"noraegaori/internal/database"
@@ -12,13 +13,8 @@ func SwapSongs(guildID string, pos1, pos2 int) error {
 	release := guild.AcquireLock(guildID)
 	defer release()
 
-	q, err := loadQueueFromDB(guildID)
-	if err != nil {
-		return fmt.Errorf("failed to load queue: %w", err)
-	}
-
-	if pos1 < 0 || pos2 < 0 || pos1 >= len(q.Songs) || pos2 >= len(q.Songs) {
-		return fmt.Errorf("invalid positions")
+	if err := checkPositions(guildID, pos1, pos2); err != nil {
+		return err
 	}
 
 	if pos1 == pos2 {
@@ -31,21 +27,14 @@ func SwapSongs(guildID string, pos1, pos2 int) error {
 	}
 	defer tx.Rollback()
 
-	var song1ID, song2ID int
-	err = tx.QueryRow(
-		`SELECT id FROM songs WHERE guild_id = ? AND queue_position = ?`,
-		guildID, pos1,
-	).Scan(&song1ID)
+	song1ID, err := songIDAt(tx, guildID, pos1)
 	if err != nil {
-		return fmt.Errorf("failed to get song at position %d: %w", pos1, err)
+		return err
 	}
 
-	err = tx.QueryRow(
-		`SELECT id FROM songs WHERE guild_id = ? AND queue_position = ?`,
-		guildID, pos2,
-	).Scan(&song2ID)
+	song2ID, err := songIDAt(tx, guildID, pos2)
 	if err != nil {
-		return fmt.Errorf("failed to get song at position %d: %w", pos2, err)
+		return err
 	}
 
 	tempPos := -1
@@ -84,13 +73,8 @@ func MoveSong(guildID string, fromPos, toPos int) error {
 	release := guild.AcquireLock(guildID)
 	defer release()
 
-	q, err := loadQueueFromDB(guildID)
-	if err != nil {
-		return fmt.Errorf("failed to load queue: %w", err)
-	}
-
-	if fromPos < 0 || toPos < 0 || fromPos >= len(q.Songs) || toPos >= len(q.Songs) {
-		return fmt.Errorf("invalid positions")
+	if err := checkPositions(guildID, fromPos, toPos); err != nil {
+		return err
 	}
 
 	if fromPos == toPos {
@@ -103,13 +87,9 @@ func MoveSong(guildID string, fromPos, toPos int) error {
 	}
 	defer tx.Rollback()
 
-	var songID int
-	err = tx.QueryRow(
-		`SELECT id FROM songs WHERE guild_id = ? AND queue_position = ?`,
-		guildID, fromPos,
-	).Scan(&songID)
+	songID, err := songIDAt(tx, guildID, fromPos)
 	if err != nil {
-		return fmt.Errorf("failed to get song at position %d: %w", fromPos, err)
+		return err
 	}
 
 	tempPos := -1
@@ -151,4 +131,30 @@ func MoveSong(guildID string, fromPos, toPos int) error {
 	InvalidateCache(guildID)
 	logger.Debugf("Moved song from position %d to %d for guild: %s", fromPos, toPos, guildID)
 	return nil
+}
+
+func checkPositions(guildID string, positions ...int) error {
+	q, err := loadQueueFromDB(guildID)
+	if err != nil {
+		return fmt.Errorf("failed to load queue: %w", err)
+	}
+
+	for _, position := range positions {
+		if position < 0 || position >= len(q.Songs) {
+			return fmt.Errorf("invalid positions")
+		}
+	}
+	return nil
+}
+
+func songIDAt(tx *sql.Tx, guildID string, position int) (int, error) {
+	var songID int
+	err := tx.QueryRow(
+		`SELECT id FROM songs WHERE guild_id = ? AND queue_position = ?`,
+		guildID, position,
+	).Scan(&songID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get song at position %d: %w", position, err)
+	}
+	return songID, nil
 }

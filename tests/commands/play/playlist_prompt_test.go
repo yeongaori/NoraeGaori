@@ -72,7 +72,7 @@ func TestPlaylistRestPromptTimeoutKeepsTheSongAndDropsTheBotsArrow(t *testing.T)
 	session, requests, msg, interaction := newPromptFixture(t)
 	timeoutEmbed := play.HookPlaylistTimeoutEmbed("guild1", timeoutSong(), false)
 
-	play.HookHandlePlaylistRestConfirmationReaction(session, interaction, msg, "list1", "timeout", nil, timeoutEmbed)()
+	play.HookHandlePlaylistRestConfirmationReaction(session, interaction, msg, "list1", "timeout", "", timeoutEmbed)()
 
 	embed := editedPromptEmbed(t, requests())
 	if want := messages.T("guild1").Titles.Added; embed["title"] != want {
@@ -87,7 +87,7 @@ func TestPlaylistRestPromptTimeoutKeepsTheSongAndDropsTheBotsArrow(t *testing.T)
 func TestPlaylistPromptTimeoutWarnsAndDropsTheBotsCheck(t *testing.T) {
 	session, requests, msg, interaction := newPromptFixture(t)
 
-	play.HookHandlePlaylistConfirmationReaction(session, interaction, msg, &youtube.PlaylistInfo{}, nil)()
+	play.HookHandlePlaylistConfirmationReaction(session, interaction, msg, &youtube.PlaylistInfo{}, "")()
 
 	embed := editedPromptEmbed(t, requests())
 	if want := messages.T("guild1").Music.PlaylistTimeoutTitle; embed["title"] != want {

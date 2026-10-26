@@ -214,24 +214,20 @@ func ResumeOrStart(session *discordgo.Session, guildID string) {
 
 	if paused {
 		logger.Debugf("Resuming playback for guild: %s", guildID)
-		go func() {
-			if err := Resume(session, guildID); errors.Is(err, ErrPlaybackAlreadyActive) {
-				logger.Debugf("Playback already active for guild %s", guildID)
-			} else if err != nil {
-				logger.Warnf("Failed to resume playback for guild %s: %v", guildID, err)
-			}
-		}()
+		go startPlayback(Resume, session, guildID, "Failed to resume playback for guild %s: %v")
 		return
 	}
 
 	logger.Debugf("Starting playback for guild: %s", guildID)
-	go func() {
-		if err := Play(session, guildID); errors.Is(err, ErrPlaybackAlreadyActive) {
-			logger.Debugf("Playback already active for guild %s", guildID)
-		} else if err != nil {
-			logger.Warnf("Failed to start playback for guild %s: %v", guildID, err)
-		}
-	}()
+	go startPlayback(Play, session, guildID, "Failed to start playback for guild %s: %v")
+}
+
+func startPlayback(start func(*discordgo.Session, string) error, session *discordgo.Session, guildID, failureFormat string) {
+	if err := start(session, guildID); errors.Is(err, ErrPlaybackAlreadyActive) {
+		logger.Debugf("Playback already active for guild %s", guildID)
+	} else if err != nil {
+		logger.Warnf(failureFormat, guildID, err)
+	}
 }
 
 func resumeInternal(session *discordgo.Session, guildID string) error {
@@ -277,10 +273,7 @@ func Skip(session *discordgo.Session, guildID string) error {
 	player := GetPlayer(guildID)
 	player.noteCommand("skip")
 
-	player.mu.Lock()
-	fadingOut := player.FadingOut
-	player.mu.Unlock()
-	if fadingOut {
+	if player.isFadingOut() {
 		logger.Debugf("Fade-out in progress, letting it finish for guild: %s", guildID)
 		return nil
 	}
@@ -292,53 +285,18 @@ func Skip(session *discordgo.Session, guildID string) error {
 	wasLoading := player.Loading
 
 	if wasPlaying || wasLoading {
-
-		select {
-		case <-player.PlaybackDone:
-		default:
-		}
-
+		player.drainPlaybackDoneLocked()
 		player.signalStopLocked()
 	}
 	player.mu.Unlock()
 
 	if wasPlaying {
-		select {
-		case <-player.PlaybackDone:
-			logger.Debugf("Playback terminated for guild: %s", guildID)
-		case <-time.After(5 * time.Second):
-			logger.Warnf("Timeout waiting for playback to terminate for guild: %s", guildID)
-		}
-
-		player.mu.Lock()
-		player.Playing = false
-		player.Loading = false
-		pending := player.PendingStream
-		player.PendingStream = nil
-		player.mu.Unlock()
-
-		if pending != nil {
-			pending.Stream.Stop()
-		}
+		player.awaitPlaybackDone(guildID, 5*time.Second)
+		player.clearPlaybackAndPendingStream()
 	}
 
-	q, err := queue.GetQueue(guildID, false)
-	if err == nil && q != nil && len(q.Songs) > 0 {
-		q.Songs[0].ResetRetry()
-		logger.Debugf("Removing song: %s", q.Songs[0].Title)
-	}
-
-	if err := queue.RemoveFirstSong(guildID); err != nil {
-		logger.Errorf("Failed to remove song: %v", err)
-		return fmt.Errorf("failed to remove song: %w", err)
-	}
-
-	logger.Debugf("Skipped song for guild: %s", guildID)
-
-	q, err = queue.GetQueue(guildID, true)
-	if err != nil || q == nil || len(q.Songs) == 0 {
-		logger.Infof("Queue is empty after skip for guild: %s", guildID)
-		return ErrQueueEmpty
+	if err := removeSkippedSong(guildID, logger.Infof); err != nil {
+		return err
 	}
 
 	startNextSongAsync(session, guildID)
@@ -357,23 +315,13 @@ func SkipTo(session *discordgo.Session, guildID string) error {
 	wasLoading := player.Loading
 
 	if wasPlaying || wasLoading {
-
-		select {
-		case <-player.PlaybackDone:
-		default:
-		}
-
+		player.drainPlaybackDoneLocked()
 		player.signalStopLocked()
 	}
 	player.mu.Unlock()
 
 	if wasPlaying {
-		select {
-		case <-player.PlaybackDone:
-			logger.Debugf("Playback terminated for guild: %s", guildID)
-		case <-time.After(5 * time.Second):
-			logger.Warnf("Timeout waiting for playback to terminate for guild: %s", guildID)
-		}
+		player.awaitPlaybackDone(guildID, 5*time.Second)
 
 		player.mu.Lock()
 		player.Playing = false
@@ -392,10 +340,7 @@ func skipInternal(session *discordgo.Session, guildID string) error {
 	logger.Debugf("Called for guild %s", guildID)
 	player := GetPlayer(guildID)
 
-	player.mu.Lock()
-	fadingOut := player.FadingOut
-	player.mu.Unlock()
-	if fadingOut {
+	if player.isFadingOut() {
 		logger.Debugf("Fade-out in progress, letting it finish for guild: %s", guildID)
 		return nil
 	}
@@ -405,37 +350,27 @@ func skipInternal(session *discordgo.Session, guildID string) error {
 
 	wasPlaying := player.Playing
 	if wasPlaying {
-
-		select {
-		case <-player.PlaybackDone:
-		default:
-		}
-
+		player.drainPlaybackDoneLocked()
 		player.signalStopLocked()
 	}
 
 	player.mu.Unlock()
 
 	if wasPlaying {
-		select {
-		case <-player.PlaybackDone:
-			logger.Debugf("Playback terminated for guild: %s", guildID)
-		case <-time.After(2 * time.Second):
-			logger.Warnf("Timeout waiting for playback to terminate for guild: %s", guildID)
-		}
-
-		player.mu.Lock()
-		player.Playing = false
-		player.Loading = false
-		pending := player.PendingStream
-		player.PendingStream = nil
-		player.mu.Unlock()
-
-		if pending != nil {
-			pending.Stream.Stop()
-		}
+		player.awaitPlaybackDone(guildID, 2*time.Second)
+		player.clearPlaybackAndPendingStream()
 	}
 
+	if err := removeSkippedSong(guildID, logger.Debugf); err != nil {
+		return err
+	}
+
+	startNextSongAsync(session, guildID)
+
+	return nil
+}
+
+func removeSkippedSong(guildID string, logEmpty func(format string, args ...interface{})) error {
 	q, err := queue.GetQueue(guildID, false)
 	if err == nil && q != nil && len(q.Songs) > 0 {
 		q.Songs[0].ResetRetry()
@@ -451,12 +386,9 @@ func skipInternal(session *discordgo.Session, guildID string) error {
 
 	q, err = queue.GetQueue(guildID, true)
 	if err != nil || q == nil || len(q.Songs) == 0 {
-		logger.Debugf("Queue is empty after skip for guild: %s", guildID)
+		logEmpty("Queue is empty after skip for guild: %s", guildID)
 		return ErrQueueEmpty
 	}
-
-	startNextSongAsync(session, guildID)
-
 	return nil
 }
 
@@ -480,10 +412,7 @@ func stopPlayback(guildID string, isLeaving bool) error {
 	wasPlaying := player.Playing
 
 	if wasPlaying || player.Loading {
-		select {
-		case <-player.PlaybackDone:
-		default:
-		}
+		player.drainPlaybackDoneLocked()
 	}
 
 	player.haltLocked()
@@ -491,12 +420,7 @@ func stopPlayback(guildID string, isLeaving bool) error {
 	player.mu.Unlock()
 
 	if wasPlaying {
-		select {
-		case <-player.PlaybackDone:
-			logger.Debugf("Playback terminated for guild: %s", guildID)
-		case <-time.After(5 * time.Second):
-			logger.Warnf("Timeout waiting for playback to terminate for guild: %s", guildID)
-		}
+		player.awaitPlaybackDone(guildID, 5*time.Second)
 	}
 
 	if err := releasePlayback(guildID, isLeaving); err != nil {

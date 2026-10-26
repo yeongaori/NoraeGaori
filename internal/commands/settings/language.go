@@ -44,8 +44,7 @@ func HandleSetLanguage(s *discordgo.Session, i *discordgo.InteractionCreate) err
 
 	if requested == "" {
 		if err := guild.SetLanguage(i.GuildID, ""); err != nil {
-			discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
-				fmt.Sprintf(t.Settings.LanguageSaveFailed, err)))
+			discord.RespondErrorEmbed(s, i, fmt.Sprintf(t.Settings.LanguageSaveFailed, err))
 			return err
 		}
 
@@ -68,14 +67,12 @@ func HandleSetLanguage(s *discordgo.Session, i *discordgo.InteractionCreate) err
 		}
 	}
 	if !known {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
-			fmt.Sprintf(t.Settings.LanguageUnknown, requested, availableStr)))
+		discord.RespondErrorEmbed(s, i, fmt.Sprintf(t.Settings.LanguageUnknown, requested, availableStr))
 		return nil
 	}
 
 	if err := guild.SetLanguage(i.GuildID, requested); err != nil {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
-			fmt.Sprintf(t.Settings.LanguageSaveFailed, err)))
+		discord.RespondErrorEmbed(s, i, fmt.Sprintf(t.Settings.LanguageSaveFailed, err))
 		return err
 	}
 

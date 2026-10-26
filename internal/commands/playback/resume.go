@@ -13,36 +13,36 @@ import (
 )
 
 func HandleResume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
-	if err != nil || voiceState.ChannelID == "" {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.NotInVoiceChannel))
+	voiceChannelID, ok := discord.CallerVoiceChannel(s, i)
+	if !ok {
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Errors.NotInVoiceChannel)
 		return nil
 	}
 
 	q, err := queue.GetQueue(i.GuildID, true)
 	if err != nil || q == nil || len(q.Songs) == 0 {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.NoSongsToResume))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Music.NoSongsToResume)
 		return nil
 	}
 
 	if q.Playing || q.Loading {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.AlreadyPlaying))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Music.AlreadyPlaying)
 		return nil
 	}
 
 	if err := queue.SetPaused(i.GuildID, false); err != nil {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.PlaybackStartError))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Music.PlaybackStartError)
 		return err
 	}
 
-	if err := queue.UpdateVoiceChannel(i.GuildID, voiceState.ChannelID); err != nil {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.PlaybackStartError))
+	if err := queue.UpdateVoiceChannel(i.GuildID, voiceChannelID); err != nil {
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Music.PlaybackStartError)
 		return err
 	}
 
 	q, err = queue.GetQueue(i.GuildID, true)
 	if err != nil || q == nil || len(q.Songs) == 0 {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.QueueNotFound))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Music.QueueNotFound)
 		return nil
 	}
 
@@ -70,7 +70,7 @@ func HandleResume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 			logger.Infof("Live stream has ended, skipping to next song")
 
 			if err := queue.RemoveSong(i.GuildID, 0); err != nil {
-				_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.PlaybackStartError))
+				discord.UpdateErrorEmbed(s, i, messages.T(i.GuildID).Music.PlaybackStartError)
 				return err
 			}
 

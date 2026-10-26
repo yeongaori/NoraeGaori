@@ -255,10 +255,10 @@ func (c *InnertubeClient) GetVideoInfo(guildID, url, requesterName, requesterID 
 	var isLive bool
 
 	if vd.IsLiveContent || vd.IsLive {
-		durationStr = "🔴 LIVE"
+		durationStr = LiveDuration
 		isLive = true
 	} else if seconds, parseErr := strconv.Atoi(vd.LengthSeconds); vd.LengthSeconds != "" && parseErr == nil {
-		durationStr = formatDuration(seconds)
+		durationStr = messages.FormatDuration(seconds)
 	} else {
 		durationStr = "Unknown"
 	}

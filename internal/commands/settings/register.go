@@ -10,9 +10,8 @@ import (
 )
 
 func Register(cmd func(string) messages.CommandStrings) {
-	command.RegisterCommand(&command.Command{
-		Name:        "setprefix",
-		Description: cmd("setprefix").Description,
+	command.RegisterLocalized(cmd, &command.Command{
+		Name: "setprefix",
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Type:        discordgo.ApplicationCommandOptionString,
@@ -24,20 +23,18 @@ func Register(cmd func(string) messages.CommandStrings) {
 		Handler:   HandleSetPrefix,
 		AdminOnly: true,
 		TextOnly:  true,
-		Usage:     cmd("setprefix").Usage,
-		Example:   cmd("setprefix").Example,
 	})
-	command.RegisterAliases("setprefix", cmd("setprefix"))
+	setLanguage := cmd("setlanguage")
 	for _, langCmd := range []string{"setlanguage", "lang", "language"} {
 		name := langCmd
 		command.RegisterCommand(&command.Command{
 			Name:        name,
-			Description: cmd("setlanguage").Description,
+			Description: setLanguage.Description,
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Type:        discordgo.ApplicationCommandOptionString,
 					Name:        "language",
-					Description: cmd("setlanguage").Options["language"],
+					Description: setLanguage.Options["language"],
 					Required:    false,
 					Choices:     BuildLanguageChoices(),
 				},
@@ -45,17 +42,16 @@ func Register(cmd func(string) messages.CommandStrings) {
 			Handler:   HandleSetLanguage,
 			AdminOnly: true,
 			TextOnly:  true,
-			Usage:     cmd("setlanguage").Usage,
-			Example:   cmd("setlanguage").Example,
+			Usage:     setLanguage.Usage,
+			Example:   setLanguage.Example,
 		})
 	}
-	command.RegisterAliases("setlanguage", cmd("setlanguage"))
+	command.RegisterAliases("setlanguage", &setLanguage)
 	for _, name := range []string{"sponsorblock", "showstartedtrack", "normalization", "autoleave", "autopause", "autoresume"} {
 		RegisterToggleCommand(cmd, name)
 	}
-	command.RegisterCommand(&command.Command{
-		Name:        "settings",
-		Description: cmd("settings").Description,
+	command.RegisterLocalized(cmd, &command.Command{
+		Name: "settings",
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Type:        discordgo.ApplicationCommandOptionString,
@@ -65,12 +61,8 @@ func Register(cmd func(string) messages.CommandStrings) {
 				Choices:     BuildCategoryChoices(),
 			},
 		},
-		Handler:  HandleSettingsPanel,
-		TextOnly: false,
-		Usage:    cmd("settings").Usage,
-		Example:  cmd("settings").Example,
+		Handler: HandleSettingsPanel,
 	})
-	command.RegisterAliases("settings", cmd("settings"))
 	registerSettingMenus()
 	registerPanelRoutes()
 }
@@ -90,22 +82,17 @@ func RegisterToggleCommand(cmd func(string) messages.CommandStrings, name string
 		},
 	}
 	if number := findNumberSetting(name, ""); number != nil {
-		options = append(options, numberOption(commandStrings, strings.TrimPrefix(number.key, name+"_"), number))
+		options = append(options, numberOption(&commandStrings, strings.TrimPrefix(number.key, name+"_"), number))
 	}
 
-	command.RegisterCommand(&command.Command{
-		Name:        name,
-		Description: commandStrings.Description,
-		Options:     options,
-		Handler:     HandleSetting(name),
-		TextOnly:    false,
-		Usage:       commandStrings.Usage,
-		Example:     commandStrings.Example,
+	command.RegisterLocalized(cmd, &command.Command{
+		Name:    name,
+		Options: options,
+		Handler: HandleSetting(name),
 	})
-	command.RegisterAliases(name, commandStrings)
 }
 
-func numberOption(commandStrings messages.CommandStrings, name string, spec *settingSpec) *discordgo.ApplicationCommandOption {
+func numberOption(commandStrings *messages.CommandStrings, name string, spec *settingSpec) *discordgo.ApplicationCommandOption {
 	minValue := spec.min
 	return &discordgo.ApplicationCommandOption{
 		Type:        discordgo.ApplicationCommandOptionInteger,

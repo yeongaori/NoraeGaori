@@ -1,7 +1,6 @@
 package player
 
 import (
-	"context"
 	"errors"
 	"strings"
 	"sync"
@@ -26,9 +25,7 @@ func prepareVoiceConnection(session *discordgo.Session, player *GuildPlayer, gui
 		select {
 		case <-conn.DeadChan():
 			logger.Warnf("Detected dead voice connection, will reconnect for guild: %s", guildID)
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			_ = conn.Disconnect(ctx)
-			cancel()
+			_ = disconnectVoice(conn, 2*time.Second)
 			player.setVoice(nil, "")
 			conn = nil
 		default:
@@ -46,9 +43,7 @@ func prepareVoiceConnection(session *discordgo.Session, player *GuildPlayer, gui
 
 	if !player.adoptVoice(vc, voiceChannelID) {
 		logger.Debugf("Session halted while joining voice, dropping the new connection for guild: %s", guildID)
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		_ = vc.Disconnect(ctx)
-		cancel()
+		_ = disconnectVoice(vc, 5*time.Second)
 		return errSessionHalted
 	}
 
@@ -330,12 +325,8 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 
 		shouldRetry := handlePlaybackError(session, guildID, song, streamErr)
 		if shouldRetry {
-
-			select {
-			case <-player.StopChan:
-				logger.Debugf("Drained stale stop signal before retry for: %s", song.Title)
+			if hasStaleStop(player, song) {
 				return playStop
-			default:
 			}
 			if !waitBeforeRetry(player, streamErr, retryDelay) {
 				logger.Debugf("Stop signal received while waiting to retry: %s", song.Title)
@@ -344,10 +335,7 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 			return playContinue
 		}
 
-		if err := queue.RemoveFirstSong(guildID); err != nil {
-			logger.Errorf("Failed to remove failed song: %v", err)
-		}
-		clearAnnounced(guildID)
+		dropFailedSong(guildID)
 		return playContinue
 	}
 
@@ -469,9 +457,7 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 		if isVoiceError {
 			logger.Warnf("Voice connection error detected, clearing dead connection for guild: %s", guildID)
 			if conn := player.currentVoice(); conn != nil {
-				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-				_ = conn.Disconnect(ctx)
-				cancel()
+				_ = disconnectVoice(conn, 2*time.Second)
 				player.setVoice(nil, "")
 			}
 		}
@@ -479,12 +465,8 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 		logger.Errorf("Playback error: %v", err)
 		shouldRetry := handlePlaybackError(session, guildID, song, err)
 		if shouldRetry {
-
-			select {
-			case <-player.StopChan:
-				logger.Debugf("Drained stale stop signal before retry for: %s", song.Title)
+			if hasStaleStop(player, song) {
 				return playStop
-			default:
 			}
 
 			delay := retryDelay
@@ -503,10 +485,7 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 			return playContinue
 		}
 
-		if err := queue.RemoveFirstSong(guildID); err != nil {
-			logger.Errorf("Failed to remove failed song: %v", err)
-		}
-		clearAnnounced(guildID)
+		dropFailedSong(guildID)
 		dismissLoadingMessage(session, guildID)
 		abortPlayback()
 		return playContinue

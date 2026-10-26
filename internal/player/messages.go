@@ -38,6 +38,18 @@ type embedSender interface {
 	ChannelMessageEditEmbed(channelID, messageID string, embed *discordgo.MessageEmbed, options ...discordgo.RequestOption) (*discordgo.Message, error)
 }
 
+func songEmbed(guildID string, color int, title, description string, song *queue.Song) *discordgo.MessageEmbed {
+	return messages.CreateSongEmbed(guildID, color, title, description, song.Title, song.URL, song.Uploader, song.Duration, song.RequestedByTag, song.Thumbnail)
+}
+
+func textChannelOf(guildID string) (string, bool) {
+	q, err := queue.GetQueue(guildID, false)
+	if err != nil || q == nil || q.TextChannelID == "" {
+		return "", false
+	}
+	return q.TextChannelID, true
+}
+
 func sendNowPlayingMessage(session *discordgo.Session, guildID string, song *queue.Song, q *queue.Queue) {
 	deliverNowPlaying(session, guildID, song, q)
 }
@@ -45,18 +57,7 @@ func sendNowPlayingMessage(session *discordgo.Session, guildID string, song *que
 func deliverNowPlaying(sender embedSender, guildID string, song *queue.Song, q *queue.Queue) {
 	loadingMsg := GetLoadingMessage(guildID)
 	if loadingMsg != nil {
-		nowPlayingEmbed := messages.CreateSongEmbed(
-			guildID,
-			messages.ColorSuccess,
-			messages.T(guildID).Player.PlaybackStarted,
-			"",
-			song.Title,
-			song.URL,
-			song.Uploader,
-			song.Duration,
-			song.RequestedByTag,
-			song.Thumbnail,
-		)
+		nowPlayingEmbed := songEmbed(guildID, messages.ColorSuccess, messages.T(guildID).Player.PlaybackStarted, "", song)
 
 		_, err := sender.ChannelMessageEditEmbed(loadingMsg.ChannelID, loadingMsg.ID, nowPlayingEmbed)
 		if err != nil {
@@ -70,18 +71,7 @@ func deliverNowPlaying(sender embedSender, guildID string, song *queue.Song, q *
 
 		DeleteLoadingMessage(guildID)
 	} else if q.ShowStartedTrack {
-		embed := messages.CreateSongEmbed(
-			guildID,
-			messages.ColorSuccess,
-			messages.T(guildID).Player.NowPlaying,
-			"",
-			song.Title,
-			song.URL,
-			song.Uploader,
-			song.Duration,
-			song.RequestedByTag,
-			song.Thumbnail,
-		)
+		embed := songEmbed(guildID, messages.ColorSuccess, messages.T(guildID).Player.NowPlaying, "", song)
 		if _, err := sender.ChannelMessageSendEmbed(q.TextChannelID, embed); err != nil {
 			logger.Warnf("Failed to send the now playing message: %v", err)
 		}
@@ -98,18 +88,7 @@ func resolveNotice(sender embedSender, notices *guildMessages, guildID string, s
 		return
 	}
 
-	resolvedEmbed := messages.CreateSongEmbed(
-		guildID,
-		messages.ColorSuccess,
-		title,
-		description,
-		song.Title,
-		song.URL,
-		song.Uploader,
-		song.Duration,
-		song.RequestedByTag,
-		song.Thumbnail,
-	)
+	resolvedEmbed := songEmbed(guildID, messages.ColorSuccess, title, description, song)
 	if _, err := sender.ChannelMessageEditEmbed(notice.ChannelID, notice.ID, resolvedEmbed); err != nil {
 		logger.Warnf("Failed to update the %q notice: %v", title, err)
 	}
@@ -143,24 +122,13 @@ func (notices *guildMessages) remove(guildID string) {
 }
 
 func sendReconnectMessage(session *discordgo.Session, guildID string, song *queue.Song) {
-	q, err := queue.GetQueue(guildID, false)
-	if err != nil || q == nil || q.TextChannelID == "" {
+	textChannelID, ok := textChannelOf(guildID)
+	if !ok {
 		return
 	}
 
-	embed := messages.CreateSongEmbed(
-		guildID,
-		messages.ColorWarning,
-		messages.T(guildID).Player.StreamReconnectingTitle,
-		messages.T(guildID).Player.StreamReconnectingDesc,
-		song.Title,
-		song.URL,
-		song.Uploader,
-		song.Duration,
-		song.RequestedByTag,
-		song.Thumbnail,
-	)
-	msg, err := session.ChannelMessageSendEmbed(q.TextChannelID, embed)
+	embed := songEmbed(guildID, messages.ColorWarning, messages.T(guildID).Player.StreamReconnectingTitle, messages.T(guildID).Player.StreamReconnectingDesc, song)
+	msg, err := session.ChannelMessageSendEmbed(textChannelID, embed)
 	if err == nil && msg != nil {
 		reconnectNotices.set(guildID, msg)
 	}
@@ -174,24 +142,13 @@ func postRateLimitNotice(sender embedSender, guildID string, song *queue.Song) {
 	if rateLimitNotices.get(guildID) != nil {
 		return
 	}
-	q, err := queue.GetQueue(guildID, false)
-	if err != nil || q == nil || q.TextChannelID == "" {
+	textChannelID, ok := textChannelOf(guildID)
+	if !ok {
 		return
 	}
 
-	embed := messages.CreateSongEmbed(
-		guildID,
-		messages.ColorWarning,
-		messages.T(guildID).Player.RateLimitedTitle,
-		messages.T(guildID).Player.RateLimitedDesc,
-		song.Title,
-		song.URL,
-		song.Uploader,
-		song.Duration,
-		song.RequestedByTag,
-		song.Thumbnail,
-	)
-	msg, err := sender.ChannelMessageSendEmbed(q.TextChannelID, embed)
+	embed := songEmbed(guildID, messages.ColorWarning, messages.T(guildID).Player.RateLimitedTitle, messages.T(guildID).Player.RateLimitedDesc, song)
+	msg, err := sender.ChannelMessageSendEmbed(textChannelID, embed)
 	if err != nil || msg == nil {
 		logger.Warnf("Failed to send the rate limit notice: %v", err)
 		return
@@ -200,25 +157,14 @@ func postRateLimitNotice(sender embedSender, guildID string, song *queue.Song) {
 }
 
 func sendSongErrorMessage(session *discordgo.Session, guildID string, song *queue.Song, reason string) {
-	q, err := queue.GetQueue(guildID, false)
-	if err != nil || q == nil || q.TextChannelID == "" {
+	textChannelID, ok := textChannelOf(guildID)
+	if !ok {
 		logger.Warnf("Cannot send error message - no text channel for guild: %s", guildID)
 		return
 	}
 
-	embed := messages.CreateSongEmbed(
-		guildID,
-		messages.ColorError,
-		messages.T(guildID).Player.PlaybackFailedTitle,
-		reason,
-		song.Title,
-		song.URL,
-		song.Uploader,
-		song.Duration,
-		song.RequestedByTag,
-		song.Thumbnail,
-	)
-	_, _ = session.ChannelMessageSendEmbed(q.TextChannelID, embed)
+	embed := songEmbed(guildID, messages.ColorError, messages.T(guildID).Player.PlaybackFailedTitle, reason, song)
+	_, _ = session.ChannelMessageSendEmbed(textChannelID, embed)
 }
 
 func sendPlaybackCrashMessage(session *discordgo.Session, guildID string, song *queue.Song) {
@@ -226,13 +172,13 @@ func sendPlaybackCrashMessage(session *discordgo.Session, guildID string, song *
 }
 
 func sendPlaybackEndMessage(session *discordgo.Session, guildID, reason string, isLeaving bool) {
-	q, err := queue.GetQueue(guildID, false)
-	if err != nil || q == nil || q.TextChannelID == "" {
+	textChannelID, ok := textChannelOf(guildID)
+	if !ok {
 		logger.Debugf("Cannot send playback end message: no queue or text channel")
 		return
 	}
 
-	if _, err := session.ChannelMessageSendEmbed(q.TextChannelID, playbackEndEmbed(guildID, reason, isLeaving)); err != nil {
+	if _, err := session.ChannelMessageSendEmbed(textChannelID, playbackEndEmbed(guildID, reason, isLeaving)); err != nil {
 		logger.Debugf("Failed to send playback end message: %v", err)
 	}
 }

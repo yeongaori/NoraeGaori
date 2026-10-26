@@ -30,6 +30,13 @@ const (
 	YtDlpChannelNightly = "nightly"
 )
 
+const (
+	defaultLanguage             = "en"
+	defaultLogFile              = "latest.log"
+	DefaultMaxDownloadSpeedMbps = 10.0
+	defaultVolume               = 100
+)
+
 type AdminsConfig struct {
 	Admins []string `json:"admins"`
 }
@@ -93,11 +100,11 @@ func loadConfig() error {
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		defaultConfig := &Config{
 			Prefix:               "!",
-			Language:             "en",
+			Language:             defaultLanguage,
 			ShowStartedTrack:     true,
-			DefaultVolume:        100,
-			MaxDownloadSpeedMbps: 10.0,
-			LogFile:              "latest.log",
+			DefaultVolume:        defaultVolume,
+			MaxDownloadSpeedMbps: DefaultMaxDownloadSpeedMbps,
+			LogFile:              defaultLogFile,
 			YtDlpChannel:         YtDlpChannelAuto,
 		}
 		if err := saveConfig(defaultConfig); err != nil {
@@ -125,16 +132,16 @@ func loadConfig() error {
 	}
 
 	if cfg.MaxDownloadSpeedMbps <= 0 || math.IsNaN(cfg.MaxDownloadSpeedMbps) || math.IsInf(cfg.MaxDownloadSpeedMbps, 0) {
-		logger.Warnf("Invalid max_download_speed_mbps=%.2f, falling back to default (10.0 Mbps)", cfg.MaxDownloadSpeedMbps)
-		cfg.MaxDownloadSpeedMbps = 10.0
+		logger.Warnf("Invalid max_download_speed_mbps=%.2f, falling back to default (%.1f Mbps)", cfg.MaxDownloadSpeedMbps, DefaultMaxDownloadSpeedMbps)
+		cfg.MaxDownloadSpeedMbps = DefaultMaxDownloadSpeedMbps
 	}
 
 	if cfg.Language == "" {
-		cfg.Language = "en"
+		cfg.Language = defaultLanguage
 	}
 
 	if cfg.LogFile == "" {
-		cfg.LogFile = "latest.log"
+		cfg.LogFile = defaultLogFile
 	}
 
 	switch cfg.YtDlpChannel {
@@ -182,19 +189,19 @@ func loadAdmins() error {
 }
 
 func saveConfig(cfg *Config) error {
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(configPath, data, 0600)
+	return writeJSON(configPath, cfg)
 }
 
 func saveAdmins(admins *AdminsConfig) error {
-	data, err := json.MarshalIndent(admins, "", "  ")
+	return writeJSON(adminsPath, admins)
+}
+
+func writeJSON(path string, value any) error {
+	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(adminsPath, data, 0600)
+	return os.WriteFile(path, data, 0600)
 }
 
 func isDuplicateWriteEvent(absPath string, fileInfo os.FileInfo) bool {
@@ -299,7 +306,7 @@ func DefaultVolume() float64 {
 	if cfg := GetConfig(); cfg != nil {
 		return cfg.DefaultVolume
 	}
-	return 100
+	return defaultVolume
 }
 
 func SetPrefix(prefix string) error {

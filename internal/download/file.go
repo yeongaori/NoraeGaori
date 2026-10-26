@@ -15,12 +15,10 @@ import (
 	"noraegaori/internal/logger"
 )
 
-const defaultDownloadMbps = 10.0
-
 var downloadStallTimeout = 2 * time.Minute
 
 func rateLimitBytesPerSecond() float64 {
-	mbps := defaultDownloadMbps
+	mbps := config.DefaultMaxDownloadSpeedMbps
 	if cfg := config.GetConfig(); cfg != nil && cfg.MaxDownloadSpeedMbps > 0 {
 		mbps = cfg.MaxDownloadSpeedMbps
 	}

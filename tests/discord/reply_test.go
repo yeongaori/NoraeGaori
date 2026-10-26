@@ -89,8 +89,8 @@ func runReplyCases(t *testing.T, cases []replyCase) {
 }
 
 func TestReplyHelpersOnEveryPath(t *testing.T) {
-	respondError := func(s *discordgo.Session, i *discordgo.InteractionCreate) { discord.RespondError(s, i, "broken") }
-	respondSuccess := func(s *discordgo.Session, i *discordgo.InteractionCreate) { discord.RespondSuccess(s, i, "done") }
+	respondErrorEmbed := func(s *discordgo.Session, i *discordgo.InteractionCreate) { discord.RespondErrorEmbed(s, i, "broken") }
+	updateErrorEmbed := func(s *discordgo.Session, i *discordgo.InteractionCreate) { discord.UpdateErrorEmbed(s, i, "broken") }
 	respondEmbed := func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		discord.RespondEmbed(s, i, &discordgo.MessageEmbed{Title: "answer"})
 	}
@@ -100,14 +100,13 @@ func TestReplyHelpersOnEveryPath(t *testing.T) {
 		discord.FollowUpEmbed(s, i, &discordgo.MessageEmbed{Title: "summary"})
 	}
 	loadingTitle := messages.T(replyGuildID).Titles.Loading
+	errorTitle := messages.T(replyGuildID).Titles.Error
 
 	runReplyCases(t, []replyCase{
-		{name: "an error reply to a slash command", send: respondError, wantMethod: http.MethodPost, wantPath: interactionReply, wantTexts: []string{`"content":"broken"`, privateFlag}},
-		{name: "an error reply to a text command", isMessageCommand: true, hasResponder: true, send: respondError, wantMethod: http.MethodPost, wantPath: channelMessagePath, wantTexts: []string{`"content":"broken"`, replyingToCommand}},
-		{name: "an error reply without a responder", isMessageCommand: true, send: respondError},
-		{name: "a success reply to a slash command", send: respondSuccess, wantMethod: http.MethodPost, wantPath: interactionReply, wantTexts: []string{`"content":"done"`}, unwantedTexts: []string{privateFlag}},
-		{name: "a success reply to a text command", isMessageCommand: true, hasResponder: true, send: respondSuccess, wantMethod: http.MethodPost, wantPath: channelMessagePath, wantTexts: []string{`"content":"done"`, replyingToCommand}},
-		{name: "a success reply without a responder", isMessageCommand: true, send: respondSuccess},
+		{name: "an error embed reply to a slash command", send: respondErrorEmbed, wantMethod: http.MethodPost, wantPath: interactionReply, wantTexts: []string{`"type":4`, errorTitle, `"description":"broken"`}, unwantedTexts: []string{privateFlag}},
+		{name: "an error embed reply to a text command", isMessageCommand: true, hasResponder: true, send: respondErrorEmbed, wantMethod: http.MethodPost, wantPath: channelMessagePath, wantTexts: []string{errorTitle, `"description":"broken"`, replyingToCommand}},
+		{name: "an error embed reply without a responder", isMessageCommand: true, send: respondErrorEmbed},
+		{name: "an error embed edit of a slash command reply", send: updateErrorEmbed, wantMethod: http.MethodPatch, wantPath: originalReplyPath, wantTexts: []string{errorTitle, `"description":"broken"`}},
 		{name: "an embed reply to a slash command", send: respondEmbed, wantMethod: http.MethodPost, wantPath: interactionReply, wantTexts: []string{`"type":4`, `"title":"answer"`}, unwantedTexts: []string{privateFlag}},
 		{name: "an embed reply to a text command", isMessageCommand: true, hasResponder: true, send: respondEmbed, wantMethod: http.MethodPost, wantPath: channelMessagePath, wantTexts: []string{`"title":"answer"`, replyingToCommand}},
 		{name: "an embed reply without a responder", isMessageCommand: true, send: respondEmbed},
@@ -262,31 +261,6 @@ func TestGetResponseMessageOnEveryPath(t *testing.T) {
 
 			if message, err := discord.GetResponseMessage(session, ic); err == nil || message != nil {
 				t.Errorf("GetResponseMessage = (%v, %v), want an error", message, err)
-			}
-		})
-	}
-}
-
-func TestSendMessageKeepsOnlyADeliveredReply(t *testing.T) {
-	for name, check := range map[string]struct {
-		status        int
-		wantMessageID string
-	}{
-		"a delivered reply": {http.StatusOK, "333"},
-		"a rejected reply":  {http.StatusBadRequest, ""},
-	} {
-		t.Run(name, func(t *testing.T) {
-			session, _ := discordtest.StubAPI(t, discordtest.Status(check.status))
-			responder := newResponder(session, nil)
-
-			responder.SendMessage("hello")
-
-			got := ""
-			if responder.Message != nil {
-				got = responder.Message.ID
-			}
-			if got != check.wantMessageID {
-				t.Errorf("stored message = %q, want %q", got, check.wantMessageID)
 			}
 		})
 	}

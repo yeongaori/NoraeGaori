@@ -2,6 +2,7 @@ package queue
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -9,6 +10,8 @@ import (
 	"noraegaori/internal/guild"
 	"noraegaori/internal/logger"
 )
+
+var ErrSongInQueue = errors.New("song already in queue")
 
 func CreateQueue(guildID, textChannelID, voiceChannelID string) error {
 	release := guild.AcquireLock(guildID)
@@ -89,33 +92,13 @@ func AddSongsBatch(guildID string, songs []*Song, position int) error {
 	release := guild.AcquireLock(guildID)
 	defer release()
 
-	var queueExists int
-	err := database.DB.QueryRow(`SELECT 1 FROM queues WHERE guild_id = ? LIMIT 1`, guildID).Scan(&queueExists)
-	if err == sql.ErrNoRows {
-		return fmt.Errorf("queue does not exist for guild: %s", guildID)
-	} else if err != nil {
-		return fmt.Errorf("failed to check queue existence: %w", err)
+	if err := requireQueue(guildID); err != nil {
+		return err
 	}
 
-	var count int
-	err = database.DB.QueryRow(`SELECT COUNT(*) FROM songs WHERE guild_id = ?`, guildID).Scan(&count)
+	position, err := reserveQueueSlots(guildID, position, len(songs))
 	if err != nil {
-		return fmt.Errorf("failed to count songs: %w", err)
-	}
-
-	if position == -1 || position > count {
-		position = count
-	}
-
-	if position < count {
-		_, err = database.DB.Exec(
-			`UPDATE songs SET queue_position = queue_position + ?
-			 WHERE guild_id = ? AND queue_position >= ?`,
-			len(songs), guildID, position,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to update positions: %w", err)
-		}
+		return err
 	}
 
 	const maxSongsPerBatch = 66
@@ -137,14 +120,9 @@ func AddSongsBatch(guildID string, songs []*Song, position int) error {
 			}
 			query += "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 
-			isLiveInt := 0
-			if song.IsLive {
-				isLiveInt = 1
-			}
-
 			values = append(values,
 				guildID, song.URL, song.Title, song.Duration, song.Thumbnail,
-				song.RequestedByID, song.RequestedByTag, position+batchStart+i, song.Uploader, isLiveInt,
+				song.RequestedByID, song.RequestedByTag, position+batchStart+i, song.Uploader, boolToInt(song.IsLive),
 				EncodeOverrides(song.AutoMixOverrides),
 			)
 		}
@@ -164,47 +142,22 @@ func AddSong(guildID string, song *Song, position int) error {
 	release := guild.AcquireLock(guildID)
 	defer release()
 
-	var queueExists int
-	err := database.DB.QueryRow(`SELECT 1 FROM queues WHERE guild_id = ? LIMIT 1`, guildID).Scan(&queueExists)
-	if err == sql.ErrNoRows {
-		return fmt.Errorf("queue does not exist for guild: %s", guildID)
-	} else if err != nil {
-		return fmt.Errorf("failed to check queue existence: %w", err)
+	if err := requireQueue(guildID); err != nil {
+		return err
 	}
 
 	var existingID int
-	err = database.DB.QueryRow(`SELECT id FROM songs WHERE guild_id = ? AND url = ? LIMIT 1`, guildID, song.URL).Scan(&existingID)
+	err := database.DB.QueryRow(`SELECT id FROM songs WHERE guild_id = ? AND url = ? LIMIT 1`, guildID, song.URL).Scan(&existingID)
 	if err == nil {
 
-		return fmt.Errorf("song already in queue: %s", song.Title)
+		return fmt.Errorf("%w: %s", ErrSongInQueue, song.Title)
 	} else if err != sql.ErrNoRows {
 		return fmt.Errorf("failed to check for duplicate: %w", err)
 	}
 
-	var count int
-	err = database.DB.QueryRow(`SELECT COUNT(*) FROM songs WHERE guild_id = ?`, guildID).Scan(&count)
+	position, err = reserveQueueSlots(guildID, position, 1)
 	if err != nil {
-		return fmt.Errorf("failed to count songs: %w", err)
-	}
-
-	if position == -1 || position > count {
-		position = count
-	}
-
-	if position < count {
-		_, err = database.DB.Exec(
-			`UPDATE songs SET queue_position = queue_position + 1
-			 WHERE guild_id = ? AND queue_position >= ?`,
-			guildID, position,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to update positions: %w", err)
-		}
-	}
-
-	isLiveInt := 0
-	if song.IsLive {
-		isLiveInt = 1
+		return err
 	}
 
 	_, err = database.DB.Exec(
@@ -212,7 +165,7 @@ func AddSong(guildID string, song *Song, position int) error {
 		 requested_by_tag, queue_position, uploader, is_live, automix_overrides)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		guildID, song.URL, song.Title, song.Duration, song.Thumbnail,
-		song.RequestedByID, song.RequestedByTag, position, song.Uploader, isLiveInt,
+		song.RequestedByID, song.RequestedByTag, position, song.Uploader, boolToInt(song.IsLive),
 		EncodeOverrides(song.AutoMixOverrides),
 	)
 	if err != nil {
@@ -222,6 +175,52 @@ func AddSong(guildID string, song *Song, position int) error {
 	InvalidateCache(guildID)
 	logger.Debugf("Added song '%s' at position %d for guild: %s", song.Title, position, guildID)
 	return nil
+}
+
+func scanSongIDs(rows *sql.Rows) ([]int, error) {
+	var songIDs []int
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		songIDs = append(songIDs, id)
+	}
+	return songIDs, nil
+}
+
+func requireQueue(guildID string) error {
+	var queueExists int
+	err := database.DB.QueryRow(`SELECT 1 FROM queues WHERE guild_id = ? LIMIT 1`, guildID).Scan(&queueExists)
+	if err == sql.ErrNoRows {
+		return fmt.Errorf("queue does not exist for guild: %s", guildID)
+	} else if err != nil {
+		return fmt.Errorf("failed to check queue existence: %w", err)
+	}
+	return nil
+}
+
+func reserveQueueSlots(guildID string, position, width int) (int, error) {
+	var count int
+	if err := database.DB.QueryRow(`SELECT COUNT(*) FROM songs WHERE guild_id = ?`, guildID).Scan(&count); err != nil {
+		return 0, fmt.Errorf("failed to count songs: %w", err)
+	}
+
+	if position == -1 || position > count {
+		position = count
+	}
+
+	if position < count {
+		_, err := database.DB.Exec(
+			`UPDATE songs SET queue_position = queue_position + ?
+			 WHERE guild_id = ? AND queue_position >= ?`,
+			width, guildID, position,
+		)
+		if err != nil {
+			return 0, fmt.Errorf("failed to update positions: %w", err)
+		}
+	}
+	return position, nil
 }
 
 func UpdateSongSeekTime(guildID string, songID int, seekTime int) error {
@@ -348,13 +347,9 @@ func SkipToPosition(guildID string, targetIndex int) error {
 	}
 	defer rows.Close()
 
-	var songIDs []int
-	for rows.Next() {
-		var id int
-		if err := rows.Scan(&id); err != nil {
-			return err
-		}
-		songIDs = append(songIDs, id)
+	songIDs, err := scanSongIDs(rows)
+	if err != nil {
+		return err
 	}
 	_ = rows.Close()
 
@@ -445,13 +440,9 @@ func reorderSongsAfterRemovalTx(tx *sql.Tx, guildID string) error {
 	}
 	defer rows.Close()
 
-	var songIDs []int
-	for rows.Next() {
-		var id int
-		if err := rows.Scan(&id); err != nil {
-			return err
-		}
-		songIDs = append(songIDs, id)
+	songIDs, err := scanSongIDs(rows)
+	if err != nil {
+		return err
 	}
 	_ = rows.Close()
 

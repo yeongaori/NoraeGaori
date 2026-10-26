@@ -26,14 +26,14 @@ var (
 func HandleSearch(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	cmdOptions := i.ApplicationCommandData().Options
 	if len(cmdOptions) == 0 {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Queue.EnterSearchQuery))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Queue.EnterSearchQuery)
 		return nil
 	}
 	query := cmdOptions[0].StringValue()
 
-	voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
-	if err != nil || voiceState.ChannelID == "" {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.NotInVoiceChannel))
+	voiceChannelID, ok := discord.CallerVoiceChannel(s, i)
+	if !ok {
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Errors.NotInVoiceChannel)
 		return nil
 	}
 
@@ -96,7 +96,7 @@ func HandleSearch(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		},
 	}
 
-	selection, cancelSelection := startSearchSelection(s, i, results, customID, voiceState.ChannelID, searchMessageID)
+	selection, cancelSelection := startSearchSelection(s, i, results, customID, voiceChannelID, searchMessageID)
 
 	if err := discord.UpdateResponseEmbedWithComponents(s, i, embed, components); err != nil {
 		cancelSelection()
@@ -158,13 +158,7 @@ func (c *searchSelection) handle(s *discordgo.Session, i *discordgo.InteractionC
 
 	if i.Member.User.ID != c.original.Member.User.ID {
 		embed := messages.CreateWarningEmbed(messages.T(i.GuildID).Titles.NoPermission, messages.T(i.GuildID).Queue.OnlyRequester)
-		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Embeds: []*discordgo.MessageEmbed{embed},
-				Flags:  discordgo.MessageFlagsEphemeral,
-			},
-		})
+		_ = discord.RespondEphemeralEmbed(s, i, embed)
 		return
 	}
 
@@ -199,13 +193,7 @@ func (c *searchSelection) handle(s *discordgo.Session, i *discordgo.InteractionC
 		searchSelectionsMu.Unlock()
 		logger.Debugf("Duplicate selection attempt ignored for search message: '%s'", c.searchMessageID)
 		embed := messages.CreateWarningEmbed(messages.T(i.GuildID).Queue.AlreadySelectedTitle, messages.T(i.GuildID).Queue.AlreadySelectedDesc)
-		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Embeds: []*discordgo.MessageEmbed{embed},
-				Flags:  discordgo.MessageFlagsEphemeral,
-			},
-		})
+		_ = discord.RespondEphemeralEmbed(s, i, embed)
 		return
 	}
 	logger.Debugf("Marking search as selected: c.searchMessageID='%s'", c.searchMessageID)
@@ -223,12 +211,7 @@ func (c *searchSelection) handle(s *discordgo.Session, i *discordgo.InteractionC
 	processingEmbed := messages.CreateWarningEmbed(messages.T(i.GuildID).Queue.ProcessingTitle,
 		fmt.Sprintf(messages.T(i.GuildID).Queue.ProcessingDesc, selectedResult.Title))
 
-	if _, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-		Embeds:     &[]*discordgo.MessageEmbed{processingEmbed},
-		Components: &[]discordgo.MessageComponent{},
-	}); err != nil {
-		logger.Errorf("Failed to edit message to processing state: %v", err)
-	}
+	editSearchPanel(s, i, processingEmbed, "processing")
 
 	videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", selectedResult.VideoID)
 	logger.Debugf("Fetching detailed info for selected song: %s", selectedResult.Title)
@@ -237,13 +220,7 @@ func (c *searchSelection) handle(s *discordgo.Session, i *discordgo.InteractionC
 	song, err := youtube.GetVideoInfo(c.original.GuildID, videoURL, c.original.Member.User.Username, c.original.Member.User.ID)
 	if err != nil {
 		logger.Errorf("Error fetching detailed info: %v", err)
-		errorEmbed := messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Queue.SearchAddError)
-		if _, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-			Embeds:     &[]*discordgo.MessageEmbed{errorEmbed},
-			Components: &[]discordgo.MessageComponent{},
-		}); err != nil {
-			logger.Errorf("Failed to edit message to fetch-error state: %v", err)
-		}
+		editSearchPanel(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Queue.SearchAddError), "fetch-error")
 		return
 	}
 
@@ -260,13 +237,7 @@ func (c *searchSelection) handle(s *discordgo.Session, i *discordgo.InteractionC
 	if q == nil {
 		if err := queue.CreateQueue(c.original.GuildID, c.original.ChannelID, c.voiceChannelID); err != nil {
 			logger.Errorf("Error creating queue: %v", err)
-			errorEmbed := messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.QueueCreateFailed)
-			if _, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-				Embeds:     &[]*discordgo.MessageEmbed{errorEmbed},
-				Components: &[]discordgo.MessageComponent{},
-			}); err != nil {
-				logger.Errorf("Failed to edit message to queue-create-error state: %v", err)
-			}
+			editSearchPanel(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.QueueCreateFailed), "queue-create-error")
 			return
 		}
 		_, _ = queue.GetQueue(c.original.GuildID, false)
@@ -276,38 +247,22 @@ func (c *searchSelection) handle(s *discordgo.Session, i *discordgo.InteractionC
 
 	if err := queue.AddSong(c.original.GuildID, queueSong, -1); err != nil {
 		logger.Errorf("Error adding song to queue: %v", err)
-		errorEmbed := messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
-			fmt.Sprintf(messages.T(i.GuildID).Music.SongAddFailed, err))
-		if _, editErr := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-			Embeds:     &[]*discordgo.MessageEmbed{errorEmbed},
-			Components: &[]discordgo.MessageComponent{},
-		}); editErr != nil {
-			logger.Errorf("Failed to edit message to add-error state: %v", editErr)
-		}
+		editSearchPanel(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
+			fmt.Sprintf(messages.T(i.GuildID).Music.SongAddFailed, err)), "add-error")
 		return
 	}
 
-	addedEmbed := messages.CreateSongEmbed(
-		i.GuildID,
-		messages.ColorSuccess,
-		messages.T(i.GuildID).Titles.Added,
-		"",
-		song.Title,
-		song.URL,
-		song.Uploader,
-		song.Duration,
-		song.RequestedBy,
-		song.Thumbnail,
-	)
+	addedEmbed := youtubeSongEmbed(i.GuildID, messages.ColorSuccess, messages.T(i.GuildID).Titles.Added, "", song)
 
-	if _, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-		Embeds:     &[]*discordgo.MessageEmbed{addedEmbed},
-		Components: &[]discordgo.MessageComponent{},
-	}); err != nil {
-		logger.Errorf("Failed to edit message to added state: %v", err)
-	}
+	editSearchPanel(s, i, addedEmbed, "added")
 
 	player.ResumeOrStart(s, c.original.GuildID)
+}
+
+func editSearchPanel(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, state string) {
+	if err := discord.UpdateResponseEmbedWithComponents(s, i, embed, []discordgo.MessageComponent{}); err != nil {
+		logger.Errorf("Failed to edit message to %s state: %v", state, err)
+	}
 }
 
 func startSearchSelection(s *discordgo.Session, originalInteraction *discordgo.InteractionCreate, results []youtube.SearchResult, customID, voiceChannelID, searchMessageID string) (*searchSelection, func()) {

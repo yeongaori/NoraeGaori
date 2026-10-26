@@ -8,17 +8,54 @@ import (
 
 	"noraegaori/internal/dependency"
 	"noraegaori/internal/logger"
+	"noraegaori/internal/messages"
 	ytdlpUpdater "noraegaori/internal/ytdlp"
 
 	"github.com/lrstanley/go-ytdlp"
 	"github.com/ppalone/ytsearch"
 )
 
+const LiveDuration = "🔴 LIVE"
+
 func applyJsRuntime(cmd *ytdlp.Command) *ytdlp.Command {
 	if rt := dependency.JsRuntimeArg(); rt != "" {
 		return cmd.JsRuntimes(rt)
 	}
 	return cmd
+}
+
+func ytdlpCommand() *ytdlp.Command {
+	return ytdlp.New().SetExecutable(ytdlpUpdater.GetBinaryPath())
+}
+
+func videoInfoCommand() *ytdlp.Command {
+	cmd := ytdlpCommand().
+		DumpJSON().
+		NoPlaylist()
+	return applyJsRuntime(cmd).
+		Format("bestaudio/best")
+}
+
+func isLiveOrUpcoming(info *ytdlp.ExtractedInfo) bool {
+	return info.LiveStatus != nil && (*info.LiveStatus == ytdlp.ExtractedLiveStatusIsLive ||
+		*info.LiveStatus == ytdlp.ExtractedLiveStatusIsUpcoming)
+}
+
+func durationLabel(info *ytdlp.ExtractedInfo) (string, bool) {
+	if isLiveOrUpcoming(info) {
+		return LiveDuration, true
+	}
+	if info.Duration != nil && *info.Duration > 0 {
+		return messages.FormatDuration(int(*info.Duration)), false
+	}
+	return "Unknown", false
+}
+
+func lastThumbnail(info *ytdlp.ExtractedInfo) string {
+	if len(info.Thumbnails) == 0 {
+		return ""
+	}
+	return info.Thumbnails[len(info.Thumbnails)-1].URL
 }
 
 func SaveStreamFailure(url string, err error) {
@@ -103,10 +140,7 @@ func retryWithBackoff(operation func() error, operationName string) error {
 
 		if attempt < maxRetries-1 {
 
-			delay := time.Duration(1<<uint(attempt)) * baseDelay
-			if delay > maxDelay {
-				delay = maxDelay
-			}
+			delay := retryDelay(attempt, baseDelay, maxDelay)
 
 			logger.Warnf("%s failed (attempt %d/%d): %v, retrying in %v",
 				operationName, attempt+1, maxRetries, err, delay)
@@ -151,12 +185,7 @@ func GetVideoInfo(guildID, url, requesterName, requesterID string) (*Song, error
 
 	retryErr := retryWithBackoff(func() error {
 
-		cmd := ytdlp.New().
-			SetExecutable(ytdlpUpdater.GetBinaryPath()).
-			DumpJSON().
-			NoPlaylist()
-		cmd = applyJsRuntime(cmd).
-			Format("bestaudio/best")
+		cmd := videoInfoCommand()
 
 		var err error
 		result, err = cmd.Run(ctx, url)
@@ -182,24 +211,8 @@ func GetVideoInfo(guildID, url, requesterName, requesterID string) (*Song, error
 
 	info := infos[0]
 
-	var duration string
-	var isLive bool
-
-	if info.LiveStatus != nil && (*info.LiveStatus == ytdlp.ExtractedLiveStatusIsLive ||
-		*info.LiveStatus == ytdlp.ExtractedLiveStatusIsUpcoming) {
-		duration = "🔴 LIVE"
-		isLive = true
-	} else if info.Duration != nil && *info.Duration > 0 {
-		duration = formatDuration(int(*info.Duration))
-	} else {
-		duration = "Unknown"
-	}
-
-	thumbnail := ""
-	if len(info.Thumbnails) > 0 {
-
-		thumbnail = info.Thumbnails[len(info.Thumbnails)-1].URL
-	}
+	duration, isLive := durationLabel(info)
+	thumbnail := lastThumbnail(info)
 
 	uploader := "Unknown"
 	if info.Uploader != nil && *info.Uploader != "" {
@@ -282,8 +295,7 @@ func GetStreamURLContext(parent context.Context, url string, sponsorBlock bool, 
 
 	retryErr := retryWithBackoff(func() error {
 
-		cmd := ytdlp.New().
-			SetExecutable(ytdlpUpdater.GetBinaryPath()).
+		cmd := ytdlpCommand().
 			GetURL().
 			NoPlaylist()
 		cmd = applyJsRuntime(cmd).
@@ -324,19 +336,16 @@ func GetStreamURLContext(parent context.Context, url string, sponsorBlock bool, 
 	return streamURL, nil
 }
 
-func formatDuration(seconds int) string {
-	hours := seconds / 3600
-	minutes := (seconds % 3600) / 60
-	secs := seconds % 60
-
-	if hours > 0 {
-		return fmt.Sprintf("%d:%02d:%02d", hours, minutes, secs)
+func retryDelay(attempt int, base, limit time.Duration) time.Duration {
+	delay := time.Duration(1<<uint(attempt)) * base
+	if delay > limit {
+		delay = limit
 	}
-	return fmt.Sprintf("%d:%02d", minutes, secs)
+	return delay
 }
 
 func ParseDurationToSeconds(duration string) int {
-	if duration == "" || duration == "Unknown" || duration == "🔴 LIVE" {
+	if duration == "" || duration == "Unknown" || duration == LiveDuration {
 		return 0
 	}
 

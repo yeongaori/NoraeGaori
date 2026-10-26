@@ -430,15 +430,7 @@ func updateFromChannel(channel string, force bool) (channelOutcome, error) {
 				if state == StateVerified {
 					logger.Infof("Re-verifying %s before returning to it", latestVersion)
 				}
-				switch runCanaryAndActivate(versionmanager, latestVersion) {
-				case canaryActivated:
-					return channelOutcome{updated: true}, nil
-				case canaryPending:
-					return channelOutcome{}, nil
-				default:
-					logger.Warnf("Trying previous releases after %s failed canary", latestVersion)
-					return installFallbackVersion(versionmanager, channel, latestVersion, release)
-				}
+				return activateOrFallback(versionmanager, channel, latestVersion, release)
 			}
 
 			logger.Debugf("Version %s is %s but its binary is gone; reinstalling", latestVersion, state)
@@ -469,6 +461,10 @@ func updateFromChannel(channel string, force bool) (channelOutcome, error) {
 		versionmanager.RegisterVersion(latestVersion, binaryPath)
 	}
 
+	return activateOrFallback(versionmanager, channel, latestVersion, release)
+}
+
+func activateOrFallback(versionmanager *VersionManager, channel, latestVersion string, release *GitHubRelease) (channelOutcome, error) {
 	switch runCanaryAndActivate(versionmanager, latestVersion) {
 	case canaryActivated:
 		return channelOutcome{updated: true}, nil

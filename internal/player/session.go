@@ -40,6 +40,41 @@ func (player *GuildPlayer) isHalted() bool {
 	return player.halted
 }
 
+func (player *GuildPlayer) isFadingOut() bool {
+	player.mu.Lock()
+	defer player.mu.Unlock()
+	return player.FadingOut
+}
+
+func (player *GuildPlayer) drainPlaybackDoneLocked() {
+	select {
+	case <-player.PlaybackDone:
+	default:
+	}
+}
+
+func (player *GuildPlayer) awaitPlaybackDone(guildID string, timeout time.Duration) {
+	select {
+	case <-player.PlaybackDone:
+		logger.Debugf("Playback terminated for guild: %s", guildID)
+	case <-time.After(timeout):
+		logger.Warnf("Timeout waiting for playback to terminate for guild: %s", guildID)
+	}
+}
+
+func (player *GuildPlayer) clearPlaybackAndPendingStream() {
+	player.mu.Lock()
+	player.Playing = false
+	player.Loading = false
+	pending := player.PendingStream
+	player.PendingStream = nil
+	player.mu.Unlock()
+
+	if pending != nil {
+		pending.Stream.Stop()
+	}
+}
+
 func (player *GuildPlayer) beginSession() chan struct{} {
 	player.mu.Lock()
 	defer player.mu.Unlock()

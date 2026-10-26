@@ -9,23 +9,18 @@ import (
 )
 
 func Register(cmd func(string) messages.CommandStrings) {
-	command.RegisterCommand(&command.Command{
-		Name:        "help",
-		Description: cmd("help").Description,
+	command.RegisterLocalized(cmd, &command.Command{
+		Name: "help",
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Type:        discordgo.ApplicationCommandOptionInteger,
 				Name:        "page",
 				Description: cmd("help").Options["page"],
 				Required:    false,
-				MinValue:    func() *float64 { v := 1.0; return &v }(),
+				MinValue:    command.FloatPointer(1),
 			},
 		},
-		Handler:  HandleHelp,
-		TextOnly: false,
-		Usage:    cmd("help").Usage,
-		Example:  cmd("help").Example,
+		Handler: HandleHelp,
 	})
-	command.RegisterAliases("help", cmd("help"))
 	discord.RegisterComponentRoute(helpPageRoute, turnHelpPage)
 }

@@ -11,23 +11,22 @@ import (
 )
 
 func HandlePause(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
-	if err != nil || voiceState.ChannelID == "" {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.NotInVoiceChannel))
+	if _, ok := discord.CallerVoiceChannel(s, i); !ok {
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Errors.NotInVoiceChannel)
 		return nil
 	}
 
 	q, err := queue.GetQueue(i.GuildID, true)
 	if err != nil || q == nil || (!q.Playing && !q.Loading) {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.NotPlayingOrLoading))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Music.NotPlayingOrLoading)
 		return nil
 	}
 
 	if err := player.Pause(i.GuildID); errors.Is(err, player.ErrNotPlaying) {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.NotPlayingOrLoading))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Music.NotPlayingOrLoading)
 		return nil
 	} else if err != nil {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.PauseFailed))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Music.PauseFailed)
 		return err
 	}
 

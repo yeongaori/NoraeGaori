@@ -8,19 +8,14 @@ import (
 )
 
 func Register(cmd func(string) messages.CommandStrings) {
-	command.RegisterCommand(&command.Command{
-		Name:        "forceskip",
-		Description: cmd("forceskip").Description,
-		Handler:     HandleForceSkip,
-		AdminOnly:   true,
-		TextOnly:    true,
-		Usage:       cmd("forceskip").Usage,
-		Example:     cmd("forceskip").Example,
+	command.RegisterLocalized(cmd, &command.Command{
+		Name:      "forceskip",
+		Handler:   HandleForceSkip,
+		AdminOnly: true,
+		TextOnly:  true,
 	})
-	command.RegisterAliases("forceskip", cmd("forceskip"))
-	command.RegisterCommand(&command.Command{
-		Name:        "forceremove",
-		Description: cmd("forceremove").Description,
+	command.RegisterLocalized(cmd, &command.Command{
+		Name: "forceremove",
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Type:        discordgo.ApplicationCommandOptionString,
@@ -32,28 +27,17 @@ func Register(cmd func(string) messages.CommandStrings) {
 		Handler:   HandleForceRemove,
 		AdminOnly: true,
 		TextOnly:  true,
-		Usage:     cmd("forceremove").Usage,
-		Example:   cmd("forceremove").Example,
 	})
-	command.RegisterAliases("forceremove", cmd("forceremove"))
-	command.RegisterCommand(&command.Command{
-		Name:        "forcestop",
-		Description: cmd("forcestop").Description,
-		Handler:     HandleForceStop,
-		AdminOnly:   true,
-		TextOnly:    true,
-		Usage:       cmd("forcestop").Usage,
-		Example:     cmd("forcestop").Example,
+	command.RegisterLocalized(cmd, &command.Command{
+		Name:      "forcestop",
+		Handler:   HandleForceStop,
+		AdminOnly: true,
+		TextOnly:  true,
 	})
-	command.RegisterAliases("forcestop", cmd("forcestop"))
-	command.RegisterCommand(&command.Command{
-		Name:        "status",
-		Description: cmd("status").Description,
-		Handler:     HandleStatus,
-		AdminOnly:   true,
-		TextOnly:    true,
-		Usage:       cmd("status").Usage,
-		Example:     cmd("status").Example,
+	command.RegisterLocalized(cmd, &command.Command{
+		Name:      "status",
+		Handler:   HandleStatus,
+		AdminOnly: true,
+		TextOnly:  true,
 	})
-	command.RegisterAliases("status", cmd("status"))
 }

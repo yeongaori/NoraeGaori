@@ -53,22 +53,30 @@ func hasAdministrator(permissions int64) bool {
 	return (permissions & discordgo.PermissionAdministrator) == discordgo.PermissionAdministrator
 }
 
-func CheckUserInBotVoiceChannel(s *discordgo.Session, i *discordgo.InteractionCreate) (string, *discordgo.MessageEmbed) {
-
+func CallerVoiceChannel(s *discordgo.Session, i *discordgo.InteractionCreate) (string, bool) {
 	voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
 	if err != nil || voiceState.ChannelID == "" {
+		return "", false
+	}
+	return voiceState.ChannelID, true
+}
+
+func CheckUserInBotVoiceChannel(s *discordgo.Session, i *discordgo.InteractionCreate) (string, *discordgo.MessageEmbed) {
+
+	voiceChannelID, ok := CallerVoiceChannel(s, i)
+	if !ok {
 		return "", messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.NotInVoiceChannel)
 	}
 
 	q, err := queue.GetQueue(i.GuildID, false)
 	if err != nil || q == nil || q.VoiceChannelID == "" {
 
-		return voiceState.ChannelID, nil
+		return voiceChannelID, nil
 	}
 
-	if voiceState.ChannelID != q.VoiceChannelID {
+	if voiceChannelID != q.VoiceChannelID {
 		return "", messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.MustBeInBotChannel)
 	}
 
-	return voiceState.ChannelID, nil
+	return voiceChannelID, nil
 }

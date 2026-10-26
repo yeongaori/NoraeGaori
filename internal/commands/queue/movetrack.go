@@ -10,42 +10,25 @@ import (
 )
 
 func HandleMoveTrack(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	options := i.ApplicationCommandData().Options
-	if len(options) < 2 {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Admin.EnterPositions))
-		return nil
-	}
-	fromPos := int(options[0].IntValue()) - 1
-	toPos := int(options[1].IntValue()) - 1
-
-	q, err := queue.GetQueue(i.GuildID, false)
-	if err != nil || q == nil || len(q.Songs) == 0 {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.EmptyQueue, messages.T(i.GuildID).Descriptions.EmptyQueue))
-		return nil
-	}
-
-	if fromPos < 0 || toPos < 0 || fromPos >= len(q.Songs) || toPos >= len(q.Songs) {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
-			fmt.Sprintf(messages.T(i.GuildID).Admin.EnterValidRange, len(q.Songs))))
+	q, fromPos, toPos, ok := readTwoPositions(s, i, messages.T(i.GuildID).Admin.EnterPositions, messages.T(i.GuildID).Admin.EnterValidRange)
+	if !ok {
 		return nil
 	}
 
 	if fromPos == toPos {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Admin.SamePosition))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Admin.SamePosition)
 		return nil
 	}
 
 	if (fromPos == 0 || toPos == 0) && (q.Playing || q.Loading) {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
-			messages.T(i.GuildID).Admin.CannotMovePlaying))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Admin.CannotMovePlaying)
 		return nil
 	}
 
 	songTitle := q.Songs[fromPos].Title
 
 	if err := queue.MoveSong(i.GuildID, fromPos, toPos); err != nil {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
-			fmt.Sprintf(messages.T(i.GuildID).Admin.MoveFailed, err)))
+		discord.RespondErrorEmbed(s, i, fmt.Sprintf(messages.T(i.GuildID).Admin.MoveFailed, err))
 		return err
 	}
 
@@ -57,4 +40,26 @@ func HandleMoveTrack(s *discordgo.Session, i *discordgo.InteractionCreate) error
 	}
 	discord.RespondEmbed(s, i, embed)
 	return nil
+}
+
+func readTwoPositions(s *discordgo.Session, i *discordgo.InteractionCreate, missingText, rangeFormat string) (*queue.Queue, int, int, bool) {
+	options := i.ApplicationCommandData().Options
+	if len(options) < 2 {
+		discord.RespondErrorEmbed(s, i, missingText)
+		return nil, 0, 0, false
+	}
+	first := int(options[0].IntValue()) - 1
+	second := int(options[1].IntValue()) - 1
+
+	q, err := queue.GetQueue(i.GuildID, false)
+	if err != nil || q == nil || len(q.Songs) == 0 {
+		discord.RespondEmbed(s, i, emptyQueueEmbed(i.GuildID))
+		return nil, 0, 0, false
+	}
+
+	if first < 0 || second < 0 || first >= len(q.Songs) || second >= len(q.Songs) {
+		discord.RespondErrorEmbed(s, i, fmt.Sprintf(rangeFormat, len(q.Songs)))
+		return nil, 0, 0, false
+	}
+	return q, first, second, true
 }

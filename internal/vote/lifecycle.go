@@ -19,6 +19,15 @@ func replyVoteInProgress(s *discordgo.Session, i *discordgo.InteractionCreate, t
 	_ = discord.UpdateResponseEmbed(s, i, messages.CreateWarningEmbed(title, description))
 }
 
+func ResolveRequiredVotes(s *discordgo.Session, i *discordgo.InteractionCreate, voiceChannelID string) (int, error) {
+	requiredVotes, err := RequiredInChannel(s, i.GuildID, voiceChannelID, ResolveWithFetch)
+	if err != nil {
+		discord.UpdateErrorEmbed(s, i, messages.T(i.GuildID).Music.ServerInfoFailed)
+		return 0, err
+	}
+	return requiredVotes, nil
+}
+
 type Request struct {
 	Kind           Kind
 	Title          string
@@ -55,7 +64,7 @@ func Start(s *discordgo.Session, i *discordgo.InteractionCreate, request Request
 	if err != nil || msg == nil {
 		logger.Errorf("Failed to get vote message: %v", err)
 		activeVotes.release(session)
-		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.CommandExecutionError))
+		discord.UpdateErrorEmbed(s, i, messages.T(i.GuildID).Errors.CommandExecutionError)
 		return nil
 	}
 

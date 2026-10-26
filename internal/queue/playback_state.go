@@ -42,65 +42,30 @@ func UpdateVoiceChannel(guildID, channelID string) error {
 }
 
 func SetPaused(guildID string, paused bool) error {
-	release := guild.AcquireLock(guildID)
-	defer release()
-
-	pausedInt := 0
-	if paused {
-		pausedInt = 1
-	}
-
-	_, err := database.DB.Exec(
-		`UPDATE queues SET paused = ? WHERE guild_id = ?`,
-		pausedInt, guildID)
-	if err != nil {
-		return fmt.Errorf("failed to set paused state: %w", err)
-	}
-
-	InvalidateCache(guildID)
-	logger.Debugf("Set paused=%v for guild: %s", paused, guildID)
-	return nil
+	return setQueueFlag(guildID, "paused", paused)
 }
 
 func SetPlaying(guildID string, playing bool) error {
-	release := guild.AcquireLock(guildID)
-	defer release()
-
-	playingInt := 0
-	if playing {
-		playingInt = 1
-	}
-
-	_, err := database.DB.Exec(
-		`UPDATE queues SET playing = ? WHERE guild_id = ?`,
-		playingInt, guildID)
-	if err != nil {
-		return fmt.Errorf("failed to set playing state: %w", err)
-	}
-
-	InvalidateCache(guildID)
-	logger.Debugf("Set playing=%v for guild: %s", playing, guildID)
-	return nil
+	return setQueueFlag(guildID, "playing", playing)
 }
 
 func SetLoading(guildID string, loading bool) error {
+	return setQueueFlag(guildID, "loading", loading)
+}
+
+func setQueueFlag(guildID, column string, value bool) error {
 	release := guild.AcquireLock(guildID)
 	defer release()
 
-	loadingInt := 0
-	if loading {
-		loadingInt = 1
-	}
-
 	_, err := database.DB.Exec(
-		`UPDATE queues SET loading = ? WHERE guild_id = ?`,
-		loadingInt, guildID)
+		fmt.Sprintf(`UPDATE queues SET %s = ? WHERE guild_id = ?`, column),
+		boolToInt(value), guildID)
 	if err != nil {
-		return fmt.Errorf("failed to set loading state: %w", err)
+		return fmt.Errorf("failed to set %s state: %w", column, err)
 	}
 
 	InvalidateCache(guildID)
-	logger.Debugf("Set loading=%v for guild: %s", loading, guildID)
+	logger.Debugf("Set %s=%v for guild: %s", column, value, guildID)
 	return nil
 }
 

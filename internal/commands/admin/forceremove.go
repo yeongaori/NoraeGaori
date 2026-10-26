@@ -21,14 +21,14 @@ var (
 func HandleForceRemove(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	options := i.ApplicationCommandData().Options
 	if len(options) == 0 {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Admin.MentionTarget))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Admin.MentionTarget)
 		return nil
 	}
 	target := options[0].StringValue()
 
 	q, err := queue.GetQueue(i.GuildID, false)
 	if err != nil || q == nil || len(q.Songs) == 0 {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Admin.NoSongsToDelete))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Admin.NoSongsToDelete)
 		return nil
 	}
 
@@ -42,8 +42,7 @@ func HandleForceRemove(s *discordgo.Session, i *discordgo.InteractionCreate) err
 
 	matches := userMentionRegex.FindStringSubmatch(target)
 	if len(matches) < 2 {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
-			messages.T(i.GuildID).Admin.InvalidMention))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Admin.InvalidMention)
 		return nil
 	}
 
@@ -52,13 +51,13 @@ func HandleForceRemove(s *discordgo.Session, i *discordgo.InteractionCreate) err
 
 func forceRemoveByUser(s *discordgo.Session, i *discordgo.InteractionCreate, q *queue.Queue, targetUserID string) error {
 	if len(q.Songs) < 2 {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Admin.NoSongsToDelete))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Admin.NoSongsToDelete)
 		return nil
 	}
 
 	targetUser, err := s.User(targetUserID)
 	if err != nil {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Admin.UserNotFound))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Admin.UserNotFound)
 		return nil
 	}
 
@@ -79,7 +78,7 @@ func forceRemoveByUser(s *discordgo.Session, i *discordgo.InteractionCreate, q *
 		if startIdx == 1 {
 			description += messages.T(i.GuildID).Admin.ExcludingCurrent
 		}
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, description))
+		discord.RespondErrorEmbed(s, i, description)
 		return nil
 	}
 
@@ -89,8 +88,7 @@ func forceRemoveByUser(s *discordgo.Session, i *discordgo.InteractionCreate, q *
 	}
 
 	if err := queue.RemoveSongsByIDs(i.GuildID, songIDs); err != nil {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
-			fmt.Sprintf(messages.T(i.GuildID).Admin.RemoveFailed, err)))
+		discord.RespondErrorEmbed(s, i, fmt.Sprintf(messages.T(i.GuildID).Admin.RemoveFailed, err))
 		return err
 	}
 
@@ -121,8 +119,7 @@ func forceRemoveByUser(s *discordgo.Session, i *discordgo.InteractionCreate, q *
 
 func forceRemoveByPosition(s *discordgo.Session, i *discordgo.InteractionCreate, q *queue.Queue, position int) error {
 	if position < 1 || position > len(q.Songs) {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
-			fmt.Sprintf(messages.T(i.GuildID).Admin.EnterValidRange, len(q.Songs))))
+		discord.RespondErrorEmbed(s, i, fmt.Sprintf(messages.T(i.GuildID).Admin.EnterValidRange, len(q.Songs)))
 		return nil
 	}
 
@@ -133,8 +130,7 @@ func forceRemoveByPosition(s *discordgo.Session, i *discordgo.InteractionCreate,
 	songToRemove := q.Songs[position-1]
 
 	if err := queue.RemoveSong(i.GuildID, position-1); err != nil {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
-			fmt.Sprintf(messages.T(i.GuildID).Admin.RemoveFailed, err)))
+		discord.RespondErrorEmbed(s, i, fmt.Sprintf(messages.T(i.GuildID).Admin.RemoveFailed, err))
 		return err
 	}
 
@@ -153,8 +149,7 @@ func forceRemoveCurrent(s *discordgo.Session, i *discordgo.InteractionCreate, q 
 
 	err := player.Skip(s, i.GuildID)
 	if err != nil && err != player.ErrQueueEmpty {
-		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
-			fmt.Sprintf(messages.T(i.GuildID).Admin.RemoveFailed, err)))
+		discord.UpdateErrorEmbed(s, i, fmt.Sprintf(messages.T(i.GuildID).Admin.RemoveFailed, err))
 		return nil
 	}
 

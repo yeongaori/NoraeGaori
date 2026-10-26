@@ -10,28 +10,33 @@ import (
 )
 
 func HandleJoin(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
-	if err != nil || voiceState.ChannelID == "" {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Voice.EnterVoiceChannel))
+	voiceChannelID, ok := discord.CallerVoiceChannel(s, i)
+	if !ok {
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Voice.EnterVoiceChannel)
 		return nil
 	}
 
 	discord.DeferResponse(s, i)
 
-	if err := joinChannel(s, i.GuildID, voiceState.ChannelID); err != nil {
+	if err := joinChannel(s, i.GuildID, voiceChannelID); err != nil {
 		logger.Errorf("Failed to join voice channel for guild %s: %v", i.GuildID, err)
 		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Voice.JoinFailedTitle, messages.T(i.GuildID).Voice.JoinFailedDesc))
 		return nil
 	}
 
-	channel, err := s.Channel(voiceState.ChannelID)
+	voice := &messages.T(i.GuildID).Voice
+	respondChannelSuccess(s, i, voiceChannelID, voice.JoinSuccessTitle, voice.JoinSuccessDesc, voice.JoinSuccessChannel)
+	return nil
+}
+
+func respondChannelSuccess(s *discordgo.Session, i *discordgo.InteractionCreate, channelID, title, fallbackText, channelFormat string) {
+	channel, err := s.Channel(channelID)
 	if err != nil {
-		_ = discord.UpdateResponseEmbed(s, i, messages.CreateSuccessEmbed(messages.T(i.GuildID).Voice.JoinSuccessTitle, messages.T(i.GuildID).Voice.JoinSuccessDesc))
-		return nil
+		_ = discord.UpdateResponseEmbed(s, i, messages.CreateSuccessEmbed(title, fallbackText))
+		return
 	}
 
-	_ = discord.UpdateResponseEmbed(s, i, messages.CreateSuccessEmbed(messages.T(i.GuildID).Voice.JoinSuccessTitle, fmt.Sprintf(messages.T(i.GuildID).Voice.JoinSuccessChannel, messages.EscapeMarkdown(channel.Name))))
-	return nil
+	_ = discord.UpdateResponseEmbed(s, i, messages.CreateSuccessEmbed(title, fmt.Sprintf(channelFormat, messages.EscapeMarkdown(channel.Name))))
 }
 
 func joinChannel(s *discordgo.Session, guildID, channelID string) error {

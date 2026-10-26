@@ -9,29 +9,23 @@ import (
 )
 
 func Register(cmd func(string) messages.CommandStrings) {
-	command.RegisterCommand(&command.Command{
-		Name:        "queue",
-		Description: cmd("queue").Description,
+	command.RegisterLocalized(cmd, &command.Command{
+		Name: "queue",
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Type:        discordgo.ApplicationCommandOptionInteger,
 				Name:        "page",
 				Description: cmd("queue").Options["page"],
 				Required:    false,
-				MinValue:    func() *float64 { v := 1.0; return &v }(),
+				MinValue:    command.FloatPointer(1),
 			},
 		},
-		Handler:  HandleQueue,
-		TextOnly: false,
-		Usage:    cmd("queue").Usage,
-		Example:  cmd("queue").Example,
+		Handler: HandleQueue,
 	})
-	command.RegisterAliases("queue", cmd("queue"))
 	discord.RegisterComponentRoute(queuePageRoute, turnQueuePage)
 	discord.RegisterComponentRoute(queueMixRoute, openMixPanel)
-	command.RegisterCommand(&command.Command{
-		Name:        "remove",
-		Description: cmd("remove").Description,
+	command.RegisterLocalized(cmd, &command.Command{
+		Name: "remove",
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Type:        discordgo.ApplicationCommandOptionString,
@@ -40,79 +34,29 @@ func Register(cmd func(string) messages.CommandStrings) {
 				Required:    true,
 			},
 		},
-		Handler:  HandleRemove,
-		TextOnly: false,
-		Usage:    cmd("remove").Usage,
-		Example:  cmd("remove").Example,
+		Handler: HandleRemove,
 	})
-	command.RegisterAliases("remove", cmd("remove"))
-	command.RegisterCommand(&command.Command{
-		Name:        "swap",
-		Description: cmd("swap").Description,
+	command.RegisterLocalized(cmd, &command.Command{
+		Name: "swap",
 		Options: []*discordgo.ApplicationCommandOption{
-			{
-				Type:        discordgo.ApplicationCommandOptionInteger,
-				Name:        "position1",
-				Description: cmd("swap").Options["position1"],
-				Required:    true,
-				MinValue:    func() *float64 { v := 1.0; return &v }(),
-			},
-			{
-				Type:        discordgo.ApplicationCommandOptionInteger,
-				Name:        "position2",
-				Description: cmd("swap").Options["position2"],
-				Required:    true,
-				MinValue:    func() *float64 { v := 1.0; return &v }(),
-			},
+			command.PositionOption("position1", cmd("swap").Options["position1"]),
+			command.PositionOption("position2", cmd("swap").Options["position2"]),
 		},
-		Handler:  HandleSwap,
-		TextOnly: false,
-		Usage:    cmd("swap").Usage,
-		Example:  cmd("swap").Example,
+		Handler: HandleSwap,
 	})
-	command.RegisterAliases("swap", cmd("swap"))
-	command.RegisterCommand(&command.Command{
-		Name:        "skipto",
-		Description: cmd("skipto").Description,
-		Options: []*discordgo.ApplicationCommandOption{
-			{
-				Type:        discordgo.ApplicationCommandOptionInteger,
-				Name:        "position",
-				Description: cmd("skipto").Options["position"],
-				Required:    true,
-				MinValue:    func() *float64 { v := 1.0; return &v }(),
-			},
-		},
-		Handler:  HandleSkipTo,
-		TextOnly: false,
-		Usage:    cmd("skipto").Usage,
-		Example:  cmd("skipto").Example,
+	command.RegisterLocalized(cmd, &command.Command{
+		Name:    "skipto",
+		Options: []*discordgo.ApplicationCommandOption{command.PositionOption("position", cmd("skipto").Options["position"])},
+		Handler: HandleSkipTo,
 	})
-	command.RegisterAliases("skipto", cmd("skipto"))
-	command.RegisterCommand(&command.Command{
-		Name:        "movetrack",
-		Description: cmd("movetrack").Description,
+	command.RegisterLocalized(cmd, &command.Command{
+		Name: "movetrack",
 		Options: []*discordgo.ApplicationCommandOption{
-			{
-				Type:        discordgo.ApplicationCommandOptionInteger,
-				Name:        "from",
-				Description: cmd("movetrack").Options["from"],
-				Required:    true,
-				MinValue:    func() *float64 { v := 1.0; return &v }(),
-			},
-			{
-				Type:        discordgo.ApplicationCommandOptionInteger,
-				Name:        "to",
-				Description: cmd("movetrack").Options["to"],
-				Required:    true,
-				MinValue:    func() *float64 { v := 1.0; return &v }(),
-			},
+			command.PositionOption("from", cmd("movetrack").Options["from"]),
+			command.PositionOption("to", cmd("movetrack").Options["to"]),
 		},
 		Handler:   HandleMoveTrack,
 		AdminOnly: true,
 		TextOnly:  true,
-		Usage:     cmd("movetrack").Usage,
-		Example:   cmd("movetrack").Example,
 	})
-	command.RegisterAliases("movetrack", cmd("movetrack"))
 }

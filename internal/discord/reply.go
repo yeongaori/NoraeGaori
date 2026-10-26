@@ -13,37 +13,6 @@ func IsMessageCommand(i *discordgo.InteractionCreate) bool {
 	return strings.HasPrefix(i.Token, "message_")
 }
 
-func RespondError(s *discordgo.Session, i *discordgo.InteractionCreate, message string) {
-	if IsMessageCommand(i) {
-		if mr, ok := messageResponders.Load(i.Token); ok {
-			mr.(*MessageResponse).SendMessage(message)
-		}
-		return
-	}
-	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: message,
-			Flags:   discordgo.MessageFlagsEphemeral,
-		},
-	})
-}
-
-func RespondSuccess(s *discordgo.Session, i *discordgo.InteractionCreate, message string) {
-	if IsMessageCommand(i) {
-		if mr, ok := messageResponders.Load(i.Token); ok {
-			mr.(*MessageResponse).SendMessage(message)
-		}
-		return
-	}
-	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: message,
-		},
-	})
-}
-
 func RespondEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) {
 	if IsMessageCommand(i) {
 		if mr, ok := messageResponders.Load(i.Token); ok {
@@ -57,6 +26,10 @@ func RespondEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *d
 			Embeds: []*discordgo.MessageEmbed{embed},
 		},
 	})
+}
+
+func RespondErrorEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, text string) {
+	RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, text))
 }
 
 func RespondEphemeralEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, components ...discordgo.MessageComponent) error {
@@ -163,6 +136,10 @@ func UpdateResponseEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, e
 		Embeds: &[]*discordgo.MessageEmbed{embed},
 	})
 	return err
+}
+
+func UpdateErrorEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, text string) {
+	_ = UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, text))
 }
 
 func UpdateResponseEmbedWithComponents(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, components []discordgo.MessageComponent) error {

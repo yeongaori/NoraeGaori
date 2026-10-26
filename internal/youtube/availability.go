@@ -8,7 +8,6 @@ import (
 
 	"noraegaori/internal/logger"
 	"noraegaori/internal/messages"
-	ytdlpUpdater "noraegaori/internal/ytdlp"
 
 	"github.com/lrstanley/go-ytdlp"
 )
@@ -24,8 +23,7 @@ var checkAvailabilityViaInnertube = func(guildID, url string) (*AvailabilityResu
 }
 
 var runYtDlpAvailability = func(ctx context.Context, url string) (*ytdlp.Result, error) {
-	cmd := applyJsRuntime(ytdlp.New().
-		SetExecutable(ytdlpUpdater.GetBinaryPath()).
+	cmd := applyJsRuntime(ytdlpCommand().
 		DumpJSON().
 		FlatPlaylist()).
 		SkipDownload()
@@ -90,9 +88,7 @@ func checkAvailabilityWithYtDlp(guildID, url, cacheKey string, startTime time.Ti
 		logger.Debugf("age_limit: %g", *info.AgeLimit)
 	}
 
-	isLive := info.IsLive != nil && *info.IsLive ||
-		(info.LiveStatus != nil && (*info.LiveStatus == ytdlp.ExtractedLiveStatusIsLive ||
-			*info.LiveStatus == ytdlp.ExtractedLiveStatusIsUpcoming))
+	isLive := info.IsLive != nil && *info.IsLive || isLiveOrUpcoming(info)
 	if isLive {
 		logger.Debugf("\"%s\" is a LIVE stream", getStringValue(info.Title))
 	}
@@ -199,12 +195,7 @@ func IsLiveStreamActive(url string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	cmd := ytdlp.New().
-		SetExecutable(ytdlpUpdater.GetBinaryPath()).
-		DumpJSON().
-		NoPlaylist()
-	cmd = applyJsRuntime(cmd).
-		Format("bestaudio/best")
+	cmd := videoInfoCommand()
 
 	result, ytdlpErr := cmd.Run(ctx, url)
 	if ytdlpErr != nil {
@@ -246,8 +237,7 @@ func CheckIfLiveStreamEnded(url string) (bool, error) {
 
 	retryErr := retryWithBackoff(func() error {
 
-		cmd := ytdlp.New().
-			SetExecutable(ytdlpUpdater.GetBinaryPath()).
+		cmd := ytdlpCommand().
 			DumpJSON().
 			FlatPlaylist()
 		cmd = applyJsRuntime(cmd).
@@ -311,8 +301,7 @@ func CheckAvailability(url string) (available bool, isLive bool, err error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		cmd := ytdlp.New().
-			SetExecutable(ytdlpUpdater.GetBinaryPath()).
+		cmd := ytdlpCommand().
 			DumpJSON().
 			NoPlaylist()
 		cmd = applyJsRuntime(cmd).
@@ -338,11 +327,7 @@ func CheckAvailability(url string) (available bool, isLive bool, err error) {
 
 		info := infos[0]
 
-		isLive = false
-		if info.LiveStatus != nil && (*info.LiveStatus == ytdlp.ExtractedLiveStatusIsLive ||
-			*info.LiveStatus == ytdlp.ExtractedLiveStatusIsUpcoming) {
-			isLive = true
-		}
+		isLive = isLiveOrUpcoming(info)
 
 		available = true
 		checkTime := time.Since(startTime)

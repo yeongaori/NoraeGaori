@@ -8,7 +8,6 @@ import (
 
 	"noraegaori/internal/logger"
 	"noraegaori/internal/messages"
-	ytdlpUpdater "noraegaori/internal/ytdlp"
 
 	"github.com/lrstanley/go-ytdlp"
 )
@@ -69,8 +68,7 @@ func GetPlaylistInfo(url, requesterName, requesterID string) (*PlaylistInfo, err
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	cmd := ytdlp.New().
-		SetExecutable(ytdlpUpdater.GetBinaryPath()).
+	cmd := ytdlpCommand().
 		ExtractorArgs("youtube:lang=" + messages.Lang()).
 		DumpJSON().
 		FlatPlaylist()
@@ -144,23 +142,8 @@ func GetPlaylistInfo(url, requesterName, requesterID string) (*PlaylistInfo, err
 	for _, entry := range videoInfos {
 		videoURL := fmt.Sprintf("https://%s/watch?v=%s", domain, entry.ID)
 
-		var duration string
-		var isLive bool
-
-		if entry.LiveStatus != nil && (*entry.LiveStatus == ytdlp.ExtractedLiveStatusIsLive ||
-			*entry.LiveStatus == ytdlp.ExtractedLiveStatusIsUpcoming) {
-			duration = "🔴 LIVE"
-			isLive = true
-		} else if entry.Duration != nil && *entry.Duration > 0 {
-			duration = formatDuration(int(*entry.Duration))
-		} else {
-			duration = "Unknown"
-		}
-
-		thumbnail := ""
-		if len(entry.Thumbnails) > 0 {
-			thumbnail = entry.Thumbnails[len(entry.Thumbnails)-1].URL
-		}
+		duration, isLive := durationLabel(entry)
+		thumbnail := lastThumbnail(entry)
 
 		song := &Song{
 			URL:           videoURL,

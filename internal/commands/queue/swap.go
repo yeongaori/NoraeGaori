@@ -10,29 +10,13 @@ import (
 )
 
 func HandleSwap(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	options := i.ApplicationCommandData().Options
-	if len(options) < 2 {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Queue.SwapEnterPositions))
-		return nil
-	}
-	pos1 := int(options[0].IntValue()) - 1
-	pos2 := int(options[1].IntValue()) - 1
-
-	q, err := queue.GetQueue(i.GuildID, false)
-	if err != nil || q == nil || len(q.Songs) == 0 {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.EmptyQueue, messages.T(i.GuildID).Descriptions.EmptyQueue))
-		return nil
-	}
-
-	if pos1 < 0 || pos2 < 0 || pos1 >= len(q.Songs) || pos2 >= len(q.Songs) {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
-			fmt.Sprintf(messages.T(i.GuildID).Queue.EnterValidRange, len(q.Songs))))
+	q, pos1, pos2, ok := readTwoPositions(s, i, messages.T(i.GuildID).Queue.SwapEnterPositions, messages.T(i.GuildID).Queue.EnterValidRange)
+	if !ok {
 		return nil
 	}
 
 	if (pos1 == 0 || pos2 == 0) && (q.Playing || q.Loading) {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
-			messages.T(i.GuildID).Queue.CannotSwapCurrent))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Queue.CannotSwapCurrent)
 		return nil
 	}
 
@@ -46,8 +30,7 @@ func HandleSwap(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	song2Title := q.Songs[pos2].Title
 
 	if err := queue.SwapSongs(i.GuildID, pos1, pos2); err != nil {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error,
-			fmt.Sprintf(messages.T(i.GuildID).Queue.SwapFailed, err)))
+		discord.RespondErrorEmbed(s, i, fmt.Sprintf(messages.T(i.GuildID).Queue.SwapFailed, err))
 		return err
 	}
 

@@ -18,7 +18,7 @@ func HandleForceStop(s *discordgo.Session, i *discordgo.InteractionCreate) error
 	}
 
 	if err := player.Stop(i.GuildID); err != nil {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, fmt.Sprintf(messages.T(i.GuildID).Admin.StopFailed, err)))
+		discord.RespondErrorEmbed(s, i, fmt.Sprintf(messages.T(i.GuildID).Admin.StopFailed, err))
 		return err
 	}
 

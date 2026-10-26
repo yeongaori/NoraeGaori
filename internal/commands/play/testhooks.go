@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"noraegaori/internal/youtube"
 )
 
 const HookAutocompleteCacheCapacity = autocompleteCacheCapacity
@@ -65,4 +66,13 @@ func (c *searchSelection) HookDone() *chan struct{} {
 
 func (c *searchSelection) HookPanelMsg() **discordgo.Message {
 	return &c.panelMsg
+}
+
+func HookEnqueueAvailableSongs(guildID string, songs []*youtube.Song, results []youtube.BatchResult) (int, int, []string) {
+	outcome := enqueueAvailableSongs(guildID, songs, results, false)
+	skippedURLs := make([]string, 0, len(outcome.skippedSongs))
+	for idx := range outcome.skippedSongs {
+		skippedURLs = append(skippedURLs, outcome.skippedSongs[idx].URL)
+	}
+	return outcome.added, outcome.skipped, skippedURLs
 }

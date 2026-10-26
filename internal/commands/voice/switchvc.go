@@ -2,7 +2,6 @@ package voice
 
 import (
 	"errors"
-	"fmt"
 	"noraegaori/internal/discord"
 
 	"github.com/bwmarrin/discordgo"
@@ -17,12 +16,12 @@ func HandleSwitchVC(s *discordgo.Session, i *discordgo.InteractionCreate) error 
 	if len(options) > 0 {
 		targetChannelID = options[0].ChannelValue(s).ID
 	} else {
-		voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
-		if err != nil || voiceState.ChannelID == "" {
-			discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Voice.EnterVoiceOrSpecify))
+		voiceChannelID, ok := discord.CallerVoiceChannel(s, i)
+		if !ok {
+			discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Voice.EnterVoiceOrSpecify)
 			return nil
 		}
-		targetChannelID = voiceState.ChannelID
+		targetChannelID = voiceChannelID
 	}
 
 	discord.DeferResponse(s, i)
@@ -37,12 +36,7 @@ func HandleSwitchVC(s *discordgo.Session, i *discordgo.InteractionCreate) error 
 		return nil
 	}
 
-	channel, err := s.Channel(targetChannelID)
-	if err != nil {
-		_ = discord.UpdateResponseEmbed(s, i, messages.CreateSuccessEmbed(messages.T(i.GuildID).Voice.SwitchSuccessTitle, messages.T(i.GuildID).Voice.SwitchSuccessDesc))
-		return nil
-	}
-
-	_ = discord.UpdateResponseEmbed(s, i, messages.CreateSuccessEmbed(messages.T(i.GuildID).Voice.SwitchSuccessTitle, fmt.Sprintf(messages.T(i.GuildID).Voice.SwitchSuccessChannel, messages.EscapeMarkdown(channel.Name))))
+	voice := &messages.T(i.GuildID).Voice
+	respondChannelSuccess(s, i, targetChannelID, voice.SwitchSuccessTitle, voice.SwitchSuccessDesc, voice.SwitchSuccessChannel)
 	return nil
 }

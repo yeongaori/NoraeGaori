@@ -51,7 +51,7 @@ func PreCacheNext(guildID string, bitrate int) {
 		return
 	}
 
-	cacheKey := fmt.Sprintf("%s_%d", guildID, nextSong.ID)
+	cacheKey := preCacheKey(guildID, nextSong.ID)
 	preCacheStoreMu.Lock()
 	isRetry := false
 	if cached, exists := preCacheStore[cacheKey]; exists && time.Since(cached.Timestamp) < preCacheTTL {
@@ -106,7 +106,7 @@ func preCacheSong(ctx context.Context, guildID string, song *queue.Song, sponsor
 		return fmt.Errorf("failed to get stream URL: %w", err)
 	}
 
-	cacheKey := fmt.Sprintf("%s_%d", guildID, song.ID)
+	cacheKey := preCacheKey(guildID, song.ID)
 
 	preCacheStoreMu.Lock()
 	cache, exists := preCacheStore[cacheKey]
@@ -172,8 +172,12 @@ func preCacheSong(ctx context.Context, guildID string, song *queue.Song, sponsor
 	return nil
 }
 
+func preCacheKey(guildID string, songID int) string {
+	return fmt.Sprintf("%s_%d", guildID, songID)
+}
+
 func lookupPreCacheLocked(guildID string, songID int) *PreCache {
-	cached, exists := preCacheStore[fmt.Sprintf("%s_%d", guildID, songID)]
+	cached, exists := preCacheStore[preCacheKey(guildID, songID)]
 	if !exists {
 		return nil
 	}
@@ -312,7 +316,7 @@ func ClearPreCache(guildID string) {
 }
 
 func invalidatePreCacheSong(guildID string, songID int) {
-	cacheKey := fmt.Sprintf("%s_%d", guildID, songID)
+	cacheKey := preCacheKey(guildID, songID)
 	preCacheStoreMu.Lock()
 	defer preCacheStoreMu.Unlock()
 

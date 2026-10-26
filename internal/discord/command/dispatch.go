@@ -50,13 +50,13 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	cmd, exists := lookupCommand(cmdName)
 	if !exists {
 		logger.Warnf("Unknown command: %s", cmdName)
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.UnknownCommand))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Errors.UnknownCommand)
 		return
 	}
 
 	member := discord.InteractionMember(i)
 	if member == nil {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.GuildOnly))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Errors.GuildOnly)
 		return
 	}
 
@@ -70,7 +70,7 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	if err := cmd.Handler(s, i); err != nil {
 		logger.Errorf("Command %s failed: %v", cmdName, err)
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, fmt.Sprintf(messages.T(i.GuildID).Errors.CommandExecutionError, err)))
+		discord.RespondErrorEmbed(s, i, fmt.Sprintf(messages.T(i.GuildID).Errors.CommandExecutionError, err))
 	}
 }
 
@@ -120,12 +120,8 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if !config.IsAdmin(m.Author.ID) && !discord.IsGuildAdmin(s, m.GuildID, member) {
 			embed := messages.CreateErrorEmbed(messages.T(m.GuildID).Titles.NoPermission, messages.T(m.GuildID).Errors.AdminOnly)
 
-			_, _ = s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
+			_, _ = discord.SendReply(s, m.ChannelID, m.ID, &discordgo.MessageSend{
 				Embeds: []*discordgo.MessageEmbed{embed},
-				Reference: &discordgo.MessageReference{
-					MessageID: m.ID,
-					ChannelID: m.ChannelID,
-				},
 			})
 			return
 		}
@@ -155,12 +151,8 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if messageResponder.Message == nil {
 			embed := messages.CreateErrorEmbed(messages.T(m.GuildID).Titles.Error, fmt.Sprintf(messages.T(m.GuildID).Errors.CommandExecutionError, err))
 
-			_, _ = s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
+			_, _ = discord.SendReply(s, m.ChannelID, m.ID, &discordgo.MessageSend{
 				Embeds: []*discordgo.MessageEmbed{embed},
-				Reference: &discordgo.MessageReference{
-					MessageID: m.ID,
-					ChannelID: m.ChannelID,
-				},
 			})
 		}
 	}

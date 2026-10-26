@@ -12,11 +12,15 @@ func panelStrings(guildID string) *messages.SettingsPanelMessages {
 	return &messages.T(guildID).SettingsPanel
 }
 
-func settingLabel(guildID, key string) string {
-	if label, ok := panelStrings(guildID).Labels[key]; ok && label != "" {
+func labelOr(labels map[string]string, key string) string {
+	if label, ok := labels[key]; ok && label != "" {
 		return label
 	}
 	return key
+}
+
+func settingLabel(guildID, key string) string {
+	return labelOr(panelStrings(guildID).Labels, key)
 }
 
 func settingHint(guildID, key string) string {
@@ -24,10 +28,7 @@ func settingHint(guildID, key string) string {
 }
 
 func categoryLabel(guildID, category string) string {
-	if label, ok := panelStrings(guildID).Categories[category]; ok && label != "" {
-		return label
-	}
-	return category
+	return labelOr(panelStrings(guildID).Categories, category)
 }
 
 func defaultFor(spec *settingSpec) string {

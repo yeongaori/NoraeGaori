@@ -38,6 +38,15 @@ func stopAfterEmptyQueue(guildID string) {
 	}
 }
 
+func loadVoteQueue(s *discordgo.Session, i *discordgo.InteractionCreate) (*queue.Queue, bool) {
+	q, err := queue.GetQueue(i.GuildID, false)
+	if err != nil || q == nil || len(q.Songs) == 0 {
+		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.NoSong, messages.T(i.GuildID).Errors.EmptyQueue))
+		return nil, false
+	}
+	return q, true
+}
+
 func skipCurrentSong(s *discordgo.Session, guildID string, skipped *queue.Song) (*discordgo.MessageEmbed, bool, error) {
 	err := player.Skip(s, guildID)
 	if err != nil && err != player.ErrQueueEmpty {
@@ -68,21 +77,19 @@ func applySkipVote(guildID string, skipped *queue.Song) func(*discordgo.Session,
 func HandleSkip(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	discord.DeferResponse(s, i)
 
-	voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
-	if err != nil || voiceState.ChannelID == "" {
-		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.EnterVoiceChannel))
+	voiceChannelID, ok := discord.CallerVoiceChannel(s, i)
+	if !ok {
+		discord.UpdateErrorEmbed(s, i, messages.T(i.GuildID).Music.EnterVoiceChannel)
 		return nil
 	}
 
-	q, err := queue.GetQueue(i.GuildID, false)
-	if err != nil || q == nil || len(q.Songs) == 0 {
-		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.NoSong, messages.T(i.GuildID).Errors.EmptyQueue))
+	q, ok := loadVoteQueue(s, i)
+	if !ok {
 		return nil
 	}
 
-	requiredVotes, err := vote.RequiredInChannel(s, i.GuildID, voiceState.ChannelID, vote.ResolveWithFetch)
+	requiredVotes, err := vote.ResolveRequiredVotes(s, i, voiceChannelID)
 	if err != nil {
-		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.ServerInfoFailed))
 		return err
 	}
 
@@ -96,7 +103,7 @@ func HandleSkip(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		Kind:           vote.KindSkip,
 		Title:          messages.T(i.GuildID).Titles.SkipVote,
 		Emoji:          "⏭",
-		VoiceChannelID: voiceState.ChannelID,
+		VoiceChannelID: voiceChannelID,
 		RequiredVotes:  requiredVotes,
 		Target:         vote.Target{Scope: vote.ScopeCurrentSong},
 		OnPassed:       applySkipVote(i.GuildID, skipped),

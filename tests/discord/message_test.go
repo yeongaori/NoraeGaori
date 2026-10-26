@@ -303,7 +303,6 @@ func TestMessageResponseFunctions(t *testing.T) {
 		}
 	}()
 
-	mr.SendMessage("test")
 	mr.SendEmbed(embed)
 	mr.SendFollowUp("followup")
 	mr.SendFollowUpEmbed(embed)

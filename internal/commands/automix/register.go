@@ -20,9 +20,8 @@ func Register(cmd func(string) messages.CommandStrings) {
 	for _, name := range []string{"fadein", "fadeout", "automix", "crossfade", "fadeonstop", "trimsilence"} {
 		settings.RegisterToggleCommand(cmd, name)
 	}
-	command.RegisterCommand(&command.Command{
-		Name:        "automixstyle",
-		Description: cmd("automixstyle").Description,
+	command.RegisterLocalized(cmd, &command.Command{
+		Name: "automixstyle",
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Type:        discordgo.ApplicationCommandOptionString,
@@ -38,30 +37,21 @@ func Register(cmd func(string) messages.CommandStrings) {
 				Required:    false,
 			},
 		},
-		Handler:  HandleAutoMixStyle,
-		TextOnly: false,
-		Usage:    cmd("automixstyle").Usage,
-		Example:  cmd("automixstyle").Example,
+		Handler: HandleAutoMixStyle,
 	})
-	command.RegisterAliases("automixstyle", cmd("automixstyle"))
-	command.RegisterCommand(&command.Command{
-		Name:        "automixpanel",
-		Description: cmd("automixpanel").Description,
+	command.RegisterLocalized(cmd, &command.Command{
+		Name: "automixpanel",
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Type:        discordgo.ApplicationCommandOptionInteger,
 				Name:        "page",
 				Description: cmd("automixpanel").Options["page"],
 				Required:    false,
-				MinValue:    func() *float64 { v := 1.0; return &v }(),
+				MinValue:    command.FloatPointer(1),
 			},
 		},
-		Handler:  HandleAutoMixPanel,
-		TextOnly: false,
-		Usage:    cmd("automixpanel").Usage,
-		Example:  cmd("automixpanel").Example,
+		Handler: HandleAutoMixPanel,
 	})
-	command.RegisterAliases("automixpanel", cmd("automixpanel"))
 	registerPanelRoutes()
 	reportMissingLabels()
 }

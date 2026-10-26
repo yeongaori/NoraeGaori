@@ -9,147 +9,98 @@ import (
 	"noraegaori/internal/logger"
 )
 
-var (
-	prefixCache       = make(map[string]string)
-	prefixCacheLoaded = make(map[string]bool)
-	prefixCacheMux    sync.RWMutex
+type settingCache struct {
+	column   string
+	mu       sync.RWMutex
+	values   map[string]string
+	isLoaded map[string]bool
+}
 
-	languageCache       = make(map[string]string)
-	languageCacheLoaded = make(map[string]bool)
-	languageCacheMux    sync.RWMutex
+var (
+	prefixCache   = settingCache{column: "prefix", values: make(map[string]string), isLoaded: make(map[string]bool)}
+	languageCache = settingCache{column: "language", values: make(map[string]string), isLoaded: make(map[string]bool)}
 )
 
-func invalidateLanguageCache(guildID string) {
-	languageCacheMux.Lock()
-	defer languageCacheMux.Unlock()
-	delete(languageCache, guildID)
-	delete(languageCacheLoaded, guildID)
+func (cache *settingCache) invalidate(guildID string) {
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+	delete(cache.values, guildID)
+	delete(cache.isLoaded, guildID)
+}
+
+func (cache *settingCache) load(guildID string) (string, error) {
+	if guildID == "" {
+		return "", nil
+	}
+
+	cache.mu.RLock()
+	if cache.isLoaded[guildID] {
+		val := cache.values[guildID]
+		cache.mu.RUnlock()
+		return val, nil
+	}
+	cache.mu.RUnlock()
+
+	var stored sql.NullString
+	err := database.DB.QueryRow(
+		fmt.Sprintf(`SELECT %s FROM guild_settings WHERE guild_id = ?`, cache.column),
+		guildID,
+	).Scan(&stored)
+
+	value := ""
+	if err == nil && stored.Valid {
+		value = stored.String
+	} else if err != nil && err != sql.ErrNoRows {
+		return "", fmt.Errorf("failed to get guild %s: %w", cache.column, err)
+	}
+
+	cache.mu.Lock()
+	cache.values[guildID] = value
+	cache.isLoaded[guildID] = true
+	cache.mu.Unlock()
+
+	return value, nil
+}
+
+func (cache *settingCache) save(guildID, value string) error {
+	release := AcquireLock(guildID)
+	defer release()
+
+	var storedValue interface{}
+	if value != "" {
+		storedValue = value
+	}
+
+	if err := SaveSetting(guildID, cache.column, storedValue); err != nil {
+		return fmt.Errorf("failed to set guild %s: %w", cache.column, err)
+	}
+
+	cache.mu.Lock()
+	cache.values[guildID] = value
+	cache.isLoaded[guildID] = true
+	cache.mu.Unlock()
+
+	logger.Debugf("Set %s=%q for guild: %s", cache.column, value, guildID)
+	return nil
 }
 
 func GetLanguage(guildID string) (string, error) {
-	if guildID == "" {
-		return "", nil
-	}
-
-	languageCacheMux.RLock()
-	if languageCacheLoaded[guildID] {
-		val := languageCache[guildID]
-		languageCacheMux.RUnlock()
-		return val, nil
-	}
-	languageCacheMux.RUnlock()
-
-	var lang sql.NullString
-	err := database.DB.QueryRow(
-		`SELECT language FROM guild_settings WHERE guild_id = ?`,
-		guildID,
-	).Scan(&lang)
-
-	value := ""
-	if err == nil && lang.Valid {
-		value = lang.String
-	} else if err != nil && err != sql.ErrNoRows {
-		return "", fmt.Errorf("failed to get guild language: %w", err)
-	}
-
-	languageCacheMux.Lock()
-	languageCache[guildID] = value
-	languageCacheLoaded[guildID] = true
-	languageCacheMux.Unlock()
-
-	return value, nil
+	return languageCache.load(guildID)
 }
 
 func SetLanguage(guildID, lang string) error {
-	release := AcquireLock(guildID)
-	defer release()
-
-	var langValue interface{}
-	if lang == "" {
-		langValue = nil
-	} else {
-		langValue = lang
-	}
-
-	if err := SaveSetting(guildID, "language", langValue); err != nil {
-		return fmt.Errorf("failed to set guild language: %w", err)
-	}
-
-	languageCacheMux.Lock()
-	languageCache[guildID] = lang
-	languageCacheLoaded[guildID] = true
-	languageCacheMux.Unlock()
-
-	logger.Debugf("Set language=%q for guild: %s", lang, guildID)
-	return nil
+	return languageCache.save(guildID, lang)
 }
 
 func InvalidateCaches(guildID string) {
-	invalidatePrefixCache(guildID)
-	invalidateLanguageCache(guildID)
-}
-
-func invalidatePrefixCache(guildID string) {
-	prefixCacheMux.Lock()
-	defer prefixCacheMux.Unlock()
-	delete(prefixCache, guildID)
-	delete(prefixCacheLoaded, guildID)
+	prefixCache.invalidate(guildID)
+	languageCache.invalidate(guildID)
 }
 
 func GetPrefix(guildID string) (string, error) {
-	if guildID == "" {
-		return "", nil
-	}
-
-	prefixCacheMux.RLock()
-	if prefixCacheLoaded[guildID] {
-		val := prefixCache[guildID]
-		prefixCacheMux.RUnlock()
-		return val, nil
-	}
-	prefixCacheMux.RUnlock()
-
-	var prefix sql.NullString
-	err := database.DB.QueryRow(
-		`SELECT prefix FROM guild_settings WHERE guild_id = ?`,
-		guildID,
-	).Scan(&prefix)
-
-	value := ""
-	if err == nil && prefix.Valid {
-		value = prefix.String
-	} else if err != nil && err != sql.ErrNoRows {
-		return "", fmt.Errorf("failed to get guild prefix: %w", err)
-	}
-
-	prefixCacheMux.Lock()
-	prefixCache[guildID] = value
-	prefixCacheLoaded[guildID] = true
-	prefixCacheMux.Unlock()
-
-	return value, nil
+	return prefixCache.load(guildID)
 }
 
 func SetPrefix(guildID, prefix string) error {
-	release := AcquireLock(guildID)
-	defer release()
-
-	var prefixValue interface{}
-	if prefix == "" {
-		prefixValue = nil
-	} else {
-		prefixValue = prefix
-	}
-
-	if err := SaveSetting(guildID, "prefix", prefixValue); err != nil {
-		return fmt.Errorf("failed to set guild prefix: %w", err)
-	}
-
-	prefixCacheMux.Lock()
-	prefixCache[guildID] = prefix
-	prefixCacheLoaded[guildID] = true
-	prefixCacheMux.Unlock()
-
-	logger.Debugf("Set prefix=%q for guild: %s", prefix, guildID)
-	return nil
+	return prefixCache.save(guildID, prefix)
 }

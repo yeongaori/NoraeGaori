@@ -18,7 +18,7 @@ func HandleVolume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	if len(options) == 0 {
 		volume, err := queue.GetVolume(i.GuildID)
 		if err != nil {
-			discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, fmt.Sprintf(messages.T(i.GuildID).Music.VolumeQueryFailed, err)))
+			discord.RespondErrorEmbed(s, i, fmt.Sprintf(messages.T(i.GuildID).Music.VolumeQueryFailed, err))
 			return err
 		}
 		discord.RespondEmbed(s, i, messages.CreateInfoEmbed(messages.T(i.GuildID).Music.CurrentVolumeTitle, fmt.Sprintf(messages.T(i.GuildID).Music.CurrentVolumeDesc, volume)))
@@ -33,21 +33,21 @@ func HandleVolume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		var err error
 		volume, err = strconv.ParseFloat(v, 64)
 		if err != nil || math.IsNaN(volume) {
-			discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.VolumeNotNumber))
+			discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Music.VolumeNotNumber)
 			return nil
 		}
 	default:
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.VolumeNotNumber))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Music.VolumeNotNumber)
 		return nil
 	}
 
 	if volume < 0 || volume > 1000 {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.VolumeOutOfRange))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Music.VolumeOutOfRange)
 		return nil
 	}
 
 	if err := player.SetVolume(i.GuildID, volume); err != nil {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, fmt.Sprintf(messages.T(i.GuildID).Music.VolumeSetFailed, err)))
+		discord.RespondErrorEmbed(s, i, fmt.Sprintf(messages.T(i.GuildID).Music.VolumeSetFailed, err))
 		return err
 	}
 

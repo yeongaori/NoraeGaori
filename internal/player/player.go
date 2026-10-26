@@ -302,33 +302,33 @@ func DeletePlayer(guildID string) {
 }
 
 func SetOnSongStartCallback(callback func(guildID string)) {
-	callbackMu.Lock()
-	defer callbackMu.Unlock()
-	onSongStartCallback = callback
+	setGuildCallback(&onSongStartCallback, callback)
 }
 
 func callOnSongStart(guildID string) {
-	callbackMu.RLock()
-	callback := onSongStartCallback
-	callbackMu.RUnlock()
-
-	if callback != nil {
-		callback(guildID)
-	}
+	callGuildCallback(&onSongStartCallback, guildID)
 }
 
 func SetOnPlaybackEndedCallback(callback func(guildID string)) {
-	callbackMu.Lock()
-	defer callbackMu.Unlock()
-	onPlaybackEndedCallback = callback
+	setGuildCallback(&onPlaybackEndedCallback, callback)
 }
 
 func callOnPlaybackEnded(guildID string) {
+	callGuildCallback(&onPlaybackEndedCallback, guildID)
+}
+
+func setGuildCallback(target *func(guildID string), callback func(guildID string)) {
+	callbackMu.Lock()
+	defer callbackMu.Unlock()
+	*target = callback
+}
+
+func callGuildCallback(callback *func(guildID string), guildID string) {
 	callbackMu.RLock()
-	callback := onPlaybackEndedCallback
+	fn := *callback
 	callbackMu.RUnlock()
 
-	if callback != nil {
-		callback(guildID)
+	if fn != nil {
+		fn(guildID)
 	}
 }

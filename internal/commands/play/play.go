@@ -1,7 +1,6 @@
 package play
 
 import (
-	"errors"
 	"fmt"
 	"noraegaori/internal/discord"
 
@@ -14,72 +13,30 @@ import (
 )
 
 func HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-
-	options := i.ApplicationCommandData().Options
-	if len(options) == 0 {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.EnterQuery))
+	query, voiceChannelID, ok := readPlayRequest(s, i)
+	if !ok {
 		return nil
 	}
-	query := options[0].StringValue()
-
-	query = messages.StripMarkdown(query)
-
-	voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
-	if err != nil || voiceState.ChannelID == "" {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.NotInVoiceChannel))
-		return nil
-	}
-
-	discord.DeferResponse(s, i)
-
-	searchEmbed := messages.CreateWarningEmbed(messages.T(i.GuildID).Titles.Searching, fmt.Sprintf(messages.T(i.GuildID).Descriptions.Searching, query))
-	_ = discord.UpdateResponseEmbed(s, i, searchEmbed)
 
 	if youtube.IsYouTubeURL(query) {
 		analysis := youtube.AnalyzeYouTubeURL(query)
 		logger.Debugf("URL analysis: type=%s, videoID=%s, playlistID=%s", analysis.Type, analysis.VideoID, analysis.PlaylistID)
 
 		if analysis.Type == youtube.URLTypePurePlaylist {
-			return handlePurePlaylist(s, i, query, voiceState)
+			return handlePurePlaylist(s, i, query, voiceChannelID)
 		}
 
 		if analysis.Type == youtube.URLTypeVideoWithPlaylist {
-			return handleVideoWithPlaylist(s, i, query, analysis, voiceState)
+			return handleVideoWithPlaylist(s, i, query, analysis, voiceChannelID)
 		}
 	}
 
-	logger.Debugf("Searching for: %s", query)
-	song, err := youtube.Search(i.GuildID, query, i.Member.User.Username, i.Member.User.ID)
-	if err != nil {
-		if errors.Is(err, youtube.ErrUnsupportedYouTubeURL) {
-			_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.UnsupportedURL))
-			return nil
-		}
-		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.SongNotFound))
+	song, err := searchAndEnqueue(s, i, query, voiceChannelID, -1)
+	if song == nil {
 		return err
 	}
 
-	q, err := queue.GetQueue(i.GuildID, false)
-	if err != nil {
-		return err
-	}
-
-	if err := ensureQueueForVoice(s, i, q, voiceState.ChannelID); err != nil {
-		return err
-	}
-
-	queueSong := queueSongFrom(song)
-
-	if err := queue.AddSong(i.GuildID, queueSong, -1); err != nil {
-		if err.Error() == "song already in queue: "+song.Title {
-			_ = discord.UpdateResponseEmbed(s, i, messages.CreateWarningEmbed(messages.T(i.GuildID).Titles.Duplicate, messages.T(i.GuildID).Errors.DuplicateSong))
-		} else {
-			_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, fmt.Sprintf(messages.T(i.GuildID).Music.SongAddFailed, err)))
-		}
-		return err
-	}
-
-	q, _ = queue.GetQueue(i.GuildID, true)
+	q, _ := queue.GetQueue(i.GuildID, true)
 
 	isFirstSong := len(q.Songs) == 1
 
@@ -107,18 +64,7 @@ func HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 			embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: song.Thumbnail}
 		}
 	} else {
-		embed = messages.CreateSongEmbed(
-			i.GuildID,
-			messages.ColorSuccess,
-			messages.T(i.GuildID).Titles.Added,
-			"",
-			song.Title,
-			song.URL,
-			song.Uploader,
-			song.Duration,
-			song.RequestedBy,
-			song.Thumbnail,
-		)
+		embed = youtubeSongEmbed(i.GuildID, messages.ColorSuccess, messages.T(i.GuildID).Titles.Added, "", song)
 	}
 
 	_ = discord.UpdateResponseEmbed(s, i, embed)

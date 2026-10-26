@@ -35,6 +35,12 @@ func (d *discordVoice) Err() error                           { return d.vc.Err }
 func (d *discordVoice) Speaking(b bool) error                { return d.vc.Speaking(b) }
 func (d *discordVoice) Disconnect(ctx context.Context) error { return d.vc.Disconnect(ctx) }
 
+func disconnectVoice(conn voiceConnection, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return conn.Disconnect(ctx)
+}
+
 func (player *GuildPlayer) currentVoice() voiceConnection {
 	player.mu.Lock()
 	defer player.mu.Unlock()
@@ -62,15 +68,11 @@ func JoinVoice(session *discordgo.Session, guildID, channelID string) (voiceConn
 	session.RUnlock()
 	if exists && existingVC != nil {
 		logger.Infof("Found stale session voice connection, disconnecting for guild: %s", guildID)
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		_ = existingVC.Disconnect(ctx)
-		cancel()
+		_ = disconnectVoice(wrapVoiceConn(existingVC), 5*time.Second)
 	}
 
 	if player.VoiceConn != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		_ = player.VoiceConn.Disconnect(ctx)
-		cancel()
+		_ = disconnectVoice(player.VoiceConn, 5*time.Second)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -97,9 +99,7 @@ func JoinVoice(session *discordgo.Session, guildID, channelID string) (voiceConn
 		case <-vc.Dead:
 			return nil, fmt.Errorf("voice connection died: %v", vc.Err)
 		case <-timeout:
-			ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
-			_ = vc.Disconnect(ctx2)
-			cancel2()
+			_ = disconnectVoice(wrapVoiceConn(vc), 5*time.Second)
 			return nil, fmt.Errorf("timeout waiting for voice")
 		}
 	}
@@ -111,9 +111,7 @@ func LeaveVoice(guildID string) error {
 	defer player.mu.Unlock()
 
 	if player.VoiceConn != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := player.VoiceConn.Disconnect(ctx); err != nil {
+		if err := disconnectVoice(player.VoiceConn, 5*time.Second); err != nil {
 			return fmt.Errorf("failed to disconnect: %w", err)
 		}
 		player.VoiceConn = nil

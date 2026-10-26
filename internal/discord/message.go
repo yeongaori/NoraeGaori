@@ -136,14 +136,18 @@ type MessageResponse struct {
 	OriginalMsgID string
 }
 
+func SendReply(s *discordgo.Session, channelID, messageID string, send *discordgo.MessageSend) (*discordgo.Message, error) {
+	send.Reference = &discordgo.MessageReference{
+		MessageID: messageID,
+		ChannelID: channelID,
+	}
+	return s.ChannelMessageSendComplex(channelID, send)
+}
+
 func (mr *MessageResponse) SendEmbed(embed *discordgo.MessageEmbed) {
 
-	msg, err := mr.Session.ChannelMessageSendComplex(mr.ChannelID, &discordgo.MessageSend{
+	msg, err := SendReply(mr.Session, mr.ChannelID, mr.OriginalMsgID, &discordgo.MessageSend{
 		Embeds: []*discordgo.MessageEmbed{embed},
-		Reference: &discordgo.MessageReference{
-			MessageID: mr.OriginalMsgID,
-			ChannelID: mr.ChannelID,
-		},
 	})
 	if err == nil {
 		mr.Message = msg
@@ -187,20 +191,6 @@ func (mr *MessageResponse) isOwnReply(msg *discordgo.Message) bool {
 		msg.MessageReference != nil && msg.MessageReference.MessageID == mr.OriginalMsgID
 }
 
-func (mr *MessageResponse) SendMessage(content string) {
-
-	msg, err := mr.Session.ChannelMessageSendComplex(mr.ChannelID, &discordgo.MessageSend{
-		Content: content,
-		Reference: &discordgo.MessageReference{
-			MessageID: mr.OriginalMsgID,
-			ChannelID: mr.ChannelID,
-		},
-	})
-	if err == nil {
-		mr.Message = msg
-	}
-}
-
 func (mr *MessageResponse) SendFollowUp(content string) {
 	_, _ = mr.Session.ChannelMessageSend(mr.ChannelID, content)
 }
@@ -210,13 +200,9 @@ func (mr *MessageResponse) SendFollowUpEmbed(embed *discordgo.MessageEmbed) {
 }
 
 func (mr *MessageResponse) SendEmbedWithComponents(embed *discordgo.MessageEmbed, components []discordgo.MessageComponent) (*discordgo.Message, error) {
-	msg, err := mr.Session.ChannelMessageSendComplex(mr.ChannelID, &discordgo.MessageSend{
+	msg, err := SendReply(mr.Session, mr.ChannelID, mr.OriginalMsgID, &discordgo.MessageSend{
 		Embeds:     []*discordgo.MessageEmbed{embed},
 		Components: components,
-		Reference: &discordgo.MessageReference{
-			MessageID: mr.OriginalMsgID,
-			ChannelID: mr.ChannelID,
-		},
 	})
 	if err == nil {
 		mr.Message = msg

@@ -78,10 +78,19 @@ func RegisterAlias(alias, commandName string) {
 	logger.Debugf("Registered alias: %s -> %s", alias, commandName)
 }
 
-func RegisterAliases(name string, cs messages.CommandStrings) {
+func RegisterAliases(name string, cs *messages.CommandStrings) {
 	for _, alias := range cs.Aliases {
 		RegisterAlias(alias, name)
 	}
+}
+
+func RegisterLocalized(cmd func(string) messages.CommandStrings, command *Command) {
+	cs := cmd(command.Name)
+	command.Description = cs.Description
+	command.Usage = cs.Usage
+	command.Example = cs.Example
+	RegisterCommand(command)
+	RegisterAliases(command.Name, &cs)
 }
 
 func ReloadAliases() {

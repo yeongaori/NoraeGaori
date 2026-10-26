@@ -8,7 +8,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/discord"
 	"noraegaori/internal/logger"
-	"noraegaori/internal/messages"
 )
 
 type settingArguments struct {
@@ -42,7 +41,7 @@ func settingCommandHandler(key string, buildEmbed func(guildID string) *discordg
 			if !isValidationError(err) {
 				logger.Errorf("Failed to save setting %s for guild %s: %v", failed.key, i.GuildID, err)
 			}
-			discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, validationMessage(i.GuildID, failed, err)))
+			discord.RespondErrorEmbed(s, i, validationMessage(i.GuildID, failed, err))
 			return nil
 		}
 

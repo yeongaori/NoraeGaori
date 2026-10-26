@@ -13,7 +13,7 @@ var cancelSkipVotes = vote.CancelSkipVotes
 
 func HandleLeave(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	if botVoiceChannelID(s, i.GuildID) == "" {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Voice.BotNotInVoice))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Voice.BotNotInVoice)
 		return nil
 	}
 

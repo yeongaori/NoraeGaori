@@ -161,6 +161,23 @@ func waitBeforeRetry(player *GuildPlayer, err error, delay time.Duration) bool {
 	}
 }
 
+func hasStaleStop(player *GuildPlayer, song *queue.Song) bool {
+	select {
+	case <-player.StopChan:
+		logger.Debugf("Drained stale stop signal before retry for: %s", song.Title)
+		return true
+	default:
+		return false
+	}
+}
+
+func dropFailedSong(guildID string) {
+	if err := queue.RemoveFirstSong(guildID); err != nil {
+		logger.Errorf("Failed to remove failed song: %v", err)
+	}
+	clearAnnounced(guildID)
+}
+
 func handlePlaybackError(session *discordgo.Session, guildID string, song *queue.Song, err error) bool {
 	errMsg := err.Error()
 
@@ -212,18 +229,7 @@ func handlePlaybackError(session *discordgo.Session, guildID string, song *queue
 	logger.Errorf("Max retries exceeded for song %s in guild: %s", song.Title, guildID)
 
 	if reconnectMsg := reconnectNotices.get(guildID); reconnectMsg != nil {
-		failedEmbed := messages.CreateSongEmbed(
-			guildID,
-			messages.ColorError,
-			messages.T(guildID).Player.StreamReconnectFailedTitle,
-			messages.T(guildID).Player.StreamReconnectFailedDesc,
-			song.Title,
-			song.URL,
-			song.Uploader,
-			song.Duration,
-			song.RequestedByTag,
-			song.Thumbnail,
-		)
+		failedEmbed := songEmbed(guildID, messages.ColorError, messages.T(guildID).Player.StreamReconnectFailedTitle, messages.T(guildID).Player.StreamReconnectFailedDesc, song)
 		_, _ = session.ChannelMessageEditEmbed(reconnectMsg.ChannelID, reconnectMsg.ID, failedEmbed)
 		reconnectNotices.remove(guildID)
 	} else {

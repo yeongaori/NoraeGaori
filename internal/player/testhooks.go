@@ -155,6 +155,7 @@ var HookSendFrame = sendFrame
 var HookSendPlaybackEndMessage = sendPlaybackEndMessage
 var HookShouldAutoPause = shouldAutoPause
 var HookShouldAutoResume = shouldAutoResume
+var HookSkipInternal = skipInternal
 var HookSnapTransitionToBar = snapTransitionToBar
 var HookSnapTransitionToGrid = snapTransitionToGrid
 var HookStartAnalysisBackfill = &startAnalysisBackfill

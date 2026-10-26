@@ -8,27 +8,23 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/messages"
 	"noraegaori/internal/player"
-	"noraegaori/internal/queue"
 )
 
 func HandleStop(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	discord.DeferResponse(s, i)
 
-	voiceState, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
-	if err != nil || voiceState.ChannelID == "" {
-		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.EnterVoiceChannel))
+	voiceChannelID, ok := discord.CallerVoiceChannel(s, i)
+	if !ok {
+		discord.UpdateErrorEmbed(s, i, messages.T(i.GuildID).Music.EnterVoiceChannel)
 		return nil
 	}
 
-	q, err := queue.GetQueue(i.GuildID, false)
-	if err != nil || q == nil || len(q.Songs) == 0 {
-		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.NoSong, messages.T(i.GuildID).Errors.EmptyQueue))
+	if _, ok := loadVoteQueue(s, i); !ok {
 		return nil
 	}
 
-	requiredVotes, err := vote.RequiredInChannel(s, i.GuildID, voiceState.ChannelID, vote.ResolveWithFetch)
+	requiredVotes, err := vote.ResolveRequiredVotes(s, i, voiceChannelID)
 	if err != nil {
-		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.ServerInfoFailed))
 		return err
 	}
 
@@ -40,7 +36,7 @@ func HandleStop(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		Kind:           vote.KindStop,
 		Title:          messages.T(i.GuildID).Titles.StopVote,
 		Emoji:          "⏹",
-		VoiceChannelID: voiceState.ChannelID,
+		VoiceChannelID: voiceChannelID,
 		RequiredVotes:  requiredVotes,
 		Target:         vote.Target{Scope: vote.ScopeWholeQueue},
 		OnPassed:       applyStopVote(i.GuildID),

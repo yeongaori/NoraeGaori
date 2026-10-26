@@ -138,6 +138,17 @@ func FormatBoldMaskedLink(title, url string) string {
 	return fmt.Sprintf("**%s**", FormatMaskedLink(title, url))
 }
 
+func FormatDuration(seconds int) string {
+	hours := seconds / 3600
+	minutes := (seconds % 3600) / 60
+	secs := seconds % 60
+
+	if hours > 0 {
+		return fmt.Sprintf("%d:%02d:%02d", hours, minutes, secs)
+	}
+	return fmt.Sprintf("%d:%02d", minutes, secs)
+}
+
 func StripMarkdown(s string) string {
 	s = strings.TrimSpace(s)
 	markers := []string{"***", "**", "__", "~~", "||", "*", "_", "`"}

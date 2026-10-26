@@ -67,41 +67,41 @@ func HandleSeek(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 	options := i.ApplicationCommandData().Options
 	if len(options) == 0 {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.SeekInvalidFormat))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Music.SeekInvalidFormat)
 		return nil
 	}
 	posStr, ok := options[0].Value.(string)
 	if !ok || posStr == "" {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.SeekInvalidFormat))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Music.SeekInvalidFormat)
 		return nil
 	}
 	posMs, err := parseSeekPosition(posStr)
 	if err != nil {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.SeekInvalidFormat))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Music.SeekInvalidFormat)
 		return nil
 	}
 
 	q, err := queue.GetQueue(i.GuildID, true)
 	if err != nil || q == nil || len(q.Songs) == 0 {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Errors.EmptyQueue))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Errors.EmptyQueue)
 		return nil
 	}
 	currentSong := q.Songs[0]
 	if currentSong.IsLive {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.SeekLiveStream))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Music.SeekLiveStream)
 		return nil
 	}
 	durationMs := youtube.ParseDurationToSeconds(currentSong.Duration) * 1000
 	if durationMs > 0 && posMs > durationMs {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.SeekOutOfBounds))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Music.SeekOutOfBounds)
 		return nil
 	}
 
 	if err := player.Seek(i.GuildID, posMs); errors.Is(err, player.ErrNotPlaying) {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, messages.T(i.GuildID).Music.NotPlayingOrLoading))
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Music.NotPlayingOrLoading)
 		return nil
 	} else if err != nil {
-		discord.RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, fmt.Sprintf(messages.T(i.GuildID).Music.SeekFailed, err)))
+		discord.RespondErrorEmbed(s, i, fmt.Sprintf(messages.T(i.GuildID).Music.SeekFailed, err))
 		return err
 	}
 
@@ -109,7 +109,7 @@ func HandleSeek(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		messages.T(i.GuildID).Music.SeekedTitle,
 		fmt.Sprintf(messages.T(i.GuildID).Music.SeekedDesc,
 			messages.FormatMaskedLink(currentSong.Title, currentSong.URL),
-			player.FormatDuration(posMs),
+			messages.FormatDuration(posMs/1000),
 			currentSong.Duration),
 	)
 	discord.RespondEmbed(s, i, embed)

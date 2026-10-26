@@ -9,36 +9,20 @@ import (
 )
 
 func Register(cmd func(string) messages.CommandStrings) {
-	command.RegisterCommand(&command.Command{
-		Name:        "pause",
-		Description: cmd("pause").Description,
-		Handler:     HandlePause,
-		TextOnly:    false,
-		Usage:       cmd("pause").Usage,
-		Example:     cmd("pause").Example,
+	command.RegisterLocalized(cmd, &command.Command{
+		Name:    "pause",
+		Handler: HandlePause,
 	})
-	command.RegisterAliases("pause", cmd("pause"))
-	command.RegisterCommand(&command.Command{
-		Name:        "resume",
-		Description: cmd("resume").Description,
-		Handler:     HandleResume,
-		TextOnly:    false,
-		Usage:       cmd("resume").Usage,
-		Example:     cmd("resume").Example,
+	command.RegisterLocalized(cmd, &command.Command{
+		Name:    "resume",
+		Handler: HandleResume,
 	})
-	command.RegisterAliases("resume", cmd("resume"))
-	command.RegisterCommand(&command.Command{
-		Name:        "skip",
-		Description: cmd("skip").Description,
-		Handler:     HandleSkip,
-		TextOnly:    false,
-		Usage:       cmd("skip").Usage,
-		Example:     cmd("skip").Example,
+	command.RegisterLocalized(cmd, &command.Command{
+		Name:    "skip",
+		Handler: HandleSkip,
 	})
-	command.RegisterAliases("skip", cmd("skip"))
-	command.RegisterCommand(&command.Command{
-		Name:        "seek",
-		Description: cmd("seek").Description,
+	command.RegisterLocalized(cmd, &command.Command{
+		Name: "seek",
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Type:        discordgo.ApplicationCommandOptionString,
@@ -47,52 +31,32 @@ func Register(cmd func(string) messages.CommandStrings) {
 				Required:    true,
 			},
 		},
-		Handler:  HandleSeek,
-		TextOnly: false,
-		Usage:    cmd("seek").Usage,
-		Example:  cmd("seek").Example,
+		Handler: HandleSeek,
 	})
-	command.RegisterAliases("seek", cmd("seek"))
-	command.RegisterCommand(&command.Command{
-		Name:        "stop",
-		Description: cmd("stop").Description,
-		Handler:     HandleStop,
-		TextOnly:    false,
-		Usage:       cmd("stop").Usage,
-		Example:     cmd("stop").Example,
+	command.RegisterLocalized(cmd, &command.Command{
+		Name:    "stop",
+		Handler: HandleStop,
 	})
-	command.RegisterAliases("stop", cmd("stop"))
-	command.RegisterCommand(&command.Command{
-		Name:        "nowplaying",
-		Description: cmd("nowplaying").Description,
-		Handler:     HandleNowPlaying,
-		TextOnly:    false,
-		Usage:       cmd("nowplaying").Usage,
-		Example:     cmd("nowplaying").Example,
+	command.RegisterLocalized(cmd, &command.Command{
+		Name:    "nowplaying",
+		Handler: HandleNowPlaying,
 	})
-	command.RegisterAliases("nowplaying", cmd("nowplaying"))
-	command.RegisterCommand(&command.Command{
-		Name:        "volume",
-		Description: cmd("volume").Description,
+	command.RegisterLocalized(cmd, &command.Command{
+		Name: "volume",
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Type:        discordgo.ApplicationCommandOptionNumber,
 				Name:        "level",
 				Description: cmd("volume").Options["level"],
 				Required:    false,
-				MinValue:    func() *float64 { v := 0.0; return &v }(),
+				MinValue:    command.FloatPointer(0),
 				MaxValue:    1000.0,
 			},
 		},
-		Handler:  HandleVolume,
-		TextOnly: false,
-		Usage:    cmd("volume").Usage,
-		Example:  cmd("volume").Example,
+		Handler: HandleVolume,
 	})
-	command.RegisterAliases("volume", cmd("volume"))
-	command.RegisterCommand(&command.Command{
-		Name:        "repeat",
-		Description: cmd("repeat").Description,
+	command.RegisterLocalized(cmd, &command.Command{
+		Name: "repeat",
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Type:        discordgo.ApplicationCommandOptionString,
@@ -106,10 +70,6 @@ func Register(cmd func(string) messages.CommandStrings) {
 				},
 			},
 		},
-		Handler:  settings.HandleSetting("repeat"),
-		TextOnly: false,
-		Usage:    cmd("repeat").Usage,
-		Example:  cmd("repeat").Example,
+		Handler: settings.HandleSetting("repeat"),
 	})
-	command.RegisterAliases("repeat", cmd("repeat"))
 }

@@ -1,7 +1,6 @@
 package player
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -21,17 +20,6 @@ func GetCurrentPosition(guildID string) int {
 
 	elapsed := time.Since(player.PlaybackStart)
 	return int(elapsed.Milliseconds())
-}
-
-func FormatDuration(ms int) string {
-	seconds := ms / 1000
-	minutes := seconds / 60
-	hours := minutes / 60
-
-	if hours > 0 {
-		return fmt.Sprintf("%d:%02d:%02d", hours, minutes%60, seconds%60)
-	}
-	return fmt.Sprintf("%d:%02d", minutes, seconds%60)
 }
 
 func StopAll() {

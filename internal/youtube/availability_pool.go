@@ -171,11 +171,7 @@ func (p *AvailabilityPool) worker(id int) {
 }
 
 func (p *AvailabilityPool) backoffDelay(retryCount int) time.Duration {
-	delay := time.Duration(1<<uint(retryCount)) * p.retryDelay
-	if delay > p.maxRetryDelay {
-		delay = p.maxRetryDelay
-	}
-	return delay
+	return retryDelay(retryCount, p.retryDelay, p.maxRetryDelay)
 }
 
 func (p *AvailabilityPool) scheduleRetry(job BatchJob, delay time.Duration) {

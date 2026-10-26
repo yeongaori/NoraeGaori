@@ -35,7 +35,7 @@ func HandleNowPlaying(s *discordgo.Session, i *discordgo.InteractionCreate) erro
 	progressText := song.Duration
 	if q.Playing && !song.IsLive {
 		position := player.GetCurrentPosition(i.GuildID)
-		positionStr := player.FormatDuration(position)
+		positionStr := messages.FormatDuration(position / 1000)
 		progressText = fmt.Sprintf("%s / %s", positionStr, song.Duration)
 	}
 	if !song.IsLive {
@@ -43,9 +43,9 @@ func HandleNowPlaying(s *discordgo.Session, i *discordgo.InteractionCreate) erro
 		if trimStart > 0 || trimEnd > 0 {
 			endStr := song.Duration
 			if trimEnd > 0 {
-				endStr = player.FormatDuration(trimEnd)
+				endStr = messages.FormatDuration(trimEnd / 1000)
 			}
-			progressText = fmt.Sprintf("%s (%s - %s)", progressText, player.FormatDuration(trimStart), endStr)
+			progressText = fmt.Sprintf("%s (%s - %s)", progressText, messages.FormatDuration(trimStart/1000), endStr)
 		}
 	}
 
