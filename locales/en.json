@@ -149,7 +149,7 @@
       "options": {},
       "usage": "stop",
       "example": "stop",
-      "aliases": ["stop", "st"]
+      "aliases": ["stop"]
     },
     "nowplaying": {
       "description": "Shows the currently playing song",

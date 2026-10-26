@@ -149,7 +149,7 @@
       "options": {},
       "usage": "stop",
       "example": "stop",
-      "aliases": ["stop", "st", "정지", "멈춤"]
+      "aliases": ["stop", "정지", "멈춤"]
     },
     "nowplaying": {
       "description": "현재 재생 중인 노래를 보여줍니다",

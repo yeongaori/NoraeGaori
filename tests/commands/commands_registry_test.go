@@ -206,6 +206,33 @@ func TestEveryAliasTargetsARegisteredCommand(t *testing.T) {
 	}
 }
 
+func TestNoAliasBelongsToTwoCommands(t *testing.T) {
+	t.Cleanup(func() {
+		if err := messages.LoadLocale("en"); err != nil {
+			t.Errorf("failed to restore the English locale: %v", err)
+		}
+	})
+
+	for _, lang := range messages.AvailableLocales() {
+		if err := messages.LoadLocale(lang); err != nil {
+			t.Fatalf("failed to load the %s locale: %v", lang, err)
+		}
+
+		owners := make(map[string][]string)
+		for name, cs := range messages.T().Commands {
+			for _, alias := range cs.Aliases {
+				owners[alias] = append(owners[alias], name)
+			}
+		}
+		for alias, names := range owners {
+			if len(names) > 1 {
+				sort.Strings(names)
+				t.Errorf("locale %s, alias %q: got commands %v, want one", lang, alias, names)
+			}
+		}
+	}
+}
+
 func indexOfPipe(s string) int {
 	for i := 0; i < len(s); i++ {
 		if s[i] == '|' {
