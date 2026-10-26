@@ -70,6 +70,7 @@ func Register(cmd func(string) messages.CommandStrings) {
 		Usage:    cmd("swap").Usage,
 		Example:  cmd("swap").Example,
 	})
+	command.RegisterAliases("swap", cmd("swap"))
 	command.RegisterCommand(&command.Command{
 		Name:        "skipto",
 		Description: cmd("skipto").Description,

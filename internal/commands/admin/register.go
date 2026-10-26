@@ -55,4 +55,5 @@ func Register(cmd func(string) messages.CommandStrings) {
 		Usage:       cmd("status").Usage,
 		Example:     cmd("status").Example,
 	})
+	command.RegisterAliases("status", cmd("status"))
 }

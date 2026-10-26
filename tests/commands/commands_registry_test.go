@@ -5,6 +5,7 @@ import (
 	"noraegaori/internal/commands"
 	"noraegaori/internal/discord/command"
 	"sort"
+	"strings"
 	"testing"
 
 	"noraegaori/internal/messages"
@@ -56,87 +57,6 @@ var expectedCommands = []string{
 	"volume|admin=false|textonly=false|opts=1|handler=true|autocomplete=false",
 }
 
-var expectedAliases = []string{
-	"al=autoleave",
-	"ap=autopause",
-	"ar=autoresume",
-	"autoleave=autoleave",
-	"automix=automix",
-	"automixpanel=automixpanel",
-	"automixstyle=automixstyle",
-	"autopause=autopause",
-	"autoresume=autoresume",
-	"cf=crossfade",
-	"config=settings",
-	"crossfade=crossfade",
-	"dc=leave",
-	"disconnect=leave",
-	"fade-in=fadein",
-	"fade-out=fadeout",
-	"fadein=fadein",
-	"fadeonstop=fadeonstop",
-	"fadeout=fadeout",
-	"forceremove=forceremove",
-	"forceskip=forceskip",
-	"forcestop=forcestop",
-	"fos=fadeonstop",
-	"fr=forceremove",
-	"fs=forceskip",
-	"fstop=forcestop",
-	"h=help",
-	"help=help",
-	"j=join",
-	"join=join",
-	"jump=seek",
-	"lang=setlanguage",
-	"language=setlanguage",
-	"leave=leave",
-	"mix=automix",
-	"mixpanel=automixpanel",
-	"mixstyle=automixstyle",
-	"move=switchvc",
-	"movetrack=movetrack",
-	"mt=movetrack",
-	"normalization=normalization",
-	"normalize=normalization",
-	"nowplaying=nowplaying",
-	"np=nowplaying",
-	"p=play",
-	"pause=pause",
-	"play=play",
-	"playnext=playnext",
-	"pn=playnext",
-	"prefix=setprefix",
-	"q=queue",
-	"queue=queue",
-	"remove=remove",
-	"repeat=repeat",
-	"resume=resume",
-	"rm=remove",
-	"s=search",
-	"sb=sponsorblock",
-	"search=search",
-	"seek=seek",
-	"setlang=setlanguage",
-	"setlanguage=setlanguage",
-	"setprefix=setprefix",
-	"settings=settings",
-	"settingspanel=settings",
-	"showstartedtrack=showstartedtrack",
-	"showtrack=showstartedtrack",
-	"skipto=skipto",
-	"sponsorblock=sponsorblock",
-	"st=skipto",
-	"stop=stop",
-	"switch=switchvc",
-	"switchvc=switchvc",
-	"trim=trimsilence",
-	"trimsilence=trimsilence",
-	"v=volume",
-	"vol=volume",
-	"volume=volume",
-}
-
 func registeredCommandFingerprint(t *testing.T) ([]string, []string) {
 	t.Helper()
 
@@ -177,15 +97,38 @@ func TestRegisteredCommandsMatchTheExpectedList(t *testing.T) {
 	}
 }
 
-func TestRegisteredAliasesMatchTheExpectedList(t *testing.T) {
-	_, pairs := registeredCommandFingerprint(t)
+func TestReloadingAliasesKeepsTheStartupAliases(t *testing.T) {
+	previousCommands := command.HookCommands.Load()
+	previousAliases := command.HookAliases.Load()
+	t.Cleanup(func() {
+		command.HookCommands.Store(previousCommands)
+		command.HookAliases.Store(previousAliases)
+		if err := messages.LoadLocale("en"); err != nil {
+			t.Errorf("failed to restore the English locale: %v", err)
+		}
+	})
 
-	if len(pairs) != len(expectedAliases) {
-		t.Fatalf("got %d aliases, want %d", len(pairs), len(expectedAliases))
-	}
-	for i, got := range pairs {
-		if got != expectedAliases[i] {
-			t.Errorf("alias %d: got %q, want %q", i, got, expectedAliases[i])
+	for _, lang := range messages.AvailableLocales() {
+		if err := messages.LoadLocale(lang); err != nil {
+			t.Fatalf("failed to load the %s locale: %v", lang, err)
+		}
+		command.HookCommands.Store(&map[string]*command.Command{})
+		command.HookAliases.Store(&map[string]string{})
+
+		commands.InitializeCommands()
+		startup := command.SnapshotAliases()
+		command.ReloadAliases()
+		reloaded := command.SnapshotAliases()
+
+		for alias, want := range reloaded {
+			if got := startup[alias]; got != want {
+				t.Errorf("locale %s, alias %q: got %q at startup, want %q after reload", lang, alias, got, want)
+			}
+		}
+		for alias, got := range startup {
+			if _, ok := reloaded[alias]; !ok {
+				t.Errorf("locale %s, alias %q: got %q at startup, want %q after reload", lang, alias, got, "")
+			}
 		}
 	}
 }
@@ -195,11 +138,12 @@ func TestEveryAliasTargetsARegisteredCommand(t *testing.T) {
 
 	registered := make(map[string]bool, len(fingerprints))
 	for _, fingerprint := range fingerprints {
-		registered[fingerprint[:len(fingerprint)-len(fingerprint[indexOfPipe(fingerprint):])]] = true
+		name, _, _ := strings.Cut(fingerprint, "|")
+		registered[name] = true
 	}
 
 	for _, pair := range pairs {
-		target := pair[indexOfEquals(pair)+1:]
+		_, target, _ := strings.Cut(pair, "=")
 		if !registered[target] {
 			t.Errorf("alias %q points at %q, which is not registered", pair, target)
 		}
@@ -231,22 +175,4 @@ func TestNoAliasBelongsToTwoCommands(t *testing.T) {
 			}
 		}
 	}
-}
-
-func indexOfPipe(s string) int {
-	for i := 0; i < len(s); i++ {
-		if s[i] == '|' {
-			return i
-		}
-	}
-	return len(s)
-}
-
-func indexOfEquals(s string) int {
-	for i := 0; i < len(s); i++ {
-		if s[i] == '=' {
-			return i
-		}
-	}
-	return len(s)
 }

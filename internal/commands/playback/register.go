@@ -35,6 +35,7 @@ func Register(cmd func(string) messages.CommandStrings) {
 		Usage:       cmd("skip").Usage,
 		Example:     cmd("skip").Example,
 	})
+	command.RegisterAliases("skip", cmd("skip"))
 	command.RegisterCommand(&command.Command{
 		Name:        "seek",
 		Description: cmd("seek").Description,
