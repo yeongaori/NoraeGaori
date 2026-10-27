@@ -38,7 +38,7 @@ func PruneTrackAnalysis() error {
 	}
 
 	if removed, err := result.RowsAffected(); err == nil {
-		logger.Infof("Pruned %d stored rows (older than %d days or not version %d), %d remain",
+		logger.Debugf("Pruned %d stored rows (older than %d days or not version %d), %d remain",
 			removed, analysisRetentionDays, analysisVersion, remaining)
 	}
 	return nil

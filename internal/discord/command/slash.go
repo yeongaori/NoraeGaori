@@ -54,13 +54,13 @@ func SyncSlashCommands(session *discordgo.Session) error {
 		return nil
 	}
 
-	logger.Infof("Slash command changes detected — added: %v, updated: %v, removed: %v", added, updated, removed)
+	logger.Debugf("Slash command changes detected — added: %v, updated: %v, removed: %v", added, updated, removed)
 
 	if _, err := session.ApplicationCommandBulkOverwrite(appID, "", desired); err != nil {
 		return fmt.Errorf("failed to bulk overwrite slash commands: %w", err)
 	}
 
-	logger.Info("Slash commands registered successfully")
+	logger.Debug("Slash commands registered successfully")
 	return nil
 }
 
