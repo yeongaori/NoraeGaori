@@ -12,5 +12,5 @@ var HookOnGuildDelete = onGuildDelete
 var HookReconnectResumeDelay = &reconnectResumeDelay
 var HookRedactToken = redactToken
 var HookResumeAfterReconnect = &resumeAfterReconnect
-var HookResumePlayersAfterReconnect = resumePlayersAfterReconnect
+var HookResumePlayers = resumePlayers
 var HookResumeWaitingPlayers = &resumeWaitingPlayers

@@ -72,8 +72,8 @@ var HookFetchBackfillStreamURL = &fetchBackfillStreamURL
 var HookMarkAnalysisFailed = markAnalysisFailed
 var HookMarkAnalysisPending = markAnalysisPending
 var HookPlanBackfillWork = planBackfillWork
-var HookRunAnalysisBackfillPass = runAnalysisBackfillPass
-var HookAdjustEndStateForOffset = adjustEndStateForOffset
+var HookRunBackfillPass = runBackfillPass
+var HookOffsetEndState = offsetEndState
 var HookAnnounceAutoPause = &announceAutoPause
 var HookAnnounceNowPlaying = &announceNowPlaying
 var HookAnnouncePlaybackCrash = &announcePlaybackCrash
@@ -92,7 +92,7 @@ var HookAutoPausedChannels = &autoPausedChannels
 var HookAwaitingDiscord = &awaitingDiscord
 var HookAwaitingDiscordMu = &awaitingDiscordMu
 var HookCancelAutoPauseTimer = cancelAutoPauseTimer
-var HookClassifyDrainedStream = classifyDrainedStream
+var HookClassifyDrain = classifyDrain
 var HookClearAnnounced = clearAnnounced
 var HookClearRetryCount = clearRetryCount
 var HookDeliverNowPlaying = deliverNowPlaying
@@ -132,7 +132,7 @@ var HookPreCacheNext = &preCacheNext
 var HookPreCacheSong = preCacheSong
 var HookPreCacheStore = &preCacheStore
 var HookPreCacheStoreMu = &preCacheStoreMu
-var HookPrepareVoiceConnection = prepareVoiceConnection
+var HookPrepareVoice = prepareVoice
 var HookRateLimitCooldown = &rateLimitCooldown
 var HookRateLimitNotices = &rateLimitNotices
 var HookReadFloat32Samples = readFloat32Samples
@@ -140,19 +140,19 @@ var HookRecentCommandWindow = &recentCommandWindow
 var HookReconnectNotices = &reconnectNotices
 var HookReleaseFFmpeg = &releaseFFmpeg
 var HookReleasePlayback = releasePlayback
-var HookReportPlaybackFailure = reportPlaybackFailure
+var HookReportFailure = reportFailure
 var HookReportStreamFailure = &reportStreamFailure
-var HookResolveRestartStreamURL = resolveRestartStreamURL
+var HookResolveRestartURL = resolveRestartURL
 var HookResumeAfterOutage = &resumeAfterOutage
 var HookResumeAutoPaused = &resumeAutoPaused
 var HookResumePlayback = &resumePlayback
 var HookRetryDelay = &retryDelay
 var HookRetryKey = retryKey
-var HookSendAutoPauseNotification = sendAutoPauseNotification
+var HookSendAutoPauseNotice = sendAutoPauseNotice
 var HookSettleTailAnalysis = settleTailAnalysis
 var HookSendCommandToPlayer = sendCommandToPlayer
 var HookSendFrame = sendFrame
-var HookSendPlaybackEndMessage = sendPlaybackEndMessage
+var HookSendEndMessage = sendEndMessage
 var HookShouldAutoPause = shouldAutoPause
 var HookShouldAutoResume = shouldAutoResume
 var HookSkipInternal = skipInternal
@@ -163,7 +163,7 @@ var HookStartPlaybackSession = startPlaybackSession
 var HookVoiceRejoinDelay = &voiceRejoinDelay
 var HookWaitBeforeRetry = waitBeforeRetry
 
-func HookBuildGuildPlayer(fields *HookGuildPlayerFields) *GuildPlayer {
+func HookCreateGuildPlayer(fields *HookGuildPlayerFields) *GuildPlayer {
 	return &GuildPlayer{
 		GuildID:          fields.GuildID,
 		Volume:           fields.Volume,
@@ -176,7 +176,7 @@ func HookBuildGuildPlayer(fields *HookGuildPlayerFields) *GuildPlayer {
 	}
 }
 
-func HookBuildFadeSettings(fields *HookFadeSettingsFields) *fadeSettings {
+func HookCreateFadeSettings(fields *HookFadeSettingsFields) *fadeSettings {
 	return &fadeSettings{
 		fadeIn:         fields.FadeIn,
 		autoMix:        fields.AutoMix,

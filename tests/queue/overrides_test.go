@@ -9,7 +9,7 @@ import (
 	"noraegaori/internal/queue"
 )
 
-func TestOverridesRoundTripInAStableOrder(t *testing.T) {
+func TestEncodeOverridesStableOrder(t *testing.T) {
 	overrides := map[string]string{"fx_out": "phaser", "eq_in": "hi_fast", "length": "four_bars"}
 	encoded := queue.EncodeOverrides(overrides)
 	if encoded != "eq_in=hi_fast,fx_out=phaser,length=four_bars" {
@@ -26,7 +26,7 @@ func TestOverridesRoundTripInAStableOrder(t *testing.T) {
 	}
 }
 
-func TestDecodeDropsBrokenPairs(t *testing.T) {
+func TestDecodeOverridesBrokenPairs(t *testing.T) {
 	decoded := queue.DecodeOverrides(",fx_out=phaser,=none,loop=,eq_in=auto,garbage,volume_out=slow")
 	if len(decoded) != 2 || decoded["fx_out"] != "phaser" || decoded["volume_out"] != "slow" {
 		t.Errorf("decoded %v, want only fx_out and volume_out", decoded)
@@ -51,7 +51,7 @@ func expandStored(category, value string) map[string]string {
 	return transition.ExpandLegacy(transition.Category(category), value)
 }
 
-func addLegacyStyleColumns(t *testing.T) {
+func addLegacyColumns(t *testing.T) {
 	t.Helper()
 	for _, table := range []string{"guild_settings", "songs"} {
 		for _, category := range []string{"volume", "eq", "filter", "effect", "loop"} {
@@ -62,9 +62,9 @@ func addLegacyStyleColumns(t *testing.T) {
 	}
 }
 
-func TestLegacyStylesConvertOnceAndTheirColumnsGo(t *testing.T) {
+func TestConvertLegacyStylesOnce(t *testing.T) {
 	setupTestDB(t)
-	addLegacyStyleColumns(t)
+	addLegacyColumns(t)
 
 	if _, err := database.DB.Exec(`INSERT INTO guild_settings (guild_id, volume, automix_style_volume, automix_style_effect, automix_style_loop)
 		VALUES ('guild1', 100, 'smooth', 'vinyl_stop', 'two_beats')`); err != nil {
@@ -106,7 +106,7 @@ func TestLegacyStylesConvertOnceAndTheirColumnsGo(t *testing.T) {
 	}
 }
 
-func TestFreshDatabaseNeedsNoConversion(t *testing.T) {
+func TestConvertLegacyStylesFresh(t *testing.T) {
 	setupTestDB(t)
 	for _, table := range []string{"guild_settings", "songs"} {
 		if exists, err := database.ColumnExists(table, "automix_overrides"); err != nil || !exists {

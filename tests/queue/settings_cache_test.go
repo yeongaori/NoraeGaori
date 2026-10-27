@@ -11,7 +11,7 @@ import (
 	"noraegaori/internal/queue"
 )
 
-func TestSettingGettersServeRepeatReadsFromTheCache(t *testing.T) {
+func TestGettersServeFromCache(t *testing.T) {
 	setupTestDB(t)
 
 	if err := queue.SetSponsorBlock("guild1", true); err != nil {
@@ -30,7 +30,7 @@ func TestSettingGettersServeRepeatReadsFromTheCache(t *testing.T) {
 	}
 }
 
-func TestSettersRefreshTheCachedSettings(t *testing.T) {
+func TestSettersRefreshCache(t *testing.T) {
 	setupTestDB(t)
 
 	if enabled, err := queue.GetFadeIn("guild1"); err != nil || enabled {
@@ -44,12 +44,12 @@ func TestSettersRefreshTheCachedSettings(t *testing.T) {
 	}
 }
 
-func TestAStaleLoadIsNotCachedAfterAnInvalidation(t *testing.T) {
+func TestInvalidateCacheDropsStale(t *testing.T) {
 	setupTestDB(t)
 
 	generation := queue.HookSettingsGeneration("guild1")
 	queue.InvalidateCache("guild1")
-	settings := queue.HookDefaultGuildSettingsRow()
+	settings := queue.HookDefaultSettingsRow()
 	queue.HookStoreGuildSettings("guild1", generation, &settings)
 
 	queue.HookCacheMux.RLock()
@@ -60,7 +60,7 @@ func TestAStaleLoadIsNotCachedAfterAnInvalidation(t *testing.T) {
 	}
 }
 
-func TestCachedSettingsFromAnotherDatabaseAreReloaded(t *testing.T) {
+func TestGetVolumeOtherDatabase(t *testing.T) {
 	setupTestDB(t)
 
 	if err := queue.SetVolume("guild1", 42); err != nil {
@@ -82,7 +82,7 @@ func TestCachedSettingsFromAnotherDatabaseAreReloaded(t *testing.T) {
 	}
 }
 
-func TestGetQueueReloadsAQueueCachedFromAnotherDatabase(t *testing.T) {
+func TestGetQueueOtherDatabase(t *testing.T) {
 	setupTestDB(t)
 
 	first, err := queue.GetQueue("guild1", false)
@@ -102,10 +102,10 @@ func TestGetQueueReloadsAQueueCachedFromAnotherDatabase(t *testing.T) {
 	}
 }
 
-func TestSettingGettersReadEveryDefault(t *testing.T) {
+func TestGettersReadDefaults(t *testing.T) {
 	setupTestDB(t)
 
-	defaults := queue.HookDefaultGuildSettingsRow()
+	defaults := queue.HookDefaultSettingsRow()
 	guildID := "guild-without-settings"
 
 	checks := []struct {
@@ -137,7 +137,7 @@ func TestSettingGettersReadEveryDefault(t *testing.T) {
 	}
 }
 
-func TestGetQueueReportsAFailedSettingsLoad(t *testing.T) {
+func TestGetQueueSettingsFailure(t *testing.T) {
 	setupTestDB(t)
 
 	if _, err := database.DB.Exec(`DROP TABLE guild_settings`); err != nil {
@@ -149,7 +149,7 @@ func TestGetQueueReportsAFailedSettingsLoad(t *testing.T) {
 	}
 }
 
-func TestLoadQueueFromDBReportsAFailedSongsLoad(t *testing.T) {
+func TestLoadQueueFromDBSongsFailure(t *testing.T) {
 	setupTestDB(t)
 
 	if _, err := database.DB.Exec(`DROP TABLE songs`); err != nil {
@@ -161,7 +161,7 @@ func TestLoadQueueFromDBReportsAFailedSongsLoad(t *testing.T) {
 	}
 }
 
-func TestSettersKeepAnExistingRowsVolume(t *testing.T) {
+func TestSettersKeepVolume(t *testing.T) {
 	setupTestDB(t)
 
 	if err := queue.SetVolume("guild1", 70); err != nil {
@@ -176,7 +176,7 @@ func TestSettersKeepAnExistingRowsVolume(t *testing.T) {
 	}
 }
 
-func TestSettersReportInvalidInputAndSaveFailures(t *testing.T) {
+func TestSettersReportFailures(t *testing.T) {
 	setupTestDB(t)
 	defer func() {
 		if err := database.Initialize(); err != nil {
@@ -199,7 +199,7 @@ func TestSettersReportInvalidInputAndSaveFailures(t *testing.T) {
 	}
 }
 
-func TestSetSongAutoMixOverrides(t *testing.T) {
+func TestSetSongOverrides(t *testing.T) {
 	setupTestDB(t)
 
 	song := &queue.Song{
@@ -218,10 +218,10 @@ func TestSetSongAutoMixOverrides(t *testing.T) {
 	}
 	songID := q.Songs[0].ID
 
-	if err = queue.SetSongAutoMixOverrides("guild1", songID, map[string]string{"eq_out": "hi_fast", "fx_in": "phaser"}); err != nil {
+	if err = queue.SetSongOverrides("guild1", songID, map[string]string{"eq_out": "hi_fast", "fx_in": "phaser"}); err != nil {
 		t.Errorf("setting the song's styles failed: %v", err)
 	}
-	if err = queue.SetSongAutoMixOverrides("guild1", songID, map[string]string{"fx_in": "auto", "length": "four_bars"}); err != nil {
+	if err = queue.SetSongOverrides("guild1", songID, map[string]string{"fx_in": "auto", "length": "four_bars"}); err != nil {
 		t.Errorf("changing the song's styles failed: %v", err)
 	}
 	q, err = queue.GetQueue("guild1", true)
@@ -231,7 +231,7 @@ func TestSetSongAutoMixOverrides(t *testing.T) {
 	if got := q.Songs[0].AutoMixOverrides; len(got) != 2 || got["eq_out"] != "hi_fast" || got["length"] != "four_bars" {
 		t.Errorf("song overrides = %v, want eq_out kept, fx_in reset to auto and length added", got)
 	}
-	if err := queue.SetSongAutoMixOverrides("guild1", songID+1000, map[string]string{"eq_out": "hi_fast"}); !errors.Is(err, queue.ErrSongNotInQueue) {
+	if err := queue.SetSongOverrides("guild1", songID+1000, map[string]string{"eq_out": "hi_fast"}); !errors.Is(err, queue.ErrSongNotInQueue) {
 		t.Errorf("a missing song = %v, want ErrSongNotInQueue", err)
 	}
 
@@ -243,7 +243,7 @@ func TestSetSongAutoMixOverrides(t *testing.T) {
 	if err := database.Close(); err != nil {
 		t.Fatalf("failed to close the test database: %v", err)
 	}
-	if err := queue.SetSongAutoMixOverrides("guild1", songID, map[string]string{"eq_out": "hi_fast"}); err == nil {
+	if err := queue.SetSongOverrides("guild1", songID, map[string]string{"eq_out": "hi_fast"}); err == nil {
 		t.Error("setting a song style on a closed database succeeded")
 	}
 }
@@ -255,7 +255,7 @@ func must[T any](value T, err error) T {
 	return value
 }
 
-func TestGuildOverridesMergeAndReset(t *testing.T) {
+func TestSetAutoMixOverridesMerge(t *testing.T) {
 	setupTestDB(t)
 
 	if err := queue.SetAutoMixOverrides("guild1", map[string]string{"volume_out": "slow", "volume_in": "slow"}); err != nil {
@@ -270,7 +270,7 @@ func TestGuildOverridesMergeAndReset(t *testing.T) {
 	}
 }
 
-func TestGuildOverridesAreSharedNotCopied(t *testing.T) {
+func TestGetAutoMixOverridesShared(t *testing.T) {
 	setupTestDB(t)
 	if err := queue.SetAutoMixOverrides("guild1", map[string]string{"fx_out": "phaser"}); err != nil {
 		t.Fatalf("failed to set a style: %v", err)
@@ -289,7 +289,7 @@ func TestGuildOverridesAreSharedNotCopied(t *testing.T) {
 	}
 }
 
-func TestSettingGettersReturnTheirFallbackWhenTheDatabaseFails(t *testing.T) {
+func TestGettersFallbackOnFailure(t *testing.T) {
 	setupTestDB(t)
 	defer func() {
 		if err := database.Initialize(); err != nil {

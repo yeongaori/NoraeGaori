@@ -11,7 +11,7 @@ import (
 	"noraegaori/tests/testutil/discordtest"
 )
 
-func TestRegisterAddsTheAutoMixCommandsAndRoutes(t *testing.T) {
+func TestRegisterAutoMixCommands(t *testing.T) {
 	commandStrings := func(string) messages.CommandStrings { return messages.CommandStrings{} }
 	settings.Register(commandStrings)
 	automix.Register(commandStrings)

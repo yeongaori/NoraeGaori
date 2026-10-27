@@ -67,7 +67,7 @@ func GetCurrentVersion() (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
-func resolveCurrentVersion(versionmanager *VersionManager) string {
+func resolveCurrent(versionmanager *VersionManager) string {
 	if versionmanager != nil && versionmanager.hasActiveBinary() {
 		return versionmanager.GetActiveVersion()
 	}
@@ -173,7 +173,7 @@ func runCanaryAndActivate(versionmanager *VersionManager, version string) canary
 	return canaryRejected
 }
 
-func activeVersionIsHealthy() bool {
+func isActiveHealthy() bool {
 	versionmanager := GetVersionManager()
 	if versionmanager == nil {
 		return false
@@ -189,7 +189,7 @@ func activeVersionIsHealthy() bool {
 		return false
 	}
 
-	if versionmanager.ActiveVersionIsFailing() {
+	if versionmanager.IsActiveFailing() {
 		logger.Warnf("Active version %s is failing playback", active)
 		return false
 	}
@@ -216,7 +216,7 @@ func UpdateYtDlp(force bool) (bool, error) {
 	}
 
 	stable, stableErr := updateChannelFn(config.YtDlpChannelStable, force)
-	if !stable.canaryFailed && activeVersionIsHealthy() {
+	if !stable.canaryFailed && isActiveHealthy() {
 		return stable.updated, stableErr
 	}
 
@@ -239,7 +239,7 @@ func resolveKnownVersion(versionmanager *VersionManager, channel, latestVersion 
 			return channelOutcome{canaryFailed: true}, true, nil
 		}
 		logger.Warnf("No usable binary on disk; trying previous releases")
-		outcome, err := installFallbackVersion(versionmanager, channel, latestVersion, release)
+		outcome, err := installFallback(versionmanager, channel, latestVersion, release)
 		return outcome, true, err
 	}
 	_, statErr := os.Stat(VersionedBinaryPath(latestVersion))
@@ -250,7 +250,7 @@ func resolveKnownVersion(versionmanager *VersionManager, channel, latestVersion 
 		return channelOutcome{}, true, nil
 	}
 
-	if state == StateVerified && activeVersionIsHealthy() {
+	if state == StateVerified && isActiveHealthy() {
 		logger.Debugf("Version %s is verified but the active version is healthy; staying put", latestVersion)
 		return channelOutcome{}, true, nil
 	}
@@ -281,7 +281,7 @@ func updateFromChannel(channel string, force bool) (channelOutcome, error) {
 	logger.Debugf("Checking for updates on the %s channel...", channel)
 
 	versionmanager := GetVersionManager()
-	currentVersion := resolveCurrentVersion(versionmanager)
+	currentVersion := resolveCurrent(versionmanager)
 
 	release, err := getLatestReleaseFn(channel)
 	if err != nil {
@@ -332,11 +332,11 @@ func activateOrFallback(versionmanager *VersionManager, channel, latestVersion s
 		return channelOutcome{}, nil
 	default:
 		logger.Warnf("Trying previous releases after %s failed canary", latestVersion)
-		return installFallbackVersion(versionmanager, channel, latestVersion, release)
+		return installFallback(versionmanager, channel, latestVersion, release)
 	}
 }
 
-func installFallbackVersion(versionmanager *VersionManager, channel, latestVersion string, latestRelease *GitHubRelease) (channelOutcome, error) {
+func installFallback(versionmanager *VersionManager, channel, latestVersion string, latestRelease *GitHubRelease) (channelOutcome, error) {
 	releases, err := getReleasesFn(channel, fallbackReleaseFetch)
 	if err != nil {
 		return channelOutcome{canaryFailed: true}, fmt.Errorf("failed to fetch release list: %w", err)
@@ -410,13 +410,13 @@ func activateLastResort(versionmanager *VersionManager, latestRelease *GitHubRel
 		return channelOutcome{canaryFailed: true}, fmt.Errorf("last-resort: %w", err)
 	}
 
-	versionmanager.ProvisionallyActivate(latestVersion, binaryPath)
+	versionmanager.ActivateProvisional(latestVersion, binaryPath)
 	return channelOutcome{updated: true, canaryFailed: true}, nil
 }
 
 var updateCheckRequests = make(chan struct{}, 1)
 
-func runBackgroundUpdateCheck() {
+func runUpdateCheck() {
 	versionmanager := GetVersionManager()
 	if versionmanager == nil {
 		return
@@ -446,7 +446,7 @@ func RequestUpdateCheck() {
 	}
 }
 
-func StartBackgroundUpdater(ctx context.Context, onSchedule func()) {
+func StartUpdater(ctx context.Context, onSchedule func()) {
 	go func() {
 		logger.Debug("Background updater started")
 		ticker := time.NewTicker(updateCheckInterval)
@@ -458,16 +458,16 @@ func StartBackgroundUpdater(ctx context.Context, onSchedule func()) {
 				logger.Debug("Background updater stopped")
 				return
 			case <-updateCheckRequests:
-				runBackgroundUpdateCheck()
+				runUpdateCheck()
 			case <-ticker.C:
-				runBackgroundUpdateCheck()
+				runUpdateCheck()
 				onSchedule()
 			}
 		}
 	}()
 }
 
-func MigrateFromLegacyLayout() error {
+func MigrateLegacyLayout() error {
 	versionmanager := GetVersionManager()
 	if versionmanager == nil {
 		return nil
@@ -520,7 +520,7 @@ func MigrateFromLegacyLayout() error {
 
 func AutoUpdate() {
 
-	if err := MigrateFromLegacyLayout(); err != nil {
+	if err := MigrateLegacyLayout(); err != nil {
 		logger.Warnf("Migration failed: %v", err)
 	}
 

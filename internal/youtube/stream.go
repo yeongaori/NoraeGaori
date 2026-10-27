@@ -103,7 +103,7 @@ func downloadRateLimitArg() (string, bool) {
 }
 
 func streamPipeArgs(url string, sponsorBlock bool, bitrate, seekTime int, ffmpeg *dependency.Binary) []string {
-	audioFormat := GetOptimalAudioFormat(bitrate)
+	audioFormat := GetAudioFormat(bitrate)
 	logger.Debugf("Creating stream pipe for: %s (SponsorBlock: %v, Format: %s)", url, sponsorBlock, audioFormat)
 
 	args := []string{

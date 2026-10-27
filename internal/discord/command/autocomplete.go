@@ -19,7 +19,7 @@ func HandleAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	cmd, exists := lookupCommand(data.Name)
 	if !exists || cmd.AutocompleteHandler == nil {
-		respondAutocompleteChoices(s, i, nil)
+		respondChoices(s, i, nil)
 		return
 	}
 
@@ -35,7 +35,7 @@ func HandleAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		choices = choices[:MaxAutocompleteChoices]
 	}
 
-	respondAutocompleteChoices(s, i, choices)
+	respondChoices(s, i, choices)
 }
 
 func focusedStringOption(options []*discordgo.ApplicationCommandInteractionDataOption) string {
@@ -65,7 +65,7 @@ func interactionUserID(i *discordgo.InteractionCreate) string {
 	return ""
 }
 
-func respondAutocompleteChoices(s *discordgo.Session, i *discordgo.InteractionCreate, choices []*discordgo.ApplicationCommandOptionChoice) {
+func respondChoices(s *discordgo.Session, i *discordgo.InteractionCreate, choices []*discordgo.ApplicationCommandOptionChoice) {
 	if choices == nil {
 		choices = []*discordgo.ApplicationCommandOptionChoice{}
 	}

@@ -55,7 +55,7 @@ func editedPromptEmbed(t *testing.T, requests []discordtest.Request) map[string]
 	return nil
 }
 
-func assertBotsReactionDropped(t *testing.T, requests []discordtest.Request, emoji string) {
+func assertBotReactionGone(t *testing.T, requests []discordtest.Request, emoji string) {
 	t.Helper()
 
 	lines := make([]string, 0, len(requests))
@@ -69,11 +69,11 @@ func assertBotsReactionDropped(t *testing.T, requests []discordtest.Request, emo
 	}
 }
 
-func TestPlaylistRestPromptTimeoutKeepsTheSongAndDropsTheBotsArrow(t *testing.T) {
+func TestConfirmPlaylistRestTimeout(t *testing.T) {
 	session, requests, msg, interaction := newPromptFixture(t)
 	timeoutEmbed := play.HookPlaylistTimeoutEmbed("guild1", timeoutSong(), false)
 
-	play.HookHandlePlaylistRestConfirmationReaction(session, interaction, msg, "list1", "timeout", "", timeoutEmbed)()
+	play.HookConfirmPlaylistRest(session, interaction, msg, "list1", "timeout", "", timeoutEmbed)()
 
 	embed := editedPromptEmbed(t, requests())
 	if want := messages.T("guild1").Titles.Added; embed["title"] != want {
@@ -82,17 +82,17 @@ func TestPlaylistRestPromptTimeoutKeepsTheSongAndDropsTheBotsArrow(t *testing.T)
 	if want := messages.T("guild1").Music.PlaylistTimeoutDesc; discordtest.JSONAt(t, embed, "footer", "text") != want {
 		t.Errorf("got footer %v, want %q", embed["footer"], want)
 	}
-	assertBotsReactionDropped(t, requests(), "⬇️")
+	assertBotReactionGone(t, requests(), "⬇️")
 }
 
-func TestPlaylistPromptTimeoutWarnsAndDropsTheBotsCheck(t *testing.T) {
+func TestConfirmPlaylistTimeout(t *testing.T) {
 	session, requests, msg, interaction := newPromptFixture(t)
 
-	play.HookHandlePlaylistConfirmationReaction(session, interaction, msg, &youtube.PlaylistInfo{}, "")()
+	play.HookConfirmPlaylist(session, interaction, msg, &youtube.PlaylistInfo{}, "")()
 
 	embed := editedPromptEmbed(t, requests())
 	if want := messages.T("guild1").Music.PlaylistTimeoutTitle; embed["title"] != want {
 		t.Errorf("got title %v, want %q", embed["title"], want)
 	}
-	assertBotsReactionDropped(t, requests(), "✅")
+	assertBotReactionGone(t, requests(), "✅")
 }

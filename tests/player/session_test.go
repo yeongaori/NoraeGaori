@@ -10,7 +10,7 @@ import (
 	"noraegaori/tests/testutil"
 )
 
-func TestReconcileClearsStaleStoredFlagsAndPauses(t *testing.T) {
+func TestReconcileStateStoredFlags(t *testing.T) {
 	guildID := "reconcile-stale"
 	setupPlayerDB(t, guildID, 1)
 	markStoredActive(t, guildID)
@@ -30,7 +30,7 @@ func TestReconcileClearsStaleStoredFlagsAndPauses(t *testing.T) {
 	}
 }
 
-func TestReconcileClearsStaleMemoryFlags(t *testing.T) {
+func TestReconcileStateMemoryFlags(t *testing.T) {
 	guildID := "reconcile-memory"
 	setupPlayerDB(t, guildID, 1)
 	guildPlayer := player.GetPlayer(guildID)
@@ -48,7 +48,7 @@ func TestReconcileClearsStaleMemoryFlags(t *testing.T) {
 	}
 }
 
-func TestReconcileDoesNotPauseAnEmptyQueue(t *testing.T) {
+func TestReconcileStateEmptyQueue(t *testing.T) {
 	guildID := "reconcile-empty"
 	setupPlayerDB(t, guildID, 0)
 	markStoredActive(t, guildID)
@@ -64,7 +64,7 @@ func TestReconcileDoesNotPauseAnEmptyQueue(t *testing.T) {
 	}
 }
 
-func TestReconcileLeavesAnIdleQueueAlone(t *testing.T) {
+func TestReconcileStateIdleQueue(t *testing.T) {
 	guildID := "reconcile-idle"
 	setupPlayerDB(t, guildID, 1)
 
@@ -75,7 +75,7 @@ func TestReconcileLeavesAnIdleQueueAlone(t *testing.T) {
 	}
 }
 
-func TestReconcileNeverTouchesARunningSession(t *testing.T) {
+func TestReconcileStateRunning(t *testing.T) {
 	guildID := "reconcile-running"
 	setupPlayerDB(t, guildID, 1)
 	markStoredActive(t, guildID)
@@ -102,7 +102,7 @@ func TestReconcileNeverTouchesARunningSession(t *testing.T) {
 	state := readStoredState(t, guildID)
 	isActive := player.IsPlaybackActive(guildID)
 	close(release)
-	waitForPlayLockRelease(t, guildID)
+	waitForPlayLock(t, guildID)
 
 	if !state.loading || !state.playing || state.paused {
 		t.Errorf("stored playing=%v loading=%v paused=%v during a session, want true true false", state.playing, state.loading, state.paused)
@@ -112,7 +112,7 @@ func TestReconcileNeverTouchesARunningSession(t *testing.T) {
 	}
 }
 
-func TestEndingAHaltedSessionPersistsTheIdleState(t *testing.T) {
+func TestEndSessionPersistsIdle(t *testing.T) {
 	guildID := "session-halted-end"
 	setupPlayerDB(t, guildID, 1)
 	guildPlayer := player.GetPlayer(guildID)

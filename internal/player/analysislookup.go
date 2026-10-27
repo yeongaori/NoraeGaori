@@ -47,7 +47,7 @@ func chooseTailAnalysis(live, stored *analysis.TrackAnalysis) (*analysis.TrackAn
 	return live, true
 }
 
-func LookupAnalysisForDisplay(guildID string, song *queue.Song, segment string) *analysis.TrackAnalysis {
+func LookupDisplayAnalysis(guildID string, song *queue.Song, segment string) *analysis.TrackAnalysis {
 	if found := LookupAnalysis(guildID, song, segment); found != nil {
 		return found
 	}

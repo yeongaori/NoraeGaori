@@ -22,5 +22,5 @@ func Register(cmd func(string) messages.CommandStrings) {
 		},
 		Handler: HandleHelp,
 	})
-	discord.RegisterComponentRoute(helpPageRoute, turnHelpPage)
+	discord.RegisterRoute(helpPageRoute, turnHelpPage)
 }

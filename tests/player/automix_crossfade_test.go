@@ -29,7 +29,7 @@ func seedCrossfadeQueue(t *testing.T, guildID string) *queue.Queue {
 	return q
 }
 
-func seedCrossfadeQueueWithNext(t *testing.T, guildID string, next *queue.Song) *queue.Queue {
+func seedQueueWithNext(t *testing.T, guildID string, next *queue.Song) *queue.Queue {
 	t.Helper()
 
 	setupPlayerDB(t, guildID, 1)
@@ -80,14 +80,14 @@ func failingAudioStream(t *testing.T) {
 }
 
 func crossfadeFade() *player.HookFadeSettings {
-	return player.HookBuildFadeSettings(&player.HookFadeSettingsFields{Crossfade: true, CrossfadeSec: 6, RepeatMode: queue.RepeatOff})
+	return player.HookCreateFadeSettings(&player.HookFadeSettingsFields{Crossfade: true, CrossfadeSec: 6, RepeatMode: queue.RepeatOff})
 }
 
 func crossfadeEndState() *ffmpeg.EndState {
 	return &ffmpeg.EndState{TotalFrames: 9000, TailStartFrame: 8000}
 }
 
-func TestCrossfadePlanArmsWithTheExpectedFrameMath(t *testing.T) {
+func TestCrossfadePlanFrameMath(t *testing.T) {
 	guildID := "planarm"
 	q := seedCrossfadeQueue(t, guildID)
 	cacheNextStreamURL(t, guildID, q.Songs[1].ID, "https://example.invalid/next")
@@ -145,7 +145,7 @@ func TestCrossfadePlanArmsWithTheExpectedFrameMath(t *testing.T) {
 	}
 }
 
-func TestCrossfadePlanTrimsTheSilentTailFromTheEffectiveEnd(t *testing.T) {
+func TestCrossfadePlanTrimsTail(t *testing.T) {
 	guildID := "plantrim"
 	q := seedCrossfadeQueue(t, guildID)
 	cacheNextStreamURL(t, guildID, q.Songs[1].ID, "https://example.invalid/next")
@@ -167,7 +167,7 @@ func TestCrossfadePlanTrimsTheSilentTailFromTheEffectiveEnd(t *testing.T) {
 	}
 }
 
-func TestCrossfadePlanClampsTheTransitionAheadOfTheCurrentFrame(t *testing.T) {
+func TestCrossfadePlanClamps(t *testing.T) {
 	guildID := "planclamp"
 	q := seedCrossfadeQueue(t, guildID)
 	cacheNextStreamURL(t, guildID, q.Songs[1].ID, "https://example.invalid/next")
@@ -227,7 +227,7 @@ func checkCrossfadeGuard(t *testing.T, guildID string, nextID int, testCase *cro
 	}
 }
 
-func TestCrossfadePlanRefusesEveryGuard(t *testing.T) {
+func TestCrossfadePlanGuards(t *testing.T) {
 	guildID := "planguard"
 	q := seedCrossfadeQueue(t, guildID)
 	nextID := q.Songs[1].ID
@@ -235,7 +235,7 @@ func TestCrossfadePlanRefusesEveryGuard(t *testing.T) {
 	cases := []crossfadeGuardCase{
 		{
 			name:     "neither automix nor crossfade",
-			fade:     player.HookBuildFadeSettings(&player.HookFadeSettingsFields{CrossfadeSec: 6}),
+			fade:     player.HookCreateFadeSettings(&player.HookFadeSettingsFields{CrossfadeSec: 6}),
 			cacheURL: "https://example.invalid/next",
 			streamOK: true,
 		},
@@ -248,7 +248,7 @@ func TestCrossfadePlanRefusesEveryGuard(t *testing.T) {
 		},
 		{
 			name:     "repeat single",
-			fade:     player.HookBuildFadeSettings(&player.HookFadeSettingsFields{Crossfade: true, CrossfadeSec: 6, RepeatMode: queue.RepeatSingle}),
+			fade:     player.HookCreateFadeSettings(&player.HookFadeSettingsFields{Crossfade: true, CrossfadeSec: 6, RepeatMode: queue.RepeatSingle}),
 			cacheURL: "https://example.invalid/next",
 			streamOK: true,
 		},
@@ -281,9 +281,9 @@ func TestCrossfadePlanRefusesEveryGuard(t *testing.T) {
 	}
 }
 
-func TestCrossfadePlanRefusesAShortNextSong(t *testing.T) {
+func TestCrossfadePlanRefusesShort(t *testing.T) {
 	guildID := "planshort"
-	q := seedCrossfadeQueueWithNext(t, guildID, &queue.Song{
+	q := seedQueueWithNext(t, guildID, &queue.Song{
 		URL:            "https://youtube.com/watch?v=short",
 		Title:          "Short",
 		Duration:       "0:08",
@@ -299,9 +299,9 @@ func TestCrossfadePlanRefusesAShortNextSong(t *testing.T) {
 	}
 }
 
-func TestCrossfadePlanRefusesALiveNextSong(t *testing.T) {
+func TestCrossfadePlanRefusesLive(t *testing.T) {
 	guildID := "planlive"
-	q := seedCrossfadeQueueWithNext(t, guildID, &queue.Song{
+	q := seedQueueWithNext(t, guildID, &queue.Song{
 		URL:            "https://youtube.com/watch?v=live",
 		Title:          "Live",
 		Duration:       "0:00",

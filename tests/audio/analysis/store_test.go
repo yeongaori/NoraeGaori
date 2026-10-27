@@ -21,7 +21,7 @@ func useAnalysisDatabase(t *testing.T) {
 	}
 }
 
-func TestAnalysisRoundTripsThroughTheDatabase(t *testing.T) {
+func TestSaveTrackAnalysisRoundTrip(t *testing.T) {
 	useAnalysisDatabase(t)
 	saved := &analysis.TrackAnalysis{
 		BPM: 128, PeriodSec: 60.0 / 128, FirstBeat: 0.2, Duration: 90, Offset: 120.5,
@@ -53,7 +53,7 @@ func TestAnalysisRoundTripsThroughTheDatabase(t *testing.T) {
 	}
 }
 
-func TestUnreadableBarOffsetsAreDropped(t *testing.T) {
+func TestLoadTrackAnalysisBadOffsets(t *testing.T) {
 	useAnalysisDatabase(t)
 	saved := &analysis.TrackAnalysis{BPM: 128, PeriodSec: 60.0 / 128, BarOffsets: []float64{0.01, 0.02}}
 	if err := analysis.SaveTrackAnalysis("https://example.com/b", analysis.SegmentHead, saved); err != nil {

@@ -34,7 +34,7 @@ func incomingFrames(t *testing.T, loop *transition.BeatLoop, frames int) [][]int
 	return outputs
 }
 
-func TestIncomingSlipRollLoopsTheFirstQuarterBeatThenReleases(t *testing.T) {
+func TestPrepareIncomingLoopSlipRoll(t *testing.T) {
 	outputs := incomingFrames(t, transition.PrepareIncomingLoop(transition.FXSlipRoll, 0.1, 40), 40)
 
 	quarterBeat := 1200
@@ -46,7 +46,7 @@ func TestIncomingSlipRollLoopsTheFirstQuarterBeatThenReleases(t *testing.T) {
 	}
 }
 
-func TestIncomingFramesPassThroughWithoutARoll(t *testing.T) {
+func TestIncomingFramesNoRoll(t *testing.T) {
 	outputs := incomingFrames(t, nil, 3)
 	for index, frame := range outputs {
 		if got := int(frame[7*player.HookChannels]); got != index*player.HookFrameSize+7 {

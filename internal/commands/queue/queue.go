@@ -20,7 +20,7 @@ func HandleQueue(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	}
 
 	embed, components := renderQueuePage(i.GuildID, q.Songs, page)
-	if _, err := discord.SendEmbedWithComponents(s, i, embed, components); err != nil {
+	if _, err := discord.SendPanel(s, i, embed, components); err != nil {
 		logger.Errorf("Failed to send response: %v", err)
 		return err
 	}

@@ -35,7 +35,7 @@ func TestMirrorsNameTheirSource(t *testing.T) {
 	}
 }
 
-func TestChecksumForRejectsAMissingEntry(t *testing.T) {
+func TestChecksumForMissingEntry(t *testing.T) {
 	if _, err := mirror.HookChecksumFor([]byte(releasetest.SumA+"  other.zip\n"), "deno.zip"); err == nil {
 		t.Error("got nil, want an error when the asset has no checksum line")
 	}

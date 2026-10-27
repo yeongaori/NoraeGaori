@@ -148,7 +148,7 @@ func hydrateTransitionRow(guildID string, state *panelState, pair *transitionPai
 	row := &transitionRow{
 		transitionPair: pair,
 		auto:           transition.PresetRecipe(transition.NoPreset),
-		fromAnalysis:   player.LookupAnalysisForDisplay(guildID, pair.fromSong, analysis.SegmentTail),
+		fromAnalysis:   player.LookupDisplayAnalysis(guildID, pair.fromSong, analysis.SegmentTail),
 		fromAnalyzing:  state.pending[pair.fromSong.ID] > 0,
 	}
 	frames, _ := transition.CrossfadeFrames(state.autoSelect, state.autoMixBeats, state.crossfadeSec, row.fromAnalysis)
@@ -158,7 +158,7 @@ func hydrateTransitionRow(guildID string, state *panelState, pair *transitionPai
 			row.auto = transition.OutroRecipe()
 		}
 	} else {
-		row.toAnalysis = player.LookupAnalysisForDisplay(guildID, pair.toSong, analysis.SegmentHead)
+		row.toAnalysis = player.LookupDisplayAnalysis(guildID, pair.toSong, analysis.SegmentHead)
 		row.toAnalyzing = state.pending[pair.toSong.ID] > 0
 		if state.autoSelect {
 			row.overlap = previewOverlap(pair, row.fromAnalysis, row.toAnalysis, state.autoMixBeats)
@@ -174,7 +174,7 @@ func hydrateTransitionRow(guildID string, state *panelState, pair *transitionPai
 	return row
 }
 
-func hydrateTransitionRows(guildID string, state *panelState, pairs []transitionPair) []*transitionRow {
+func hydrateRows(guildID string, state *panelState, pairs []transitionPair) []*transitionRow {
 	rows := make([]*transitionRow, 0, len(pairs))
 	for index := range pairs {
 		rows = append(rows, hydrateTransitionRow(guildID, state, &pairs[index]))
@@ -236,7 +236,7 @@ func previewOverlap(pair *transitionPair, from, to *analysis.TrackAnalysis, maxB
 func previewTrack(song *queue.Song, trackAnalysis *analysis.TrackAnalysis) transition.Track {
 	return transition.Track{
 		URL:      song.URL,
-		Duration: float64(youtube.ParseDurationToSeconds(song.Duration)),
+		Duration: float64(youtube.ParseDuration(song.Duration)),
 		Analysis: trackAnalysis,
 	}
 }
@@ -344,7 +344,7 @@ func describeSongLine(guildID string, index int, song *queue.Song, analysis *ana
 		describeTrack(guildID, analysis, analyzing))
 }
 
-func createTransitionPanelEmbed(guildID string, state *panelState, rows []*transitionRow, page, totalPages int) *discordgo.MessageEmbed {
+func createPanelEmbed(guildID string, state *panelState, rows []*transitionRow, page, totalPages int) *discordgo.MessageEmbed {
 	panel := &messages.T(guildID).AutoMixPanel
 
 	if len(rows) == 0 {
@@ -402,7 +402,7 @@ func createTransitionPanelEmbed(guildID string, state *panelState, rows []*trans
 	}
 }
 
-func createTransitionPanelComponents(guildID string, rows []*transitionRow, page, totalPages int) []discordgo.MessageComponent {
+func createPanelControls(guildID string, rows []*transitionRow, page, totalPages int) []discordgo.MessageComponent {
 	t := messages.T(guildID)
 	pageArgument := strconv.Itoa(page)
 

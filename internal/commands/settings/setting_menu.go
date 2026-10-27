@@ -13,7 +13,7 @@ func registerSettingMenus() {
 			continue
 		}
 		discord.RegisterDropdownMenu(spec.key, func(guildID string) discord.DropdownMenu {
-			return buildSettingMenu(guildID, spec)
+			return createSettingMenu(guildID, spec)
 		})
 	}
 }
@@ -29,7 +29,7 @@ func settingMenuValues(spec *settingSpec) []string {
 	return toggleValues
 }
 
-func buildSettingMenu(guildID string, spec *settingSpec) discord.DropdownMenu {
+func createSettingMenu(guildID string, spec *settingSpec) discord.DropdownMenu {
 	current, isRead := currentValue(guildID, spec)
 
 	values := settingMenuValues(spec)

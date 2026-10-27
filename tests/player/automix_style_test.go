@@ -28,7 +28,7 @@ func checkResolved(t *testing.T, resolved *transition.Resolved, wants []expected
 	}
 }
 
-func TestEveryPresetResolvesToValidStyleKeys(t *testing.T) {
+func TestPresetsResolveToValidKeys(t *testing.T) {
 	for _, preset := range []int{1, 2, 3, 4, 5, 8, 9, 10, 11, 17, 18, 19} {
 		for _, category := range transition.StyleCategories() {
 			if style := transition.StyleOf(transition.PresetRecipe(preset), category); !transition.ValidStyle(category, style) {
@@ -38,7 +38,7 @@ func TestEveryPresetResolvesToValidStyleKeys(t *testing.T) {
 	}
 }
 
-func TestStylePrecedenceSongOverGuildOverAuto(t *testing.T) {
+func TestStylePrecedence(t *testing.T) {
 	for _, category := range transition.StyleCategories() {
 		t.Run(string(category), func(t *testing.T) {
 			values := transition.StyleValues(category)
@@ -74,7 +74,7 @@ func TestStylePrecedenceSongOverGuildOverAuto(t *testing.T) {
 	}
 }
 
-func TestOverrideAffectsOnlyItsOwnCategory(t *testing.T) {
+func TestResolveStylesOwnCategory(t *testing.T) {
 	resolved := transition.ResolveStyles(autoRecipe, nil, transition.CategoryFXOut.Override("echo_half_cut_end"))
 
 	for _, category := range transition.StyleCategories() {
@@ -86,7 +86,7 @@ func TestOverrideAffectsOnlyItsOwnCategory(t *testing.T) {
 	}
 }
 
-func TestTheFadePresetIsTheDefaultCrossfadeWithABassSwap(t *testing.T) {
+func TestPresetRecipeFadeBassSwap(t *testing.T) {
 	resolved := transition.ResolveStyles(transition.PresetRecipe(transition.FadePreset), nil, nil)
 
 	checkResolved(t, resolved, []expectedStyle{
@@ -100,7 +100,7 @@ func TestTheFadePresetIsTheDefaultCrossfadeWithABassSwap(t *testing.T) {
 	})
 }
 
-func TestOverridesStillLayerOverThePlainCrossfade(t *testing.T) {
+func TestResolveStylesOverCrossfade(t *testing.T) {
 	resolved := transition.ResolveStyles(transition.PresetRecipe(transition.NoPreset),
 		transition.ExpandLegacy(transition.ShortcutEQ, "quick_bass"), transition.CategoryFXOut.Override("reverb_out_end"))
 
@@ -111,7 +111,7 @@ func TestOverridesStillLayerOverThePlainCrossfade(t *testing.T) {
 	})
 }
 
-func TestAutoOutroLetsTheSongEndNaturally(t *testing.T) {
+func TestOutroRecipeAutoNatural(t *testing.T) {
 	outro := transition.OutroRecipe()
 	for _, category := range []transition.Category{transition.CategoryEQOut, transition.CategoryFilterOut, transition.CategoryFXOut, transition.CategoryLoop} {
 		if style := transition.StyleOf(outro, category); style != "none" {
@@ -123,7 +123,7 @@ func TestAutoOutroLetsTheSongEndNaturally(t *testing.T) {
 	}
 }
 
-func TestOutroOverridesLayerSongOverGuildOverAuto(t *testing.T) {
+func TestOutroRecipeLayering(t *testing.T) {
 	resolved := transition.ResolveStyles(transition.OutroRecipe(),
 		transition.ExpandLegacy(transition.ShortcutVolume, "fadein_cutout"), transition.CategoryFXOut.Override("reverb_out_center"))
 
@@ -134,7 +134,7 @@ func TestOutroOverridesLayerSongOverGuildOverAuto(t *testing.T) {
 	})
 }
 
-func TestEveryVolumeStyleGivesTheOutroADistinctShape(t *testing.T) {
+func TestOutroRecipeVolumeShapes(t *testing.T) {
 	distinct := map[string]bool{}
 
 	for _, style := range transition.StyleValues(transition.CategoryVolumeOut)[1:] {

@@ -56,7 +56,7 @@ var HookVoteForReaction = voteForReaction
 var HookVoteMessageURL = voteMessageURL
 var HookVoteProgressEmbed = voteProgressEmbed
 
-func HookBuildTally(fields HookTallyFields) *Tally {
+func HookCreateTally(fields HookTallyFields) *Tally {
 	return &Tally{
 		current:        fields.Current,
 		required:       fields.Required,
@@ -67,11 +67,11 @@ func HookBuildTally(fields HookTallyFields) *Tally {
 	}
 }
 
-func HookBuildVoteBallot(fields HookVoteBallotFields) *voteBallot {
+func HookCreateVoteBallot(fields HookVoteBallotFields) *voteBallot {
 	return &voteBallot{userID: fields.UserID, countsFor: fields.CountsFor, isAdder: fields.IsAdder}
 }
 
-func HookBuildVoteThreshold(fields HookVoteThresholdFields) *voteThreshold {
+func HookCreateVoteThreshold(fields HookVoteThresholdFields) *voteThreshold {
 	return &voteThreshold{quorum: fields.Quorum, adders: fields.Adders}
 }
 

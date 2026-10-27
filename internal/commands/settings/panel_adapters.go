@@ -33,7 +33,7 @@ func writeNormalization(guildID, value string) error {
 	if err := queue.SetNormalization(guildID, value == valueOn); err != nil {
 		return err
 	}
-	player.RestartForNormalization(guildID)
+	player.RestartToNormalize(guildID)
 	return nil
 }
 

@@ -44,7 +44,7 @@ func TestForceSkipSpamConcurrent(t *testing.T) {
 	}
 }
 
-func TestSkipReturnsQueueEmptyOnLast(t *testing.T) {
+func TestSkipLastQueueEmpty(t *testing.T) {
 	guildID := "skiplast"
 	setupPlayerDB(t, guildID, 1)
 
@@ -145,7 +145,7 @@ func TestPlayAudioStopsOnSignal(t *testing.T) {
 	}
 }
 
-func TestSkipDoesNotWaitForTheNextSession(t *testing.T) {
+func TestSkipNonBlocking(t *testing.T) {
 	guildID := "skiphandoff"
 	setupPlayerDB(t, guildID, 2)
 

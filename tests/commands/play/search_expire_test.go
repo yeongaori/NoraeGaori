@@ -13,7 +13,7 @@ import (
 	"noraegaori/internal/commands/play"
 )
 
-func recordSearchEditRequests(t *testing.T) *[]string {
+func captureSearchEdits(t *testing.T) *[]string {
 	t.Helper()
 
 	var mu sync.Mutex
@@ -44,10 +44,10 @@ func recordSearchEditRequests(t *testing.T) *[]string {
 	return &paths
 }
 
-func newPseudoSearchSelection(t *testing.T) *play.HookSearchSelection {
+func createSearchSelection(t *testing.T) *play.HookSearchSelection {
 	t.Helper()
 
-	return play.HookBuildSearchSelection(&play.HookSearchSelectionFields{
+	return play.HookCreateSearchSelection(&play.HookSearchSelectionFields{
 		SearchMessageID: "g1_u1_1",
 		Original: &discordgo.InteractionCreate{
 			Interaction: &discordgo.Interaction{
@@ -62,15 +62,15 @@ func newPseudoSearchSelection(t *testing.T) *play.HookSearchSelection {
 	})
 }
 
-func TestExpireSearchSelectionEditsTheChannelMessage(t *testing.T) {
-	paths := recordSearchEditRequests(t)
+func TestExpireSearchEditsMessage(t *testing.T) {
+	paths := captureSearchEdits(t)
 
 	session, err := discordgo.New("Bot test")
 	if err != nil {
 		t.Fatalf("discordgo.New returned %v, want nil", err)
 	}
 
-	play.HookExpireSearchSelection(session, newPseudoSearchSelection(t), func() {})
+	play.HookExpireSearch(session, createSearchSelection(t), func() {})
 
 	if len(*paths) != 1 {
 		t.Fatalf("requested %v, want exactly one edit", *paths)
@@ -85,37 +85,37 @@ func TestExpireSearchSelectionEditsTheChannelMessage(t *testing.T) {
 	}
 }
 
-func TestExpireSearchSelectionSkipsTheEditWithoutAPanelMessage(t *testing.T) {
-	paths := recordSearchEditRequests(t)
+func TestExpireSearchSkipsNoPanel(t *testing.T) {
+	paths := captureSearchEdits(t)
 
 	session, err := discordgo.New("Bot test")
 	if err != nil {
 		t.Fatalf("discordgo.New returned %v, want nil", err)
 	}
 
-	selection := newPseudoSearchSelection(t)
+	selection := createSearchSelection(t)
 	*selection.HookPanelMsg() = nil
 
-	play.HookExpireSearchSelection(session, selection, func() {})
+	play.HookExpireSearch(session, selection, func() {})
 
 	if len(*paths) != 0 {
 		t.Errorf("requested %v, want no request when the panel message cannot be resolved", *paths)
 	}
 }
 
-func TestExpireSearchSelectionSkipsTheEditWhenDone(t *testing.T) {
-	paths := recordSearchEditRequests(t)
+func TestExpireSearchSkipsDone(t *testing.T) {
+	paths := captureSearchEdits(t)
 
 	session, err := discordgo.New("Bot test")
 	if err != nil {
 		t.Fatalf("discordgo.New returned %v, want nil", err)
 	}
 
-	selection := newPseudoSearchSelection(t)
+	selection := createSearchSelection(t)
 	close(*selection.HookDone())
 
 	cleaned := false
-	play.HookExpireSearchSelection(session, selection, func() { cleaned = true })
+	play.HookExpireSearch(session, selection, func() { cleaned = true })
 
 	if len(*paths) != 0 {
 		t.Errorf("requested %v, want no requests once the selection completed", *paths)

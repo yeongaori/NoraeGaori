@@ -9,13 +9,13 @@ import (
 	"noraegaori/tests/testutil"
 )
 
-func TestGetInnertubeClientInitializesExactlyOnce(t *testing.T) {
+func TestGetInnertubeClientOnce(t *testing.T) {
 	var calls int64
 	testutil.Swap(t, youtube.HookInnertubeClient, nil)
 	testutil.Swap(t, youtube.HookInnertubeOnce, &sync.Once{})
 	testutil.Swap(t, youtube.HookInnertubeInit, func() {
 		atomic.AddInt64(&calls, 1)
-		*youtube.HookInnertubeClient = youtube.HookBuildInnertubeClient(&youtube.HookInnertubeClientFields{ClientName: "TEST"})
+		*youtube.HookInnertubeClient = youtube.HookCreateInnertubeClient(&youtube.HookInnertubeClientFields{ClientName: "TEST"})
 	})
 
 	const goroutines = 32
@@ -45,7 +45,7 @@ func TestGetInnertubeClientInitializesExactlyOnce(t *testing.T) {
 	}
 }
 
-func TestExtractVideoIDHandlesEveryURLShapeTheBotStores(t *testing.T) {
+func TestExtractVideoIDShapes(t *testing.T) {
 	tests := []struct {
 		name string
 		url  string

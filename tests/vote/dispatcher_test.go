@@ -9,7 +9,7 @@ import (
 	"noraegaori/tests/testutil/discordtest"
 )
 
-func TestVoteForReactionRoutesOnlyItsOwnMessage(t *testing.T) {
+func TestVoteForReactionOwnMessage(t *testing.T) {
 	session := discordtest.Session(t, "bot")
 
 	voteSession := vote.HookNewVoteSession("guild1", vote.KindSkip, "Skip", "⏭", "voice1", 2)
@@ -41,7 +41,7 @@ func TestVoteForReactionRoutesOnlyItsOwnMessage(t *testing.T) {
 	}
 }
 
-func TestVoteForReactionSurvivesAnEmptyState(t *testing.T) {
+func TestVoteForReactionEmptyState(t *testing.T) {
 	if vote.HookVoteForReaction(&discordgo.Session{}, "u1", "msg1", "⏭") != nil {
 		t.Error("a session with no state routed a reaction")
 	}
@@ -52,7 +52,7 @@ func TestVoteForReactionSurvivesAnEmptyState(t *testing.T) {
 	}
 }
 
-func TestCurrentThresholdFallsBackToTheSeedValue(t *testing.T) {
+func TestCurrentThresholdSeedFallback(t *testing.T) {
 	stubVoteEffects(t)
 	session := discordtest.Session(t, "bot")
 
@@ -63,7 +63,7 @@ func TestCurrentThresholdFallsBackToTheSeedValue(t *testing.T) {
 	}
 }
 
-func TestCurrentThresholdRecomputesFromTheChannel(t *testing.T) {
+func TestCurrentThresholdRecomputes(t *testing.T) {
 	stubVoteEffects(t)
 	session := discordtest.Session(t, "bot")
 

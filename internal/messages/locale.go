@@ -114,7 +114,7 @@ func getCachedLocale(lang string) *Locale {
 	if ok {
 		return loc
 	}
-	loc, err := buildLocale(lang)
+	loc, err := createLocale(lang)
 	if err != nil {
 		return nil
 	}
@@ -122,7 +122,7 @@ func getCachedLocale(lang string) *Locale {
 	return loc
 }
 
-func buildLocale(lang string) (*Locale, error) {
+func createLocale(lang string) (*Locale, error) {
 	enData, err := readLocaleFile(filepath.Join(localesDir(), "en.json"))
 	if err != nil {
 		enData = locales.EnglishLocale
@@ -146,14 +146,14 @@ func buildLocale(lang string) (*Locale, error) {
 	return &base, nil
 }
 
-func InvalidateLocaleCache() {
+func InvalidateLocales() {
 	localeCacheWrite.Lock()
 	localeCache.Store(&map[string]*Locale{})
 	localeCacheWrite.Unlock()
 }
 
 func LoadLocale(lang string) error {
-	loc, err := buildLocale(lang)
+	loc, err := createLocale(lang)
 	if err != nil {
 
 		var base Locale

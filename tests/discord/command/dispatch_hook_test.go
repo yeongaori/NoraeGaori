@@ -20,7 +20,7 @@ func recordBeforeCommand(t *testing.T) *[]string {
 	return &guildIDs
 }
 
-func TestBeforeCommandRunsAheadOfTheSlashHandler(t *testing.T) {
+func TestSetBeforeCommandSlash(t *testing.T) {
 	guildIDs := recordBeforeCommand(t)
 	hookRanFirst := false
 	registerProbe(t, "probe", false, func(*discordgo.Session, *discordgo.InteractionCreate) error {
@@ -40,7 +40,7 @@ func TestBeforeCommandRunsAheadOfTheSlashHandler(t *testing.T) {
 	}
 }
 
-func TestBeforeCommandRunsForComponentsButNotAutocomplete(t *testing.T) {
+func TestSetBeforeCommandComponents(t *testing.T) {
 	guildIDs := recordBeforeCommand(t)
 	session, _ := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 
@@ -61,7 +61,7 @@ func TestBeforeCommandRunsForComponentsButNotAutocomplete(t *testing.T) {
 	}
 }
 
-func TestBeforeCommandRunsForTextCommandsOnly(t *testing.T) {
+func TestSetBeforeCommandTextOnly(t *testing.T) {
 	guildIDs := recordBeforeCommand(t)
 	session, _ := dispatchSession(t)
 	registerProbeCommand(t, "probe", false)

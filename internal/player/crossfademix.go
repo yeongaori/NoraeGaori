@@ -37,7 +37,7 @@ func (cs *crossfadeState) slideTransition(reason string) {
 	cs.scope.Debugf("%s, deferred transition to frame %d", reason, cs.transitionFrame)
 }
 
-func (cs *crossfadeState) startNextStreamRefetch(player *GuildPlayer) {
+func (cs *crossfadeState) refetchNextStream(player *GuildPlayer) {
 	guildID := cs.guildID
 	songID := cs.nextSongID
 	seekSec := cs.bSeekSec
@@ -46,7 +46,7 @@ func (cs *crossfadeState) startNextStreamRefetch(player *GuildPlayer) {
 	bitrate := cs.bitrate
 	collectTail := cs.trimSilence || cs.autoMix
 
-	invalidatePreCacheSong(guildID, songID)
+	invalidatePreCache(guildID, songID)
 	cs.bRefetching.Store(true)
 
 	go func() {
@@ -184,7 +184,7 @@ func (cs *crossfadeState) consume(player *GuildPlayer, conn voiceConnection, sto
 		if cs.bFailed() {
 			if !cs.bRetried {
 				cs.bRetried = true
-				cs.startNextStreamRefetch(player)
+				cs.refetchNextStream(player)
 			}
 			if refetched := cs.bRefetch.Swap(nil); refetched != nil {
 				cs.bStream = refetched.stream

@@ -19,8 +19,8 @@ var (
 	autoPauseTimersMu  sync.Mutex
 )
 
-func HandleVoiceStateUpdate(session *discordgo.Session, vsu *discordgo.VoiceStateUpdate) {
-	resumeForReturningListener(session, vsu)
+func HandleVoiceState(session *discordgo.Session, vsu *discordgo.VoiceStateUpdate) {
+	resumeForListener(session, vsu)
 
 	guild, err := session.State.Guild(vsu.GuildID)
 	if err != nil {
@@ -86,7 +86,7 @@ func isHumanListener(session *discordgo.Session, userID string) bool {
 	return err == nil && !user.Bot
 }
 
-func resumeForReturningListener(session *discordgo.Session, vsu *discordgo.VoiceStateUpdate) {
+func resumeForListener(session *discordgo.Session, vsu *discordgo.VoiceStateUpdate) {
 	guildID := vsu.GuildID
 	if vsu.ChannelID == "" || autoPausedChannel(guildID) != vsu.ChannelID {
 		return
@@ -201,7 +201,7 @@ func cancelAutoPauseTimer(guildID string) {
 	}
 }
 
-func sendAutoPauseNotification(session *discordgo.Session, guildID, voiceChannelID string) {
+func sendAutoPauseNotice(session *discordgo.Session, guildID, voiceChannelID string) {
 
 	q, err := queue.GetQueue(guildID, false)
 	if err != nil || q == nil {

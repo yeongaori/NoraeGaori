@@ -112,7 +112,7 @@ func wantQueueLength(t *testing.T, guildID string, want int) {
 	}
 }
 
-func checkSkipEndsPlayingSession(t *testing.T, guildID, name string, skip func() error, wantPending bool, wantLength int) {
+func checkSkipEndsSession(t *testing.T, guildID, name string, skip func() error, wantPending bool, wantLength int) {
 	t.Helper()
 
 	setupPlayerDB(t, guildID, 2)
@@ -132,17 +132,17 @@ func checkSkipEndsPlayingSession(t *testing.T, guildID, name string, skip func()
 	wantQueueLength(t, guildID, wantLength)
 }
 
-func TestSkipWhilePlayingStopsTheSessionAndDropsThePendingStream(t *testing.T) {
+func TestSkipDropsPendingStream(t *testing.T) {
 	const guildID = "skip-playing"
-	checkSkipEndsPlayingSession(t, guildID, "Skip", func() error { return player.Skip(nil, guildID) }, false, 1)
+	checkSkipEndsSession(t, guildID, "Skip", func() error { return player.Skip(nil, guildID) }, false, 1)
 }
 
-func TestSkipToWhilePlayingKeepsThePendingStream(t *testing.T) {
+func TestSkipToKeepsPendingStream(t *testing.T) {
 	const guildID = "skipto-playing"
-	checkSkipEndsPlayingSession(t, guildID, "SkipTo", func() error { return player.SkipTo(nil, guildID) }, true, 2)
+	checkSkipEndsSession(t, guildID, "SkipTo", func() error { return player.SkipTo(nil, guildID) }, true, 2)
 }
 
-func TestInternalSkipIgnoresALoadingSession(t *testing.T) {
+func TestSkipInternalLoading(t *testing.T) {
 	const guildID = "skip-loading"
 	setupPlayerDB(t, guildID, 3)
 
@@ -168,16 +168,16 @@ func TestInternalSkipIgnoresALoadingSession(t *testing.T) {
 	wantQueueLength(t, guildID, 1)
 }
 
-func TestPlaybackEndedCallback(t *testing.T) {
+func TestSetOnPlaybackEnded(t *testing.T) {
 	const guildID = "ended-callback"
 	preparedPlayer(t, guildID, 1)
 
 	var ended, started atomic.Int32
-	player.SetOnPlaybackEndedCallback(func(string) { ended.Add(1) })
-	player.SetOnSongStartCallback(func(string) { started.Add(1) })
+	player.SetOnPlaybackEnded(func(string) { ended.Add(1) })
+	player.SetOnSongStart(func(string) { started.Add(1) })
 	t.Cleanup(func() {
-		player.SetOnPlaybackEndedCallback(nil)
-		player.SetOnSongStartCallback(nil)
+		player.SetOnPlaybackEnded(nil)
+		player.SetOnSongStart(nil)
 	})
 
 	if err := runWithin(t, "Stop", func() error { return player.Stop(guildID) }); err != nil {
@@ -191,7 +191,7 @@ func TestPlaybackEndedCallback(t *testing.T) {
 	}
 }
 
-func TestStopWhilePlayingWaitsForTheSession(t *testing.T) {
+func TestStopWaitsForSession(t *testing.T) {
 	const guildID = "stop-playing"
 	setupPlayerDB(t, guildID, 2)
 	session := startRunningSession(t, guildID, true, false)

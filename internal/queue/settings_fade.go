@@ -86,7 +86,7 @@ func SetAutoMixOverrides(guildID string, changes map[string]string) error {
 
 var ErrSongNotInQueue = errors.New("song is no longer in the queue")
 
-func SetSongAutoMixOverrides(guildID string, songID int, changes map[string]string) error {
+func SetSongOverrides(guildID string, songID int, changes map[string]string) error {
 	release := guild.AcquireLock(guildID)
 	defer release()
 

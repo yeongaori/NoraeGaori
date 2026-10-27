@@ -17,7 +17,7 @@ import (
 
 var downloadStallTimeout = 2 * time.Minute
 
-func rateLimitBytesPerSecond() float64 {
+func readRateLimit() float64 {
 	mbps := config.DefaultMaxDownloadSpeedMbps
 	if cfg := config.GetConfig(); cfg != nil && cfg.MaxDownloadSpeedMbps > 0 {
 		mbps = cfg.MaxDownloadSpeedMbps
@@ -48,7 +48,7 @@ func openDownload(ctx context.Context, url string) (*http.Response, error) {
 }
 
 func copyThrottled(ctx context.Context, body io.Reader, sink io.Writer, stall *time.Timer) error {
-	rateLimit := rateLimitBytesPerSecond()
+	rateLimit := readRateLimit()
 	buffer := make([]byte, 16*1024)
 	chunkDelay := time.Duration(float64(len(buffer)) / rateLimit * float64(time.Second))
 

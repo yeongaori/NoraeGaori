@@ -77,7 +77,7 @@ func TestDeriveTag(t *testing.T) {
 	}
 }
 
-func TestDeriveTagFallsBackToPackageName(t *testing.T) {
+func TestDeriveTagPackageFallback(t *testing.T) {
 	if got := logger.HookDeriveTag("noraegaori/internal/player.func1"); got != "player" {
 		t.Errorf("got %q, want the package name when every part is generated", got)
 	}
@@ -119,7 +119,7 @@ func TestIsGeneratedPart(t *testing.T) {
 	}
 }
 
-func TestScopeUsesTheGivenTag(t *testing.T) {
+func TestScopeUsesGivenTag(t *testing.T) {
 	buffer := captureOutput(t)
 
 	scope := logger.Scope("Worker 7")
@@ -133,7 +133,7 @@ func TestScopeUsesTheGivenTag(t *testing.T) {
 	}
 }
 
-func TestScopefFormatsTheTag(t *testing.T) {
+func TestScopefFormatsTag(t *testing.T) {
 	buffer := captureOutput(t)
 
 	logger.Scopef("Worker %d", 3).Warn("busy")
@@ -142,14 +142,14 @@ func TestScopefFormatsTheTag(t *testing.T) {
 	}
 }
 
-func TestCallerTagNamesTheCallingFunction(t *testing.T) {
+func TestCallerTagNamesCaller(t *testing.T) {
 	buffer := captureOutput(t)
 
 	logger.Info("first")
 	logger.Info("second")
 
 	out := buffer.String()
-	if count := strings.Count(out, "[TestCallerTagNamesTheCallingFunction]"); count != 2 {
+	if count := strings.Count(out, "[TestCallerTagNamesCaller]"); count != 2 {
 		t.Errorf("got %d tagged lines in %q, want 2 naming the calling function", count, out)
 	}
 }
@@ -171,7 +171,7 @@ func TestScopedDebugRespectsDebugMode(t *testing.T) {
 	}
 }
 
-func TestSetLogFileWritesToTheFile(t *testing.T) {
+func TestSetLogFileWrites(t *testing.T) {
 	resetLogFileState(t)
 	path := filepath.Join(t.TempDir(), "bot.log")
 
@@ -259,7 +259,7 @@ func TestSetLogFileDisablesFileOutput(t *testing.T) {
 	}
 }
 
-func TestSetLogFileIgnoresRepeatedPath(t *testing.T) {
+func TestSetLogFileRepeatedPath(t *testing.T) {
 	resetLogFileState(t)
 	path := filepath.Join(t.TempDir(), "bot.log")
 
@@ -278,7 +278,7 @@ func TestSetLogFileIgnoresRepeatedPath(t *testing.T) {
 	}
 }
 
-func TestSetLogFileFallsBackWhenUnopenable(t *testing.T) {
+func TestSetLogFileUnopenable(t *testing.T) {
 	resetLogFileState(t)
 	path := filepath.Join(t.TempDir(), "missing-dir", "bot.log")
 

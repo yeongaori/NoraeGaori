@@ -12,7 +12,7 @@ import (
 	"noraegaori/internal/audio/transition"
 )
 
-func synthesizeChordProgression(chords [][]int, seconds, sampleRate float64) []float32 {
+func synthesizeChords(chords [][]int, seconds, sampleRate float64) []float32 {
 	total := int(seconds * sampleRate)
 	samples := make([]float32, total)
 	chordLength := total / len(chords)
@@ -106,8 +106,8 @@ func TestFifthsDistanceSemantics(t *testing.T) {
 	}
 }
 
-func TestCMajorProgressionDetectsCMajorOrItsRelative(t *testing.T) {
-	samples := synthesizeChordProgression([][]int{{0, 4, 7}, {5, 9, 12}, {7, 11, 14}, {0, 4, 7}}, 20, analysis.SampleRate)
+func TestAnalyzeKeyMajor(t *testing.T) {
+	samples := synthesizeChords([][]int{{0, 4, 7}, {5, 9, 12}, {7, 11, 14}, {0, 4, 7}}, 20, analysis.SampleRate)
 	tonic, minor, confidence := analysis.AnalyzeKey(samples, analysis.SampleRate)
 
 	if confidence <= 0 {
@@ -118,8 +118,8 @@ func TestCMajorProgressionDetectsCMajorOrItsRelative(t *testing.T) {
 	}
 }
 
-func TestAMinorProgressionDetectsAMinorOrItsRelative(t *testing.T) {
-	samples := synthesizeChordProgression([][]int{{9, 12, 16}, {2, 5, 9}, {4, 8, 11}, {9, 12, 16}}, 20, analysis.SampleRate)
+func TestAnalyzeKeyMinor(t *testing.T) {
+	samples := synthesizeChords([][]int{{9, 12, 16}, {2, 5, 9}, {4, 8, 11}, {9, 12, 16}}, 20, analysis.SampleRate)
 	tonic, minor, confidence := analysis.AnalyzeKey(samples, analysis.SampleRate)
 
 	if confidence <= 0 {
@@ -130,8 +130,8 @@ func TestAMinorProgressionDetectsAMinorOrItsRelative(t *testing.T) {
 	}
 }
 
-func TestTransposedProgressionTracksTheTransposition(t *testing.T) {
-	samples := synthesizeChordProgression([][]int{{3, 7, 10}, {8, 12, 15}, {10, 14, 17}, {3, 7, 10}}, 20, analysis.SampleRate)
+func TestAnalyzeKeyTransposed(t *testing.T) {
+	samples := synthesizeChords([][]int{{3, 7, 10}, {8, 12, 15}, {10, 14, 17}, {3, 7, 10}}, 20, analysis.SampleRate)
 	tonic, minor, _ := analysis.AnalyzeKey(samples, analysis.SampleRate)
 
 	if !((tonic == 3 && !minor) || (tonic == 0 && minor)) {
@@ -139,7 +139,7 @@ func TestTransposedProgressionTracksTheTransposition(t *testing.T) {
 	}
 }
 
-func TestSilenceYieldsNoKeyConfidence(t *testing.T) {
+func TestAnalyzeKeySilence(t *testing.T) {
 	silence := make([]float32, int(20*analysis.SampleRate))
 
 	if _, _, confidence := analysis.AnalyzeKey(silence, analysis.SampleRate); confidence != 0 {
@@ -147,18 +147,18 @@ func TestSilenceYieldsNoKeyConfidence(t *testing.T) {
 	}
 }
 
-func TestTooShortInputYieldsNoKey(t *testing.T) {
+func TestAnalyzeKeyShortInput(t *testing.T) {
 	if _, _, confidence := analysis.AnalyzeKey(make([]float32, 100), analysis.SampleRate); confidence != 0 {
 		t.Errorf("confidence = %.6f, want 0", confidence)
 	}
 }
 
-func TestWhiteNoiseStaysBelowTheConfidenceFloor(t *testing.T) {
+func TestAnalyzeKeyWhiteNoise(t *testing.T) {
 	noise := noiseSamples(20, 7)
 	_, _, confidence := analysis.AnalyzeKey(noise, analysis.SampleRate)
 
 	if confidence >= analysis.KeyConfidenceFloor {
-		music := synthesizeChordProgression([][]int{{0, 4, 7}, {5, 9, 12}, {7, 11, 14}, {0, 4, 7}}, 20, analysis.SampleRate)
+		music := synthesizeChords([][]int{{0, 4, 7}, {5, 9, 12}, {7, 11, 14}, {0, 4, 7}}, 20, analysis.SampleRate)
 		noiseChroma, _ := analysis.Chromagram(noise, analysis.SampleRate)
 		musicChroma, _ := analysis.Chromagram(music, analysis.SampleRate)
 		t.Errorf("confidence = %.4f, want < floor %.4f (chroma contrast %.3f vs music %.3f)",
@@ -166,8 +166,8 @@ func TestWhiteNoiseStaysBelowTheConfidenceFloor(t *testing.T) {
 	}
 }
 
-func TestNoisyGlideStaysBelowTheMusicConfidenceLevel(t *testing.T) {
-	music := synthesizeChordProgression([][]int{{9, 12, 16}, {2, 5, 9}, {4, 8, 11}, {9, 12, 16}}, 20, analysis.SampleRate)
+func TestAnalyzeKeyNoisyGlide(t *testing.T) {
+	music := synthesizeChords([][]int{{9, 12, 16}, {2, 5, 9}, {4, 8, 11}, {9, 12, 16}}, 20, analysis.SampleRate)
 	_, _, musicConfidence := analysis.AnalyzeKey(music, analysis.SampleRate)
 
 	source := rand.New(rand.NewSource(7))
@@ -188,7 +188,7 @@ func TestNoisyGlideStaysBelowTheMusicConfidenceLevel(t *testing.T) {
 	}
 }
 
-func TestAClearlyTonalSignalClearsTheContrastGate(t *testing.T) {
+func TestAnalyzeKeyTonalPassesGate(t *testing.T) {
 	tonal := make([]float32, int(20*analysis.SampleRate))
 	phases := []float64{0, 0, 0}
 	frequencies := []float64{261.63, 329.63, 392.00}
@@ -207,7 +207,7 @@ func TestAClearlyTonalSignalClearsTheContrastGate(t *testing.T) {
 	}
 }
 
-func TestBroadbandNoiseIsRejectedByTheContrastGate(t *testing.T) {
+func TestAnalyzeKeyRejectsNoise(t *testing.T) {
 	_, _, confidence := analysis.AnalyzeKey(noiseSamples(20, 7), analysis.SampleRate)
 
 	if confidence != 0 {
@@ -221,7 +221,7 @@ func tempoLagBounds() (minLag, maxLag int, frameRate float64) {
 	return minLag, maxLag, frameRate
 }
 
-func TestFastestSearchableLagIsInsideTheAcceptedBand(t *testing.T) {
+func TestFastestLagIsInBand(t *testing.T) {
 	minLag, _, frameRate := tempoLagBounds()
 
 	period := float64(minLag) / frameRate
@@ -230,7 +230,7 @@ func TestFastestSearchableLagIsInsideTheAcceptedBand(t *testing.T) {
 	}
 }
 
-func TestSlowestSearchableLagIsInsideTheAcceptedBand(t *testing.T) {
+func TestSlowestLagIsInBand(t *testing.T) {
 	_, maxLag, frameRate := tempoLagBounds()
 
 	period := float64(maxLag) / frameRate
@@ -250,7 +250,7 @@ func TestTempoSearchWindowIsNotEmpty(t *testing.T) {
 	}
 }
 
-func TestATempoJustUnderTheCeilingIsRefinedNotClamped(t *testing.T) {
+func TestAnalyzeTrackSamplesRefines(t *testing.T) {
 	minLag, _, frameRate := tempoLagBounds()
 	clampBPM := (60 * frameRate) / float64(minLag)
 
@@ -264,7 +264,7 @@ func TestATempoJustUnderTheCeilingIsRefinedNotClamped(t *testing.T) {
 	}
 }
 
-func TestANearCeilingEstimateIsNotTheRawLagQuantum(t *testing.T) {
+func TestAnalyzeTrackSamplesFineLag(t *testing.T) {
 	minLag, _, frameRate := tempoLagBounds()
 	clampBPM := (60 * frameRate) / float64(minLag)
 
@@ -278,7 +278,7 @@ func TestANearCeilingEstimateIsNotTheRawLagQuantum(t *testing.T) {
 	}
 }
 
-func TestATempoBeyondTheCeilingResolvesToAnOctaveNeverTheClamp(t *testing.T) {
+func TestAnalyzeTrackSamplesOctave(t *testing.T) {
 	minLag, _, frameRate := tempoLagBounds()
 	clampBPM := (60 * frameRate) / float64(minLag)
 
@@ -323,7 +323,7 @@ func TestTempoDeltaFoldsOctaveErrors(t *testing.T) {
 	}
 }
 
-func TestTempoDeltaRejectsNonPositiveInput(t *testing.T) {
+func TestTempoDeltaRejectsNonPositive(t *testing.T) {
 	cases := []struct {
 		name string
 		bpmA float64
@@ -342,7 +342,7 @@ func TestTempoDeltaRejectsNonPositiveInput(t *testing.T) {
 	}
 }
 
-func TestFoldingOnlyAppliesToGenuineOctaveRelationships(t *testing.T) {
+func TestTempoDeltaFactorOctavesOnly(t *testing.T) {
 	_, thirdsFactor := analysis.TempoDeltaFactor(128, 192)
 	_, halfFactor := analysis.TempoDeltaFactor(187.5, 93.75)
 
@@ -354,7 +354,7 @@ func TestFoldingOnlyAppliesToGenuineOctaveRelationships(t *testing.T) {
 	}
 }
 
-func TestSignedTempoDeltaKeepsDirectionAndFolds(t *testing.T) {
+func TestSignedTempoDelta(t *testing.T) {
 	if up := analysis.SignedTempoDelta(128, 160); up <= 0 {
 		t.Errorf("128 to 160 = %.4f, want positive", up)
 	}
@@ -366,7 +366,7 @@ func TestSignedTempoDeltaKeepsDirectionAndFolds(t *testing.T) {
 	}
 }
 
-func TestBPMDetectionOnSyntheticClickTracks(t *testing.T) {
+func TestAnalyzeTrackSamplesBPM(t *testing.T) {
 	for _, bpm := range []float64{70, 72, 90, 120, 140, 174, 185, 200, 205} {
 		track, err := analysis.AnalyzeTrackSamples(audiotest.SynthesizeClickTrack(bpm, 30, analysis.SampleRate, 0, 0), analysis.SampleRate)
 		if err != nil {
@@ -384,26 +384,26 @@ func TestBPMDetectionOnSyntheticClickTracks(t *testing.T) {
 	}
 }
 
-func TestShortTrackIsRejected(t *testing.T) {
+func TestAnalyzeTrackSamplesShort(t *testing.T) {
 	if _, err := analysis.AnalyzeTrackSamples(make([]float32, int(4*analysis.SampleRate)), analysis.SampleRate); err == nil {
 		t.Error("a 4 second track was accepted")
 	}
 }
 
-func TestSilentTrackIsRejected(t *testing.T) {
+func TestAnalyzeTrackSamplesSilent(t *testing.T) {
 	if _, err := analysis.AnalyzeTrackSamples(make([]float32, int(30*analysis.SampleRate)), analysis.SampleRate); err == nil {
 		t.Error("a silent track was accepted")
 	}
 }
 
-func TestInvalidSampleRateIsRejected(t *testing.T) {
+func TestAnalyzeTrackSamplesBadRate(t *testing.T) {
 	if _, err := analysis.AnalyzeTrackSamples(make([]float32, 1000), 0); err == nil {
 		t.Error("a zero sample rate was accepted")
 	}
 }
 
 func TestDownbeatPhaseIsInRange(t *testing.T) {
-	track := audiotest.AnalyzeAccentedClickTrack(t)
+	track := audiotest.AnalyzeAccentClicks(t)
 
 	if track.DownbeatPhase < 0 || track.DownbeatPhase >= 4 {
 		t.Errorf("phase = %d, want within [0, 4) for a %d beat bar", track.DownbeatPhase, analysis.BarBeats)
@@ -411,7 +411,7 @@ func TestDownbeatPhaseIsInRange(t *testing.T) {
 }
 
 func TestAnalysisCarriesKeyData(t *testing.T) {
-	track := audiotest.AnalyzeAccentedClickTrack(t)
+	track := audiotest.AnalyzeAccentClicks(t)
 
 	if track.BPM <= 0 {
 		t.Errorf("BPM = %.1f, want > 0", track.BPM)
@@ -421,7 +421,7 @@ func TestAnalysisCarriesKeyData(t *testing.T) {
 	}
 }
 
-func measureProcessorFrameCost(recipe *transition.Recipe, bothSides bool) time.Duration {
+func measureFrameCost(recipe *transition.Recipe, bothSides bool) time.Duration {
 	frames := 500
 	processor := transition.NewProcessor(recipe, &transition.Window{Frames: frames, PeriodSec: 0.5, Bars: 4})
 	aTone := &audiotest.ToneGenerator{Frequency: 220, Amplitude: 8000}
@@ -446,7 +446,7 @@ func measureProcessorFrameCost(recipe *transition.Recipe, bothSides bool) time.D
 	return time.Since(start) / time.Duration(frames)
 }
 
-func TestHeaviestRecipeFitsTheRealtimeBudget(t *testing.T) {
+func TestHeaviestRecipeFitsBudget(t *testing.T) {
 	recipe := transition.DefaultRecipe()
 	recipe.Out = transition.Side{
 		Volume: transition.VolumeSlow, EQ: transition.EQThreeBand, Filter: transition.FilterHighPass, FX: transition.FXReverbOutCenter,
@@ -455,7 +455,7 @@ func TestHeaviestRecipeFitsTheRealtimeBudget(t *testing.T) {
 		Volume: transition.VolumeFastAtEdge, EQ: transition.EQThreeBand, Filter: transition.FilterLowPass, FX: transition.FXPhaser,
 	}
 	recipe.Loop = transition.LoopSpinbackFourBeats
-	perFrame := measureProcessorFrameCost(&recipe, true)
+	perFrame := measureFrameCost(&recipe, true)
 
 	if perFrame >= 4*time.Millisecond {
 		t.Errorf("%.3fms per 20ms frame (%.1f%% of realtime), want under 4ms",
@@ -463,11 +463,11 @@ func TestHeaviestRecipeFitsTheRealtimeBudget(t *testing.T) {
 	}
 }
 
-func TestReverbFitsTheRealtimeBudget(t *testing.T) {
+func TestReverbFitsBudget(t *testing.T) {
 	recipe := transition.DefaultRecipe()
 	recipe.Out.FX = transition.FXReverbOutCenter
 
-	if perFrame := measureProcessorFrameCost(&recipe, false); perFrame >= 4*time.Millisecond {
+	if perFrame := measureFrameCost(&recipe, false); perFrame >= 4*time.Millisecond {
 		t.Errorf("%.3fms per 20ms frame, want under 4ms", float64(perFrame.Microseconds())/1000)
 	}
 }

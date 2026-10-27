@@ -37,8 +37,8 @@ type requiredVotesCase struct {
 	want    int
 }
 
-func TestRequiredVotesInChannelIgnoresBotsAndOtherChannels(t *testing.T) {
-	cases := slices.Concat(requiredVotesCountCases(), requiredVotesFilterCases())
+func TestRequiredInChannelIgnores(t *testing.T) {
+	cases := slices.Concat(voteCountCases(), voteFilterCases())
 
 	for i := range cases {
 		testCase := &cases[i]
@@ -54,7 +54,7 @@ func TestRequiredVotesInChannelIgnoresBotsAndOtherChannels(t *testing.T) {
 	}
 }
 
-func requiredVotesCountCases() []requiredVotesCase {
+func voteCountCases() []requiredVotesCase {
 	return []requiredVotesCase{
 		{
 			name:    "an empty channel still needs one vote",
@@ -101,7 +101,7 @@ func requiredVotesCountCases() []requiredVotesCase {
 	}
 }
 
-func requiredVotesFilterCases() []requiredVotesCase {
+func voteFilterCases() []requiredVotesCase {
 	return []requiredVotesCase{
 		{
 			name: "bots and other channels do not count",
@@ -124,7 +124,7 @@ func requiredVotesFilterCases() []requiredVotesCase {
 	}
 }
 
-func TestRequiredVotesInChannelCountsMembersAttachedToVoiceStates(t *testing.T) {
+func TestRequiredInChannelVoiceStates(t *testing.T) {
 	states := []*discordgo.VoiceState{
 		voiceStateWithMember("u1", "voice", false),
 		voiceStateWithMember("u2", "voice", false),
@@ -145,7 +145,7 @@ func TestRequiredVotesInChannelCountsMembersAttachedToVoiceStates(t *testing.T) 
 	}
 }
 
-func TestRequiredVotesInChannelSkipsTheBotItself(t *testing.T) {
+func TestRequiredInChannelSkipsBot(t *testing.T) {
 	states := []*discordgo.VoiceState{
 		voiceStateWithMember("u1", "voice", false),
 		voiceStateWithMember("u2", "voice", false),
@@ -163,7 +163,7 @@ func TestRequiredVotesInChannelSkipsTheBotItself(t *testing.T) {
 	}
 }
 
-func TestRequiredVotesInChannelCountsUnresolvedMembersOnTheHotPath(t *testing.T) {
+func TestRequiredInChannelUnresolved(t *testing.T) {
 	states := []*discordgo.VoiceState{
 		{GuildID: "g", UserID: "u1", ChannelID: "voice"},
 		{GuildID: "g", UserID: "u2", ChannelID: "voice"},
@@ -181,7 +181,7 @@ func TestRequiredVotesInChannelCountsUnresolvedMembersOnTheHotPath(t *testing.T)
 	}
 }
 
-func TestRequiredVotesInChannelReportsAnUnknownGuild(t *testing.T) {
+func TestRequiredInChannelNoGuild(t *testing.T) {
 	session := &discordgo.Session{State: discordgo.NewState()}
 
 	if _, err := vote.RequiredInChannel(session, "missing", "voice", vote.HookResolveFromCache); err == nil {
@@ -189,7 +189,7 @@ func TestRequiredVotesInChannelReportsAnUnknownGuild(t *testing.T) {
 	}
 }
 
-func TestClassifyVoterSortsPresentAbsentAndUnknown(t *testing.T) {
+func TestClassifyVoterSorts(t *testing.T) {
 	session := discordtest.Session(t, "self")
 
 	if _, ok := vote.HookClassifyVoter(session, "guild1", "voice1", "stranger", nil); ok {
@@ -244,7 +244,7 @@ func TestClassifyVoterSortsPresentAbsentAndUnknown(t *testing.T) {
 	}
 }
 
-func TestClassifyVoterLetsAbsentAddersConsent(t *testing.T) {
+func TestClassifyVoterAbsentAdders(t *testing.T) {
 	session := discordtest.Session(t, "self")
 
 	if err := session.State.GuildAdd(&discordgo.Guild{ID: "guild1"}); err != nil {

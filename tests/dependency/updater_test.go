@@ -13,7 +13,7 @@ import (
 func installableFFmpeg(t *testing.T, version string) *stubMirror {
 	t.Helper()
 
-	payload := buildZip(t, map[string]string{
+	payload := createZip(t, map[string]string{
 		"bundle/bin/ffmpeg":  script("ffmpeg version N-121234"),
 		"bundle/bin/ffprobe": script("ffprobe version N-121234"),
 	})
@@ -27,7 +27,7 @@ func installableFFmpeg(t *testing.T, version string) *stubMirror {
 	}}
 }
 
-func TestPrepareStopsWhenFFmpegHasNoBuild(t *testing.T) {
+func TestPrepareFFmpegNoBuild(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
 	usePath(t)
@@ -48,7 +48,7 @@ func TestPrepareStopsWhenFFmpegHasNoBuild(t *testing.T) {
 	}
 }
 
-func TestPrepareStopsWhenTheFFmpegDownloadFails(t *testing.T) {
+func TestPrepareFFmpegDownloadFails(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
 	usePath(t)
@@ -60,7 +60,7 @@ func TestPrepareStopsWhenTheFFmpegDownloadFails(t *testing.T) {
 	}
 }
 
-func TestPrepareUsesAnInstalledFFmpegWhenOffline(t *testing.T) {
+func TestPrepareFFmpegOffline(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
 	usePath(t)
@@ -79,7 +79,7 @@ func TestPrepareUsesAnInstalledFFmpegWhenOffline(t *testing.T) {
 	}
 }
 
-func TestPrepareUsesTheSystemFFmpegAndContinuesWithoutAJsRuntime(t *testing.T) {
+func TestPrepareSystemFFmpeg(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
 	read := logtest.Capture(t)
@@ -98,7 +98,7 @@ func TestPrepareUsesTheSystemFFmpegAndContinuesWithoutAJsRuntime(t *testing.T) {
 	}
 }
 
-func TestPrepareDownloadsFFmpegWhenNothingIsInstalled(t *testing.T) {
+func TestPrepareFFmpegDownloads(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
 	usePath(t)
@@ -116,7 +116,7 @@ func TestPrepareDownloadsFFmpegWhenNothingIsInstalled(t *testing.T) {
 	}
 }
 
-func TestFFmpegUpdatesWaitAWeek(t *testing.T) {
+func TestIsFFmpegUpdateDue(t *testing.T) {
 	cases := map[string]bool{
 		"2026.09.18.1845": false,
 		"2026.09.25.1745": false,
@@ -145,7 +145,7 @@ func activateDownloaded(t *testing.T, s *dependency.HookSlot, toolName, version 
 	return binary
 }
 
-func TestCheckUpdatesReplacesFFmpegOnceAWeekHasPassed(t *testing.T) {
+func TestCheckUpdatesWeeklyFFmpeg(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
 	old := activateDownloaded(t, dependency.HookFfmpegSlot, "ffmpeg", "2026.09.18.1845")
@@ -167,11 +167,11 @@ func TestCheckUpdatesReplacesFFmpegOnceAWeekHasPassed(t *testing.T) {
 	}
 }
 
-func TestCheckUpdatesLeavesSystemBinariesAlone(t *testing.T) {
+func TestCheckUpdatesSkipsSystem(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
-	ffmpeg := dependency.HookBuildBinary(&dependency.HookBinaryFields{Tool: "ffmpeg", Path: "/usr/bin/ffmpeg", IsSystem: true})
-	node := dependency.HookBuildBinary(&dependency.HookBinaryFields{Tool: "node", Path: "/usr/bin/node", IsSystem: true})
+	ffmpeg := dependency.HookCreateBinary(&dependency.HookBinaryFields{Tool: "ffmpeg", Path: "/usr/bin/ffmpeg", IsSystem: true})
+	node := dependency.HookCreateBinary(&dependency.HookBinaryFields{Tool: "node", Path: "/usr/bin/node", IsSystem: true})
 	dependency.HookFfmpegSlot.HookReplace(ffmpeg)
 	dependency.HookJsRuntimeSlot.HookReplace(node)
 	ffmpegMirror := installableFFmpeg(t, "2026.09.25.1845")
@@ -189,7 +189,7 @@ func TestCheckUpdatesLeavesSystemBinariesAlone(t *testing.T) {
 	}
 }
 
-func TestCheckUpdatesMovesUpToDenoOnceItIsAvailable(t *testing.T) {
+func TestCheckUpdatesMovesToDeno(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
 	read := logtest.Capture(t)
@@ -210,7 +210,7 @@ func TestCheckUpdatesMovesUpToDenoOnceItIsAvailable(t *testing.T) {
 	}
 }
 
-func TestCheckUpdatesNeverDropsToALowerPriorityRuntime(t *testing.T) {
+func TestCheckUpdatesKeepsPriority(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
 	deno := activateDownloaded(t, dependency.HookJsRuntimeSlot, "deno", "2.9.7")
@@ -227,7 +227,7 @@ func TestCheckUpdatesNeverDropsToALowerPriorityRuntime(t *testing.T) {
 	}
 }
 
-func TestCheckUpdatesUpgradesTheSameRuntime(t *testing.T) {
+func TestCheckUpdatesUpgradesRuntime(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
 	activateDownloaded(t, dependency.HookJsRuntimeSlot, "deno", "2.9.6")
@@ -245,7 +245,7 @@ func TestCheckUpdatesUpgradesTheSameRuntime(t *testing.T) {
 	}
 }
 
-func TestCheckUpdatesChecksEveryRuntimeForAnUnknownOne(t *testing.T) {
+func TestCheckUpdatesUnknownRuntime(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
 	activateDownloaded(t, dependency.HookJsRuntimeSlot, "quickjs", "0.10.0")
@@ -258,7 +258,7 @@ func TestCheckUpdatesChecksEveryRuntimeForAnUnknownOne(t *testing.T) {
 	}
 }
 
-func TestCheckUpdatesFindsARuntimeWhenNoneWasAvailable(t *testing.T) {
+func TestCheckUpdatesFindsRuntime(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
 	useJsRuntimes(t, stubTool("deno", installableRuntime(t, "deno", "2.9.7")))

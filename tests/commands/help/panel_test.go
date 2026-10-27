@@ -54,7 +54,7 @@ func paginationFooter(page, totalPages int) string {
 	return fmt.Sprintf(messages.T(helpCheckGuildID).Footers.HelpPagination, page, totalPages)
 }
 
-func TestHelpPagesClampAndKeepTheOpenersView(t *testing.T) {
+func TestCreateHelpPageClamps(t *testing.T) {
 	setupHelpCommands(t)
 
 	checks := []struct {
@@ -63,7 +63,7 @@ func TestHelpPagesClampAndKeepTheOpenersView(t *testing.T) {
 	}{{true, 3}, {false, 2}}
 	for i := range checks {
 		check := &checks[i]
-		embed, components, hasCommands := help.HookBuildHelpPage(helpCheckGuildID, check.isAdmin, 99)
+		embed, components, hasCommands := help.HookCreateHelpPage(helpCheckGuildID, check.isAdmin, 99)
 		if !hasCommands {
 			t.Fatalf("admin=%v found no commands", check.isAdmin)
 		}
@@ -82,13 +82,13 @@ func TestHelpPagesClampAndKeepTheOpenersView(t *testing.T) {
 func TestHelpNumbering(t *testing.T) {
 	setupHelpCommands(t)
 
-	embed, _, _ := help.HookBuildHelpPage(helpCheckGuildID, true, 2)
+	embed, _, _ := help.HookCreateHelpPage(helpCheckGuildID, true, 2)
 	if !strings.HasPrefix(embed.Description, "**6. ") {
 		t.Errorf("page 2 = %q, want its first command numbered 6", embed.Description)
 	}
 }
 
-func TestTurningAHelpPageRedrawsTheMessage(t *testing.T) {
+func TestTurnHelpPageRedraws(t *testing.T) {
 	setupHelpCommands(t)
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 	ic := &discordgo.InteractionCreate{Interaction: &discordgo.Interaction{

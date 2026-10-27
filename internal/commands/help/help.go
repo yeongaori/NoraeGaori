@@ -35,7 +35,7 @@ func HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		page = int(options[0].IntValue())
 	}
 
-	embed, components, hasCommands := buildHelpPage(i.GuildID, config.IsAdmin(i.Member.User.ID), page)
+	embed, components, hasCommands := createHelpPage(i.GuildID, config.IsAdmin(i.Member.User.ID), page)
 	switch {
 	case !hasCommands:
 		t := messages.T(i.GuildID)
@@ -43,7 +43,7 @@ func HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	case components == nil:
 		discord.RespondEmbed(s, i, embed)
 	default:
-		if _, err := discord.SendEmbedWithComponents(s, i, embed, components); err != nil {
+		if _, err := discord.SendPanel(s, i, embed, components); err != nil {
 			logger.Errorf("Failed to send response: %v", err)
 			return err
 		}
@@ -61,16 +61,16 @@ func turnHelpPage(s *discordgo.Session, ic *discordgo.InteractionCreate, argumen
 		return
 	}
 
-	embed, components, hasCommands := buildHelpPage(ic.GuildID, isAdmin, page)
+	embed, components, hasCommands := createHelpPage(ic.GuildID, isAdmin, page)
 	if !hasCommands {
 		return
 	}
-	if err := discord.UpdateComponentMessage(s, ic, embed, components); err != nil {
+	if err := discord.UpdatePanel(s, ic, embed, components); err != nil {
 		logger.Errorf("Failed to turn the help page: %v", err)
 	}
 }
 
-func buildHelpPage(guildID string, isAdmin bool, page int) (*discordgo.MessageEmbed, []discordgo.MessageComponent, bool) {
+func createHelpPage(guildID string, isAdmin bool, page int) (*discordgo.MessageEmbed, []discordgo.MessageComponent, bool) {
 	commands := visibleCommands(guildID, isAdmin)
 	if len(commands) == 0 {
 		return nil, nil, false
@@ -80,7 +80,7 @@ func buildHelpPage(guildID string, isAdmin bool, page int) (*discordgo.MessageEm
 	page = discord.ClampPage(page, totalPages)
 	start, end := discord.PageBounds(page, commandsPerPage, len(commands))
 
-	embed := buildHelpEmbed(guildID, commands[start:end], page, totalPages, start, len(commands), guildPrefix(guildID))
+	embed := createHelpEmbed(guildID, commands[start:end], page, totalPages, start, len(commands), guildPrefix(guildID))
 	if totalPages == 1 {
 		return embed, nil, true
 	}
@@ -115,7 +115,7 @@ func guildPrefix(guildID string) string {
 	return prefix
 }
 
-func buildHelpEmbed(guildID string, commands []CommandInfo, page, totalPages, startIndex, totalCommands int, prefix string) *discordgo.MessageEmbed {
+func createHelpEmbed(guildID string, commands []CommandInfo, page, totalPages, startIndex, totalCommands int, prefix string) *discordgo.MessageEmbed {
 	t := messages.T(guildID)
 	var description strings.Builder
 	for i := range commands {

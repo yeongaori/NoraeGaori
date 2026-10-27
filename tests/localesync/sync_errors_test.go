@@ -11,7 +11,7 @@ import (
 	"noraegaori/internal/localesync"
 )
 
-func TestSyncContinuesPastAFailingLocale(t *testing.T) {
+func TestSyncContinuesPastFailure(t *testing.T) {
 	tests := []struct{ broken, healthy string }{
 		{broken: "en.json", healthy: "ko.json"},
 		{broken: "ko.json", healthy: "en.json"},
@@ -37,7 +37,7 @@ func TestSyncContinuesPastAFailingLocale(t *testing.T) {
 	}
 }
 
-func TestSyncReportsABaselineLoadFailureWithoutTouchingTheFile(t *testing.T) {
+func TestSyncBaselineLoadFailure(t *testing.T) {
 	dir := t.TempDir()
 	user := `{"player": {"now_playing": "Now playing"}}`
 	path := writeUserLocale(t, dir, "ko.json", user)
@@ -56,7 +56,7 @@ func TestSyncReportsABaselineLoadFailureWithoutTouchingTheFile(t *testing.T) {
 	}
 }
 
-func TestSyncTreatsAnUnreadableBaselineAsMissing(t *testing.T) {
+func TestSyncUnreadableBaseline(t *testing.T) {
 	locale := syncOne(t,
 		`{"player": {"now_playing": "Now playing ▶", "paused": "Paused"}}`,
 		`not json`,
@@ -80,7 +80,7 @@ func (unreadableLocales) ReadFile(name string) ([]byte, error) {
 	return nil, errors.New("embedded file is damaged")
 }
 
-func TestSyncReportsAnUnreadableShippedLocale(t *testing.T) {
+func TestSyncUnreadableShipped(t *testing.T) {
 	shipped := unreadableLocales{shippedLocales(map[string]string{"ko.json": `{"a": "A"}`})}
 
 	err := localesync.Sync(t.TempDir(), shipped, storeWith(map[string]string{}))
@@ -89,7 +89,7 @@ func TestSyncReportsAnUnreadableShippedLocale(t *testing.T) {
 	}
 }
 
-func TestSyncReportsAnInvalidShippedLocale(t *testing.T) {
+func TestSyncInvalidShipped(t *testing.T) {
 	store := storeWith(map[string]string{})
 
 	err := localesync.Sync(t.TempDir(), shippedLocales(map[string]string{"ko.json": `{"a": }`}), store)
@@ -101,7 +101,7 @@ func TestSyncReportsAnInvalidShippedLocale(t *testing.T) {
 	}
 }
 
-func TestSyncReportsADirectoryItCannotCreate(t *testing.T) {
+func TestSyncDirectoryFailure(t *testing.T) {
 	blocker := filepath.Join(t.TempDir(), "file")
 	if err := os.WriteFile(blocker, nil, 0644); err != nil {
 		t.Fatalf("failed to create %s: %v", blocker, err)
@@ -113,7 +113,7 @@ func TestSyncReportsADirectoryItCannotCreate(t *testing.T) {
 	}
 }
 
-func TestSyncReportsAnUnreadableUserLocale(t *testing.T) {
+func TestSyncUnreadableUser(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.Mkdir(filepath.Join(dir, "ko.json"), 0755); err != nil {
 		t.Fatalf("failed to create the blocking directory: %v", err)
@@ -125,7 +125,7 @@ func TestSyncReportsAnUnreadableUserLocale(t *testing.T) {
 	}
 }
 
-func TestSyncReportsAFailedWrite(t *testing.T) {
+func TestSyncWriteFailure(t *testing.T) {
 	tests := []struct {
 		name string
 		user string
@@ -156,7 +156,7 @@ func TestSyncReportsAFailedWrite(t *testing.T) {
 	}
 }
 
-func TestSyncReportsABaselineSaveFailure(t *testing.T) {
+func TestSyncBaselineSaveFailure(t *testing.T) {
 	dir := t.TempDir()
 	store := &memoryStore{baselines: map[string]string{}, saveErr: errors.New("disk full")}
 

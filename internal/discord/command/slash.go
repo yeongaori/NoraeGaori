@@ -9,7 +9,7 @@ import (
 	"noraegaori/internal/logger"
 )
 
-func RegisterSlashCommands(session *discordgo.Session) error {
+func SyncSlashCommands(session *discordgo.Session) error {
 	logger.Debug("Syncing slash commands with Discord...")
 
 	appID := session.State.User.ID
@@ -32,7 +32,7 @@ func RegisterSlashCommands(session *discordgo.Session) error {
 		})
 	}
 
-	fillMissingCommandDescriptions(desired)
+	fillDescriptions(desired)
 
 	existing, err := session.ApplicationCommands(appID, "")
 	if err != nil {
@@ -64,7 +64,7 @@ func RegisterSlashCommands(session *discordgo.Session) error {
 	return nil
 }
 
-func fillMissingCommandDescriptions(cmds []*discordgo.ApplicationCommand) {
+func fillDescriptions(cmds []*discordgo.ApplicationCommand) {
 	for _, command := range cmds {
 		if command.Description == "" {
 			logger.Errorf("Missing locale description for command %q, using its name as a placeholder", command.Name)

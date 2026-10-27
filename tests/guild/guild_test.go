@@ -51,7 +51,7 @@ func TestPrefixCacheColumn(t *testing.T) {
 	}
 }
 
-func TestInvalidateCachesForgetsBothValues(t *testing.T) {
+func TestInvalidateCachesForgets(t *testing.T) {
 	dbtest.Setup(t)
 
 	guildID := "guild1"

@@ -61,7 +61,7 @@ func CallerVoiceChannel(s *discordgo.Session, i *discordgo.InteractionCreate) (s
 	return voiceState.ChannelID, true
 }
 
-func CheckUserInBotVoiceChannel(s *discordgo.Session, i *discordgo.InteractionCreate) (string, *discordgo.MessageEmbed) {
+func RequireSameVoice(s *discordgo.Session, i *discordgo.InteractionCreate) (string, *discordgo.MessageEmbed) {
 
 	voiceChannelID, ok := CallerVoiceChannel(s, i)
 	if !ok {

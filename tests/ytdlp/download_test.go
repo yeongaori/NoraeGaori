@@ -118,7 +118,7 @@ func serveRelease(t *testing.T, payload []byte, claimedSum string) (*ytdlp.GitHu
 	return release, filepath.Join(t.TempDir(), "downloaded")
 }
 
-func TestDownloadVerifiedAcceptsMatchingChecksum(t *testing.T) {
+func TestDownloadVerifiedMatches(t *testing.T) {
 	payload := []byte("trusted yt-dlp binary")
 	release, destination := serveRelease(t, payload, sha256Hex(payload))
 
@@ -135,7 +135,7 @@ func TestDownloadVerifiedAcceptsMatchingChecksum(t *testing.T) {
 	}
 }
 
-func TestDownloadVerifiedRejectsTamperedPayload(t *testing.T) {
+func TestDownloadVerifiedTampered(t *testing.T) {
 	payload := []byte("tampered yt-dlp binary")
 	expected := sha256Hex([]byte("the binary the release promised"))
 	release, destination := serveRelease(t, payload, expected)
@@ -153,7 +153,7 @@ func TestDownloadVerifiedRejectsTamperedPayload(t *testing.T) {
 	}
 }
 
-func TestDownloadVerifiedRejectsDigestDisagreeingWithSignedSums(t *testing.T) {
+func TestDownloadVerifiedDigestClash(t *testing.T) {
 	payload := []byte("trusted yt-dlp binary")
 	release, destination := serveRelease(t, payload, sha256Hex(payload))
 	release.Assets[0].Digest = "sha256:" + sha256Hex([]byte("something else"))
@@ -171,7 +171,7 @@ func TestDownloadVerifiedRejectsDigestDisagreeingWithSignedSums(t *testing.T) {
 	}
 }
 
-func TestDownloadVerifiedRejectsAnUnsignedChecksumFile(t *testing.T) {
+func TestDownloadVerifiedUnsigned(t *testing.T) {
 	payload := []byte("yt-dlp binary")
 	release, destination := serveRelease(t, payload, sha256Hex(payload))
 
@@ -190,7 +190,7 @@ func TestDownloadVerifiedRejectsAnUnsignedChecksumFile(t *testing.T) {
 	}
 }
 
-func TestDownloadVerifiedRejectsAForeignSignature(t *testing.T) {
+func TestDownloadVerifiedForeignKey(t *testing.T) {
 	payload := []byte("yt-dlp binary")
 	release, destination := serveRelease(t, payload, sha256Hex(payload))
 
@@ -209,7 +209,7 @@ func TestDownloadVerifiedRejectsAForeignSignature(t *testing.T) {
 	}
 }
 
-func TestDownloadVerifiedFailsClosedWithoutChecksumSource(t *testing.T) {
+func TestDownloadVerifiedNoSource(t *testing.T) {
 	payload := []byte("unverifiable yt-dlp binary")
 	release, destination := serveRelease(t, payload, "")
 
@@ -223,7 +223,7 @@ func TestDownloadVerifiedFailsClosedWithoutChecksumSource(t *testing.T) {
 	}
 }
 
-func TestDownloadVerifiedRejectsFailedDownload(t *testing.T) {
+func TestDownloadVerifiedFailed(t *testing.T) {
 	payload := []byte("yt-dlp binary")
 	release, destination := serveRelease(t, payload, sha256Hex(payload))
 
@@ -233,7 +233,7 @@ func TestDownloadVerifiedRejectsFailedDownload(t *testing.T) {
 	}
 }
 
-func TestGetDownloadAssetMatchesThisPlatform(t *testing.T) {
+func TestGetDownloadAssetPlatform(t *testing.T) {
 	release := &ytdlp.GitHubRelease{TagName: "2026.07.04"}
 	for _, name := range []string{"yt-dlp", "yt-dlp.exe", "yt-dlp_macos", "yt-dlp_linux_aarch64"} {
 		addAsset(release, name, "https://example.invalid/"+name, "")
@@ -251,7 +251,7 @@ func TestGetDownloadAssetMatchesThisPlatform(t *testing.T) {
 	}
 }
 
-func TestGetDownloadAssetFailsWhenAssetIsAbsent(t *testing.T) {
+func TestGetDownloadAssetAbsent(t *testing.T) {
 	release := &ytdlp.GitHubRelease{TagName: "2026.07.04"}
 	addAsset(release, "unrelated-asset", "https://example.invalid/unrelated", "")
 

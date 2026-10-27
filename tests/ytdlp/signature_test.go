@@ -42,15 +42,15 @@ func TestSigningKeyIsEmbedded(t *testing.T) {
 	}
 }
 
-func TestVerifyChecksumSignatureAcceptsTheRealSignature(t *testing.T) {
+func TestVerifySignatureAcceptsReal(t *testing.T) {
 	checksums, signature := loadSignedFixtures(t)
 
-	if err := ytdlp.VerifyChecksumSignature(checksums, signature); err != nil {
-		t.Fatalf("VerifyChecksumSignature returned %v, want nil for a genuine signature", err)
+	if err := ytdlp.VerifySignature(checksums, signature); err != nil {
+		t.Fatalf("VerifySignaturereturned %v, want nil for a genuine signature", err)
 	}
 }
 
-func TestVerifyChecksumSignatureRejectsTamperedChecksums(t *testing.T) {
+func TestVerifySignatureTampered(t *testing.T) {
 	checksums, signature := loadSignedFixtures(t)
 
 	tampered := bytes.Replace(checksums,
@@ -60,24 +60,24 @@ func TestVerifyChecksumSignatureRejectsTamperedChecksums(t *testing.T) {
 		t.Fatal("the fixture was not modified, so this test would pass vacuously")
 	}
 
-	if err := ytdlp.VerifyChecksumSignature(tampered, signature); err == nil {
-		t.Error("VerifyChecksumSignature accepted a tampered checksum file")
+	if err := ytdlp.VerifySignature(tampered, signature); err == nil {
+		t.Error("VerifySignatureaccepted a tampered checksum file")
 	}
 }
 
-func TestVerifyChecksumSignatureRejectsASingleFlippedByte(t *testing.T) {
+func TestVerifySignatureFlippedByte(t *testing.T) {
 	checksums, signature := loadSignedFixtures(t)
 
 	tampered := make([]byte, len(checksums))
 	copy(tampered, checksums)
 	tampered[0] ^= 0x01
 
-	if err := ytdlp.VerifyChecksumSignature(tampered, signature); err == nil {
-		t.Error("VerifyChecksumSignature accepted a checksum file with one flipped byte")
+	if err := ytdlp.VerifySignature(tampered, signature); err == nil {
+		t.Error("VerifySignatureaccepted a checksum file with one flipped byte")
 	}
 }
 
-func TestVerifyChecksumSignatureRejectsCorruptSignature(t *testing.T) {
+func TestVerifySignatureCorrupt(t *testing.T) {
 	checksums, signature := loadSignedFixtures(t)
 
 	cases := map[string][]byte{
@@ -87,25 +87,25 @@ func TestVerifyChecksumSignatureRejectsCorruptSignature(t *testing.T) {
 	}
 
 	for name, sig := range cases {
-		if err := ytdlp.VerifyChecksumSignature(checksums, sig); err == nil {
+		if err := ytdlp.VerifySignature(checksums, sig); err == nil {
 			t.Errorf("%s signature was accepted, want a rejection", name)
 		}
 	}
 }
 
-func TestVerifyChecksumSignatureRejectsAForeignSignature(t *testing.T) {
+func TestVerifySignatureForeign(t *testing.T) {
 	checksums, signature := loadSignedFixtures(t)
 
 	flipped := make([]byte, len(signature))
 	copy(flipped, signature)
 	flipped[len(flipped)-1] ^= 0xFF
 
-	if err := ytdlp.VerifyChecksumSignature(checksums, flipped); err == nil {
+	if err := ytdlp.VerifySignature(checksums, flipped); err == nil {
 		t.Error("a signature with a corrupted trailing byte was accepted")
 	}
 }
 
-func TestFixtureChecksumsParseAndCoverEveryPlatform(t *testing.T) {
+func TestFixtureChecksumsComplete(t *testing.T) {
 	checksums, _ := loadSignedFixtures(t)
 
 	parsed, err := download.ParseChecksums(bytes.NewReader(checksums))

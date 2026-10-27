@@ -107,5 +107,5 @@ func cleanupForShutdown(guildID string) error {
 }
 
 func ShutdownWorkerPool() {
-	youtube.CloseAvailabilityPool()
+	youtube.ClosePool()
 }

@@ -36,7 +36,7 @@ func Register(cmd func(string) messages.CommandStrings) {
 					Name:        "language",
 					Description: setLanguage.Options["language"],
 					Required:    false,
-					Choices:     BuildLanguageChoices(),
+					Choices:     CreateLanguageChoices(),
 				},
 			},
 			Handler:   HandleSetLanguage,
@@ -48,7 +48,7 @@ func Register(cmd func(string) messages.CommandStrings) {
 	}
 	command.RegisterAliases("setlanguage", &setLanguage)
 	for _, name := range []string{"sponsorblock", "showstartedtrack", "normalization", "autoleave", "autopause", "autoresume"} {
-		RegisterToggleCommand(cmd, name)
+		RegisterToggle(cmd, name)
 	}
 	command.RegisterLocalized(cmd, &command.Command{
 		Name: "settings",
@@ -58,7 +58,7 @@ func Register(cmd func(string) messages.CommandStrings) {
 				Name:        "category",
 				Description: cmd("settings").Options["category"],
 				Required:    false,
-				Choices:     BuildCategoryChoices(),
+				Choices:     CreateCategoryChoices(),
 			},
 		},
 		Handler: HandleSettingsPanel,
@@ -67,7 +67,7 @@ func Register(cmd func(string) messages.CommandStrings) {
 	registerPanelRoutes()
 }
 
-func RegisterToggleCommand(cmd func(string) messages.CommandStrings, name string) {
+func RegisterToggle(cmd func(string) messages.CommandStrings, name string) {
 	commandStrings := cmd(name)
 	options := []*discordgo.ApplicationCommandOption{
 		{

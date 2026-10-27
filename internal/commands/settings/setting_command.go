@@ -18,26 +18,26 @@ type settingArguments struct {
 }
 
 func HandleSetting(key string) func(*discordgo.Session, *discordgo.InteractionCreate) error {
-	return settingCommandHandler(key, nil)
+	return createSettingHandler(key, nil)
 }
 
-func HandleSettingWithEmbed(key string, buildEmbed func(guildID string) *discordgo.MessageEmbed) func(*discordgo.Session, *discordgo.InteractionCreate) error {
-	return settingCommandHandler(key, buildEmbed)
+func HandleSettingEmbed(key string, buildEmbed func(guildID string) *discordgo.MessageEmbed) func(*discordgo.Session, *discordgo.InteractionCreate) error {
+	return createSettingHandler(key, buildEmbed)
 }
 
-func settingCommandHandler(key string, buildEmbed func(guildID string) *discordgo.MessageEmbed) func(*discordgo.Session, *discordgo.InteractionCreate) error {
+func createSettingHandler(key string, buildEmbed func(guildID string) *discordgo.MessageEmbed) func(*discordgo.Session, *discordgo.InteractionCreate) error {
 	return func(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		spec, found := findSetting(key)
 		if !found {
 			return fmt.Errorf("setting %q is not defined", key)
 		}
 
-		arguments := parseSettingArguments(spec, i.ApplicationCommandData().Options)
+		arguments := parseArguments(spec, i.ApplicationCommandData().Options)
 		if !arguments.hasValue && arguments.number == nil {
 			return discord.RespondDropdownMenu(s, i, key)
 		}
 
-		if failed, err := applySettingArguments(i.GuildID, spec, &arguments); err != nil {
+		if failed, err := applyArguments(i.GuildID, spec, &arguments); err != nil {
 			if !isValidationError(err) {
 				logger.Errorf("Failed to save setting %s for guild %s: %v", failed.key, i.GuildID, err)
 			}
@@ -53,7 +53,7 @@ func settingCommandHandler(key string, buildEmbed func(guildID string) *discordg
 	}
 }
 
-func parseSettingArguments(spec *settingSpec, options []*discordgo.ApplicationCommandInteractionDataOption) settingArguments {
+func parseArguments(spec *settingSpec, options []*discordgo.ApplicationCommandInteractionDataOption) settingArguments {
 	var arguments settingArguments
 
 	for _, option := range options {
@@ -76,7 +76,7 @@ func parseSettingArguments(spec *settingSpec, options []*discordgo.ApplicationCo
 	return arguments
 }
 
-func applySettingArguments(guildID string, spec *settingSpec, arguments *settingArguments) (*settingSpec, error) {
+func applyArguments(guildID string, spec *settingSpec, arguments *settingArguments) (*settingSpec, error) {
 	if arguments.number != nil {
 		normalized, err := normalizeValue(arguments.number, arguments.numberValue)
 		if err != nil {

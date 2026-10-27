@@ -46,7 +46,7 @@ func (player *GuildPlayer) isFadingOut() bool {
 	return player.FadingOut
 }
 
-func (player *GuildPlayer) drainPlaybackDoneLocked() {
+func (player *GuildPlayer) drainDoneLocked() {
 	select {
 	case <-player.PlaybackDone:
 	default:
@@ -62,7 +62,7 @@ func (player *GuildPlayer) awaitPlaybackDone(guildID string, timeout time.Durati
 	}
 }
 
-func (player *GuildPlayer) clearPlaybackAndPendingStream() {
+func (player *GuildPlayer) clearPlayback() {
 	player.mu.Lock()
 	player.Playing = false
 	player.Loading = false

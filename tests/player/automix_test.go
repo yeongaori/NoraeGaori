@@ -23,7 +23,7 @@ func slidingCrossfade() *player.HookCrossfadeState {
 	return cs
 }
 
-func TestSlidingPushesTheTransitionForwardByOneBeat(t *testing.T) {
+func TestSlideTransitionOneBeat(t *testing.T) {
 	cs := slidingCrossfade()
 	cs.HookSlideTransition("check")
 
@@ -32,7 +32,7 @@ func TestSlidingPushesTheTransitionForwardByOneBeat(t *testing.T) {
 	}
 }
 
-func TestSlidingLeavesTheCrossfadeIntactWhileTheWindowStillFits(t *testing.T) {
+func TestSlideTransitionKeepsFit(t *testing.T) {
 	cs := slidingCrossfade()
 	cs.HookSlideTransition("check")
 
@@ -41,7 +41,7 @@ func TestSlidingLeavesTheCrossfadeIntactWhileTheWindowStillFits(t *testing.T) {
 	}
 }
 
-func TestSlidingShrinksTheCrossfadeOnceItOverrunsTheWindow(t *testing.T) {
+func TestSlideTransitionShrinks(t *testing.T) {
 	cs := slidingCrossfade()
 	cs.HookSlideTransition("check")
 
@@ -53,7 +53,7 @@ func TestSlidingShrinksTheCrossfadeOnceItOverrunsTheWindow(t *testing.T) {
 	}
 }
 
-func TestCrossfadeWindowNeverGrowsWhileSliding(t *testing.T) {
+func TestSlideTransitionNeverGrows(t *testing.T) {
 	cs := slidingCrossfade()
 	cs.HookSlideTransition("check")
 	*cs.HookTransitionFrame() = 1250
@@ -72,7 +72,7 @@ func TestCrossfadeWindowNeverGrowsWhileSliding(t *testing.T) {
 	}
 }
 
-func TestSlidingEventuallyCancelsOnceTheWindowIsUnusable(t *testing.T) {
+func TestSlideTransitionCancels(t *testing.T) {
 	cs := slidingCrossfade()
 	cs.HookSlideTransition("check")
 	*cs.HookTransitionFrame() = 1250
@@ -90,7 +90,7 @@ func TestSlidingEventuallyCancelsOnceTheWindowIsUnusable(t *testing.T) {
 	}
 }
 
-func TestANewCrossfadeHasNoRefetchParked(t *testing.T) {
+func TestCrossfadeStateNoRefetch(t *testing.T) {
 	fresh := player.HookNewCrossfadeState()
 
 	if got := fresh.HookBRefetch().Load(); got != nil {
@@ -104,7 +104,7 @@ func TestANewCrossfadeHasNoRefetchParked(t *testing.T) {
 	}
 }
 
-func TestAbortingMarksTheRefetchAsUnwanted(t *testing.T) {
+func TestCrossfadeStateAbortRefetch(t *testing.T) {
 	fresh := player.HookNewCrossfadeState()
 	fresh.HookAbort()
 
@@ -113,7 +113,7 @@ func TestAbortingMarksTheRefetchAsUnwanted(t *testing.T) {
 	}
 }
 
-func TestTheAnalysisReadCapCoversTheFullRequestedHead(t *testing.T) {
+func TestAnalysisReadCapCoversHead(t *testing.T) {
 	requested := int64(player.HookAnalysisHeadSecs * analysis.SampleRate * 4)
 
 	if player.HookAnalysisMaxBytes <= requested {
@@ -121,7 +121,7 @@ func TestTheAnalysisReadCapCoversTheFullRequestedHead(t *testing.T) {
 	}
 }
 
-func TestTheAnalysisReadCapKeepsABoundedMargin(t *testing.T) {
+func TestAnalysisReadCapMargin(t *testing.T) {
 	requested := int64(player.HookAnalysisHeadSecs * analysis.SampleRate * 4)
 	margin := player.HookAnalysisMaxBytes - requested
 
@@ -133,7 +133,7 @@ func TestTheAnalysisReadCapKeepsABoundedMargin(t *testing.T) {
 	}
 }
 
-func TestTheAnalysisReadCapAdmitsFarMoreThanTheMinimumAnalysableLength(t *testing.T) {
+func TestAnalysisReadCapAdmitsMore(t *testing.T) {
 	minimumSamples := int64(analysis.MinSeconds * analysis.SampleRate)
 
 	if capSamples := player.HookAnalysisMaxBytes / 4; capSamples <= minimumSamples {
@@ -143,13 +143,13 @@ func TestTheAnalysisReadCapAdmitsFarMoreThanTheMinimumAnalysableLength(t *testin
 
 func outroWindowFixture() (*ffmpeg.EndState, *player.HookFadeSettings, int) {
 	track := &analysis.TrackAnalysis{BPM: 128, PeriodSec: 60.0 / 128, Duration: 240}
-	fade := player.HookBuildFadeSettings(&player.HookFadeSettingsFields{AutoMix: true, AutoMixBeats: 16, CrossfadeSec: 8})
+	fade := player.HookCreateFadeSettings(&player.HookFadeSettingsFields{AutoMix: true, AutoMixBeats: 16, CrossfadeSec: 8})
 	expectedFrames, _ := transition.CrossfadeFrames(true, 16, 8, track)
 
 	return &ffmpeg.EndState{TotalFrames: 12000, Analysis: track}, fade, expectedFrames
 }
 
-func TestOutroWindowSitsAtTheEndOfTheTrack(t *testing.T) {
+func TestPlanOutroWindowAtEnd(t *testing.T) {
 	full, fade, expectedFrames := outroWindowFixture()
 
 	start, frames, ok := player.HookPlanOutroWindow(full, 100, fade)
@@ -167,7 +167,7 @@ func TestOutroWindowSitsAtTheEndOfTheTrack(t *testing.T) {
 	}
 }
 
-func TestOutroWindowRespectsTheTrimmedSilentTail(t *testing.T) {
+func TestPlanOutroWindowTrimmed(t *testing.T) {
 	_, fade, expectedFrames := outroWindowFixture()
 	track := &analysis.TrackAnalysis{BPM: 128, PeriodSec: 60.0 / 128, Duration: 240}
 	trimmed := &ffmpeg.EndState{TotalFrames: 12000, SilentTailFrames: 500, Analysis: track}
@@ -181,7 +181,7 @@ func TestOutroWindowRespectsTheTrimmedSilentTail(t *testing.T) {
 	}
 }
 
-func TestOutroRefusesAWindowThatStartsInThePast(t *testing.T) {
+func TestPlanOutroWindowPast(t *testing.T) {
 	full, fade, expectedFrames := outroWindowFixture()
 
 	if _, _, ok := player.HookPlanOutroWindow(full, full.TotalFrames-expectedFrames, fade); ok {
@@ -189,7 +189,7 @@ func TestOutroRefusesAWindowThatStartsInThePast(t *testing.T) {
 	}
 }
 
-func TestOutroRefusesATrackTooShortToHoldIt(t *testing.T) {
+func TestPlanOutroWindowShortTrack(t *testing.T) {
 	_, fade, _ := outroWindowFixture()
 	track := &analysis.TrackAnalysis{BPM: 128, PeriodSec: 60.0 / 128, Duration: 240}
 
@@ -198,10 +198,10 @@ func TestOutroRefusesATrackTooShortToHoldIt(t *testing.T) {
 	}
 }
 
-func TestOutroWindowStillResolvesWithoutAnalysis(t *testing.T) {
+func TestPlanOutroWindowNoAnalysis(t *testing.T) {
 	full, fade, _ := outroWindowFixture()
 
-	if _, _, ok := player.HookPlanOutroWindow(full, 100, player.HookBuildFadeSettings(&player.HookFadeSettingsFields{AutoMix: false, AutoMixBeats: 16, CrossfadeSec: 8})); !ok {
+	if _, _, ok := player.HookPlanOutroWindow(full, 100, player.HookCreateFadeSettings(&player.HookFadeSettingsFields{AutoMix: false, AutoMixBeats: 16, CrossfadeSec: 8})); !ok {
 		t.Error("no window was planned with automix off")
 	}
 
@@ -221,7 +221,7 @@ func timingTrack() *analysis.TrackAnalysis {
 	return &analysis.TrackAnalysis{BPM: 128, PeriodSec: 60.0 / 128, Duration: 240}
 }
 
-func TestCrossfadeFramesFollowTheConfiguredDurationWhenAutoMixIsOff(t *testing.T) {
+func TestCrossfadeFramesConfigured(t *testing.T) {
 	frames, seconds := transition.CrossfadeFrames(false, 16, 8, timingTrack())
 
 	if want := int(8 * dsp.FramesPerSecond); frames != want {
@@ -232,7 +232,7 @@ func TestCrossfadeFramesFollowTheConfiguredDurationWhenAutoMixIsOff(t *testing.T
 	}
 }
 
-func TestCrossfadeFramesFollowTheBeatGridWhenAutoMixIsOn(t *testing.T) {
+func TestCrossfadeFramesBeatGrid(t *testing.T) {
 	track := timingTrack()
 	frames, seconds := transition.CrossfadeFrames(true, 16, 8, track)
 	beatDerived := 16 * track.PeriodSec
@@ -245,7 +245,7 @@ func TestCrossfadeFramesFollowTheBeatGridWhenAutoMixIsOn(t *testing.T) {
 	}
 }
 
-func TestCrossfadeFramesFallBackWithoutAnalysis(t *testing.T) {
+func TestCrossfadeFramesNoAnalysis(t *testing.T) {
 	frames, _ := transition.CrossfadeFrames(true, 16, 0, nil)
 
 	if want := int(transition.FallbackCrossfadeSec * dsp.FramesPerSecond); frames != want {
@@ -253,7 +253,7 @@ func TestCrossfadeFramesFallBackWithoutAnalysis(t *testing.T) {
 	}
 }
 
-func TestCrossfadeSecondsAreClampedToTheMaximum(t *testing.T) {
+func TestCrossfadeFramesClamped(t *testing.T) {
 	_, seconds := transition.CrossfadeFrames(true, 4096, 8, timingTrack())
 
 	if seconds != transition.CrossfadeMaxSec {
@@ -278,7 +278,7 @@ func loopOutput(loop *transition.BeatLoop, frames int) []int16 {
 	return output
 }
 
-func TestLoopSurvivesWhenItFitsInsideTheCrossfade(t *testing.T) {
+func TestCrossfadeFramesLoopFits(t *testing.T) {
 	track := timingTrack()
 	crossfadeFrames, _ := transition.CrossfadeFrames(true, 16, 8, track)
 
@@ -291,7 +291,7 @@ func TestLoopSurvivesWhenItFitsInsideTheCrossfade(t *testing.T) {
 	}
 }
 
-func TestLoopLengthRoundsToTheNearestSample(t *testing.T) {
+func TestCrossfadeFramesLoopRounds(t *testing.T) {
 	track := &analysis.TrackAnalysis{BPM: 123, PeriodSec: 60.0 / 123, Duration: 240}
 	crossfadeFrames, _ := transition.CrossfadeFrames(true, 16, 8, track)
 
@@ -301,7 +301,7 @@ func TestLoopLengthRoundsToTheNearestSample(t *testing.T) {
 	}
 }
 
-func TestLoopIsDroppedWhenItIsLongerThanTheCrossfade(t *testing.T) {
+func TestCrossfadeFramesDropsLongLoop(t *testing.T) {
 	track := timingTrack()
 	crossfadeFrames, _ := transition.CrossfadeFrames(true, 8, 8, track)
 
@@ -313,7 +313,7 @@ func TestLoopIsDroppedWhenItIsLongerThanTheCrossfade(t *testing.T) {
 	}
 }
 
-func TestLoopIsDroppedWithoutABeatGrid(t *testing.T) {
+func TestCrossfadeFramesLoopNoGrid(t *testing.T) {
 	crossfadeFrames, _ := transition.CrossfadeFrames(true, 16, 8, timingTrack())
 
 	if style := clampedLoop(transition.LoopFourBeats, 0, crossfadeFrames); style != transition.LoopNone {
@@ -336,7 +336,7 @@ func clampedLoop(loop transition.LoopStyle, periodSec float64, frames int) trans
 	return resolved.Recipe.Loop
 }
 
-func TestAnalysisSummaryHandlesNil(t *testing.T) {
+func TestSummarizeNil(t *testing.T) {
 	bpm, key, code, hasKey := analysis.Summarize(nil)
 
 	if bpm != 0 {
@@ -353,7 +353,7 @@ func TestAnalysisSummaryHandlesNil(t *testing.T) {
 	}
 }
 
-func TestAnalysisSummaryHidesLowConfidenceKeys(t *testing.T) {
+func TestSummarizeHidesWeakKeys(t *testing.T) {
 	track := &analysis.TrackAnalysis{BPM: 120, Tonic: 3, Minor: false, KeyConfidence: analysis.KeyConfidenceFloor / 2}
 	bpm, _, _, hasKey := analysis.Summarize(track)
 
@@ -365,7 +365,7 @@ func TestAnalysisSummaryHidesLowConfidenceKeys(t *testing.T) {
 	}
 }
 
-func TestAnalysisSummaryReportsConfidentKeys(t *testing.T) {
+func TestSummarizeConfidentKeys(t *testing.T) {
 	_, key, code, hasKey := analysis.Summarize(&analysis.TrackAnalysis{BPM: 174, Tonic: 0, Minor: false, KeyConfidence: 0.5})
 
 	if !hasKey {
@@ -379,7 +379,7 @@ func TestAnalysisSummaryReportsConfidentKeys(t *testing.T) {
 	}
 }
 
-func TestCompatibilityRejectsNilInput(t *testing.T) {
+func TestCompareRejectsNil(t *testing.T) {
 	confident := &analysis.TrackAnalysis{BPM: 174, Tonic: 0, Minor: false, KeyConfidence: 0.5}
 
 	_, distance, ok := analysis.Compare(nil, confident)
@@ -391,7 +391,7 @@ func TestCompatibilityRejectsNilInput(t *testing.T) {
 	}
 }
 
-func TestCompatibilityRejectsZeroBPM(t *testing.T) {
+func TestCompareRejectsZeroBPM(t *testing.T) {
 	confident := &analysis.TrackAnalysis{BPM: 174, Tonic: 0, Minor: false, KeyConfidence: 0.5}
 
 	if _, _, ok := analysis.Compare(&analysis.TrackAnalysis{BPM: 0, KeyConfidence: 0.5}, confident); ok {
@@ -399,7 +399,7 @@ func TestCompatibilityRejectsZeroBPM(t *testing.T) {
 	}
 }
 
-func TestCompatibilityReportsSignedBPMDelta(t *testing.T) {
+func TestCompareSignedBPMDelta(t *testing.T) {
 	slower := &analysis.TrackAnalysis{BPM: 120, Tonic: 0, Minor: false, KeyConfidence: 0.5}
 	faster := &analysis.TrackAnalysis{BPM: 132, Tonic: 0, Minor: false, KeyConfidence: 0.5}
 
@@ -415,8 +415,8 @@ func TestCompatibilityReportsSignedBPMDelta(t *testing.T) {
 	}
 }
 
-func TestTransitionSnappingLandsOnTheGrid(t *testing.T) {
-	track := audiotest.AnalyzeAccentedClickTrack(t)
+func TestSnapTransitionToGrid(t *testing.T) {
+	track := audiotest.AnalyzeAccentClicks(t)
 
 	grid := player.HookSnapTransitionToGrid(1000, 0, track)
 	bar := player.HookSnapTransitionToBar(1000, 0, track)
@@ -442,8 +442,8 @@ func TestTransitionSnappingLandsOnTheGrid(t *testing.T) {
 	}
 }
 
-func TestBarSnapIsWithinOneBarOfBeatSnap(t *testing.T) {
-	track := audiotest.AnalyzeAccentedClickTrack(t)
+func TestSnapTransitionToGridBars(t *testing.T) {
+	track := audiotest.AnalyzeAccentClicks(t)
 
 	grid := player.HookSnapTransitionToGrid(1000, 0, track)
 	bar := player.HookSnapTransitionToBar(1000, 0, track)

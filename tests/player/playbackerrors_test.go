@@ -8,7 +8,7 @@ import (
 	"noraegaori/tests/testutil"
 )
 
-func captureStreamFailures(t *testing.T) *[]string {
+func captureFailures(t *testing.T) *[]string {
 	t.Helper()
 
 	reported := []string{}
@@ -19,8 +19,8 @@ func captureStreamFailures(t *testing.T) *[]string {
 	return &reported
 }
 
-func TestStreamFetchFailuresAreReportedAgainstTheVersion(t *testing.T) {
-	reported := captureStreamFailures(t)
+func TestReportFailureBlamesVersion(t *testing.T) {
+	reported := captureFailures(t)
 	song := &queue.Song{URL: "https://youtube.com/watch?v=abc"}
 
 	for _, errMsg := range []string{
@@ -28,7 +28,7 @@ func TestStreamFetchFailuresAreReportedAgainstTheVersion(t *testing.T) {
 		"ffmpeg produced no audio: exit status 8",
 		"HTTP error 403 Forbidden",
 	} {
-		player.HookReportPlaybackFailure(song, errMsg)
+		player.HookReportFailure(song, errMsg)
 	}
 
 	if len(*reported) != 3 {
@@ -36,8 +36,8 @@ func TestStreamFetchFailuresAreReportedAgainstTheVersion(t *testing.T) {
 	}
 }
 
-func TestUnrelatedPlaybackErrorsAreNotBlamedOnTheVersion(t *testing.T) {
-	reported := captureStreamFailures(t)
+func TestReportFailureSparesVersion(t *testing.T) {
+	reported := captureFailures(t)
 	song := &queue.Song{URL: "https://youtube.com/watch?v=abc"}
 
 	for _, errMsg := range []string{
@@ -48,7 +48,7 @@ func TestUnrelatedPlaybackErrorsAreNotBlamedOnTheVersion(t *testing.T) {
 		"playback completed with no audio frames sent",
 		"opus encoding error",
 	} {
-		player.HookReportPlaybackFailure(song, errMsg)
+		player.HookReportFailure(song, errMsg)
 	}
 
 	if len(*reported) != 0 {
@@ -56,7 +56,7 @@ func TestUnrelatedPlaybackErrorsAreNotBlamedOnTheVersion(t *testing.T) {
 	}
 }
 
-func TestStreamFetchFailureClassification(t *testing.T) {
+func TestIsStreamFetchFailure(t *testing.T) {
 	cases := map[string]bool{
 		"ffmpeg produced no audio: exit status 8": true,
 		"Server returned 403 Forbidden":           true,

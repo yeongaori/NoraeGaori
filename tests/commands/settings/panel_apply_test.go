@@ -18,7 +18,7 @@ func specFor(t *testing.T, key string) *settings.HookSettingSpec {
 	return spec
 }
 
-func TestTogglesAndRepeatRejectUnknownValues(t *testing.T) {
+func TestNormalizeValueToggleUnknown(t *testing.T) {
 	for key, value := range map[string]string{"sponsorblock": "maybe", "repeat": "double"} {
 		if _, err := settings.HookNormalizeValue(specFor(t, key), value); !errors.Is(err, *settings.HookErrUnknownValue) {
 			t.Errorf("%s accepted %q, want errUnknownValue (got %v)", key, value, err)
@@ -26,7 +26,7 @@ func TestTogglesAndRepeatRejectUnknownValues(t *testing.T) {
 	}
 }
 
-func TestTogglesAndRepeatAcceptAnyCaseAndTheOnAlias(t *testing.T) {
+func TestNormalizeValueToggleCase(t *testing.T) {
 	cases := []struct{ key, input, want string }{
 		{"sponsorblock", "ON", settings.HookValueOn},
 		{"sponsorblock", " off ", settings.HookValueOff},
@@ -42,7 +42,7 @@ func TestTogglesAndRepeatAcceptAnyCaseAndTheOnAlias(t *testing.T) {
 	}
 }
 
-func TestNumberSettingsRejectNonNumbers(t *testing.T) {
+func TestNormalizeValueNonNumber(t *testing.T) {
 	for index := range *settings.HookSettingSpecs {
 		spec := &(*settings.HookSettingSpecs)[index]
 		if *spec.HookKind() != settings.HookSettingNumber {
@@ -56,7 +56,7 @@ func TestNumberSettingsRejectNonNumbers(t *testing.T) {
 	}
 }
 
-func TestNumberSettingsRejectValuesOutsideTheirRange(t *testing.T) {
+func TestNormalizeValueOutOfRange(t *testing.T) {
 	for index := range *settings.HookSettingSpecs {
 		spec := &(*settings.HookSettingSpecs)[index]
 		if *spec.HookKind() != settings.HookSettingNumber {
@@ -70,7 +70,7 @@ func TestNumberSettingsRejectValuesOutsideTheirRange(t *testing.T) {
 	}
 }
 
-func TestNumberSettingsAcceptTheirBoundaries(t *testing.T) {
+func TestNormalizeValueNumberBounds(t *testing.T) {
 	for index := range *settings.HookSettingSpecs {
 		spec := &(*settings.HookSettingSpecs)[index]
 		if *spec.HookKind() != settings.HookSettingNumber {
@@ -89,7 +89,7 @@ func TestNumberSettingsAcceptTheirBoundaries(t *testing.T) {
 	}
 }
 
-func TestNumberSettingsTrimSurroundingSpace(t *testing.T) {
+func TestNormalizeValueTrimsSpace(t *testing.T) {
 	spec := specFor(t, "volume")
 
 	normalized, err := settings.HookNormalizeValue(spec, "  50  ")
@@ -101,7 +101,7 @@ func TestNumberSettingsTrimSurroundingSpace(t *testing.T) {
 	}
 }
 
-func TestPrefixRejectsValuesLongerThanFiveRunes(t *testing.T) {
+func TestNormalizeValuePrefixLength(t *testing.T) {
 	spec := specFor(t, "prefix")
 
 	if _, err := settings.HookNormalizeValue(spec, "abcdef"); !errors.Is(err, *settings.HookErrTooLong) {
@@ -112,7 +112,7 @@ func TestPrefixRejectsValuesLongerThanFiveRunes(t *testing.T) {
 	}
 }
 
-func TestPrefixAcceptsAnEmptyValueAsAReset(t *testing.T) {
+func TestNormalizeValuePrefixReset(t *testing.T) {
 	spec := specFor(t, "prefix")
 
 	normalized, err := settings.HookNormalizeValue(spec, "   ")
@@ -124,7 +124,7 @@ func TestPrefixAcceptsAnEmptyValueAsAReset(t *testing.T) {
 	}
 }
 
-func TestTogglesFlipBetweenOnAndOff(t *testing.T) {
+func TestNextValueFlipsToggle(t *testing.T) {
 	spec := specFor(t, "sponsorblock")
 
 	if next := settings.HookNextValue(spec, settings.HookValueOff); next != settings.HookValueOn {
@@ -135,7 +135,7 @@ func TestTogglesFlipBetweenOnAndOff(t *testing.T) {
 	}
 }
 
-func TestEverySettingIsLocalized(t *testing.T) {
+func TestSettingsAreLocalized(t *testing.T) {
 	panel := settings.HookPanelStrings("")
 
 	for index := range *settings.HookSettingSpecs {
@@ -152,7 +152,7 @@ func TestEverySettingIsLocalized(t *testing.T) {
 	}
 }
 
-func TestEveryCategoryIsLocalizedAndUsed(t *testing.T) {
+func TestCategoriesLocalizedAndUsed(t *testing.T) {
 	panel := settings.HookPanelStrings("")
 
 	for _, category := range *settings.HookSettingCategories {
@@ -172,8 +172,8 @@ func TestEveryCategoryIsLocalizedAndUsed(t *testing.T) {
 	}
 }
 
-func TestCategoryChoicesCoverEveryCategory(t *testing.T) {
-	choices := settings.BuildCategoryChoices()
+func TestCreateCategoryChoicesAll(t *testing.T) {
+	choices := settings.CreateCategoryChoices()
 
 	if len(choices) != len(*settings.HookSettingCategories) {
 		t.Fatalf("got %d choices, want %d", len(choices), len(*settings.HookSettingCategories))
@@ -185,7 +185,7 @@ func TestCategoryChoicesCoverEveryCategory(t *testing.T) {
 	}
 }
 
-func TestThePanelStoresPrefixesInLowercase(t *testing.T) {
+func TestApplySettingLowersPrefix(t *testing.T) {
 	dbtest.Setup(t)
 
 	spec := specFor(t, "prefix")

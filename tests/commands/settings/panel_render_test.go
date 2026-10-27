@@ -32,12 +32,12 @@ func rowMenu(t *testing.T, row discordgo.MessageComponent) discordgo.SelectMenu 
 	return menu
 }
 
-func TestEveryCategoryStaysWithinDiscordComponentLimits(t *testing.T) {
+func TestCreatePanelControlsLimits(t *testing.T) {
 	dbtest.Setup(t)
 
 	for _, category := range *settings.HookSettingCategories {
 		for _, isAdmin := range []bool{true, false} {
-			components := settings.HookBuildSettingsComponents(settings.HookNewPanelView(checkGuildID, category, isAdmin))
+			components := settings.HookCreatePanelControls(settings.HookNewPanelView(checkGuildID, category, isAdmin))
 
 			if len(components) > discordRowLimit {
 				t.Errorf("category %q (admin=%v) built %d rows, want at most %d",
@@ -57,7 +57,7 @@ func TestEveryCategoryStaysWithinDiscordComponentLimits(t *testing.T) {
 	}
 }
 
-func TestEveryCategoryShowsExactlyTwoRows(t *testing.T) {
+func TestCreatePanelControlsTwoRows(t *testing.T) {
 	dbtest.Setup(t)
 
 	for _, category := range *settings.HookSettingCategories {
@@ -65,7 +65,7 @@ func TestEveryCategoryShowsExactlyTwoRows(t *testing.T) {
 			if !settings.HookHasVisibleSetting(category, isAdmin) {
 				continue
 			}
-			components := settings.HookBuildSettingsComponents(settings.HookNewPanelView(checkGuildID, category, isAdmin))
+			components := settings.HookCreatePanelControls(settings.HookNewPanelView(checkGuildID, category, isAdmin))
 			if len(components) != 2 {
 				t.Errorf("category %q (admin=%v) built %d rows, want 2", category, isAdmin, len(components))
 			}
@@ -73,7 +73,7 @@ func TestEveryCategoryShowsExactlyTwoRows(t *testing.T) {
 	}
 }
 
-func TestThePickerListsEverySettingWithItsCurrentValue(t *testing.T) {
+func TestCreatePanelControlsPicker(t *testing.T) {
 	dbtest.Setup(t)
 
 	for _, category := range *settings.HookSettingCategories {
@@ -83,7 +83,7 @@ func TestThePickerListsEverySettingWithItsCurrentValue(t *testing.T) {
 		}
 
 		view := settings.HookNewPanelView(checkGuildID, category, true)
-		components := settings.HookBuildSettingsComponents(view)
+		components := settings.HookCreatePanelControls(view)
 		menu := rowMenu(t, components[len(components)-1])
 
 		if want := discord.ComponentID(settings.HookPickRoute, discord.ViewArgument(true), category); menu.CustomID != want {
@@ -111,7 +111,7 @@ func TestThePickerListsEverySettingWithItsCurrentValue(t *testing.T) {
 	}
 }
 
-func TestAdminOnlySettingsAreHiddenFromNonAdmins(t *testing.T) {
+func TestSettingsInCategoryHidesAdmin(t *testing.T) {
 	dbtest.Setup(t)
 
 	for index := range *settings.HookSettingSpecs {
@@ -136,7 +136,7 @@ func TestAdminOnlySettingsAreHiddenFromNonAdmins(t *testing.T) {
 	}
 }
 
-func TestNonAdminPanelDefaultsToAVisibleCategory(t *testing.T) {
+func TestDefaultCategoryNonAdmin(t *testing.T) {
 	dbtest.Setup(t)
 
 	category := settings.HookDefaultCategory(false)
@@ -148,14 +148,14 @@ func TestNonAdminPanelDefaultsToAVisibleCategory(t *testing.T) {
 	}
 }
 
-func TestEmbedListsEveryVisibleSettingInTheCategory(t *testing.T) {
+func TestCreateSettingsEmbedLists(t *testing.T) {
 	dbtest.Setup(t)
 	seedSetting(t, "volume", "120")
 	seedSetting(t, "sponsorblock", settings.HookValueOn)
 	wantValues := map[string]string{"volume": "120", "sponsorblock": messages.T(checkGuildID).Settings.StatusOn}
 
 	for _, category := range *settings.HookSettingCategories {
-		embed := settings.HookBuildSettingsEmbed(settings.HookNewPanelView(checkGuildID, category, true))
+		embed := settings.HookCreateSettingsEmbed(settings.HookNewPanelView(checkGuildID, category, true))
 		specs := settings.HookSettingsInCategory(category, true)
 
 		if len(embed.Fields) != len(specs) {
@@ -174,7 +174,7 @@ func TestEmbedListsEveryVisibleSettingInTheCategory(t *testing.T) {
 	}
 }
 
-func TestVoicePolicyTogglesShowInPlaybackForEveryoneAndStartOn(t *testing.T) {
+func TestVoicePolicyToggles(t *testing.T) {
 	dbtest.Setup(t)
 
 	visible := make(map[string]bool)
@@ -194,7 +194,7 @@ func TestVoicePolicyTogglesShowInPlaybackForEveryoneAndStartOn(t *testing.T) {
 	}
 }
 
-func TestTogglingASettingPersistsAndShowsTheNewValue(t *testing.T) {
+func TestApplySettingToggles(t *testing.T) {
 	dbtest.Setup(t)
 
 	spec := specFor(t, "sponsorblock")
@@ -225,7 +225,7 @@ func TestTogglingASettingPersistsAndShowsTheNewValue(t *testing.T) {
 	}
 }
 
-func TestRejectedModalValuesLeaveTheSettingUntouched(t *testing.T) {
+func TestApplySettingRejectedKeeps(t *testing.T) {
 	dbtest.Setup(t)
 
 	spec := specFor(t, "volume")

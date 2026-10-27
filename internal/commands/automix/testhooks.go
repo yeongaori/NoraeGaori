@@ -35,17 +35,17 @@ type HookPanelStateFields struct {
 	Pending        map[int]int
 }
 
-var HookChooseTransitionStyle = chooseTransitionStyle
-var HookCreateTransitionEditorComponents = createTransitionEditorComponents
-var HookCreateTransitionEditorEmbed = createTransitionEditorEmbed
-var HookCreateTransitionPanelComponents = createTransitionPanelComponents
-var HookCreateTransitionPanelEmbed = createTransitionPanelEmbed
+var HookChooseStyle = chooseStyle
+var HookCreateEditorControls = createEditorControls
+var HookCreateEditorEmbed = createEditorEmbed
+var HookCreatePanelControls = createPanelControls
+var HookCreatePanelEmbed = createPanelEmbed
 var HookDescribeRecipe = describeRecipe
 var HookDescribeTrack = describeTrack
 var HookEditorTabs = &editorTabs
 var HookFindTab = findTab
 var HookFindTransitionPair = findTransitionPair
-var HookHydrateTransitionRows = hydrateTransitionRows
+var HookHydrateRows = hydrateRows
 var HookPanelOpenButtons = panelOpenButtons
 var HookPickTransition = pickTransition
 var HookRegisterPanelRoutes = registerPanelRoutes
@@ -57,11 +57,11 @@ var HookTurnEditorTab = turnEditorTab
 var HookTurnTransitionPage = turnTransitionPage
 var HookVoiceChannelBitrate = voiceChannelBitrate
 
-func HookBuildPanelLocation(fields *HookPanelLocationFields) *panelLocation {
+func HookCreatePanelLocation(fields *HookPanelLocationFields) *panelLocation {
 	return &panelLocation{messageID: fields.MessageID, page: fields.Page}
 }
 
-func HookBuildPanelState(fields *HookPanelStateFields) *panelState {
+func HookCreatePanelState(fields *HookPanelStateFields) *panelState {
 	return &panelState{
 		pairs:          fields.Pairs,
 		guildOverrides: fields.GuildOverrides,

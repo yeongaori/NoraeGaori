@@ -37,7 +37,7 @@ func autoLeaveCases(songs []*queue.Song, options []*discordgo.ApplicationCommand
 	return cases
 }
 
-func TestForceSkippingTheLastSongFollowsAutoLeave(t *testing.T) {
+func TestForceSkipLastAutoLeave(t *testing.T) {
 	song := queuetest.Song("Last song", commandtest.CallerID)
 	link := messages.FormatMaskedLink(song.Title, song.URL)
 	leaving := func(locale *messages.Locale) string { return fmt.Sprintf(locale.Music.ForceSkippedEnded, link) }
@@ -66,7 +66,7 @@ func TestForceStopFollowsAutoLeave(t *testing.T) {
 	}))
 }
 
-func TestForceRemovingTheLastPlayingSongFollowsAutoLeave(t *testing.T) {
+func TestForceRemoveLastAutoLeave(t *testing.T) {
 	song := queuetest.Song("Last song", commandtest.CallerID)
 
 	commandtest.Run(t, "forceremove", admin.HandleForceRemove, autoLeaveCases([]*queue.Song{song}, targetOption("1"), true, func(bool) func(*messages.Locale) string {

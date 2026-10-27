@@ -29,7 +29,7 @@ func framePeak(frame []int16) float64 {
 	return peak
 }
 
-func TestOnlyRingingEffectsLeaveATail(t *testing.T) {
+func TestMakeTailRingingOnly(t *testing.T) {
 	ringing := map[string]bool{
 		"reverb_out_center":          true,
 		"reverb_out_end":             true,
@@ -47,7 +47,7 @@ func TestOnlyRingingEffectsLeaveATail(t *testing.T) {
 	}
 }
 
-func TestIncomingEffectsNeverLeaveATail(t *testing.T) {
+func TestMakeTailIncomingNone(t *testing.T) {
 	for _, effect := range legacyNames(transition.CategoryFXIn) {
 		processor := transition.NewProcessor(combinedRecipe(volumeStyle("overlap"), sideStyle(transition.CategoryFXIn, effect)), eightBarWindow(100))
 		if processor.MakeTail() != nil {
@@ -56,7 +56,7 @@ func TestIncomingEffectsNeverLeaveATail(t *testing.T) {
 	}
 }
 
-func TestRingingTailsDecayAndFinish(t *testing.T) {
+func TestTailDecaysAndFinishes(t *testing.T) {
 	for _, effect := range []string{"reverb_out_end", "echo_half_out_end", "delay_one_bar"} {
 		tail := playedThrough(effect, 9000).MakeTail()
 		frame := make([]int16, dsp.FrameSize*dsp.Channels)
@@ -88,7 +88,7 @@ func TestRingingTailsDecayAndFinish(t *testing.T) {
 	}
 }
 
-func TestTheSendTakesTheFadedOutgoingSong(t *testing.T) {
+func TestMakeTailSendsFadedSong(t *testing.T) {
 	ringFirstFrame := func(volume string) float64 {
 		processor := transition.NewProcessor(combinedRecipe(volumeStyle(volume), effectStyle("echo_half_out_end")), eightBarWindow(200))
 		tone := &audiotest.ToneGenerator{Frequency: 1000, Amplitude: 9000}
@@ -110,7 +110,7 @@ func TestTheSendTakesTheFadedOutgoingSong(t *testing.T) {
 	}
 }
 
-func TestReverbRingsLongerThanAHalfBeatEcho(t *testing.T) {
+func TestTailReverbOutlastsEcho(t *testing.T) {
 	length := func(effect string) int {
 		tail := playedThrough(effect, 9000).MakeTail()
 		frame := make([]int16, dsp.FrameSize*dsp.Channels)
@@ -130,7 +130,7 @@ func TestReverbRingsLongerThanAHalfBeatEcho(t *testing.T) {
 	}
 }
 
-func TestTailIsLimitedOverALoudNextSong(t *testing.T) {
+func TestTailLimitedOverLoudSong(t *testing.T) {
 	tail := playedThrough("echo_half_out_end", 30000).MakeTail()
 	song := &audiotest.ToneGenerator{Frequency: 440, Amplitude: 32000}
 	frame := make([]int16, dsp.FrameSize*dsp.Channels)
@@ -153,7 +153,7 @@ func TestTailIsLimitedOverALoudNextSong(t *testing.T) {
 	}
 }
 
-func TestTailHandsTheNextSongBackWithoutALevelStep(t *testing.T) {
+func TestTailHandsBackSmoothly(t *testing.T) {
 	tail := playedThrough("echo_half_out_end", 30000).MakeTail()
 	song := &audiotest.ToneGenerator{Frequency: 440, Amplitude: 32000}
 	frame := make([]int16, dsp.FrameSize*dsp.Channels)
@@ -180,7 +180,7 @@ func TestTailHandsTheNextSongBackWithoutALevelStep(t *testing.T) {
 	}
 }
 
-func TestFinishedTailLeavesFramesAlone(t *testing.T) {
+func TestTailFinishedLeavesFrames(t *testing.T) {
 	tail := playedThrough("echo_half_out_end", 5000).MakeTail()
 	frame := make([]int16, dsp.FrameSize*dsp.Channels)
 	for tail.Apply(frame) {

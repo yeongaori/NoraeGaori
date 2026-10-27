@@ -118,7 +118,7 @@ func waitForResume(t *testing.T, probe *playerProbe) {
 	}
 }
 
-func TestLeaveRefusesWhenTheBotIsNotInVoice(t *testing.T) {
+func TestLeaveNotInVoice(t *testing.T) {
 	probe := stubPlayer(t, false, nil, nil)
 	fixture := voiceFixture(t, "")
 
@@ -128,7 +128,7 @@ func TestLeaveRefusesWhenTheBotIsNotInVoice(t *testing.T) {
 	wantCalls(t, probe)
 }
 
-func TestLeaveWithAnEmptyQueueReportsLeaving(t *testing.T) {
+func TestLeaveEmptyQueue(t *testing.T) {
 	probe := stubPlayer(t, false, nil, nil)
 	fixture := voiceFixture(t, commandtest.VoiceChannelID)
 
@@ -138,7 +138,7 @@ func TestLeaveWithAnEmptyQueueReportsLeaving(t *testing.T) {
 	wantCalls(t, probe, "cancel skip votes", "suspend")
 }
 
-func TestLeaveWithQueuedSongsReportsThePausedQueue(t *testing.T) {
+func TestLeaveQueuedSongs(t *testing.T) {
 	probe := stubPlayer(t, true, nil, nil)
 	fixture := voiceFixture(t, commandtest.VoiceChannelID, queuetest.SongsBy(commandtest.CallerID, 1)...)
 
@@ -148,7 +148,7 @@ func TestLeaveWithQueuedSongsReportsThePausedQueue(t *testing.T) {
 	wantCalls(t, probe, "cancel skip votes", "suspend")
 }
 
-func TestLeaveReportsAFailedDisconnect(t *testing.T) {
+func TestLeaveDisconnectFailure(t *testing.T) {
 	stubPlayer(t, false, errors.New("disconnect timed out"), nil)
 	fixture := voiceFixture(t, commandtest.VoiceChannelID)
 

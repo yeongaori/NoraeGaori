@@ -11,11 +11,11 @@ import (
 	"noraegaori/tests/testutil/discordtest"
 )
 
-func TestHandleInteractionRoutesComponentsAndModalsByPrefix(t *testing.T) {
+func TestHandleInteractionRoutes(t *testing.T) {
 	called := registerProbeCommand(t, "dispatch_probe", false)
 
 	var routed []string
-	discord.RegisterComponentRoute("dispatch_probe", func(_ *discordgo.Session, _ *discordgo.InteractionCreate, arguments []string) {
+	discord.RegisterRoute("dispatch_probe", func(_ *discordgo.Session, _ *discordgo.InteractionCreate, arguments []string) {
 		routed = append(routed, arguments...)
 	})
 
@@ -47,7 +47,7 @@ func TestHandleInteractionRoutesComponentsAndModalsByPrefix(t *testing.T) {
 	}
 }
 
-func TestHandleInteractionAppliesADropdownPick(t *testing.T) {
+func TestHandleInteractionDropdown(t *testing.T) {
 	var picked []string
 	discord.RegisterDropdownMenu("dispatch_menu", func(string) discord.DropdownMenu {
 		return discord.DropdownMenu{

@@ -7,7 +7,7 @@ import (
 	"noraegaori/internal/config"
 )
 
-func TestSetPrefixDoesNotMutateAPublishedConfig(t *testing.T) {
+func TestSetPrefixCopiesConfig(t *testing.T) {
 	setupTestConfig(t)
 	defer teardownTestConfig(t)
 
@@ -73,7 +73,7 @@ func TestSetPrefixRacesWithReaders(t *testing.T) {
 	wg.Wait()
 }
 
-func TestSetPrefixWithoutConfigReturnsError(t *testing.T) {
+func TestSetPrefixNoConfig(t *testing.T) {
 	setupTestConfig(t)
 	defer teardownTestConfig(t)
 

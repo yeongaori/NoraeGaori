@@ -23,7 +23,7 @@ var platformAssetNames = []string{"yt-dlp", "yt-dlp.exe", "yt-dlp_macos", "yt-dl
 
 const workingBinaryScript = "#!/bin/sh\necho 2026.07.04\n"
 
-func serveInstallableRelease(t *testing.T, version string, payload []byte, breakDownload bool) *ytdlp.GitHubRelease {
+func serveInstallable(t *testing.T, version string, payload []byte, breakDownload bool) *ytdlp.GitHubRelease {
 	t.Helper()
 
 	if runtime.GOOS == "windows" {
@@ -33,7 +33,7 @@ func serveInstallableRelease(t *testing.T, version string, payload []byte, break
 	return installableRelease(t, useTestSigner(t), version, payload, breakDownload)
 }
 
-func serveInstallableReleases(t *testing.T, versions ...string) []*ytdlp.GitHubRelease {
+func serveInstallables(t *testing.T, versions ...string) []*ytdlp.GitHubRelease {
 	t.Helper()
 
 	if runtime.GOOS == "windows" {
@@ -90,9 +90,9 @@ func installableRelease(t *testing.T, sign func([]byte) []byte, version string, 
 	return release
 }
 
-func TestInstallVersionBinaryProducesARunnableBinary(t *testing.T) {
+func TestInstallVersionBinaryRuns(t *testing.T) {
 	t.Chdir(t.TempDir())
-	release := serveInstallableRelease(t, "2026.07.04", []byte(workingBinaryScript), false)
+	release := serveInstallable(t, "2026.07.04", []byte(workingBinaryScript), false)
 
 	binaryPath, reportedVersion, err := ytdlp.HookInstallVersionBinary(release, "2026.07.04")
 	if err != nil {
@@ -115,9 +115,9 @@ func TestInstallVersionBinaryProducesARunnableBinary(t *testing.T) {
 	}
 }
 
-func TestInstallVersionBinaryRemovesTheVersionDirectoryOnDownloadFailure(t *testing.T) {
+func TestInstallVersionBinaryRollback(t *testing.T) {
 	t.Chdir(t.TempDir())
-	release := serveInstallableRelease(t, "2026.07.04", []byte(workingBinaryScript), true)
+	release := serveInstallable(t, "2026.07.04", []byte(workingBinaryScript), true)
 
 	if _, _, err := ytdlp.HookInstallVersionBinary(release, "2026.07.04"); err == nil {
 		t.Fatal("installVersionBinary returned nil, want an error for a failed download")
@@ -129,9 +129,9 @@ func TestInstallVersionBinaryRemovesTheVersionDirectoryOnDownloadFailure(t *test
 	}
 }
 
-func TestInstallVersionBinaryRemovesTheVersionDirectoryWhenTheBinaryDoesNotRun(t *testing.T) {
+func TestInstallVersionBinaryUnusable(t *testing.T) {
 	t.Chdir(t.TempDir())
-	release := serveInstallableRelease(t, "2026.07.04", []byte("this is not an executable\n"), false)
+	release := serveInstallable(t, "2026.07.04", []byte("this is not an executable\n"), false)
 
 	_, _, err := ytdlp.HookInstallVersionBinary(release, "2026.07.04")
 	if err == nil {
@@ -147,7 +147,7 @@ func TestInstallVersionBinaryRemovesTheVersionDirectoryWhenTheBinaryDoesNotRun(t
 	}
 }
 
-func TestInstallVersionBinaryFailsWhenNoAssetMatchesThePlatform(t *testing.T) {
+func TestInstallVersionBinaryNoAsset(t *testing.T) {
 	t.Chdir(t.TempDir())
 	release := &ytdlp.GitHubRelease{TagName: "2026.07.04"}
 	addAsset(release, "unrelated-asset", "https://example.invalid/unrelated", "")
@@ -157,9 +157,9 @@ func TestInstallVersionBinaryFailsWhenNoAssetMatchesThePlatform(t *testing.T) {
 	}
 }
 
-func TestEnsureVersionBinaryReusesAnInstalledBinary(t *testing.T) {
+func TestEnsureVersionBinaryReuses(t *testing.T) {
 	t.Chdir(t.TempDir())
-	release := serveInstallableRelease(t, "2026.07.04", []byte(workingBinaryScript), true)
+	release := serveInstallable(t, "2026.07.04", []byte(workingBinaryScript), true)
 
 	binaryPath := ytdlp.VersionedBinaryPath("2026.07.04")
 	writeFakeBinary(t, filepath.Dir(binaryPath), "echo 2026.07.04")
@@ -173,9 +173,9 @@ func TestEnsureVersionBinaryReusesAnInstalledBinary(t *testing.T) {
 	}
 }
 
-func TestEnsureVersionBinaryRemovesAnInstalledBinaryThatDoesNotRun(t *testing.T) {
+func TestEnsureVersionBinaryBroken(t *testing.T) {
 	t.Chdir(t.TempDir())
-	release := serveInstallableRelease(t, "2026.07.04", []byte(workingBinaryScript), true)
+	release := serveInstallable(t, "2026.07.04", []byte(workingBinaryScript), true)
 
 	binaryPath := ytdlp.VersionedBinaryPath("2026.07.04")
 	writeFakeBinary(t, filepath.Dir(binaryPath), "exit 3")
@@ -189,9 +189,9 @@ func TestEnsureVersionBinaryRemovesAnInstalledBinaryThatDoesNotRun(t *testing.T)
 	}
 }
 
-func TestEnsureVersionBinaryInstallsWhenNothingIsPresent(t *testing.T) {
+func TestEnsureVersionBinaryInstalls(t *testing.T) {
 	t.Chdir(t.TempDir())
-	release := serveInstallableRelease(t, "2026.07.04", []byte(workingBinaryScript), false)
+	release := serveInstallable(t, "2026.07.04", []byte(workingBinaryScript), false)
 
 	binaryPath, err := ytdlp.HookEnsureVersionBinary(release, "2026.07.04")
 	if err != nil {
@@ -216,7 +216,7 @@ func stubCanaryPerVersion(t *testing.T, verdicts map[string]bool) {
 	})
 }
 
-func TestExhaustedFallbackKeepsTheInstalledVersion(t *testing.T) {
+func TestInstallFallbackExhausted(t *testing.T) {
 	versionmanager := useVersionManager(t)
 	stubCanary(t, false, false)
 
@@ -228,9 +228,9 @@ func TestExhaustedFallbackKeepsTheInstalledVersion(t *testing.T) {
 		return nil, nil
 	})
 
-	outcome, err := ytdlp.HookInstallFallbackVersion(versionmanager, config.YtDlpChannelNightly, "2026.08.20.234504", &ytdlp.GitHubRelease{TagName: "2026.08.20.234504"})
+	outcome, err := ytdlp.HookInstallFallback(versionmanager, config.YtDlpChannelNightly, "2026.08.20.234504", &ytdlp.GitHubRelease{TagName: "2026.08.20.234504"})
 	if err != nil {
-		t.Fatalf("installFallbackVersion returned %v, want nil", err)
+		t.Fatalf("installFallback returned %v, want nil", err)
 	}
 	if !*outcome.HookCanaryFailed() {
 		t.Error("got canaryFailed=false, want the exhausted chain reported so the other channel is tried")
@@ -247,8 +247,8 @@ func TestExhaustedFallbackKeepsTheInstalledVersion(t *testing.T) {
 	}
 }
 
-func TestRunCanaryAndActivateActivatesOnSuccess(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestRunCanaryAndActivateSuccess(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	versionmanager.RegisterVersion("2026.07.04", "lib/yt-dlp-2026.07.04/yt-dlp")
 	stubCanary(t, true, false)
 
@@ -263,8 +263,8 @@ func TestRunCanaryAndActivateActivatesOnSuccess(t *testing.T) {
 	}
 }
 
-func TestRunCanaryAndActivateLeavesNetworkFailuresPending(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestRunCanaryAndActivateNetwork(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	versionmanager.RegisterVersion("2026.07.04", "lib/yt-dlp-2026.07.04/yt-dlp")
 	stubCanary(t, false, true)
 
@@ -279,8 +279,8 @@ func TestRunCanaryAndActivateLeavesNetworkFailuresPending(t *testing.T) {
 	}
 }
 
-func TestRunCanaryAndActivateBlacklistsRealFailures(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestRunCanaryAndActivateFailure(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	versionmanager.RegisterVersion("2026.07.04", "lib/yt-dlp-2026.07.04/yt-dlp")
 	stubCanary(t, false, false)
 
@@ -292,41 +292,41 @@ func TestRunCanaryAndActivateBlacklistsRealFailures(t *testing.T) {
 	}
 }
 
-func TestResolveCurrentVersionPrefersTheActiveVersion(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestResolveCurrentPrefersActive(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	path := writeFakeBinary(t, filepath.Join("lib", "a"), "echo 2026.07.03")
 	addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{Path: path, State: ytdlp.StateActive})
 	versionmanager.HookState().ActiveVersion = "2026.07.04"
 
-	if got := ytdlp.HookResolveCurrentVersion(versionmanager); got != "2026.07.04" {
+	if got := ytdlp.HookResolveCurrent(versionmanager); got != "2026.07.04" {
 		t.Errorf("got %q, want %q", got, "2026.07.04")
 	}
 }
 
-func TestResolveCurrentVersionIgnoresAnUnregisteredActiveVersion(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestResolveCurrentUnregistered(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	versionmanager.HookState().ActiveVersion = "2026.07.04"
 
-	if got := ytdlp.HookResolveCurrentVersion(versionmanager); got != "" {
+	if got := ytdlp.HookResolveCurrent(versionmanager); got != "" {
 		t.Errorf("got %q, want an empty version because nothing is registered", got)
 	}
 }
 
-func TestResolveCurrentVersionIgnoresAnActiveVersionWhoseBinaryIsGone(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestResolveCurrentMissingBinary(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{Path: ytdlp.VersionedBinaryPath("2026.07.04"), State: ytdlp.StateActive})
 	versionmanager.HookState().ActiveVersion = "2026.07.04"
 
-	if got := ytdlp.HookResolveCurrentVersion(versionmanager); got != "" {
+	if got := ytdlp.HookResolveCurrent(versionmanager); got != "" {
 		t.Errorf("got %q, want an empty version because the active binary is gone", got)
 	}
 }
 
-func TestUpdateReinstallsARegisteredVersionWhoseBinaryIsGone(t *testing.T) {
+func TestUpdateFromChannelReinstalls(t *testing.T) {
 	for _, state := range []ytdlp.VersionState{ytdlp.StateActive, ytdlp.StateProvisional} {
 		t.Run(string(state), func(t *testing.T) {
 			versionmanager := useVersionManager(t)
-			release := serveInstallableRelease(t, "2026.07.04", []byte(workingBinaryScript), false)
+			release := serveInstallable(t, "2026.07.04", []byte(workingBinaryScript), false)
 			addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{Path: ytdlp.VersionedBinaryPath("2026.07.04"), State: state})
 			versionmanager.HookState().ActiveVersion = "2026.07.04"
 			stubCanary(t, true, false)
@@ -349,9 +349,9 @@ func TestUpdateReinstallsARegisteredVersionWhoseBinaryIsGone(t *testing.T) {
 	}
 }
 
-func TestUpdateKeepsAnInstalledActiveVersion(t *testing.T) {
+func TestUpdateFromChannelKeepsActive(t *testing.T) {
 	versionmanager := useVersionManager(t)
-	release := serveInstallableRelease(t, "2026.07.04", []byte(workingBinaryScript), true)
+	release := serveInstallable(t, "2026.07.04", []byte(workingBinaryScript), true)
 	path := writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.07.04"), "echo 2026.07.04")
 	addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{Path: path, State: ytdlp.StateActive})
 	versionmanager.HookState().ActiveVersion = "2026.07.04"
@@ -376,9 +376,9 @@ func keepOnlyPythonAsset(release *ytdlp.GitHubRelease) {
 	release.Assets = kept
 }
 
-func TestInstallVersionBinaryNamesPythonWhenThePythonBuildCannotRun(t *testing.T) {
+func TestInstallVersionBinaryPython(t *testing.T) {
 	t.Chdir(t.TempDir())
-	release := serveInstallableRelease(t, "2026.07.04", []byte("#!/bin/sh\nexit 127\n"), false)
+	release := serveInstallable(t, "2026.07.04", []byte("#!/bin/sh\nexit 127\n"), false)
 	keepOnlyPythonAsset(release)
 	testutil.Swap(t, ytdlp.HookLookPath, func(file string) (string, error) { return "", exec.ErrNotFound })
 
@@ -388,9 +388,9 @@ func TestInstallVersionBinaryNamesPythonWhenThePythonBuildCannotRun(t *testing.T
 	}
 }
 
-func TestInstallVersionBinaryOmitsPythonWhenItIsInstalled(t *testing.T) {
+func TestInstallVersionBinaryQuiet(t *testing.T) {
 	t.Chdir(t.TempDir())
-	release := serveInstallableRelease(t, "2026.07.04", []byte("#!/bin/sh\nexit 127\n"), false)
+	release := serveInstallable(t, "2026.07.04", []byte("#!/bin/sh\nexit 127\n"), false)
 	keepOnlyPythonAsset(release)
 	testutil.Swap(t, ytdlp.HookLookPath, func(file string) (string, error) { return "/usr/bin/" + file, nil })
 
@@ -403,10 +403,10 @@ func TestInstallVersionBinaryOmitsPythonWhenItIsInstalled(t *testing.T) {
 	}
 }
 
-func TestResolveCurrentVersionReportsNothingWhenNoBinaryExists(t *testing.T) {
+func TestResolveCurrentNoBinary(t *testing.T) {
 	t.Chdir(t.TempDir())
 
-	if got := ytdlp.HookResolveCurrentVersion(nil); got != "" {
+	if got := ytdlp.HookResolveCurrent(nil); got != "" {
 		t.Errorf("got %q, want an empty version when nothing is installed", got)
 	}
 }
@@ -419,16 +419,16 @@ func stubReleaseList(t *testing.T, releases []*ytdlp.GitHubRelease) {
 	})
 }
 
-func TestFallbackChainActivatesTheFirstCandidateThatPasses(t *testing.T) {
+func TestInstallFallbackFirstPass(t *testing.T) {
 	versionmanager := useVersionManager(t)
 
-	releases := serveInstallableReleases(t, "2026.09.03", "2026.09.02", "2026.09.01")
+	releases := serveInstallables(t, "2026.09.03", "2026.09.02", "2026.09.01")
 	stubReleaseList(t, releases)
 	stubCanaryPerVersion(t, map[string]bool{"2026.09.01": true})
 
-	outcome, err := ytdlp.HookInstallFallbackVersion(versionmanager, config.YtDlpChannelStable, "2026.09.03", releases[0])
+	outcome, err := ytdlp.HookInstallFallback(versionmanager, config.YtDlpChannelStable, "2026.09.03", releases[0])
 	if err != nil {
-		t.Fatalf("installFallbackVersion returned %v, want nil", err)
+		t.Fatalf("installFallback returned %v, want nil", err)
 	}
 	if !*outcome.HookUpdated() {
 		t.Error("got updated=false, want the passing candidate activated")
@@ -442,17 +442,17 @@ func TestFallbackChainActivatesTheFirstCandidateThatPasses(t *testing.T) {
 	}
 }
 
-func TestFallbackChainStopsOnACanaryNetworkError(t *testing.T) {
+func TestInstallFallbackNetworkError(t *testing.T) {
 	versionmanager := useVersionManager(t)
 
-	releases := serveInstallableReleases(t, "2026.09.03", "2026.09.02", "2026.09.01")
+	releases := serveInstallables(t, "2026.09.03", "2026.09.02", "2026.09.01")
 	stubReleaseList(t, releases)
 
 	testutil.Swap(t, ytdlp.HookRunCanary, func(_ *ytdlp.VersionManager, version string) (bool, bool) { return false, true })
 
-	outcome, err := ytdlp.HookInstallFallbackVersion(versionmanager, config.YtDlpChannelStable, "2026.09.03", releases[0])
+	outcome, err := ytdlp.HookInstallFallback(versionmanager, config.YtDlpChannelStable, "2026.09.03", releases[0])
 	if err != nil {
-		t.Fatalf("installFallbackVersion returned %v, want nil", err)
+		t.Fatalf("installFallback returned %v, want nil", err)
 	}
 	if *outcome.HookUpdated() || *outcome.HookCanaryFailed() {
 		t.Errorf("got %+v, want a zero outcome: a network blip must not condemn the channel", outcome)
@@ -463,19 +463,19 @@ func TestFallbackChainStopsOnACanaryNetworkError(t *testing.T) {
 	}
 }
 
-func TestFallbackChainProvisionallyActivatesWhenNothingUsableRemains(t *testing.T) {
+func TestInstallFallbackProvisional(t *testing.T) {
 	versionmanager := useVersionManager(t)
 
-	releases := serveInstallableReleases(t, "2026.09.03", "2026.09.02")
+	releases := serveInstallables(t, "2026.09.03", "2026.09.02")
 	stubReleaseList(t, releases)
 	stubCanary(t, false, false)
 
 	addVersion(versionmanager, "2026.08.19", &ytdlp.VersionEntry{Path: "lib/gone/yt-dlp", State: ytdlp.StateVerified, Successes: 40, BlacklistedAt: time.Now()})
 	versionmanager.HookState().ActiveVersion = "2026.08.19"
 
-	outcome, err := ytdlp.HookInstallFallbackVersion(versionmanager, config.YtDlpChannelStable, "2026.09.03", releases[0])
+	outcome, err := ytdlp.HookInstallFallback(versionmanager, config.YtDlpChannelStable, "2026.09.03", releases[0])
 	if err != nil {
-		t.Fatalf("installFallbackVersion returned %v, want nil", err)
+		t.Fatalf("installFallback returned %v, want nil", err)
 	}
 	if !*outcome.HookUpdated() || !*outcome.HookCanaryFailed() {
 		t.Errorf("got %+v, want {updated:true canaryFailed:true} for the last resort", outcome)

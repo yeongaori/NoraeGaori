@@ -4,5 +4,5 @@ package help
 
 const HookHelpPageRoute = helpPageRoute
 
-var HookBuildHelpPage = buildHelpPage
+var HookCreateHelpPage = createHelpPage
 var HookTurnHelpPage = turnHelpPage

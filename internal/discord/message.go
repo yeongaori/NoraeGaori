@@ -198,7 +198,7 @@ func (mr *MessageResponse) SendFollowUpEmbed(embed *discordgo.MessageEmbed) {
 	_, _ = mr.Session.ChannelMessageSendEmbed(mr.ChannelID, embed)
 }
 
-func (mr *MessageResponse) SendEmbedWithComponents(embed *discordgo.MessageEmbed, components []discordgo.MessageComponent) (*discordgo.Message, error) {
+func (mr *MessageResponse) SendPanel(embed *discordgo.MessageEmbed, components []discordgo.MessageComponent) (*discordgo.Message, error) {
 	msg, err := SendReply(mr.Session, mr.ChannelID, mr.OriginalMsgID, &discordgo.MessageSend{
 		Embeds:     []*discordgo.MessageEmbed{embed},
 		Components: components,

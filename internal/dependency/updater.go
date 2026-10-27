@@ -75,5 +75,5 @@ func updateJsRuntime(target *mirror.Platform) {
 	}
 
 	jsRuntimeSlot.replace(binary)
-	announceDownloadedJsRuntime(binary, results, target)
+	announceDownloadedJs(binary, results, target)
 }

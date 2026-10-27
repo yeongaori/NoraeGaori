@@ -61,7 +61,7 @@ func encodeFloat32LE(values []float32, trailingBytes int) []byte {
 	return raw.Bytes()
 }
 
-func TestReadFloat32SamplesDecodesAcrossChunkBoundaries(t *testing.T) {
+func TestReadFloat32SamplesChunks(t *testing.T) {
 	rng := rand.New(rand.NewSource(7))
 
 	for _, count := range []int{0, 1, 2, 100, 4097} {
@@ -92,7 +92,7 @@ func TestReadFloat32SamplesDecodesAcrossChunkBoundaries(t *testing.T) {
 	}
 }
 
-func TestReadFloat32SamplesStopsAtMaxBytes(t *testing.T) {
+func TestReadFloat32SamplesMaxBytes(t *testing.T) {
 	want := make([]float32, 64)
 	for i := range want {
 		want[i] = float32(i)
@@ -115,7 +115,7 @@ func TestReadFloat32SamplesStopsAtMaxBytes(t *testing.T) {
 	}
 }
 
-func TestReadFloat32SamplesReportsReadFailure(t *testing.T) {
+func TestReadFloat32SamplesFailure(t *testing.T) {
 	failure := errors.New("pipe broke")
 	raw := encodeFloat32LE([]float32{1, 2, 3}, 0)
 
@@ -130,7 +130,7 @@ func TestReadFloat32SamplesReportsReadFailure(t *testing.T) {
 	}
 }
 
-func TestPreCacheNextStartsOneFetchPerSong(t *testing.T) {
+func TestPreCacheNextOneFetch(t *testing.T) {
 	var mu sync.Mutex
 	fetches := make(map[string]int)
 	testutil.Swap(t, player.HookFetchStreamURL, func(url string, _ bool, _ int) (string, error) {
@@ -176,7 +176,7 @@ func TestPreCacheNextStartsOneFetchPerSong(t *testing.T) {
 	}
 }
 
-func TestCachedPreCacheExpiresAfterItsTTL(t *testing.T) {
+func TestGetPreCacheExpires(t *testing.T) {
 	const guildID = "precacheexpired"
 	const expiredURL = "https://example.invalid/expired"
 	const freshURL = "https://example.invalid/fresh"
@@ -248,7 +248,7 @@ func runLoggedPreCache(t *testing.T, guildID string, prepare func(next *queue.So
 	return readLog()
 }
 
-func TestPreCacheLogsHowLongTheFetchAndAnalysisTook(t *testing.T) {
+func TestPreCacheLogsTiming(t *testing.T) {
 	log := runLoggedPreCache(t, "precachetimes", nil, func() (*analysis.TrackAnalysis, error) {
 		time.Sleep(200 * time.Millisecond)
 		return &analysis.TrackAnalysis{BPM: 120, PeriodSec: 0.5, Duration: 75}, nil
@@ -262,7 +262,7 @@ func TestPreCacheLogsHowLongTheFetchAndAnalysisTook(t *testing.T) {
 	}
 }
 
-func TestPreCacheLogsAReusedHeadWithoutATime(t *testing.T) {
+func TestPreCacheLogsReusedHead(t *testing.T) {
 	analyses := 0
 	storeHead := func(next *queue.Song) {
 		if err := analysis.SaveTrackAnalysis(next.URL, analysis.SegmentHead, &analysis.TrackAnalysis{BPM: 120, PeriodSec: 0.5, Duration: 75}); err != nil {
@@ -282,7 +282,7 @@ func TestPreCacheLogsAReusedHeadWithoutATime(t *testing.T) {
 	}
 }
 
-func TestPreCacheLogsHowLongAFailedAnalysisRan(t *testing.T) {
+func TestPreCacheLogsFailedTiming(t *testing.T) {
 	log := runLoggedPreCache(t, "precachefailed", nil, func() (*analysis.TrackAnalysis, error) {
 		time.Sleep(200 * time.Millisecond)
 		return nil, io.ErrUnexpectedEOF
@@ -293,7 +293,7 @@ func TestPreCacheLogsHowLongAFailedAnalysisRan(t *testing.T) {
 	}
 }
 
-func TestPreCacheDropsAResultCancelledDuringTheFetch(t *testing.T) {
+func TestPreCacheDropsCancelled(t *testing.T) {
 	const guildID = "precachedropped"
 	readLog := logtest.Capture(t)
 	setupPlayerDB(t, guildID, 2)
@@ -358,13 +358,13 @@ func runPreCacheAndWait(t *testing.T, guildID string, next *queue.Song, finished
 	}
 }
 
-func backdatePreCacheFailure(guildID string, songID int, age time.Duration) {
+func backdateFailure(guildID string, songID int, age time.Duration) {
 	player.HookPreCacheStoreMu.Lock()
 	(*player.HookPreCacheStore)[fmt.Sprintf("%s_%d", guildID, songID)].FailedAt = time.Now().Add(-age)
 	player.HookPreCacheStoreMu.Unlock()
 }
 
-func TestFailedPreCacheRetriesAfterTheDelay(t *testing.T) {
+func TestPreCacheRetriesFailure(t *testing.T) {
 	const guildID = "precacheretry"
 	setupPlayerDB(t, guildID, 2)
 	t.Cleanup(func() { player.ClearPreCache(guildID) })
@@ -405,13 +405,13 @@ func TestFailedPreCacheRetriesAfterTheDelay(t *testing.T) {
 		t.Error("got a retry right after the failure, want none before 30s")
 	}
 
-	backdatePreCacheFailure(guildID, next.ID, 29*time.Second)
+	backdateFailure(guildID, next.ID, 29*time.Second)
 	player.PreCacheNext(guildID, 128000)
 	if player.GetPreCache(guildID, next.ID) != failed {
 		t.Error("got a retry 29s after the failure, want none before 30s")
 	}
 
-	backdatePreCacheFailure(guildID, next.ID, 31*time.Second)
+	backdateFailure(guildID, next.ID, 31*time.Second)
 	runPreCacheAndWait(t, guildID, next, finished)
 	if got := player.GetCachedStreamURL(guildID, next.ID); got != next.URL {
 		t.Errorf("got stream URL %q 31s after the failure, want %q", got, next.URL)
@@ -424,7 +424,7 @@ func TestFailedPreCacheRetriesAfterTheDelay(t *testing.T) {
 	}
 }
 
-func TestStaleFailureLeavesTheNewerPreCacheAlone(t *testing.T) {
+func TestPreCacheStaleFailure(t *testing.T) {
 	const guildID = "precachestalefailure"
 	setupPlayerDB(t, guildID, 2)
 	t.Cleanup(func() { player.ClearPreCache(guildID) })

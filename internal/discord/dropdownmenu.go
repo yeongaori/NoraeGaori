@@ -27,7 +27,7 @@ func RegisterDropdownMenu(key string, build func(guildID string) DropdownMenu) {
 	dropdownMenus.Store(key, build)
 }
 
-func AttachDropdownButtons(key string, build func(guildID string) []discordgo.MessageComponent) {
+func AttachDropdown(key string, build func(guildID string) []discordgo.MessageComponent) {
 	dropdownButtons.Store(key, build)
 }
 
@@ -47,17 +47,17 @@ func RespondDropdownMenu(s *discordgo.Session, i *discordgo.InteractionCreate, k
 
 	menu := build(i.GuildID)
 	embed, components := renderDropdownMenu(i.GuildID, key, &menu)
-	_, err := SendEmbedWithComponents(s, i, embed, components)
+	_, err := SendPanel(s, i, embed, components)
 	return err
 }
 
-func HandleDropdownMenuPick(s *discordgo.Session, ic *discordgo.InteractionCreate) {
+func HandleDropdownPick(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 	key, failure, isApplied := applyDropdownPick(ic)
 	if !isApplied {
 		return
 	}
 	if failure != nil {
-		if err := RespondEphemeralEmbed(s, ic, failure); err != nil {
+		if err := RespondEphemeral(s, ic, failure); err != nil {
 			logger.Errorf("Failed to report a dropdown failure: %v", err)
 		}
 		return
@@ -66,7 +66,7 @@ func HandleDropdownMenuPick(s *discordgo.Session, ic *discordgo.InteractionCreat
 	build, _ := lookupDropdownMenu(key)
 	menu := build(ic.GuildID)
 	embed, components := renderDropdownMenu(ic.GuildID, key, &menu)
-	if err := UpdateComponentMessage(s, ic, embed, components); err != nil {
+	if err := UpdatePanel(s, ic, embed, components); err != nil {
 		logger.Errorf("Failed to refresh the %s dropdown: %v", key, err)
 	}
 }

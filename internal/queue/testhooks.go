@@ -6,7 +6,7 @@ import "database/sql"
 
 var HookCache = &cache
 var HookCacheMux = &cacheMux
-var HookDefaultGuildSettingsRow = defaultGuildSettingsRow
+var HookDefaultSettingsRow = defaultSettingsRow
 var HookLoadQueueFromDB = loadQueueFromDB
 var HookSettingsCache = &settingsCache
 var HookSettingsGeneration = settingsGeneration

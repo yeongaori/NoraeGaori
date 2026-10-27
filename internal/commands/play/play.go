@@ -27,7 +27,7 @@ func HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		}
 
 		if analysis.Type == youtube.URLTypeVideoWithPlaylist {
-			return handleVideoWithPlaylist(s, i, query, analysis, voiceChannelID)
+			return handlePlaylistVideo(s, i, query, analysis, voiceChannelID)
 		}
 	}
 

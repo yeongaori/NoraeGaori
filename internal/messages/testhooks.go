@@ -3,7 +3,7 @@
 package messages
 
 var HookActiveLocale = &activeLocale
-var HookBuildLocale = buildLocale
+var HookCreateLocale = createLocale
 var HookLocalesDir = localesDir
 var HookReadLocaleFile = readLocaleFile
 

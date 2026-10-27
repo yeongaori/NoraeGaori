@@ -24,7 +24,7 @@ func TestSearchResultsPanelNumbering(t *testing.T) {
 	}
 }
 
-func TestParseSearchSelectionAcceptsValidValues(t *testing.T) {
+func TestParseSearchSelectionValid(t *testing.T) {
 	cases := map[string]struct {
 		searchID string
 		index    int
@@ -47,7 +47,7 @@ func TestParseSearchSelectionAcceptsValidValues(t *testing.T) {
 	}
 }
 
-func TestParseSearchSelectionRejectsMalformedValues(t *testing.T) {
+func TestParseSearchSelectionInvalid(t *testing.T) {
 	cases := []string{
 		"msg123",
 		"msg123:",
@@ -69,7 +69,7 @@ func TestParseSearchSelectionRejectsMalformedValues(t *testing.T) {
 	}
 }
 
-func TestParseSearchSelectionDoesNotDefaultToFirstResult(t *testing.T) {
+func TestParseSearchSelectionNoFirst(t *testing.T) {
 	_, index, err := play.HookParseSearchSelection("msg123:notanumber")
 	if err == nil {
 		t.Fatal("a non-numeric index was accepted, so the caller would queue result 0")

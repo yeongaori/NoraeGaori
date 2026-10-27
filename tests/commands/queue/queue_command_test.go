@@ -31,7 +31,7 @@ func TestQueueCommand(t *testing.T) {
 	})
 }
 
-func TestTurningAQueuePage(t *testing.T) {
+func TestTurnQueuePage(t *testing.T) {
 	t.Run("redraws the requested page", func(t *testing.T) {
 		fixture := commandtest.NewFixture(t, nil, queuetest.SongsBy(commandtest.CallerID, 25)...)
 
@@ -43,7 +43,7 @@ func TestTurningAQueuePage(t *testing.T) {
 	})
 }
 
-func TestOpeningTheMixPanelFromTheQueue(t *testing.T) {
+func TestOpenMixPanel(t *testing.T) {
 	t.Run("opens the panel", func(t *testing.T) {
 		fixture := commandtest.NewFixture(t, nil, queuetest.SongsBy(commandtest.CallerID, 2)...)
 

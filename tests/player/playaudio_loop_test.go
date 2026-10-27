@@ -60,7 +60,7 @@ func endlessLoudStream(t *testing.T) player.HookAudioStream {
 	return s
 }
 
-func stubQueuedSongPreCache(t *testing.T, guildID string) {
+func stubQueuedPreCache(t *testing.T, guildID string) {
 	t.Helper()
 
 	t.Cleanup(func() { player.ClearPreCache(guildID) })
@@ -116,11 +116,11 @@ func runPlayAudioWithFade(t *testing.T, guildPlayer *player.GuildPlayer, song *q
 	}
 }
 
-func TestPlayAudioSkipsLeadingSilenceWithoutSendingIt(t *testing.T) {
+func TestPlayAudioSkipsSilence(t *testing.T) {
 	guildID := "loopskip"
-	guildPlayer, mock, song := newCharacterizationPlayer(t, guildID, func() player.HookAudioStream { return silentAudioStream(20) })
+	guildPlayer, mock, song := createBaselinePlayer(t, guildID, func() player.HookAudioStream { return silentAudioStream(20) })
 
-	fade := player.HookBuildFadeSettings(&player.HookFadeSettingsFields{TrimSilence: true})
+	fade := player.HookCreateFadeSettings(&player.HookFadeSettingsFields{TrimSilence: true})
 	if err := runPlayAudioWithFade(t, guildPlayer, song, fade); err != nil {
 		t.Fatalf("playAudio returned %v, want nil: skipped silence still counts as progress", err)
 	}
@@ -130,11 +130,11 @@ func TestPlayAudioSkipsLeadingSilenceWithoutSendingIt(t *testing.T) {
 	}
 }
 
-func TestPlayAudioSendsEveryFrameOfALoudStream(t *testing.T) {
+func TestPlayAudioSendsEveryFrame(t *testing.T) {
 	guildID := "looploud"
-	guildPlayer, mock, song := newCharacterizationPlayer(t, guildID, func() player.HookAudioStream { return loudAudioStream(12) })
+	guildPlayer, mock, song := createBaselinePlayer(t, guildID, func() player.HookAudioStream { return loudAudioStream(12) })
 
-	if err := runPlayAudioWithFade(t, guildPlayer, song, player.HookBuildFadeSettings(&player.HookFadeSettingsFields{TrimSilence: true})); err != nil {
+	if err := runPlayAudioWithFade(t, guildPlayer, song, player.HookCreateFadeSettings(&player.HookFadeSettingsFields{TrimSilence: true})); err != nil {
 		t.Fatalf("playAudio returned %v, want nil", err)
 	}
 
@@ -143,11 +143,11 @@ func TestPlayAudioSendsEveryFrameOfALoudStream(t *testing.T) {
 	}
 }
 
-func TestPlayAudioPublishesFadeInWhileFadingAndClearsItAfter(t *testing.T) {
+func TestPlayAudioPublishesFadeIn(t *testing.T) {
 	guildID := "loopfadein"
-	guildPlayer, _, song := newCharacterizationPlayer(t, guildID, func() player.HookAudioStream { return loudAudioStream(30) })
+	guildPlayer, _, song := createBaselinePlayer(t, guildID, func() player.HookAudioStream { return loudAudioStream(30) })
 
-	fade := player.HookBuildFadeSettings(&player.HookFadeSettingsFields{FadeIn: true, FadeInSec: 10})
+	fade := player.HookCreateFadeSettings(&player.HookFadeSettingsFields{FadeIn: true, FadeInSec: 10})
 
 	observed := make(chan bool, 1)
 	go func() {
@@ -183,9 +183,9 @@ func TestPlayAudioPublishesFadeInWhileFadingAndClearsItAfter(t *testing.T) {
 	}
 }
 
-func TestPlayAudioLeavesTransitionArmedClearedOnReturn(t *testing.T) {
+func TestPlayAudioClearsArmed(t *testing.T) {
 	guildID := "looparmed"
-	guildPlayer, _, song := newCharacterizationPlayer(t, guildID, func() player.HookAudioStream { return loudAudioStream(6) })
+	guildPlayer, _, song := createBaselinePlayer(t, guildID, func() player.HookAudioStream { return loudAudioStream(6) })
 
 	guildPlayer.HookTransitionArmed().Store(true)
 
@@ -198,15 +198,15 @@ func TestPlayAudioLeavesTransitionArmedClearedOnReturn(t *testing.T) {
 	}
 }
 
-func TestPlayAudioConsumesTheFadeInNextFlag(t *testing.T) {
+func TestPlayAudioConsumesFadeIn(t *testing.T) {
 	guildID := "loopfadenext"
-	guildPlayer, _, song := newCharacterizationPlayer(t, guildID, func() player.HookAudioStream { return loudAudioStream(6) })
+	guildPlayer, _, song := createBaselinePlayer(t, guildID, func() player.HookAudioStream { return loudAudioStream(6) })
 
 	guildPlayer.HookMu().Lock()
 	guildPlayer.FadeInNext = true
 	guildPlayer.HookMu().Unlock()
 
-	if err := runPlayAudioWithFade(t, guildPlayer, song, player.HookBuildFadeSettings(&player.HookFadeSettingsFields{FadeIn: true, FadeInSec: 1})); err != nil {
+	if err := runPlayAudioWithFade(t, guildPlayer, song, player.HookCreateFadeSettings(&player.HookFadeSettingsFields{FadeIn: true, FadeInSec: 1})); err != nil {
 		t.Fatalf("playAudio returned %v, want nil", err)
 	}
 
@@ -241,9 +241,9 @@ func awaitPreCacheCalls(calls *atomic.Int32, want int32) int32 {
 	return calls.Load()
 }
 
-func TestPlayAudioRechecksThePreCacheEveryInterval(t *testing.T) {
+func TestPlayAudioRechecksPreCache(t *testing.T) {
 	guildID := "looprecheck"
-	guildPlayer, _, song := newCharacterizationPlayer(t, guildID, func() player.HookAudioStream { return loudAudioStream(3*250 + 10) })
+	guildPlayer, _, song := createBaselinePlayer(t, guildID, func() player.HookAudioStream { return loudAudioStream(3*250 + 10) })
 	calls := countPreCacheCalls(t)
 
 	if err := runPlayAudioWithFade(t, guildPlayer, song, &player.HookFadeSettings{}); err != nil {
@@ -255,10 +255,10 @@ func TestPlayAudioRechecksThePreCacheEveryInterval(t *testing.T) {
 	}
 }
 
-func TestPlayAudioStopsRecheckingThePreCacheOnceTheEndIsPlanned(t *testing.T) {
+func TestPlayAudioStopsRechecking(t *testing.T) {
 	guildID := "looprecheckend"
 	frames := 3*250 + 10
-	guildPlayer, _, song := newCharacterizationPlayer(t, guildID, func() player.HookAudioStream {
+	guildPlayer, _, song := createBaselinePlayer(t, guildID, func() player.HookAudioStream {
 		s := newFakeStream(ffmpeg.BufSize)
 		s.setEndState(&ffmpeg.EndState{TotalFrames: frames})
 		s.sendFrames(frames)
@@ -295,7 +295,7 @@ func addNextSong(t *testing.T, guildID string, isLive bool) *queue.Song {
 	return q.Songs[1]
 }
 
-func TestPlayAudioLogsTheNextSongsReadinessOnce(t *testing.T) {
+func TestPlayAudioReadinessLog(t *testing.T) {
 	cacheHead := func(t *testing.T, guildID string, next *queue.Song) {
 		cacheNextStreamURL(t, guildID, next.ID, "https://example.invalid/next")
 		player.HookPreCacheStoreMu.Lock()
@@ -335,7 +335,7 @@ func TestPlayAudioLogsTheNextSongsReadinessOnce(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			guildID := "loopreadiness" + c.name
 			readLog := logtest.Capture(t)
-			guildPlayer, _, song := newCharacterizationPlayer(t, guildID, func() player.HookAudioStream {
+			guildPlayer, _, song := createBaselinePlayer(t, guildID, func() player.HookAudioStream {
 				s := newFakeStream(ffmpeg.BufSize)
 				s.setEndState(&ffmpeg.EndState{TotalFrames: 300})
 				s.sendFrames(300)
@@ -358,13 +358,13 @@ func TestPlayAudioLogsTheNextSongsReadinessOnce(t *testing.T) {
 	}
 }
 
-func TestPlayAudioReadinessCountsOnlyTheAudibleRest(t *testing.T) {
+func TestPlayAudioReadinessAudible(t *testing.T) {
 	const guildID = "loopreadinessresumed"
 	readLog := logtest.Capture(t)
 	resumed := newFakeStream(ffmpeg.BufSize)
 	resumed.setEndState(&ffmpeg.EndState{TotalFrames: 400, SilentTailFrames: 50})
 	resumed.sendFrames(300)
-	guildPlayer, _, song := newCharacterizationPlayer(t, guildID, func() player.HookAudioStream { return resumed })
+	guildPlayer, _, song := createBaselinePlayer(t, guildID, func() player.HookAudioStream { return resumed })
 	addNextSong(t, guildID, false)
 
 	guildPlayer.HookMu().Lock()
@@ -381,20 +381,20 @@ func TestPlayAudioReadinessCountsOnlyTheAudibleRest(t *testing.T) {
 	}
 }
 
-func TestSongQueuedMidSongIsReadyBeforeTheEnd(t *testing.T) {
+func TestPlayAudioMidSongQueue(t *testing.T) {
 	const guildID = "loopqueuedmidsong"
 	readLog := logtest.Capture(t)
 
 	current := newFakeStream(ffmpeg.BufSize)
 	var streams atomic.Int32
-	guildPlayer, mock, song := newCharacterizationPlayer(t, guildID, func() player.HookAudioStream {
+	guildPlayer, mock, song := createBaselinePlayer(t, guildID, func() player.HookAudioStream {
 		if streams.Add(1) == 1 {
 			return current
 		}
 		return endlessLoudStream(t)
 	})
 	enableAutoMix(t, guildID)
-	stubQueuedSongPreCache(t, guildID)
+	stubQueuedPreCache(t, guildID)
 	drainOpusFrames(t, mock)
 
 	fade := autoMixFade(64)

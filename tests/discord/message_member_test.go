@@ -23,7 +23,7 @@ func memberMessage(member *discordgo.Member) *discordgo.MessageCreate {
 	}
 }
 
-func TestMessageMemberUsesTheMemberSentWithTheMessage(t *testing.T) {
+func TestMessageMemberUsesSent(t *testing.T) {
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 	sent := &discordgo.Member{Roles: []string{"role"}}
 	message := memberMessage(sent)
@@ -44,7 +44,7 @@ func TestMessageMemberUsesTheMemberSentWithTheMessage(t *testing.T) {
 	}
 }
 
-func TestMessageMemberFetchesTheMemberWhenTheMessageHasNone(t *testing.T) {
+func TestMessageMemberFetches(t *testing.T) {
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 
 	member := discord.MessageMember(session, memberMessage(nil))
@@ -58,7 +58,7 @@ func TestMessageMemberFetchesTheMemberWhenTheMessageHasNone(t *testing.T) {
 	}
 }
 
-func TestMessageMemberFallsBackToTheAuthorWhenTheLookupFails(t *testing.T) {
+func TestMessageMemberAuthorFallback(t *testing.T) {
 	session, _ := discordtest.StubAPI(t, discordtest.Status(http.StatusNotFound))
 	message := memberMessage(nil)
 
@@ -69,7 +69,7 @@ func TestMessageMemberFallsBackToTheAuthorWhenTheLookupFails(t *testing.T) {
 	}
 }
 
-func TestCreatePseudoInteractionCarriesTheGivenMember(t *testing.T) {
+func TestCreatePseudoInteractionUser(t *testing.T) {
 	message := memberMessage(nil)
 	member := &discordgo.Member{User: message.Author}
 

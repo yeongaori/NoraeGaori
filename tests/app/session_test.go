@@ -23,7 +23,7 @@ import (
 	"noraegaori/tests/testutil/dbtest"
 )
 
-func TestGuildRemovalDropsThePlayerEvenWithAutoLeaveOff(t *testing.T) {
+func TestOnGuildDeleteDropsPlayer(t *testing.T) {
 	const guildID = "removed-guild"
 	dbtest.Setup(t)
 	if err := queue.SetAutoLeave(guildID, false); err != nil {
@@ -53,7 +53,7 @@ func captureStandardLog(t *testing.T) *bytes.Buffer {
 	return &output
 }
 
-func TestDiscordDebugLogsHideTheToken(t *testing.T) {
+func TestRedactTokenHidesToken(t *testing.T) {
 	output := captureStandardLog(t)
 	identify := struct{ Token string }{"Bot abc.def-ghi"}
 
@@ -66,7 +66,7 @@ func TestDiscordDebugLogsHideTheToken(t *testing.T) {
 	if count := strings.Count(logged, "[token]"); count != 2 {
 		t.Errorf("got %q, want both copies of the token replaced", logged)
 	}
-	if !strings.HasPrefix(logged, "[DG3] session_test.go:") || !strings.Contains(logged, ":TestDiscordDebugLogsHideTheToken() ") {
+	if !strings.HasPrefix(logged, "[DG3] session_test.go:") || !strings.Contains(logged, ":TestRedactTokenHidesToken() ") {
 		t.Errorf("got %q, want the level and the calling test in the prefix", logged)
 	}
 }
@@ -100,7 +100,7 @@ const (
 	reconnected    = "Reconnected to Discord"
 )
 
-func TestLosingDiscordLogsOnceUntilReconnected(t *testing.T) {
+func TestOnDisconnectLogsOnce(t *testing.T) {
 	read := logtest.CaptureConsole(t)
 	resumes := useConnectionState(t, false)
 
@@ -121,7 +121,7 @@ func TestLosingDiscordLogsOnceUntilReconnected(t *testing.T) {
 	}
 }
 
-func TestLostConnectionLogLevel(t *testing.T) {
+func TestOnDisconnectLogLevel(t *testing.T) {
 	read := logtest.CaptureConsole(t)
 	useConnectionState(t, false)
 	testutil.Swap(t, logger.HookDebugMode, false)
@@ -133,7 +133,7 @@ func TestLostConnectionLogLevel(t *testing.T) {
 	}
 }
 
-func TestClosingTheSessionOnShutdownIsNotLogged(t *testing.T) {
+func TestOnDisconnectShutdownQuiet(t *testing.T) {
 	read := logtest.CaptureConsole(t)
 	resumes := useConnectionState(t, true)
 
@@ -146,7 +146,7 @@ func TestClosingTheSessionOnShutdownIsNotLogged(t *testing.T) {
 	requireResumes(t, resumes, 0)
 }
 
-func TestResumingAfterAReconnectWaitsAndSkipsShutdown(t *testing.T) {
+func TestResumePlayersSkipsShutdown(t *testing.T) {
 	for _, isStopping := range []bool{false, true} {
 		calls := 0
 		testutil.Swap(t, app.HookIsShuttingDown, func() bool { return isStopping })
@@ -154,7 +154,7 @@ func TestResumingAfterAReconnectWaitsAndSkipsShutdown(t *testing.T) {
 		testutil.Swap(t, app.HookReconnectResumeDelay, 30*time.Millisecond)
 
 		started := time.Now()
-		app.HookResumePlayersAfterReconnect(nil)
+		app.HookResumePlayers(nil)
 
 		if waited := time.Since(started); waited < 30*time.Millisecond {
 			t.Errorf("shutting down=%v: resumed after %v, want the reconnect delay first", isStopping, waited)
@@ -165,7 +165,7 @@ func TestResumingAfterAReconnectWaitsAndSkipsShutdown(t *testing.T) {
 	}
 }
 
-func TestFirstConnectDoesNotResumePlayback(t *testing.T) {
+func TestOnConnectFirstNoResume(t *testing.T) {
 	resumes := useConnectionState(t, false)
 
 	app.HookOnConnect(nil, &discordgo.Connect{})
@@ -173,7 +173,7 @@ func TestFirstConnectDoesNotResumePlayback(t *testing.T) {
 	requireResumes(t, resumes, 0)
 }
 
-func TestDiscordDebugLogsKeepMessagesWithoutTheToken(t *testing.T) {
+func TestRedactTokenKeepsMessage(t *testing.T) {
 	output := captureStandardLog(t)
 
 	app.HookRedactToken("abc.def-ghi")(discordgo.LogInformational, 0, "sending gateway websocket heartbeat seq %d", 11)

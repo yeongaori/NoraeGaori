@@ -23,28 +23,28 @@ const (
 	videoWatchURLPrefix       = "https://www.youtube.com/watch?v="
 )
 
-func autocompleteSuggestTerms(request command.AutocompleteRequest) []*discordgo.ApplicationCommandOptionChoice {
+func suggestTerms(request command.AutocompleteRequest) []*discordgo.ApplicationCommandOptionChoice {
 	query := strings.TrimSpace(request.Query)
 	if utf8.RuneCountInString(query) < minAutocompleteQueryRunes {
 		return nil
 	}
 
 	language := messages.Lang(request.GuildID)
-	normalized := normalizeAutocompleteQuery(query)
+	normalized := normalizeQuery(query)
 	key := autocompleteCacheKey("suggest", language, normalized)
 
-	if cached, found := loadAutocompleteChoices(key); found {
+	if cached, found := loadChoices(key); found {
 		return cached
 	}
 
-	generation := beginAutocompleteFetch(request.UserID, request.GuildID, request.CommandName)
+	generation := beginAutocomplete(request.UserID, request.GuildID, request.CommandName)
 	time.Sleep(autocompleteDebounceDelay)
 
-	if !isLatestAutocompleteFetch(request.UserID, request.GuildID, request.CommandName, generation) {
-		return loadNearestAutocompleteChoices("suggest", language, normalized)
+	if !isLatestAutocomplete(request.UserID, request.GuildID, request.CommandName, generation) {
+		return loadNearestChoices("suggest", language, normalized)
 	}
 
-	if cached, found := loadAutocompleteChoices(key); found {
+	if cached, found := loadChoices(key); found {
 		return cached
 	}
 
@@ -54,7 +54,7 @@ func autocompleteSuggestTerms(request command.AutocompleteRequest) []*discordgo.
 	terms, err := youtube.SuggestTerms(ctx, query, language)
 	if err != nil {
 		logger.Debugf("Autocomplete suggest failed for %q: %v", query, err)
-		return loadNearestAutocompleteChoices("suggest", language, normalized)
+		return loadNearestChoices("suggest", language, normalized)
 	}
 
 	choices := make([]*discordgo.ApplicationCommandOptionChoice, 0, command.MaxAutocompleteChoices)
@@ -69,11 +69,11 @@ func autocompleteSuggestTerms(request command.AutocompleteRequest) []*discordgo.
 		})
 	}
 
-	saveAutocompleteChoices(key, choices)
+	saveChoices(key, choices)
 	return choices
 }
 
-func autocompleteVideoResults(request command.AutocompleteRequest) []*discordgo.ApplicationCommandOptionChoice {
+func suggestVideos(request command.AutocompleteRequest) []*discordgo.ApplicationCommandOptionChoice {
 	query := strings.TrimSpace(request.Query)
 	if youtube.IsYouTubeURL(query) {
 		return nil
@@ -84,31 +84,31 @@ func autocompleteVideoResults(request command.AutocompleteRequest) []*discordgo.
 	}
 
 	language := messages.Lang(request.GuildID)
-	normalized := normalizeAutocompleteQuery(query)
+	normalized := normalizeQuery(query)
 	key := autocompleteCacheKey("video", language, normalized)
 
-	if cached, found := loadAutocompleteChoices(key); found {
+	if cached, found := loadChoices(key); found {
 		return cached
 	}
 
-	generation := beginAutocompleteFetch(request.UserID, request.GuildID, request.CommandName)
+	generation := beginAutocomplete(request.UserID, request.GuildID, request.CommandName)
 	time.Sleep(autocompleteDebounceDelay)
 
-	if !isLatestAutocompleteFetch(request.UserID, request.GuildID, request.CommandName, generation) {
-		return loadNearestAutocompleteChoices("video", language, normalized)
+	if !isLatestAutocomplete(request.UserID, request.GuildID, request.CommandName, generation) {
+		return loadNearestChoices("video", language, normalized)
 	}
 
-	if cached, found := loadAutocompleteChoices(key); found {
+	if cached, found := loadChoices(key); found {
 		return cached
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), autocompleteFetchTimeout)
 	defer cancel()
 
-	results, err := youtube.SearchMultipleContext(ctx, query, command.MaxAutocompleteChoices)
+	results, err := youtube.SearchManyContext(ctx, query, command.MaxAutocompleteChoices)
 	if err != nil {
 		logger.Debugf("Autocomplete video search failed for %q: %v", query, err)
-		return loadNearestAutocompleteChoices("video", language, normalized)
+		return loadNearestChoices("video", language, normalized)
 	}
 
 	choices := make([]*discordgo.ApplicationCommandOptionChoice, 0, command.MaxAutocompleteChoices)
@@ -125,16 +125,16 @@ func autocompleteVideoResults(request command.AutocompleteRequest) []*discordgo.
 			continue
 		}
 		choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
-			Name:  buildVideoChoiceName(result.Title, result.Channel, result.Duration),
+			Name:  createVideoChoiceName(result.Title, result.Channel, result.Duration),
 			Value: value,
 		})
 	}
 
-	saveAutocompleteChoices(key, choices)
+	saveChoices(key, choices)
 	return choices
 }
 
-func buildVideoChoiceName(title, channel, duration string) string {
+func createVideoChoiceName(title, channel, duration string) string {
 	suffix := ""
 	if channel != "" {
 		suffix = " - " + discord.TruncateRunes(channel, maxChannelSegmentRunes)

@@ -165,19 +165,19 @@ func init() {
 	playCurrentSong = playSingleSong
 	resumePlayback = startPlaybackSession
 	joinVoiceChannel = JoinVoice
-	announceNowPlaying = sendNowPlayingMessage
-	announcePlaybackEnd = sendPlaybackEndMessage
+	announceNowPlaying = sendNowPlaying
+	announcePlaybackEnd = sendEndMessage
 	announceReconnect = sendReconnectMessage
 	announceRateLimit = sendRateLimitMessage
-	dismissLoadingMessage = deleteLoadingMessageFor
-	lookupVoiceChannelBitrate = readVoiceChannelBitrate
+	dismissLoadingMessage = deleteLoadingMessage
+	lookupVoiceChannelBitrate = readChannelBitrate
 	announceSongError = sendSongErrorMessage
-	announceAutoPause = sendAutoPauseNotification
-	announcePlaybackCrash = sendPlaybackCrashMessage
+	announceAutoPause = sendAutoPauseNotice
+	announcePlaybackCrash = sendCrashMessage
 	resumeAutoPaused = ResumeOrStart
 }
 
-func readVoiceChannelBitrate(session *discordgo.Session, channelID string) int {
+func readChannelBitrate(session *discordgo.Session, channelID string) int {
 	if channelID == "" {
 		return 0
 	}
@@ -192,7 +192,7 @@ func readVoiceChannelBitrate(session *discordgo.Session, channelID string) int {
 	return channel.Bitrate
 }
 
-func deleteLoadingMessageFor(session *discordgo.Session, guildID string) {
+func deleteLoadingMessage(session *discordgo.Session, guildID string) {
 	lm := GetLoadingMessage(guildID)
 	if lm == nil {
 		return
@@ -227,10 +227,10 @@ func GetPlayer(guildID string) *GuildPlayer {
 	playersMu.Lock()
 	defer playersMu.Unlock()
 
-	return getOrCreatePlayerLocked(guildID)
+	return ensurePlayerLocked(guildID)
 }
 
-func getOrCreatePlayerLocked(guildID string) *GuildPlayer {
+func ensurePlayerLocked(guildID string) *GuildPlayer {
 	if player, exists := players[guildID]; exists {
 
 		player.mu.Lock()
@@ -273,7 +273,7 @@ func sendCommandToPlayer(guildID string, cmd PlayerCommand) error {
 	playersMu.Lock()
 	defer playersMu.Unlock()
 
-	player := getOrCreatePlayerLocked(guildID)
+	player := ensurePlayerLocked(guildID)
 
 	select {
 	case player.CommandChan <- cmd:
@@ -295,13 +295,13 @@ func DeletePlayer(guildID string) {
 	close(player.QuitChan)
 	playersMu.Unlock()
 
-	clearRetryCountsForGuild(guildID)
-	forgetAwaitingDiscord(guildID)
+	clearRetryCounts(guildID)
+	forgetAwaiting(guildID)
 
 	logger.Debugf("Stopped command processor for guild: %s", guildID)
 }
 
-func SetOnSongStartCallback(callback func(guildID string)) {
+func SetOnSongStart(callback func(guildID string)) {
 	setGuildCallback(&onSongStartCallback, callback)
 }
 
@@ -309,7 +309,7 @@ func callOnSongStart(guildID string) {
 	callGuildCallback(&onSongStartCallback, guildID)
 }
 
-func SetOnPlaybackEndedCallback(callback func(guildID string)) {
+func SetOnPlaybackEnded(callback func(guildID string)) {
 	setGuildCallback(&onPlaybackEndedCallback, callback)
 }
 

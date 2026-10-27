@@ -23,7 +23,7 @@ func TestPhaserAtZeroMixIsBitExact(t *testing.T) {
 	}
 }
 
-func TestPhaserSweepsBetweenItsCorners(t *testing.T) {
+func TestPhaserFrequencyCorners(t *testing.T) {
 	if low := dsp.PhaserFrequency(-math.Pi / 2); math.Abs(low-300) > 1e-9 {
 		t.Errorf("lowest sweep frequency = %.3f, want 300 Hz", low)
 	}
@@ -39,7 +39,7 @@ func TestPhaserSweepsBetweenItsCorners(t *testing.T) {
 	}
 }
 
-func TestPhaserSweepsTheChannelsInQuadrature(t *testing.T) {
+func TestPhaserQuadrature(t *testing.T) {
 	phaser := dsp.PreparePhaser(1)
 	phase := 0.0
 	var difference, level float64
@@ -56,7 +56,7 @@ func TestPhaserSweepsTheChannelsInQuadrature(t *testing.T) {
 	}
 }
 
-func TestPhaserKeepsASilentChannelSilent(t *testing.T) {
+func TestPhaserKeepsSilence(t *testing.T) {
 	phaser := dsp.PreparePhaser(0.5)
 	block := make([]float64, dsp.FrameSize*dsp.Channels)
 	for frame := 0; frame < 5; frame++ {
@@ -73,7 +73,7 @@ func TestPhaserKeepsASilentChannelSilent(t *testing.T) {
 	}
 }
 
-func TestPhaserNotchMovesAcrossATone(t *testing.T) {
+func TestPhaserNotchMoves(t *testing.T) {
 	phaser := dsp.PreparePhaser(1)
 	phase := 0.0
 	quietest, loudest := math.Inf(1), 0.0
@@ -98,7 +98,7 @@ func TestPhaserNotchMovesAcrossATone(t *testing.T) {
 	}
 }
 
-func TestBitcrusherAtZeroAmountIsBitExact(t *testing.T) {
+func TestBitcrusherZeroIsBitExact(t *testing.T) {
 	crusher := &dsp.Bitcrusher{}
 	phase := 0.0
 	block := audiotest.SineFloatFrame(700, 9000.37, &phase)
@@ -111,7 +111,7 @@ func TestBitcrusherAtZeroAmountIsBitExact(t *testing.T) {
 	}
 }
 
-func TestFullBitcrushHoldsAndQuantizes(t *testing.T) {
+func TestBitcrusherFullCrush(t *testing.T) {
 	if dsp.CrushQuantum(0) != 1 || dsp.CrushQuantum(1) != 1024 || dsp.CrushHold(0) != 1 || dsp.CrushHold(1) != 8 {
 		t.Fatalf("quantum %v..%v and hold %d..%d, want 1..1024 and 1..8",
 			dsp.CrushQuantum(0), dsp.CrushQuantum(1), dsp.CrushHold(0), dsp.CrushHold(1))

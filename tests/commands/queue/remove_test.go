@@ -22,10 +22,10 @@ func TestRemove(t *testing.T) {
 
 	commandtest.Run(t, "remove", queuecommand.HandleRemove, slices.Concat(
 		removeAllCases(),
-		removeRangeInputCases(),
-		removeRangeQueueCases(),
-		removePositionInputCases(),
-		removePositionQueueCases(),
+		rangeInputCases(),
+		rangeQueueCases(),
+		positionInputCases(),
+		positionQueueCases(),
 		removePreCacheCases(nextCache, laterCache),
 	))
 }
@@ -74,7 +74,7 @@ func removeAllCases() []commandtest.Case {
 	}
 }
 
-func removeRangeInputCases() []commandtest.Case {
+func rangeInputCases() []commandtest.Case {
 	caller := commandtest.CallerID
 	invalidRange := func(locale *messages.Locale) string { return locale.Queue.InvalidRange }
 
@@ -114,7 +114,7 @@ func removeRangeInputCases() []commandtest.Case {
 	}
 }
 
-func removeRangeQueueCases() []commandtest.Case {
+func rangeQueueCases() []commandtest.Case {
 	caller, other := commandtest.CallerID, commandtest.OtherID
 	inVoice := []string{caller}
 	rangeRemoved := func(locale *messages.Locale) string { return fmt.Sprintf(locale.Queue.RangeRemoved, 2, 2, 3) }
@@ -160,7 +160,7 @@ func removeRangeQueueCases() []commandtest.Case {
 	}
 }
 
-func removePositionInputCases() []commandtest.Case {
+func positionInputCases() []commandtest.Case {
 	caller := commandtest.CallerID
 
 	return []commandtest.Case{
@@ -196,7 +196,7 @@ func removePositionInputCases() []commandtest.Case {
 	}
 }
 
-func removePositionQueueCases() []commandtest.Case {
+func positionQueueCases() []commandtest.Case {
 	caller, other := commandtest.CallerID, commandtest.OtherID
 	inVoice := []string{caller}
 

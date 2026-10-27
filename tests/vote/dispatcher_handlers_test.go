@@ -37,7 +37,7 @@ func votingVote(t *testing.T, guildID string, requiredVotes int, onPassed func(*
 	return session
 }
 
-func TestReactionAddRejectsAnIneligibleVoter(t *testing.T) {
+func TestOnVoteReactionAddIneligible(t *testing.T) {
 	stubs := stubVoteEffects(t)
 	discord := votingSession(t, "dispatch-ineligible", "u1", "u2", "u3")
 	voteSession := votingVote(t, "dispatch-ineligible", 2, nil)
@@ -57,7 +57,7 @@ func TestReactionAddRejectsAnIneligibleVoter(t *testing.T) {
 	}
 }
 
-func TestReactionAddBelowQuorumRendersProgress(t *testing.T) {
+func TestOnVoteReactionAddProgress(t *testing.T) {
 	stubs := stubVoteEffects(t)
 	discord := votingSession(t, "dispatch-progress", "u1", "u2", "u3")
 
@@ -79,7 +79,7 @@ func TestReactionAddBelowQuorumRendersProgress(t *testing.T) {
 	}
 }
 
-func TestReactionAddReachingQuorumRunsThePassPath(t *testing.T) {
+func TestOnVoteReactionAddQuorum(t *testing.T) {
 	stubVoteEffects(t)
 	discord := votingSession(t, "dispatch-pass", "u1", "u2", "u3")
 
@@ -110,7 +110,7 @@ func TestReactionAddReachingQuorumRunsThePassPath(t *testing.T) {
 	}
 }
 
-func TestConcurrentReactionsPassTheVoteOnce(t *testing.T) {
+func TestOnVoteReactionAddConcurrent(t *testing.T) {
 	stubVoteEffects(t)
 	discord := votingSession(t, "dispatch-race", "u1", "u2", "u3", "u4")
 
@@ -132,7 +132,7 @@ func TestConcurrentReactionsPassTheVoteOnce(t *testing.T) {
 	}
 }
 
-func TestReactionAddIgnoresARepeatVoter(t *testing.T) {
+func TestOnVoteReactionAddRepeat(t *testing.T) {
 	stubs := stubVoteEffects(t)
 	discord := votingSession(t, "dispatch-repeat", "u1", "u2", "u3")
 	voteSession := votingVote(t, "dispatch-repeat", 3, nil)
@@ -145,7 +145,7 @@ func TestReactionAddIgnoresARepeatVoter(t *testing.T) {
 	}
 }
 
-func TestReactionRemoveWithdrawsAndRenders(t *testing.T) {
+func TestOnVoteReactionRemoveRenders(t *testing.T) {
 	stubs := stubVoteEffects(t)
 	discord := votingSession(t, "dispatch-withdraw", "u1", "u2", "u3", "u4", "u5")
 	voteSession := votingVote(t, "dispatch-withdraw", 3, nil)
@@ -163,7 +163,7 @@ func TestReactionRemoveWithdrawsAndRenders(t *testing.T) {
 	}
 }
 
-func TestReactionRemoveIgnoresANonVoter(t *testing.T) {
+func TestOnVoteReactionRemoveIgnores(t *testing.T) {
 	stubs := stubVoteEffects(t)
 	discord := votingSession(t, "dispatch-nonvoter", "u1", "u2", "u3")
 	voteSession := votingVote(t, "dispatch-nonvoter", 2, nil)
@@ -175,7 +175,7 @@ func TestReactionRemoveIgnoresANonVoter(t *testing.T) {
 	}
 }
 
-func TestReactionAddPassesWhenTheChannelEmpties(t *testing.T) {
+func TestOnVoteReactionAddEmpties(t *testing.T) {
 	stubVoteEffects(t)
 	discord := votingSession(t, "dispatch-shrink", "u1")
 
@@ -196,7 +196,7 @@ func TestReactionAddPassesWhenTheChannelEmpties(t *testing.T) {
 	}
 }
 
-func TestAbsentRequesterCanConsentWithoutMovingTheQuorum(t *testing.T) {
+func TestOnVoteReactionAddConsent(t *testing.T) {
 	stubs := stubVoteEffects(t)
 	stubs.useAdders([]string{"absentOwner"})
 
@@ -225,7 +225,7 @@ func TestAbsentRequesterCanConsentWithoutMovingTheQuorum(t *testing.T) {
 	}
 }
 
-func TestAbsentNonRequesterIsStillRejected(t *testing.T) {
+func TestOnVoteReactionAddAbsent(t *testing.T) {
 	stubs := stubVoteEffects(t)
 	stubs.useAdders([]string{"absentOwner"})
 
@@ -241,7 +241,7 @@ func TestAbsentNonRequesterIsStillRejected(t *testing.T) {
 	}
 }
 
-func TestConsentNeedsEveryRequester(t *testing.T) {
+func TestOnVoteReactionAddAllAdders(t *testing.T) {
 	stubs := stubVoteEffects(t)
 	stubs.useAdders([]string{"ownerA", "ownerB"})
 
@@ -261,7 +261,7 @@ func TestConsentNeedsEveryRequester(t *testing.T) {
 	}
 }
 
-func TestRequesterWithdrawalDropsConsent(t *testing.T) {
+func TestOnVoteReactionRemoveConsent(t *testing.T) {
 	stubs := stubVoteEffects(t)
 	stubs.useAdders([]string{"ownerA", "ownerB"})
 
@@ -282,7 +282,7 @@ func TestRequesterWithdrawalDropsConsent(t *testing.T) {
 	}
 }
 
-func TestPresentRequesterCountsForBothPaths(t *testing.T) {
+func TestOnVoteReactionAddPresent(t *testing.T) {
 	stubs := stubVoteEffects(t)
 	stubs.useAdders([]string{"u2"})
 

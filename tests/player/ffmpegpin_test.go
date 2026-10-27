@@ -46,7 +46,7 @@ func captureSpawns(t *testing.T) *[]spawnedStream {
 	return &spawned
 }
 
-func TestOverlappingStreamsShareOneFFmpegBuild(t *testing.T) {
+func TestClaimSharesBuild(t *testing.T) {
 	builds := useFFmpegBuilds(t)
 	old := builds.current
 	var pin player.HookFfmpegPin
@@ -81,7 +81,7 @@ func TestOverlappingStreamsShareOneFFmpegBuild(t *testing.T) {
 	}
 }
 
-func TestReleasingAStreamTwiceCountsOnce(t *testing.T) {
+func TestClaimReleaseTwice(t *testing.T) {
 	builds := useFFmpegBuilds(t)
 	var pin player.HookFfmpegPin
 
@@ -99,7 +99,7 @@ func TestReleasingAStreamTwiceCountsOnce(t *testing.T) {
 	}
 }
 
-func TestStartStreamRunsThePinnedBuild(t *testing.T) {
+func TestStartStreamPinnedBuild(t *testing.T) {
 	builds := useFFmpegBuilds(t)
 	spawned := captureSpawns(t)
 	guildPlayer := &player.GuildPlayer{GuildID: "pinstart"}
@@ -130,7 +130,7 @@ func TestStartStreamRunsThePinnedBuild(t *testing.T) {
 	}
 }
 
-func TestStartStreamReleasesAFailedSpawn(t *testing.T) {
+func TestStartStreamFailedSpawn(t *testing.T) {
 	builds := useFFmpegBuilds(t)
 	testutil.Swap(t, player.HookNewAudioStream, func(string, []string, bool, func()) (player.HookAudioStream, error) {
 		return nil, errFakeStream
@@ -145,7 +145,7 @@ func TestStartStreamReleasesAFailedSpawn(t *testing.T) {
 	}
 }
 
-func TestStartLiveStreamHandsThePinnedBuildToYtDlp(t *testing.T) {
+func TestStartLiveStreamPinnedBuild(t *testing.T) {
 	builds := useFFmpegBuilds(t)
 	pipe := io.NopCloser(strings.NewReader("audio"))
 	var ytdlpBuild *dependency.Binary
@@ -172,7 +172,7 @@ func TestStartLiveStreamHandsThePinnedBuildToYtDlp(t *testing.T) {
 	}
 }
 
-func TestStartLiveStreamReleasesOnFailure(t *testing.T) {
+func TestStartLiveStreamFailure(t *testing.T) {
 	builds := useFFmpegBuilds(t)
 	guildPlayer := &player.GuildPlayer{GuildID: "pinlivefail"}
 	testutil.Swap(t, player.HookGetLiveStreamPipe, func(string, bool, int, int, *dependency.Binary) (io.ReadCloser, error) {
@@ -198,7 +198,7 @@ func TestStartLiveStreamReleasesOnFailure(t *testing.T) {
 	}
 }
 
-func TestOpenPlaybackStreamUsesThePlayersPin(t *testing.T) {
+func TestOpenPlaybackStreamPin(t *testing.T) {
 	builds := useFFmpegBuilds(t)
 	spawned := captureSpawns(t)
 	guildPlayer := &player.GuildPlayer{GuildID: "pinopen"}
@@ -211,7 +211,7 @@ func TestOpenPlaybackStreamUsesThePlayersPin(t *testing.T) {
 	}
 }
 
-func TestCrossfadeIncomingStreamKeepsTheOutgoingBuild(t *testing.T) {
+func TestCrossfadeKeepsOutgoingBuild(t *testing.T) {
 	guildID := "pincrossfade"
 	q := seedCrossfadeQueue(t, guildID)
 	cacheNextStreamURL(t, guildID, q.Songs[1].ID, "https://example.invalid/next")

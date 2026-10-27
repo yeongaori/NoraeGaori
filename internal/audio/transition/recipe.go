@@ -146,9 +146,9 @@ func settingCategory[T comparable](names catalogue[T], field func(*Settings) *T)
 	}
 }
 
-var categoryValues = buildCategoryValues()
+var categoryValues = createCategoryValues()
 
-func buildCategoryValues() map[Category][]string {
+func createCategoryValues() map[Category][]string {
 	values := make(map[Category][]string, len(categories)+len(legacyStyles))
 	for category, info := range categories {
 		values[category] = withAuto(info.names)

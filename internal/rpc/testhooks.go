@@ -16,7 +16,7 @@ var HookRunningMu = &runningMu
 var HookStopChan = &stopChan
 var HookStopOnce = &stopOnce
 
-func HookBuildUpdater(fields HookUpdaterFields) *updater {
+func HookCreateUpdater(fields HookUpdaterFields) *updater {
 	return &updater{session: fields.Session, cfg: fields.Cfg}
 }
 

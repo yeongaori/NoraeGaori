@@ -16,7 +16,7 @@ func effectiveStyle(row *automix.HookTransitionRow, category transition.Category
 	return transition.StyleOf(&row.HookResolved().Recipe, category)
 }
 
-func TestDescribeTrackCoversEveryAnalysisState(t *testing.T) {
+func TestDescribeTrackStates(t *testing.T) {
 	panel := &messages.T("check-guild").AutoMixPanel
 
 	checks := []struct {
@@ -45,7 +45,7 @@ func TestDescribeTrackCoversEveryAnalysisState(t *testing.T) {
 	}
 }
 
-func TestSourceLabelsNameEveryOverrideSource(t *testing.T) {
+func TestSourceLabelEverySource(t *testing.T) {
 	panel := &messages.T("check-guild").AutoMixPanel
 
 	for source, want := range map[string]string{"guild": panel.SourceGuild, "song": panel.SourceSong, "auto": panel.SourceAuto} {
@@ -55,7 +55,7 @@ func TestSourceLabelsNameEveryOverrideSource(t *testing.T) {
 	}
 }
 
-func TestFindTransitionPairLooksUpTheOutgoingSong(t *testing.T) {
+func TestFindTransitionPair(t *testing.T) {
 	pairs := automix.HookTransitionPairs(checkSongs(3, "Track"))
 
 	if pair := automix.HookFindTransitionPair(pairs, 2); pair == nil || (*pair.HookFromSong()).ID != 2 {
@@ -69,13 +69,13 @@ func TestFindTransitionPairLooksUpTheOutgoingSong(t *testing.T) {
 	}
 }
 
-func TestEmptyQueueYieldsNoTransitions(t *testing.T) {
+func TestHydrateRowsEmptyQueue(t *testing.T) {
 	if rows := checkRowsFor(nil); len(rows) != 0 {
 		t.Errorf("got %d rows, want 0", len(rows))
 	}
 }
 
-func TestSingleSongYieldsOnlyAnOutro(t *testing.T) {
+func TestHydrateRowsSingleSong(t *testing.T) {
 	rows := checkRowsFor(checkSongs(1, "Solo"))
 
 	if len(rows) != 1 {
@@ -86,7 +86,7 @@ func TestSingleSongYieldsOnlyAnOutro(t *testing.T) {
 	}
 }
 
-func TestTwoSongsYieldOneTransitionAndAnOutro(t *testing.T) {
+func TestHydrateRowsTwoSongs(t *testing.T) {
 	rows := checkRowsFor(checkSongs(2, "Pair"))
 
 	if len(rows) != 2 {
@@ -100,9 +100,9 @@ func TestTwoSongsYieldOneTransitionAndAnOutro(t *testing.T) {
 	}
 }
 
-func TestFiftySongsYieldFortyNineTransitionsPlusAnOutro(t *testing.T) {
+func TestHydrateRowsFiftySongs(t *testing.T) {
 	state := checkPanelState(checkSongs(50, "Track"), nil, true)
-	rows := automix.HookHydrateTransitionRows("check-guild", state, *state.HookPairs())
+	rows := automix.HookHydrateRows("check-guild", state, *state.HookPairs())
 
 	if len(rows) != 50 {
 		t.Errorf("got %d rows, want 50", len(rows))
@@ -112,7 +112,7 @@ func TestFiftySongsYieldFortyNineTransitionsPlusAnOutro(t *testing.T) {
 	}
 }
 
-func TestLiveSongsDropBothAdjacentTransitions(t *testing.T) {
+func TestHydrateRowsLiveSongs(t *testing.T) {
 	songs := checkSongs(4, "Track")
 	songs[1].IsLive = true
 	rows := checkRowsFor(songs)
@@ -139,7 +139,7 @@ func TestLiveSongsDropBothAdjacentTransitions(t *testing.T) {
 	}
 }
 
-func TestALiveLastSongGetsNoOutro(t *testing.T) {
+func TestHydrateRowsLiveLastSong(t *testing.T) {
 	songs := checkSongs(3, "Track")
 	songs[2].IsLive = true
 	rows := checkRowsFor(songs)
@@ -149,7 +149,7 @@ func TestALiveLastSongGetsNoOutro(t *testing.T) {
 	}
 }
 
-func TestSongOverrideMarksOnlyItsOwnTransition(t *testing.T) {
+func TestHydrateRowsSongOverride(t *testing.T) {
 	songs := checkSongs(3, "Track")
 	songs[0].AutoMixOverrides = transition.CategoryFXOut.Override("echo_half_cut_end")
 	rows := checkRowsFor(songs)
@@ -168,7 +168,7 @@ func TestSongOverrideMarksOnlyItsOwnTransition(t *testing.T) {
 	}
 }
 
-func TestGuildDefaultsApplyWhereTheSongDoesNotOverride(t *testing.T) {
+func TestHydrateRowsGuildDefaults(t *testing.T) {
 	songs := checkSongs(3, "Track")
 	songs[0].AutoMixOverrides = transition.CategoryFilterOut.Override("low_pass")
 	rows := checkRowsWithGuild(songs, map[string]string{"filter_out": "high_pass", "fx_out": "reverb_out_end"})
@@ -197,7 +197,7 @@ func TestGuildDefaultsApplyWhereTheSongDoesNotOverride(t *testing.T) {
 	}
 }
 
-func TestInvalidStoredChoicesShowAsAuto(t *testing.T) {
+func TestHydrateRowsInvalidStored(t *testing.T) {
 	songs := checkSongs(3, "Track")
 	songs[0].AutoMixOverrides = map[string]string{"fx_out": "bogus", "preset": "7", "length": "four_bars"}
 	rows := checkRowsFor(songs)
@@ -213,12 +213,12 @@ func TestInvalidStoredChoicesShowAsAuto(t *testing.T) {
 	}
 }
 
-func TestPanelHidesAutoSelectionWhenAutoMixIsOff(t *testing.T) {
+func TestHydrateRowsAutoMixOff(t *testing.T) {
 	songs := checkSongs(3, "Track")
 	songs[0].AutoMixOverrides = transition.CategoryFXOut.Override("reverb_out_end")
 
 	state := checkPanelState(songs, transition.ExpandLegacy(transition.ShortcutEQ, "quick_bass"), false)
-	rows := automix.HookHydrateTransitionRows("check-guild", state, *state.HookPairs())
+	rows := automix.HookHydrateRows("check-guild", state, *state.HookPairs())
 	if len(rows) == 0 {
 		t.Fatal("no rows built")
 	}
@@ -248,7 +248,7 @@ func TestPanelHidesAutoSelectionWhenAutoMixIsOff(t *testing.T) {
 	}
 }
 
-func TestPanelDropsALoopThePlayerCannotRun(t *testing.T) {
+func TestHydrateRowsDropsLoop(t *testing.T) {
 	songs := checkSongs(3, "Track")
 	songs[0].AutoMixOverrides = transition.CategoryLoop.Override("eight_beats")
 	rows := checkRowsFor(songs)
@@ -267,10 +267,10 @@ func TestPanelDropsALoopThePlayerCannotRun(t *testing.T) {
 func analyzingRows(songs []*queue.Song, pending map[int]int) []*automix.HookTransitionRow {
 	state := checkPanelState(songs, nil, true)
 	*state.HookPending() = pending
-	return automix.HookHydrateTransitionRows("check-guild", state, *state.HookPairs())
+	return automix.HookHydrateRows("check-guild", state, *state.HookPairs())
 }
 
-func TestAnalyzingFollowsThePendingSongs(t *testing.T) {
+func TestHydrateRowsAnalyzing(t *testing.T) {
 	songs := checkSongs(3, "Track")
 
 	idleRows := analyzingRows(songs, nil)
@@ -306,7 +306,7 @@ func TestAnalyzingFollowsThePendingSongs(t *testing.T) {
 	}
 }
 
-func TestOutroRowResolvesToTheAutoOutroRecipe(t *testing.T) {
+func TestDescribeRecipeOutro(t *testing.T) {
 	rows := checkRowsFor(checkSongs(2, "Track"))
 	outro := rows[len(rows)-1]
 
@@ -319,7 +319,7 @@ func TestOutroRowResolvesToTheAutoOutroRecipe(t *testing.T) {
 	}
 }
 
-func TestPreviewShowsTheFadeWhenTheSongsCanHoldIt(t *testing.T) {
+func TestDescribeRecipeShowsFade(t *testing.T) {
 	songs := checkSongs(2, "Track")
 	for _, song := range songs {
 		song.Duration = "3:00"
@@ -341,7 +341,7 @@ func TestPreviewShowsTheFadeWhenTheSongsCanHoldIt(t *testing.T) {
 	}
 }
 
-func TestSongSettingsShapeThePreview(t *testing.T) {
+func TestDescribeRecipeSongSettings(t *testing.T) {
 	songs := checkSongs(2, "Track")
 	for _, song := range songs {
 		song.Duration = "3:00"
@@ -365,7 +365,7 @@ func TestSongSettingsShapeThePreview(t *testing.T) {
 	}
 }
 
-func TestOutroHonoursTheLastSongsOverride(t *testing.T) {
+func TestHydrateRowsOutroOverride(t *testing.T) {
 	songs := checkSongs(2, "Track")
 	songs[1].AutoMixOverrides = transition.CategoryFXOut.Override("reverb_out_center")
 	rows := checkRowsFor(songs)

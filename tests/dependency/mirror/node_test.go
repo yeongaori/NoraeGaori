@@ -29,7 +29,7 @@ func serveNode(t *testing.T) *releasetest.Server {
 	return fake
 }
 
-func TestNodeDistPicksTheNewestLTSForLinux(t *testing.T) {
+func TestNodeDistPicksNewestLTS(t *testing.T) {
 	fake := serveNode(t)
 
 	found, err := (&mirror.NodeDist{BaseURL: fake.URL("")}).Find(&mirror.Platform{GOOS: "linux", GOARCH: "amd64"}, atLeast22)
@@ -47,7 +47,7 @@ func TestNodeDistPicksTheNewestLTSForLinux(t *testing.T) {
 	}
 }
 
-func TestNodeDistSkipsReleasesWithoutThePlatform(t *testing.T) {
+func TestNodeDistSkipsOtherPlatforms(t *testing.T) {
 	fake := serveNode(t)
 
 	found, err := (&mirror.NodeDist{BaseURL: fake.URL("")}).Find(&mirror.Platform{GOOS: "windows", GOARCH: "386"}, atLeast22)
@@ -76,7 +76,7 @@ func TestNodeDistReportsNoBuild(t *testing.T) {
 	releasetest.RequireErrorIs(t, err, mirror.ErrNoBuild)
 }
 
-func TestNodeDistFailsWhenItCannotBeChecked(t *testing.T) {
+func TestNodeDistUncheckable(t *testing.T) {
 	fake := serveNode(t)
 	delete(fake.Files, "/v24.21.0/SHASUMS256.txt")
 	source := mirror.NodeDist{BaseURL: fake.URL("")}

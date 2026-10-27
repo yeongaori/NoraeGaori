@@ -10,7 +10,7 @@ import (
 	"noraegaori/tests/testutil/discordtest"
 )
 
-func autocompleteInteraction(name string, member *discordgo.Member, user *discordgo.User, options ...*discordgo.ApplicationCommandInteractionDataOption) *discordgo.InteractionCreate {
+func createAutocomplete(name string, member *discordgo.Member, user *discordgo.User, options ...*discordgo.ApplicationCommandInteractionDataOption) *discordgo.InteractionCreate {
 	return &discordgo.InteractionCreate{
 		Interaction: &discordgo.Interaction{
 			ID:      discordtest.InteractionID,
@@ -25,7 +25,7 @@ func autocompleteInteraction(name string, member *discordgo.Member, user *discor
 	}
 }
 
-func registerAutocompleteProbe(t *testing.T, name string, choiceCount int) *command.AutocompleteRequest {
+func registerChoiceProbe(t *testing.T, name string, choiceCount int) *command.AutocompleteRequest {
 	t.Helper()
 
 	received := &command.AutocompleteRequest{}
@@ -47,12 +47,12 @@ func focusedQuery(value any, optionType discordgo.ApplicationCommandOptionType) 
 	return &discordgo.ApplicationCommandInteractionDataOption{Name: "query", Type: optionType, Value: value, Focused: true}
 }
 
-func TestAutocompleteHandsTheFocusedQueryToTheCommand(t *testing.T) {
-	received := registerAutocompleteProbe(t, "probecomplete", 30)
+func TestAutocompleteFocusedQuery(t *testing.T) {
+	received := registerChoiceProbe(t, "probecomplete", 30)
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 	member := &discordgo.Member{User: &discordgo.User{ID: "member-user"}}
 
-	command.HandleAutocomplete(session, autocompleteInteraction("probecomplete", member, nil, focusedQuery("abc", discordgo.ApplicationCommandOptionString)))
+	command.HandleAutocomplete(session, createAutocomplete("probecomplete", member, nil, focusedQuery("abc", discordgo.ApplicationCommandOptionString)))
 
 	want := command.AutocompleteRequest{GuildID: "guild", UserID: "member-user", CommandName: "probecomplete", Query: "abc"}
 	if *received != want {
@@ -77,18 +77,18 @@ func TestAutocompleteHandsTheFocusedQueryToTheCommand(t *testing.T) {
 	}
 }
 
-func TestAutocompleteUsesTheDirectMessageUser(t *testing.T) {
-	received := registerAutocompleteProbe(t, "probedm", 1)
+func TestAutocompleteDirectMessage(t *testing.T) {
+	received := registerChoiceProbe(t, "probedm", 1)
 	session, _ := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 
-	command.HandleAutocomplete(session, autocompleteInteraction("probedm", nil, &discordgo.User{ID: "dm-user"}))
+	command.HandleAutocomplete(session, createAutocomplete("probedm", nil, &discordgo.User{ID: "dm-user"}))
 
 	if received.UserID != "dm-user" {
 		t.Errorf("user ID = %q, want the direct message user", received.UserID)
 	}
 }
 
-func TestFocusedStringOptionOnlyReadsAFocusedText(t *testing.T) {
+func TestFocusedStringOption(t *testing.T) {
 	unfocused := &discordgo.ApplicationCommandInteractionDataOption{Name: "query", Type: discordgo.ApplicationCommandOptionString, Value: "ignored"}
 
 	for name, check := range map[string]struct {
@@ -106,7 +106,7 @@ func TestFocusedStringOptionOnlyReadsAFocusedText(t *testing.T) {
 	}
 }
 
-func TestInteractionUserIDPrefersTheMember(t *testing.T) {
+func TestInteractionUserIDMember(t *testing.T) {
 	for name, check := range map[string]struct {
 		member *discordgo.Member
 		user   *discordgo.User

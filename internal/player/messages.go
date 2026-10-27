@@ -50,7 +50,7 @@ func textChannelOf(guildID string) (string, bool) {
 	return q.TextChannelID, true
 }
 
-func sendNowPlayingMessage(session *discordgo.Session, guildID string, song *queue.Song, q *queue.Queue) {
+func sendNowPlaying(session *discordgo.Session, guildID string, song *queue.Song, q *queue.Queue) {
 	deliverNowPlaying(session, guildID, song, q)
 }
 
@@ -167,11 +167,11 @@ func sendSongErrorMessage(session *discordgo.Session, guildID string, song *queu
 	_, _ = session.ChannelMessageSendEmbed(textChannelID, embed)
 }
 
-func sendPlaybackCrashMessage(session *discordgo.Session, guildID string, song *queue.Song) {
+func sendCrashMessage(session *discordgo.Session, guildID string, song *queue.Song) {
 	sendSongErrorMessage(session, guildID, song, messages.T(guildID).Player.PlaybackCrashRetry)
 }
 
-func sendPlaybackEndMessage(session *discordgo.Session, guildID, reason string, isLeaving bool) {
+func sendEndMessage(session *discordgo.Session, guildID, reason string, isLeaving bool) {
 	textChannelID, ok := textChannelOf(guildID)
 	if !ok {
 		logger.Debugf("Cannot send playback end message: no queue or text channel")

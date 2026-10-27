@@ -17,7 +17,7 @@ func slashProbe(name string, member *discordgo.Member) *discordgo.InteractionCre
 	return discordtest.SlashInteraction(replyGuildID, name, member)
 }
 
-func TestHandleInteractionAnswersEveryRefusalAndFailure(t *testing.T) {
+func TestHandleInteractionRefusals(t *testing.T) {
 	errors := &messages.T(replyGuildID).Errors
 	plain := discordtest.Member(replyGuildID, "plain")
 	owner := discordtest.Member(replyGuildID, "owner")

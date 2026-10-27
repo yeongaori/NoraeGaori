@@ -11,7 +11,7 @@ import (
 	"noraegaori/tests/testutil"
 )
 
-func TestExpectedChecksumAcceptsAnAgreeingDigest(t *testing.T) {
+func TestExpectedChecksumAgrees(t *testing.T) {
 	payload := []byte("yt-dlp binary")
 	release, _ := serveRelease(t, payload, sha256Hex(payload))
 	release.Assets[0].Digest = "sha256:" + strings.ToUpper(sha256Hex(payload))
@@ -25,7 +25,7 @@ func TestExpectedChecksumAcceptsAnAgreeingDigest(t *testing.T) {
 	}
 }
 
-func TestExpectedChecksumFailsClosedWithoutSource(t *testing.T) {
+func TestExpectedChecksumNoSource(t *testing.T) {
 	release := &ytdlp.GitHubRelease{TagName: "2026.07.04"}
 
 	if _, err := ytdlp.ExpectedChecksum(release, "yt-dlp"); err == nil {
@@ -46,7 +46,7 @@ func releaseWithAssets(names ...string) *ytdlp.GitHubRelease {
 	return release
 }
 
-func TestPickAssetChoosesTheStandaloneBuildForEachPlatform(t *testing.T) {
+func TestPickAssetStandalone(t *testing.T) {
 	release := releaseWithAssets(publishedAssetNames...)
 	cases := []struct{ goos, goarch, want string }{
 		{"linux", "amd64", "yt-dlp_linux"},
@@ -72,7 +72,7 @@ func TestPickAssetChoosesTheStandaloneBuildForEachPlatform(t *testing.T) {
 	}
 }
 
-func TestPickAssetUsesAStandaloneBuildOnceItIsPublished(t *testing.T) {
+func TestPickAssetNewStandalone(t *testing.T) {
 	release := releaseWithAssets(append(publishedAssetNames, "yt-dlp_linux_i686")...)
 
 	got, err := ytdlp.HookPickAsset(release, "linux", "386")
@@ -81,7 +81,7 @@ func TestPickAssetUsesAStandaloneBuildOnceItIsPublished(t *testing.T) {
 	}
 }
 
-func TestPickAssetFallsBackToThePythonBuild(t *testing.T) {
+func TestPickAssetPythonFallback(t *testing.T) {
 	release := releaseWithAssets("yt-dlp", "yt-dlp.exe")
 
 	got, err := ytdlp.HookPickAsset(release, "linux", "amd64")
@@ -90,7 +90,7 @@ func TestPickAssetFallsBackToThePythonBuild(t *testing.T) {
 	}
 }
 
-func TestPickAssetRejectsPlatformsWithoutABuild(t *testing.T) {
+func TestPickAssetNoBuild(t *testing.T) {
 	cases := map[string]struct {
 		release      *ytdlp.GitHubRelease
 		goos, goarch string
@@ -107,7 +107,7 @@ func TestPickAssetRejectsPlatformsWithoutABuild(t *testing.T) {
 	}
 }
 
-func TestUpdateFromChannelPendingCanary(t *testing.T) {
+func TestUpdateFromChannelPending(t *testing.T) {
 	versionmanager := useVersionManager(t)
 	stubLatestVersion(t, "2026.08.19")
 	stubCanary(t, false, true)
@@ -125,7 +125,7 @@ func TestUpdateFromChannelPendingCanary(t *testing.T) {
 	}
 }
 
-func TestUpdateFromChannelFallbackError(t *testing.T) {
+func TestUpdateFromChannelFallback(t *testing.T) {
 	versionmanager := useVersionManager(t)
 	stubLatestVersion(t, "2026.08.19")
 

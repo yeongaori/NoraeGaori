@@ -13,7 +13,7 @@ import (
 func installableRuntime(t *testing.T, executable, version string) *stubMirror {
 	t.Helper()
 
-	payload := buildZip(t, map[string]string{executable: script(executable + " " + version)})
+	payload := createZip(t, map[string]string{executable: script(executable + " " + version)})
 	served := serveArchive(t, payload, 200)
 	return &stubMirror{label: executable + "-mirror", found: &mirror.Candidate{
 		Version: version,
@@ -24,13 +24,13 @@ func installableRuntime(t *testing.T, executable, version string) *stubMirror {
 	}}
 }
 
-func TestJsRuntimeArgNamesTheActiveRuntime(t *testing.T) {
+func TestJsRuntimeArgActive(t *testing.T) {
 	resetState(t)
 	if got := dependency.JsRuntimeArg(); got != "" {
 		t.Errorf("got %q with no runtime, want empty", got)
 	}
 
-	dependency.HookJsRuntimeSlot.HookReplace(dependency.HookBuildBinary(&dependency.HookBinaryFields{Tool: "node", Path: "/usr/bin/node", IsSystem: true}))
+	dependency.HookJsRuntimeSlot.HookReplace(dependency.HookCreateBinary(&dependency.HookBinaryFields{Tool: "node", Path: "/usr/bin/node", IsSystem: true}))
 	if got := dependency.JsRuntimeArg(); got != "node" {
 		t.Errorf("got %q, want the bare name for a system runtime", got)
 	}
@@ -41,7 +41,7 @@ func TestJsRuntimeArgNamesTheActiveRuntime(t *testing.T) {
 	}
 }
 
-func TestPrepareJsRuntimePrefersTheSystemRuntime(t *testing.T) {
+func TestPrepareJsRuntimeSystemFirst(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
 	read := logtest.Capture(t)
@@ -63,7 +63,7 @@ func TestPrepareJsRuntimePrefersTheSystemRuntime(t *testing.T) {
 	}
 }
 
-func TestPrepareJsRuntimeIsQuietAboutASystemDeno(t *testing.T) {
+func TestPrepareJsRuntimeSystemQuiet(t *testing.T) {
 	resetState(t)
 	read := logtest.Capture(t)
 	usePath(t, fakeRuntimes(t, map[string]string{"deno": "deno 2.9.7"}))
@@ -78,7 +78,7 @@ func TestPrepareJsRuntimeIsQuietAboutASystemDeno(t *testing.T) {
 	}
 }
 
-func TestPrepareJsRuntimeDownloadsDeno(t *testing.T) {
+func TestPrepareJsRuntimeDeno(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
 	read := logtest.Capture(t)
@@ -96,13 +96,13 @@ func TestPrepareJsRuntimeDownloadsDeno(t *testing.T) {
 	}
 }
 
-func TestPrepareJsRuntimeWarnsWhenDenoHasNoBuild(t *testing.T) {
+func TestPrepareJsRuntimeNoBuild(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
 	read := logtest.Capture(t)
 	usePath(t)
-	useJsRuntimes(t, dependency.HookBuildTool(&dependency.HookToolFields{Name: "deno", DisplayName: "Deno", Mirrors: []mirror.Mirror{noBuildMirror("deno-github")}}),
-		dependency.HookBuildTool(&dependency.HookToolFields{Name: "node", DisplayName: "Node.js", VersionFlag: "--version", Mirrors: []mirror.Mirror{installableRuntime(t, "node.exe", "22.23.3")}}))
+	useJsRuntimes(t, dependency.HookCreateTool(&dependency.HookToolFields{Name: "deno", DisplayName: "Deno", Mirrors: []mirror.Mirror{noBuildMirror("deno-github")}}),
+		dependency.HookCreateTool(&dependency.HookToolFields{Name: "node", DisplayName: "Node.js", VersionFlag: "--version", Mirrors: []mirror.Mirror{installableRuntime(t, "node.exe", "22.23.3")}}))
 	windows386 := &mirror.Platform{GOOS: "windows", GOARCH: "386"}
 
 	dependency.HookPrepareJsRuntime(windows386)
@@ -119,13 +119,13 @@ func TestPrepareJsRuntimeWarnsWhenDenoHasNoBuild(t *testing.T) {
 	}
 }
 
-func TestPrepareJsRuntimeWarnsWhenDenoIsUnreachable(t *testing.T) {
+func TestPrepareJsRuntimeUnreachable(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
 	read := logtest.Capture(t)
 	usePath(t)
-	useJsRuntimes(t, dependency.HookBuildTool(&dependency.HookToolFields{Name: "deno", DisplayName: "Deno", Mirrors: []mirror.Mirror{unreachableMirror("deno-github")}}),
-		dependency.HookBuildTool(&dependency.HookToolFields{Name: "node", DisplayName: "Node.js", VersionFlag: "--version", Mirrors: []mirror.Mirror{installableRuntime(t, "node", "24.14.1")}}))
+	useJsRuntimes(t, dependency.HookCreateTool(&dependency.HookToolFields{Name: "deno", DisplayName: "Deno", Mirrors: []mirror.Mirror{unreachableMirror("deno-github")}}),
+		dependency.HookCreateTool(&dependency.HookToolFields{Name: "node", DisplayName: "Node.js", VersionFlag: "--version", Mirrors: []mirror.Mirror{installableRuntime(t, "node", "24.14.1")}}))
 
 	dependency.HookPrepareJsRuntime(linuxAmd64)
 
@@ -135,7 +135,7 @@ func TestPrepareJsRuntimeWarnsWhenDenoIsUnreachable(t *testing.T) {
 	}
 }
 
-func TestPrepareJsRuntimeUsesAnInstalledRuntimeWhenOffline(t *testing.T) {
+func TestPrepareJsRuntimeOffline(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
 	usePath(t)
@@ -149,7 +149,7 @@ func TestPrepareJsRuntimeUsesAnInstalledRuntimeWhenOffline(t *testing.T) {
 	}
 }
 
-func TestPrepareJsRuntimeWarnsWhenNothingIsAvailable(t *testing.T) {
+func TestPrepareJsRuntimeNone(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
 	read := logtest.Capture(t)

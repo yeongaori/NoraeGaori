@@ -63,7 +63,7 @@ func mixInPhaseTones(t *testing.T, amplitude, volume float64, frames int) []int1
 	return peaks
 }
 
-func TestLoudOverlapIsLimitedJustBelowFullScale(t *testing.T) {
+func TestMixLoudOverlapLimited(t *testing.T) {
 	peaks := mixInPhaseTones(t, 30000, 1.0, 60)
 
 	if last := peaks[len(peaks)-1]; last < 32000 {
@@ -71,7 +71,7 @@ func TestLoudOverlapIsLimitedJustBelowFullScale(t *testing.T) {
 	}
 }
 
-func TestOverlapOfTwoQuietSongsKeepsItsLevel(t *testing.T) {
+func TestMixQuietOverlapLevel(t *testing.T) {
 	peaks := mixInPhaseTones(t, 6000, 1.0, 60)
 
 	if last := peaks[len(peaks)-1]; last < 11900 || last > 12000 {
@@ -79,7 +79,7 @@ func TestOverlapOfTwoQuietSongsKeepsItsLevel(t *testing.T) {
 	}
 }
 
-func TestHalfVolumeMixIsNotLimited(t *testing.T) {
+func TestMixHalfVolumeUnlimited(t *testing.T) {
 	peaks := mixInPhaseTones(t, 24000, 0.5, 60)
 
 	if last := peaks[len(peaks)-1]; last < 23800 || last > 24000 {
@@ -95,7 +95,7 @@ func armLoopTransition(t *testing.T, guildID string, periodSec float64) (*player
 	next := stubAudioStream(t).(*fakeStream)
 	next.setEndState(&ffmpeg.EndState{TotalFrames: 1})
 
-	fade := player.HookBuildFadeSettings(&player.HookFadeSettingsFields{
+	fade := player.HookCreateFadeSettings(&player.HookFadeSettingsFields{
 		AutoMix:      true,
 		Crossfade:    true,
 		AutoMixBeats: 16,
@@ -125,7 +125,7 @@ func armLoopTransition(t *testing.T, guildID string, periodSec float64) (*player
 	return guildPlayer, cs
 }
 
-func TestLoopStyleArmsABeatLoopOfTheExactLength(t *testing.T) {
+func TestCrossfadePlanLoopLength(t *testing.T) {
 	_, cs := armLoopTransition(t, "looparms", 60.0/128)
 
 	if *cs.HookBeatLoop() == nil {

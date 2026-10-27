@@ -9,7 +9,7 @@ import (
 	"noraegaori/tests/testutil/discordtest"
 )
 
-func playingPlayerWithVoice(t *testing.T, guildID string) (*player.GuildPlayer, *mockVoiceConn, chan struct{}) {
+func createVoicePlayer(t *testing.T, guildID string) (*player.GuildPlayer, *mockVoiceConn, chan struct{}) {
 	t.Helper()
 
 	setupPlayerDB(t, guildID, 1)
@@ -31,9 +31,9 @@ func playingPlayerWithVoice(t *testing.T, guildID string) (*player.GuildPlayer, 
 	return guildPlayer, conn, sessionDone
 }
 
-func TestPauseForEmptyChannelWaitsForPlaybackBeforeDisconnecting(t *testing.T) {
+func TestPauseForEmptyChannelWaits(t *testing.T) {
 	guildID := "guild-autopause-wait"
-	guildPlayer, conn, sessionDone := playingPlayerWithVoice(t, guildID)
+	guildPlayer, conn, sessionDone := createVoicePlayer(t, guildID)
 	session := discordtest.Session(t, "bot")
 
 	done := make(chan struct{})
@@ -72,9 +72,9 @@ func TestPauseForEmptyChannelWaitsForPlaybackBeforeDisconnecting(t *testing.T) {
 	}
 }
 
-func TestPauseForEmptyChannelMarksThePlayerPaused(t *testing.T) {
+func TestPauseForEmptyChannelPauses(t *testing.T) {
 	guildID := "guild-autopause-state"
-	guildPlayer, _, sessionDone := playingPlayerWithVoice(t, guildID)
+	guildPlayer, _, sessionDone := createVoicePlayer(t, guildID)
 	session := discordtest.Session(t, "bot")
 
 	go func() {
@@ -106,9 +106,9 @@ func TestPauseForEmptyChannelMarksThePlayerPaused(t *testing.T) {
 	}
 }
 
-func TestPauseForEmptyChannelIgnoresAnIdlePlayer(t *testing.T) {
+func TestPauseForEmptyChannelIdle(t *testing.T) {
 	guildID := "guild-autopause-idle"
-	guildPlayer, conn, _ := playingPlayerWithVoice(t, guildID)
+	guildPlayer, conn, _ := createVoicePlayer(t, guildID)
 	session := discordtest.Session(t, "bot")
 
 	guildPlayer.HookMu().Lock()
@@ -130,7 +130,7 @@ func TestPauseForEmptyChannelIgnoresAnIdlePlayer(t *testing.T) {
 	}
 }
 
-func TestSetVoiceReplacesAndClearsTheConnection(t *testing.T) {
+func TestSetVoiceReplacesConnection(t *testing.T) {
 	guildID := "guild-setvoice"
 	setupPlayerDB(t, guildID, 0)
 

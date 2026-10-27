@@ -19,7 +19,7 @@ func fakeRuntimes(t *testing.T, versions map[string]string) string {
 	return directory
 }
 
-func TestSystemJsRuntimesFollowThePriority(t *testing.T) {
+func TestFindSystemJsRuntimePriority(t *testing.T) {
 	cases := []struct {
 		name     string
 		runtimes map[string]string
@@ -53,7 +53,7 @@ func TestSystemJsRuntimesFollowThePriority(t *testing.T) {
 	}
 }
 
-func TestSystemJsRuntimeReportsItsVersionAndPath(t *testing.T) {
+func TestFindSystemJsRuntimeVersion(t *testing.T) {
 	directory := fakeRuntimes(t, map[string]string{"node": "v22.23.3"})
 	usePath(t, directory)
 
@@ -63,7 +63,7 @@ func TestSystemJsRuntimeReportsItsVersionAndPath(t *testing.T) {
 	}
 }
 
-func TestNvmNodeIsAddedToThePathWhenNodeIsMissing(t *testing.T) {
+func TestFindSystemJsRuntimeNvm(t *testing.T) {
 	usePath(t)
 	home := os.Getenv("HOME")
 	for _, version := range []string{"v9.11.2", "v24.14.1", "v22.23.3"} {
@@ -79,7 +79,7 @@ func TestNvmNodeIsAddedToThePathWhenNodeIsMissing(t *testing.T) {
 	}
 }
 
-func TestNvmIsIgnoredWhenNodeIsAlreadyOnThePath(t *testing.T) {
+func TestAddNvmNodeToPathNodePresent(t *testing.T) {
 	usePath(t, fakeRuntimes(t, map[string]string{"node": "v22.23.3"}))
 	path := os.Getenv("PATH")
 	writeExecutable(t, filepath.Join(os.Getenv("HOME"), ".nvm", "versions", "node", "v24.14.1", "bin", "node"), script("v24.14.1"))
@@ -90,7 +90,7 @@ func TestNvmIsIgnoredWhenNodeIsAlreadyOnThePath(t *testing.T) {
 	}
 }
 
-func TestNvmIsSkippedWithoutAHomeDirectory(t *testing.T) {
+func TestAddNvmNodeToPathNoHome(t *testing.T) {
 	usePath(t)
 	t.Setenv("HOME", "")
 	path := os.Getenv("PATH")
@@ -101,7 +101,7 @@ func TestNvmIsSkippedWithoutAHomeDirectory(t *testing.T) {
 	}
 }
 
-func TestSystemFFmpegMustRun(t *testing.T) {
+func TestFindSystemFFmpegMustRun(t *testing.T) {
 	usePath(t, fakeRuntimes(t, map[string]string{"ffmpeg": "ffmpeg version N-121234-g0123456"}))
 	binary, ok := dependency.HookFindSystemFFmpeg()
 	if !ok || !*binary.HookIsSystem() || filepath.Base(binary.Path) != "ffmpeg" {

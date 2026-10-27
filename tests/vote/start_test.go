@@ -58,7 +58,7 @@ func requestPaths(sent []discordtest.Request) []string {
 	return paths
 }
 
-func TestStartPostsTheVoteAndWaitsForBallots(t *testing.T) {
+func TestStartPostsVote(t *testing.T) {
 	const guildID = "start-guild"
 	stubs := stubVoteEffects(t)
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
@@ -84,7 +84,7 @@ func TestStartPostsTheVoteAndWaitsForBallots(t *testing.T) {
 	waitUntil(t, func() bool { return slices.Contains(stubs.clearedMessages(), "333") }, "the vote did not finish after being cancelled")
 }
 
-func TestStartRefusesASecondVoteOfTheSameKind(t *testing.T) {
+func TestStartRefusesSecondVote(t *testing.T) {
 	const guildID = "start-busy-guild"
 	stubVoteEffects(t)
 	liveVote(t, guildID, vote.KindSkip)
@@ -109,7 +109,7 @@ func TestStartRefusesASecondVoteOfTheSameKind(t *testing.T) {
 	}
 }
 
-func TestStartReleasesTheVoteWhenItsMessageCannotBeFound(t *testing.T) {
+func TestStartReleasesLostVote(t *testing.T) {
 	const guildID = "start-lost-guild"
 	stubVoteEffects(t)
 	session, requests := discordtest.StubAPI(t, func(r *http.Request) int {
@@ -132,7 +132,7 @@ func TestStartReleasesTheVoteWhenItsMessageCannotBeFound(t *testing.T) {
 	}
 }
 
-func TestRequiredVotesFetchMembersMissingFromTheCache(t *testing.T) {
+func TestStartFetchesMissingMembers(t *testing.T) {
 	const guildID = "fetch-guild"
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 	session.State.User = &discordgo.User{ID: "bot"}

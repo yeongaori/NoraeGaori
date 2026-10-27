@@ -45,7 +45,7 @@ func joinFailsWith(t *testing.T, guildID string, err error) player.HookPlayResul
 	return player.HookPlaySingleSong(nil, guildID)
 }
 
-func TestUnreachableVoiceWaitsForDiscord(t *testing.T) {
+func TestUnreachableVoiceWaits(t *testing.T) {
 	cases := map[string]error{
 		"join timed out":        fmt.Errorf("failed to join voice channel: %w", context.DeadlineExceeded),
 		"gateway offline":       discordgo.ErrWSNotFound,
@@ -67,7 +67,7 @@ func TestUnreachableVoiceWaitsForDiscord(t *testing.T) {
 	}
 }
 
-func TestOtherVoiceJoinFailuresDoNotWaitForDiscord(t *testing.T) {
+func TestJoinFailureNoDiscordWait(t *testing.T) {
 	guildID := "joinrefused"
 
 	if got := joinFailsWith(t, guildID, errors.New("missing permission to connect")); got != player.HookPlayStop {
@@ -93,7 +93,7 @@ func addQueue(t *testing.T, guildID string, songs int) {
 	t.Cleanup(func() { player.DeletePlayer(guildID) })
 }
 
-func TestResumeAfterReconnectResumesOnlyWaitingGuildsWithSongs(t *testing.T) {
+func TestResumeAfterReconnectWaiting(t *testing.T) {
 	setupPlayerDB(t, "outagewaiting", 1)
 	addQueue(t, "outagepaused", 1)
 	addQueue(t, "outageempty", 0)
@@ -120,7 +120,7 @@ func TestResumeAfterReconnectResumesOnlyWaitingGuildsWithSongs(t *testing.T) {
 	}
 }
 
-func TestWaitingForDiscordIsForgotten(t *testing.T) {
+func TestForgetAwaiting(t *testing.T) {
 	guildID := "outageforgotten"
 	guildPlayer := preparedPlayer(t, guildID, 1)
 
@@ -147,7 +147,7 @@ func TestWaitingForDiscordIsForgotten(t *testing.T) {
 	}
 }
 
-func TestVoiceDropsDoNotUseUpTheSongsRetries(t *testing.T) {
+func TestVoiceDropsKeepRetries(t *testing.T) {
 	guildID := "voicedropretries"
 	setupPlayerDB(t, guildID, 1)
 	q, err := queue.GetQueue(guildID, true)

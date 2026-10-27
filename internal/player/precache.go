@@ -27,7 +27,7 @@ const (
 var (
 	preCacheNext          = PreCacheNext
 	analyzeSegment        = analyzeStreamSegment
-	startAnalysisBackfill = StartAnalysisBackfill
+	startAnalysisBackfill = StartBackfill
 )
 
 func PreCacheNext(guildID string, bitrate int) {
@@ -96,7 +96,7 @@ func preCacheSong(ctx context.Context, guildID string, song *queue.Song, sponsor
 	logger.Debugf("Cached stream URL for: %s (fetched in %.1fs)", song.Title, time.Since(fetchStart).Seconds())
 
 	if automix, err := queue.GetAutoMix(guildID); err == nil && automix {
-		analyzeHeadForPreCache(ctx, guildID, song, streamURL, cacheKey)
+		analyzeCacheHead(ctx, guildID, song, streamURL, cacheKey)
 	}
 
 	scheduleCacheExpiry(cacheKey, cache, song)
@@ -137,7 +137,7 @@ func claimPreCache(cacheKey string, nextSong *queue.Song) (context.Context, cont
 	return ctx, cancel, claim, true
 }
 
-func analyzeHeadForPreCache(ctx context.Context, guildID string, song *queue.Song, streamURL, cacheKey string) {
+func analyzeCacheHead(ctx context.Context, guildID string, song *queue.Song, streamURL, cacheKey string) {
 	head := analysis.LoadTrackAnalysis(song.URL, analysis.SegmentHead)
 	reused := head != nil
 	source := "reused"
@@ -331,7 +331,7 @@ func ClearPreCache(guildID string) {
 	logger.Debugf("Cleared all caches for guild: %s", guildID)
 }
 
-func invalidatePreCacheSong(guildID string, songID int) {
+func invalidatePreCache(guildID string, songID int) {
 	cacheKey := preCacheKey(guildID, songID)
 	preCacheStoreMu.Lock()
 	defer preCacheStoreMu.Unlock()
@@ -347,6 +347,6 @@ func invalidatePreCacheSong(guildID string, songID int) {
 
 func InvalidatePreCaches(guildID string, songIDs []int) {
 	for _, songID := range songIDs {
-		invalidatePreCacheSong(guildID, songID)
+		invalidatePreCache(guildID, songID)
 	}
 }

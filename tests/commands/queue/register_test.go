@@ -11,7 +11,7 @@ import (
 	"noraegaori/tests/testutil/discordtest"
 )
 
-func TestRegisterAddsTheQueueCommandsAndRoutes(t *testing.T) {
+func TestRegisterQueueCommands(t *testing.T) {
 	queuecommand.Register(func(string) messages.CommandStrings { return messages.CommandStrings{} })
 
 	commandtest.WantRegistered(t, map[string]commandtest.Registration{

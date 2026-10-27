@@ -16,7 +16,7 @@ func requestersOf(songs []*queue.Song) []string {
 	return ids
 }
 
-func TestAffectedSongsFollowsTheScope(t *testing.T) {
+func TestAffectedSongsScope(t *testing.T) {
 	q := queuetest.QueueOf("a", "b", "c", "b")
 
 	current := vote.AffectedSongs(q, &vote.Target{Scope: vote.ScopeCurrentSong})
@@ -35,7 +35,7 @@ func TestAffectedSongsFollowsTheScope(t *testing.T) {
 	}
 }
 
-func TestAffectedSongsIgnoresUnknownIDsAndEmptyQueues(t *testing.T) {
+func TestAffectedSongsIgnoresUnknown(t *testing.T) {
 	if songs := vote.AffectedSongs(nil, &vote.Target{Scope: vote.ScopeWholeQueue}); songs != nil {
 		t.Errorf("a nil queue produced %v, want nothing", songs)
 	}
@@ -50,7 +50,7 @@ func TestAffectedSongsIgnoresUnknownIDsAndEmptyQueues(t *testing.T) {
 	}
 }
 
-func TestEveryAdderVotedRefusesAnEmptySet(t *testing.T) {
+func TestEveryAdderVotedEmptySet(t *testing.T) {
 	votes := map[string]struct{}{"a": {}}
 
 	if vote.HookEveryAdderVoted(votes, nil) {

@@ -30,7 +30,7 @@ func TestFilterHighpassShape(t *testing.T) {
 	checkFilterShape(t, func(f *dsp.Filter) { f.SetHighpass(2000, 0.707) }, 12000, 100)
 }
 
-func TestFilterBandpassPeaksAtItsCentre(t *testing.T) {
+func TestFilterBandpassPeaksAtCentre(t *testing.T) {
 	setup := func(f *dsp.Filter) { f.SetBandpass(1000, 5) }
 	centre := audiotest.FilterResponse(setup, 1000)
 	away := audiotest.FilterResponse(setup, 4000)
@@ -43,7 +43,7 @@ func TestFilterBandpassPeaksAtItsCentre(t *testing.T) {
 	}
 }
 
-func TestFilterAllpassKeepsTheLevel(t *testing.T) {
+func TestFilterAllpassKeepsLevel(t *testing.T) {
 	for _, frequency := range []float64{100, 4000, 12000} {
 		gain := audiotest.FilterResponse(func(f *dsp.Filter) { f.SetAllpass(4000, 0.707) }, frequency)
 		if gain < 0.98 || gain > 1.02 {
@@ -69,7 +69,7 @@ func TestFilterBypassIsTransparent(t *testing.T) {
 	}
 }
 
-func TestFilterExtremeParametersStayStable(t *testing.T) {
+func TestFilterExtremesStayStable(t *testing.T) {
 	cases := []struct {
 		name  string
 		setup func(*dsp.Filter)
@@ -103,7 +103,7 @@ func TestFilterExtremeParametersStayStable(t *testing.T) {
 	}
 }
 
-func TestDryWetFollowsTheSquareRootSineLaw(t *testing.T) {
+func TestDryWetSineLaw(t *testing.T) {
 	cases := []struct{ level, dry, wet float64 }{
 		{0, 1, 0},
 		{0.5, 0.8409, 0.8409},
@@ -166,7 +166,7 @@ func TestGainRampEndpoints(t *testing.T) {
 	}
 }
 
-func TestFrameConversionsPadAShortSourceWithSilence(t *testing.T) {
+func TestFrameConversionsPadShort(t *testing.T) {
 	floats := make([]float64, 300)
 	for i := range floats {
 		floats[i] = 5
@@ -189,7 +189,7 @@ func TestFrameConversionsPadAShortSourceWithSilence(t *testing.T) {
 	}
 }
 
-func TestMixWetRampsEachChannelFromItsOwnWet(t *testing.T) {
+func TestMixWetRampsPerChannel(t *testing.T) {
 	block := make([]float64, 8)
 	wet := []float64{1000, 0, 1000, 0, 1000, 0, 1000, 0}
 	dsp.MixWet(block, wet, 1, 1, 0, 1)

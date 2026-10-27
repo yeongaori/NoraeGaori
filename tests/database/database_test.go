@@ -91,7 +91,7 @@ var migratedColumns = map[string][]string{
 	"track_analysis": {"offset_sec", "beat_strength", "bar_offsets"},
 }
 
-func assertMigratedColumns(t *testing.T, db *sql.DB) {
+func assertMigrated(t *testing.T, db *sql.DB) {
 	t.Helper()
 
 	for table, wanted := range migratedColumns {
@@ -104,7 +104,7 @@ func assertMigratedColumns(t *testing.T, db *sql.DB) {
 	}
 }
 
-func TestInitializeEnablesWALAndABusyTimeout(t *testing.T) {
+func TestInitializeEnablesWAL(t *testing.T) {
 	t.Chdir(t.TempDir())
 	t.Cleanup(func() {
 		database.Close()
@@ -160,7 +160,7 @@ func TestInitializeCreatesSchema(t *testing.T) {
 		}
 	}
 
-	assertMigratedColumns(t, database.DB)
+	assertMigrated(t, database.DB)
 }
 
 func TestInitializeIsIdempotent(t *testing.T) {
@@ -189,7 +189,7 @@ func TestInitializeIsIdempotent(t *testing.T) {
 	}
 }
 
-func TestMigrationsAddMissingColumns(t *testing.T) {
+func TestRunMigrationsAddsColumns(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "legacy.sqlite")
 	createLegacySchema(t, dbPath)
 
@@ -200,10 +200,10 @@ func TestMigrationsAddMissingColumns(t *testing.T) {
 		t.Fatalf("runMigrations returned %v, want nil", err)
 	}
 
-	assertMigratedColumns(t, db)
+	assertMigrated(t, db)
 }
 
-func TestMigrationsApplyColumnDefaults(t *testing.T) {
+func TestRunMigrationsDefaults(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "defaults.sqlite")
 	createLegacySchema(t, dbPath)
 
@@ -242,7 +242,7 @@ func TestMigrationsApplyColumnDefaults(t *testing.T) {
 	}
 }
 
-func TestMigrationsAreIdempotent(t *testing.T) {
+func TestRunMigrationsIdempotent(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "repeat.sqlite")
 	createLegacySchema(t, dbPath)
 
@@ -264,7 +264,7 @@ func TestMigrationsAreIdempotent(t *testing.T) {
 	}
 }
 
-func TestMigrationFailureIsReturned(t *testing.T) {
+func TestRunMigrationsFailure(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "readonly.sqlite")
 	createLegacySchema(t, dbPath)
 
@@ -285,7 +285,7 @@ func TestMigrationFailureIsReturned(t *testing.T) {
 	}
 }
 
-func TestCreateTablesFailsOnReadOnlyDatabase(t *testing.T) {
+func TestCreateTablesReadOnly(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "readonly.sqlite")
 	createLegacySchema(t, dbPath)
 
@@ -297,7 +297,7 @@ func TestCreateTablesFailsOnReadOnlyDatabase(t *testing.T) {
 	}
 }
 
-func TestInitializeFailsWhenDataDirectoryIsAFile(t *testing.T) {
+func TestInitializeDataDirIsFile(t *testing.T) {
 	t.Chdir(t.TempDir())
 	t.Cleanup(func() { database.DB = nil })
 
@@ -310,7 +310,7 @@ func TestInitializeFailsWhenDataDirectoryIsAFile(t *testing.T) {
 	}
 }
 
-func TestCloseWithoutDatabase(t *testing.T) {
+func TestCloseNoDatabase(t *testing.T) {
 	useTestDB(t, nil)
 
 	if err := database.Close(); err != nil {

@@ -32,7 +32,7 @@ func commandInteraction(category string) *discordgo.InteractionCreate {
 	}
 }
 
-func TestRequestedCategoryHonoursTheChosenOption(t *testing.T) {
+func TestRequestedCategoryChosen(t *testing.T) {
 	dbtest.Setup(t)
 
 	for _, category := range *settings.HookSettingCategories {
@@ -42,7 +42,7 @@ func TestRequestedCategoryHonoursTheChosenOption(t *testing.T) {
 	}
 }
 
-func TestRequestedCategoryIsCaseInsensitiveAndTrimmed(t *testing.T) {
+func TestRequestedCategoryCase(t *testing.T) {
 	dbtest.Setup(t)
 
 	if got := settings.HookRequestedCategory(commandInteraction("  MIXING "), true); got != settings.HookCategoryMixing {
@@ -50,7 +50,7 @@ func TestRequestedCategoryIsCaseInsensitiveAndTrimmed(t *testing.T) {
 	}
 }
 
-func TestRequestedCategoryFallsBackWhenUnknownOrHidden(t *testing.T) {
+func TestRequestedCategoryFallback(t *testing.T) {
 	dbtest.Setup(t)
 
 	if got := settings.HookRequestedCategory(commandInteraction("nonsense"), true); got != settings.HookDefaultCategory(true) {
@@ -64,10 +64,10 @@ func TestRequestedCategoryFallsBackWhenUnknownOrHidden(t *testing.T) {
 	}
 }
 
-func TestAPanelRendersTheCategoryItWasBuiltFor(t *testing.T) {
+func TestRenderPanelCategory(t *testing.T) {
 	dbtest.Setup(t)
 
-	embed, components := settings.HookRenderPanel(checkGuildID, settings.HookBuildPanelTarget(settings.HookPanelTargetFields{IsAdmin: true, Category: settings.HookCategoryMixing}))
+	embed, components := settings.HookRenderPanel(checkGuildID, settings.HookCreatePanelTarget(settings.HookPanelTargetFields{IsAdmin: true, Category: settings.HookCategoryMixing}))
 
 	if !strings.Contains(embed.Title, settings.HookCategoryLabel(checkGuildID, settings.HookCategoryMixing)) {
 		t.Errorf("embed title %q does not name the mixing category", embed.Title)
@@ -80,7 +80,7 @@ func TestAPanelRendersTheCategoryItWasBuiltFor(t *testing.T) {
 	}
 }
 
-func TestTheSettingsPanelIsSentWithoutFetchingTheMessage(t *testing.T) {
+func TestHandleSettingsPanelNoFetch(t *testing.T) {
 	dbtest.Setup(t)
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 	ic := commandInteraction(settings.HookCategoryMixing)
@@ -100,7 +100,7 @@ func TestTheSettingsPanelIsSentWithoutFetchingTheMessage(t *testing.T) {
 	}
 }
 
-func TestAMissingMemberCannotEditAdminSettings(t *testing.T) {
+func TestCanEditAdminSettingsNoMember(t *testing.T) {
 	if settings.HookCanEditAdminSettings(nil, checkGuildID, nil) {
 		t.Error("a nil member was treated as an admin")
 	}
@@ -109,7 +109,7 @@ func TestAMissingMemberCannotEditAdminSettings(t *testing.T) {
 	}
 }
 
-func TestPrefixWritesReachTheDatabase(t *testing.T) {
+func TestApplySettingSavesPrefix(t *testing.T) {
 	dbtest.Setup(t)
 
 	spec := specFor(t, "prefix")
@@ -133,7 +133,7 @@ func TestPrefixWritesReachTheDatabase(t *testing.T) {
 	}
 }
 
-func TestRepeatWritesMapOntoEveryQueueMode(t *testing.T) {
+func TestApplySettingRepeatModes(t *testing.T) {
 	dbtest.Setup(t)
 
 	spec := specFor(t, "repeat")
@@ -160,7 +160,7 @@ func TestRepeatWritesMapOntoEveryQueueMode(t *testing.T) {
 	}
 }
 
-func TestChoiceValuesMustBeOnOffer(t *testing.T) {
+func TestNormalizeValueOnOffer(t *testing.T) {
 	language := specFor(t, "language")
 	repeat := specFor(t, "repeat")
 
@@ -186,7 +186,7 @@ func TestChoiceValuesMustBeOnOffer(t *testing.T) {
 	}
 }
 
-func TestAutoMixBeatsAreStoredAsWholeBeats(t *testing.T) {
+func TestApplySettingWholeBeats(t *testing.T) {
 	dbtest.Setup(t)
 
 	spec := specFor(t, "automix_beats")
@@ -206,7 +206,7 @@ func TestAutoMixBeatsAreStoredAsWholeBeats(t *testing.T) {
 	}
 }
 
-func TestValidationMessagesNameTheSettingAndItsBounds(t *testing.T) {
+func TestValidationMessageBounds(t *testing.T) {
 	label := func(key string) string { return settings.HookSettingLabel(checkGuildID, key) }
 
 	for name, check := range map[string]struct {

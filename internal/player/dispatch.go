@@ -112,7 +112,7 @@ func startPlaybackSession(session *discordgo.Session, guildID string) error {
 func runPlaybackSession(session *discordgo.Session, player *GuildPlayer, done chan struct{}, release func(), playSong func(*discordgo.Session, string) playResult) {
 	defer release()
 	defer player.endSession(done)
-	defer recoverPlaybackSession(session, player)
+	defer recoverSession(session, player)
 
 	for !player.isHalted() && playSong(session, player.GuildID) != playStop {
 	}

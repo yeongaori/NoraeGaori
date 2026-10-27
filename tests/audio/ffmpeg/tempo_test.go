@@ -22,7 +22,7 @@ func filterArgument(args []string) string {
 	return ""
 }
 
-func TestArgsLeaveTheAudioAloneWithoutTempoOrNormalization(t *testing.T) {
+func TestArgsPlainAudio(t *testing.T) {
 	if filter := filterArgument(ffmpeg.Args("input", 0, false, ffmpeg.Tempo{})); filter != "" {
 		t.Errorf("filter = %q, want none", filter)
 	}
@@ -34,7 +34,7 @@ func TestArgsLeaveTheAudioAloneWithoutTempoOrNormalization(t *testing.T) {
 	}
 }
 
-func TestTempoHoldsThenStepsBackToNormalSpeed(t *testing.T) {
+func TestArgsTempoStepsBack(t *testing.T) {
 	filter := filterArgument(ffmpeg.Args("input", 12, true, ffmpeg.Tempo{Speed: 0.98, HoldSec: 10.5}))
 
 	want := "asendcmd=c='10.2900 atempo tempo 0.9850;11.2750 atempo tempo 0.9900;12.2650 atempo tempo 0.9950;13.2600 atempo tempo 1.0000',atempo=0.9800,dynaudnorm="
@@ -43,7 +43,7 @@ func TestTempoHoldsThenStepsBackToNormalSpeed(t *testing.T) {
 	}
 }
 
-func TestTempoSpeedsUpTowardNormalToo(t *testing.T) {
+func TestArgsTempoSpeedsUp(t *testing.T) {
 	filter := filterArgument(ffmpeg.Args("input", 0, false, ffmpeg.Tempo{Speed: 1.012, HoldSec: 2}))
 
 	want := "asendcmd=c='2.0240 atempo tempo 1.0070;3.0310 atempo tempo 1.0020;4.0330 atempo tempo 1.0000',atempo=1.0120"
@@ -52,7 +52,7 @@ func TestTempoSpeedsUpTowardNormalToo(t *testing.T) {
 	}
 }
 
-func TestTempoDriftCountsTheSourceTimeGainedOrLost(t *testing.T) {
+func TestTempoDriftCountsSourceTime(t *testing.T) {
 	cases := []struct {
 		tempo ffmpeg.Tempo
 		drift float64
@@ -70,7 +70,7 @@ func TestTempoDriftCountsTheSourceTimeGainedOrLost(t *testing.T) {
 	}
 }
 
-func TestFFmpegFollowsTheTempoSchedule(t *testing.T) {
+func TestStartFollowsTempo(t *testing.T) {
 	requireFFmpeg(t)
 	input := filepath.Join(t.TempDir(), "tone.wav")
 	if output, err := exec.Command("ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "sine=f=1000:d=30", input).CombinedOutput(); err != nil {

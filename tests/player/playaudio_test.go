@@ -19,7 +19,7 @@ func boundedAudioStream(frames int) player.HookAudioStream {
 	return s
 }
 
-func newCharacterizationPlayer(t *testing.T, guildID string, stream func() player.HookAudioStream) (*player.GuildPlayer, *mockVoiceConn, *queue.Song) {
+func createBaselinePlayer(t *testing.T, guildID string, stream func() player.HookAudioStream) (*player.GuildPlayer, *mockVoiceConn, *queue.Song) {
 	t.Helper()
 
 	setupPlayerDB(t, guildID, 1)
@@ -62,16 +62,16 @@ func runPlayAudio(t *testing.T, guildPlayer *player.GuildPlayer, song *queue.Son
 	}
 }
 
-func TestPlayAudioReturnsNilOnNaturalEnd(t *testing.T) {
-	guildPlayer, _, song := newCharacterizationPlayer(t, "charend", func() player.HookAudioStream { return boundedAudioStream(5) })
+func TestPlayAudioNaturalEnd(t *testing.T) {
+	guildPlayer, _, song := createBaselinePlayer(t, "charend", func() player.HookAudioStream { return boundedAudioStream(5) })
 
 	if err := runPlayAudio(t, guildPlayer, song, make(chan struct{}, 1)); err != nil {
 		t.Errorf("got %v, want nil when the stream ends after sending frames", err)
 	}
 }
 
-func TestPlayAudioReportsAStreamThatSentNothing(t *testing.T) {
-	guildPlayer, _, song := newCharacterizationPlayer(t, "charempty", func() player.HookAudioStream { return boundedAudioStream(0) })
+func TestPlayAudioEmptyStream(t *testing.T) {
+	guildPlayer, _, song := createBaselinePlayer(t, "charempty", func() player.HookAudioStream { return boundedAudioStream(0) })
 
 	err := runPlayAudio(t, guildPlayer, song, make(chan struct{}, 1))
 	if err == nil {
@@ -82,8 +82,8 @@ func TestPlayAudioReportsAStreamThatSentNothing(t *testing.T) {
 	}
 }
 
-func TestPlayAudioRequiresAVoiceConnection(t *testing.T) {
-	guildPlayer, _, song := newCharacterizationPlayer(t, "charnovc", func() player.HookAudioStream { return boundedAudioStream(5) })
+func TestPlayAudioNeedsVoice(t *testing.T) {
+	guildPlayer, _, song := createBaselinePlayer(t, "charnovc", func() player.HookAudioStream { return boundedAudioStream(5) })
 
 	guildPlayer.HookMu().Lock()
 	guildPlayer.VoiceConn = nil
@@ -95,8 +95,8 @@ func TestPlayAudioRequiresAVoiceConnection(t *testing.T) {
 	}
 }
 
-func TestPlayAudioBracketsPlaybackWithSpeaking(t *testing.T) {
-	guildPlayer, mock, song := newCharacterizationPlayer(t, "charspeak", func() player.HookAudioStream { return boundedAudioStream(5) })
+func TestPlayAudioSpeaking(t *testing.T) {
+	guildPlayer, mock, song := createBaselinePlayer(t, "charspeak", func() player.HookAudioStream { return boundedAudioStream(5) })
 
 	if err := runPlayAudio(t, guildPlayer, song, make(chan struct{}, 1)); err != nil {
 		t.Fatalf("playAudio returned %v, want nil", err)
@@ -121,7 +121,7 @@ func TestPlayAudioBracketsPlaybackWithSpeaking(t *testing.T) {
 }
 
 func TestPlayAudioSignalsPlaybackDone(t *testing.T) {
-	guildPlayer, _, song := newCharacterizationPlayer(t, "chardone", func() player.HookAudioStream { return boundedAudioStream(5) })
+	guildPlayer, _, song := createBaselinePlayer(t, "chardone", func() player.HookAudioStream { return boundedAudioStream(5) })
 
 	if err := runPlayAudio(t, guildPlayer, song, make(chan struct{}, 1)); err != nil {
 		t.Fatalf("playAudio returned %v, want nil", err)
@@ -134,8 +134,8 @@ func TestPlayAudioSignalsPlaybackDone(t *testing.T) {
 	}
 }
 
-func TestPlayAudioClearsTransientStateOnReturn(t *testing.T) {
-	guildPlayer, _, song := newCharacterizationPlayer(t, "charstate", func() player.HookAudioStream { return boundedAudioStream(5) })
+func TestPlayAudioClearsState(t *testing.T) {
+	guildPlayer, _, song := createBaselinePlayer(t, "charstate", func() player.HookAudioStream { return boundedAudioStream(5) })
 
 	guildPlayer.HookMu().Lock()
 	guildPlayer.FadingIn = true
@@ -162,8 +162,8 @@ func TestPlayAudioClearsTransientStateOnReturn(t *testing.T) {
 	}
 }
 
-func TestPlayAudioSignalsTheFirstFrameOnce(t *testing.T) {
-	guildPlayer, _, song := newCharacterizationPlayer(t, "charfirst", func() player.HookAudioStream { return boundedAudioStream(10) })
+func TestPlayAudioFirstFrameOnce(t *testing.T) {
+	guildPlayer, _, song := createBaselinePlayer(t, "charfirst", func() player.HookAudioStream { return boundedAudioStream(10) })
 
 	firstFrame := make(chan struct{}, 4)
 	if err := runPlayAudio(t, guildPlayer, song, firstFrame); err != nil {
@@ -175,8 +175,8 @@ func TestPlayAudioSignalsTheFirstFrameOnce(t *testing.T) {
 	}
 }
 
-func TestPlayAudioMarksThePlayerPlaying(t *testing.T) {
-	guildPlayer, _, song := newCharacterizationPlayer(t, "charplaying", func() player.HookAudioStream { return boundedAudioStream(30) })
+func TestPlayAudioMarksPlaying(t *testing.T) {
+	guildPlayer, _, song := createBaselinePlayer(t, "charplaying", func() player.HookAudioStream { return boundedAudioStream(30) })
 
 	observed := make(chan bool, 1)
 	go func() {
@@ -213,28 +213,28 @@ func drainedStream(t *testing.T, streamErr error) *fakeStream {
 	return s
 }
 
-func TestClassifyDrainedStreamSurfacesAStreamError(t *testing.T) {
+func TestClassifyDrainStreamError(t *testing.T) {
 	want := errors.New("ffmpeg exploded")
 	stream := drainedStream(t, want)
 
-	got := player.HookClassifyDrainedStream(stream, &queue.Song{}, 100, 0, false)
+	got := player.HookClassifyDrain(stream, &queue.Song{}, 100, 0, false)
 	if !errors.Is(got, want) {
 		t.Errorf("got %v, want the stream error", got)
 	}
 }
 
-func TestClassifyDrainedStreamAcceptsANormalEnd(t *testing.T) {
+func TestClassifyDrainNormalEnd(t *testing.T) {
 	stream := drainedStream(t, nil)
 
-	if err := player.HookClassifyDrainedStream(stream, &queue.Song{}, 500, 0, false); err != nil {
+	if err := player.HookClassifyDrain(stream, &queue.Song{}, 500, 0, false); err != nil {
 		t.Errorf("got %v, want nil after frames were sent", err)
 	}
 }
 
-func TestClassifyDrainedStreamRejectsASilentStream(t *testing.T) {
+func TestClassifyDrainSilentStream(t *testing.T) {
 	stream := drainedStream(t, nil)
 
-	err := player.HookClassifyDrainedStream(stream, &queue.Song{}, 0, 0, false)
+	err := player.HookClassifyDrain(stream, &queue.Song{}, 0, 0, false)
 	if err == nil {
 		t.Fatal("got nil, want an error when no frames were sent")
 	}
@@ -243,47 +243,47 @@ func TestClassifyDrainedStreamRejectsASilentStream(t *testing.T) {
 	}
 }
 
-func TestClassifyDrainedStreamAcceptsAnEmptyHandoff(t *testing.T) {
+func TestClassifyDrainEmptyHandoff(t *testing.T) {
 	stream := drainedStream(t, nil)
 	stream.setEndState(&ffmpeg.EndState{})
 
-	if err := player.HookClassifyDrainedStream(stream, &queue.Song{}, 0, 10, true); err != nil {
+	if err := player.HookClassifyDrain(stream, &queue.Song{}, 0, 10, true); err != nil {
 		t.Errorf("got %v, want nil when a handoff resumed past the end", err)
 	}
 }
 
-func TestClassifyDrainedStreamStillRejectsAHandoffWithoutEndState(t *testing.T) {
+func TestClassifyDrainNoEndState(t *testing.T) {
 	stream := drainedStream(t, nil)
 
-	if err := player.HookClassifyDrainedStream(stream, &queue.Song{}, 0, 10, true); err == nil {
+	if err := player.HookClassifyDrain(stream, &queue.Song{}, 0, 10, true); err == nil {
 		t.Error("got nil, want an error when the handoff carried no end state")
 	}
 }
 
-func TestClassifyDrainedStreamPrefersTheStreamErrorOverFrameCount(t *testing.T) {
+func TestClassifyDrainPrefersError(t *testing.T) {
 	want := errors.New("ffmpeg died early")
 	stream := drainedStream(t, want)
 
-	got := player.HookClassifyDrainedStream(stream, &queue.Song{}, 0, 0, false)
+	got := player.HookClassifyDrain(stream, &queue.Song{}, 0, 0, false)
 	if !errors.Is(got, want) {
 		t.Errorf("got %v, want the stream error to win over the frame-count check", got)
 	}
 }
 
-func TestAdjustEndStateForOffsetLeavesUnshiftedStreams(t *testing.T) {
+func TestOffsetEndStateUnshifted(t *testing.T) {
 	original := &ffmpeg.EndState{TotalFrames: 100, TailStartFrame: 80, SilentTailFrames: 5}
 
 	for _, offset := range []int{0, -1} {
-		if got := player.HookAdjustEndStateForOffset(original, offset); got != original {
+		if got := player.HookOffsetEndState(original, offset); got != original {
 			t.Errorf("offset %d returned a copy, want the original untouched", offset)
 		}
 	}
 }
 
-func TestAdjustEndStateForOffsetShiftsFrameCounts(t *testing.T) {
+func TestOffsetEndStateShifts(t *testing.T) {
 	original := &ffmpeg.EndState{TotalFrames: 100, TailStartFrame: 80, SilentTailFrames: 5}
 
-	got := player.HookAdjustEndStateForOffset(original, 30)
+	got := player.HookOffsetEndState(original, 30)
 
 	if got == original {
 		t.Fatal("the original end state was mutated in place")
@@ -302,7 +302,7 @@ func TestAdjustEndStateForOffsetShiftsFrameCounts(t *testing.T) {
 	}
 }
 
-func TestFadeInGainIsInactiveWithoutAWindow(t *testing.T) {
+func TestFadeInGainAtNoWindow(t *testing.T) {
 	for _, frames := range []int{0, -1} {
 		gain, active := player.HookFadeInGainAt(10, 0, frames)
 		if active {
@@ -314,7 +314,7 @@ func TestFadeInGainIsInactiveWithoutAWindow(t *testing.T) {
 	}
 }
 
-func TestFadeInGainRunsFromSilenceToUnity(t *testing.T) {
+func TestFadeInGainAtRange(t *testing.T) {
 	const start, frames = 100, 50
 
 	if gain, active := player.HookFadeInGainAt(start, start, frames); !active || gain != 0 {
@@ -334,7 +334,7 @@ func TestFadeInGainRunsFromSilenceToUnity(t *testing.T) {
 	}
 }
 
-func TestFadeInGainIsMonotonic(t *testing.T) {
+func TestFadeInGainAtMonotonic(t *testing.T) {
 	const start, frames = 0, 64
 
 	previous := -1.0
@@ -353,7 +353,7 @@ func TestFadeInGainIsMonotonic(t *testing.T) {
 	}
 }
 
-func TestFadeOutGainIsInactiveBeforeItsWindow(t *testing.T) {
+func TestFadeOutGainAtEarly(t *testing.T) {
 	gain, active := player.HookFadeOutGainAt(10, 100, 50)
 	if active {
 		t.Error("a frame before the window reported an active fade-out")
@@ -367,7 +367,7 @@ func TestFadeOutGainIsInactiveBeforeItsWindow(t *testing.T) {
 	}
 }
 
-func TestFadeOutGainRunsFromUnityToSilence(t *testing.T) {
+func TestFadeOutGainAtRange(t *testing.T) {
 	const start, frames = 100, 50
 
 	if gain, active := player.HookFadeOutGainAt(start, start, frames); !active || gain != 1 {
@@ -383,7 +383,7 @@ func TestFadeOutGainRunsFromUnityToSilence(t *testing.T) {
 	}
 }
 
-func TestFadeOutGainIsMonotonic(t *testing.T) {
+func TestFadeOutGainAtMonotonic(t *testing.T) {
 	const start, frames = 0, 64
 
 	previous := math.Inf(1)
@@ -402,7 +402,7 @@ func TestFadeOutGainIsMonotonic(t *testing.T) {
 	}
 }
 
-func TestFadeGainsClampOutsideTheirWindows(t *testing.T) {
+func TestFadeGainsClamp(t *testing.T) {
 	if gain, active := player.HookFadeInGainAt(-10, 0, 50); !active || gain != 0 {
 		t.Errorf("a frame before the fade-in start gave (%g, %v), want (0, true)", gain, active)
 	}
@@ -412,7 +412,7 @@ func TestFadeGainsClampOutsideTheirWindows(t *testing.T) {
 	}
 }
 
-func TestFadeInAndFadeOutAreComplementary(t *testing.T) {
+func TestFadeGainsComplementary(t *testing.T) {
 	const frames = 32
 
 	for frame := 0; frame < frames; frame++ {

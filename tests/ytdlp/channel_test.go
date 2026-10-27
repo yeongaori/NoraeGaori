@@ -22,7 +22,7 @@ func useChannel(t *testing.T, channel string) {
 	testutil.Swap(t, ytdlp.HookConfiguredChannelFn, func() string { return channel })
 }
 
-func TestChannelOfClassifiesByTagShape(t *testing.T) {
+func TestChannelOfTagShape(t *testing.T) {
 	cases := map[string]string{
 		"2026.07.04":        config.YtDlpChannelStable,
 		"2026.06.09":        config.YtDlpChannelStable,
@@ -37,7 +37,7 @@ func TestChannelOfClassifiesByTagShape(t *testing.T) {
 	}
 }
 
-func TestReleaseURLsFollowTheRequestedChannel(t *testing.T) {
+func TestReleasesURLChannel(t *testing.T) {
 	if repo := ytdlp.HookLatestReleaseRepo(config.YtDlpChannelNightly); repo.Repo != ytdlp.HookNightlyRepo || repo.APIURL != ytdlp.HookGithubAPI || repo.WebURL != ytdlp.HookGithubWeb {
 		t.Errorf("got %+v, want the nightly repo on api.github.com and github.com", repo)
 	}
@@ -57,8 +57,8 @@ func TestReleaseURLsFollowTheRequestedChannel(t *testing.T) {
 	}
 }
 
-func TestSelectBestVersionPrefersTheConfiguredChannel(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestSelectBestVersionChannel(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{Path: "lib/a/yt-dlp", State: ytdlp.StateVerified, Successes: 5})
 	addVersion(versionmanager, "2026.08.18.122307", &ytdlp.VersionEntry{Path: "lib/b/yt-dlp", State: ytdlp.StateVerified, Successes: 5})
 
@@ -73,8 +73,8 @@ func TestSelectBestVersionPrefersTheConfiguredChannel(t *testing.T) {
 	}
 }
 
-func TestSelectBestVersionFallsBackAcrossChannels(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestSelectBestVersionAcross(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{Path: "lib/a/yt-dlp", State: ytdlp.StateVerified, Successes: 5})
 
 	useChannel(t, config.YtDlpChannelNightly)
@@ -84,8 +84,8 @@ func TestSelectBestVersionFallsBackAcrossChannels(t *testing.T) {
 	}
 }
 
-func TestSelectBestVersionStillSkipsBlacklistedBuilds(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestSelectBestVersionBlacklist(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	addVersion(versionmanager, "2026.08.18.122307", &ytdlp.VersionEntry{Path: "lib/a/yt-dlp", State: ytdlp.StateBlacklisted, Successes: 5})
 	addVersion(versionmanager, "2026.08.17.000000", &ytdlp.VersionEntry{Path: "lib/b/yt-dlp", State: ytdlp.StateVerified, Successes: 2})
 
@@ -96,7 +96,7 @@ func TestSelectBestVersionStillSkipsBlacklistedBuilds(t *testing.T) {
 	}
 }
 
-func recordChannelAttempts(t *testing.T, onAttempt func(channel string)) *[]string {
+func captureAttempts(t *testing.T, onAttempt func(channel string)) *[]string {
 	t.Helper()
 
 	attempts := []string{}
@@ -114,17 +114,17 @@ func recordChannelAttempts(t *testing.T, onAttempt func(channel string)) *[]stri
 func useVersionManager(t *testing.T) *ytdlp.VersionManager {
 	t.Helper()
 
-	versionmanager := newTestVersionManager(t)
+	versionmanager := createVersionManager(t)
 	testutil.Swap(t, ytdlp.HookVersionMgr, versionmanager)
 
 	return versionmanager
 }
 
-func TestAutoStaysOnStableWhileStableWorks(t *testing.T) {
+func TestUpdateYtDlpStaysStable(t *testing.T) {
 	useChannel(t, config.YtDlpChannelAuto)
 	versionmanager := useVersionManager(t)
 
-	attempts := recordChannelAttempts(t, func(string) {
+	attempts := captureAttempts(t, func(string) {
 		addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{Path: "lib/s/yt-dlp", State: ytdlp.StateActive})
 		versionmanager.HookState().ActiveVersion = "2026.07.04"
 	})
@@ -138,12 +138,12 @@ func TestAutoStaysOnStableWhileStableWorks(t *testing.T) {
 	}
 }
 
-func TestAutoFallsBackToNightlyWhenStableIsBroken(t *testing.T) {
+func TestUpdateYtDlpBrokenStable(t *testing.T) {
 	useChannel(t, config.YtDlpChannelAuto)
 	versionmanager := useVersionManager(t)
 	addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{Path: "lib/s/yt-dlp", State: ytdlp.StateBlacklisted})
 
-	attempts := recordChannelAttempts(t, func(channel string) {
+	attempts := captureAttempts(t, func(channel string) {
 		if channel == config.YtDlpChannelNightly {
 			addVersion(versionmanager, "2026.08.18.122307", &ytdlp.VersionEntry{Path: "lib/n/yt-dlp", State: ytdlp.StateActive})
 			versionmanager.HookState().ActiveVersion = "2026.08.18.122307"
@@ -160,7 +160,7 @@ func TestAutoFallsBackToNightlyWhenStableIsBroken(t *testing.T) {
 	}
 }
 
-func TestAutoReturnsToStableOnceItShipsAWorkingRelease(t *testing.T) {
+func TestUpdateYtDlpReturnsToStable(t *testing.T) {
 	useChannel(t, config.YtDlpChannelAuto)
 	versionmanager := useVersionManager(t)
 
@@ -168,7 +168,7 @@ func TestAutoReturnsToStableOnceItShipsAWorkingRelease(t *testing.T) {
 	addVersion(versionmanager, "2026.08.18.122307", &ytdlp.VersionEntry{Path: "lib/n/yt-dlp", State: ytdlp.StateActive})
 	versionmanager.HookState().ActiveVersion = "2026.08.18.122307"
 
-	attempts := recordChannelAttempts(t, func(channel string) {
+	attempts := captureAttempts(t, func(channel string) {
 		if channel == config.YtDlpChannelStable {
 			addVersion(versionmanager, "2026.09.01", &ytdlp.VersionEntry{Path: "lib/s2/yt-dlp", State: ytdlp.StateActive})
 			versionmanager.HookState().ActiveVersion = "2026.09.01"
@@ -187,11 +187,11 @@ func TestAutoReturnsToStableOnceItShipsAWorkingRelease(t *testing.T) {
 	}
 }
 
-func TestAutoRejectsAProvisionallyActivatedStable(t *testing.T) {
+func TestUpdateYtDlpProvisionalStable(t *testing.T) {
 	useChannel(t, config.YtDlpChannelAuto)
 	versionmanager := useVersionManager(t)
 
-	attempts := recordChannelAttempts(t, func(channel string) {
+	attempts := captureAttempts(t, func(channel string) {
 		if channel == config.YtDlpChannelStable {
 			addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{Path: "lib/s/yt-dlp", State: ytdlp.StateProvisional})
 			versionmanager.HookState().ActiveVersion = "2026.07.04"
@@ -207,11 +207,11 @@ func TestAutoRejectsAProvisionallyActivatedStable(t *testing.T) {
 	}
 }
 
-func TestExplicitChannelPinSkipsTheAutoPolicy(t *testing.T) {
+func TestUpdateYtDlpPinnedChannel(t *testing.T) {
 	useChannel(t, config.YtDlpChannelNightly)
 	useVersionManager(t)
 
-	attempts := recordChannelAttempts(t, nil)
+	attempts := captureAttempts(t, nil)
 
 	if _, err := ytdlp.UpdateYtDlp(false); err != nil {
 		t.Fatalf("UpdateYtDlp returned %v, want nil", err)
@@ -222,7 +222,7 @@ func TestExplicitChannelPinSkipsTheAutoPolicy(t *testing.T) {
 	}
 }
 
-func TestProbeStreamReachableAcceptsAServedStream(t *testing.T) {
+func TestProbeStreamReachableServed(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write(make([]byte, 4096))
 	}))
@@ -233,7 +233,7 @@ func TestProbeStreamReachableAcceptsAServedStream(t *testing.T) {
 	}
 }
 
-func TestProbeStreamReachableRejectsAForbiddenStream(t *testing.T) {
+func TestProbeStreamReachable403(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 	}))
@@ -248,7 +248,7 @@ func TestProbeStreamReachableRejectsAForbiddenStream(t *testing.T) {
 	}
 }
 
-func TestProbeStreamReachableSendsNoRangeHeader(t *testing.T) {
+func TestProbeStreamReachableNoRange(t *testing.T) {
 	var sawRange string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sawRange = r.Header.Get("Range")
@@ -265,8 +265,8 @@ func TestProbeStreamReachableSendsNoRangeHeader(t *testing.T) {
 	}
 }
 
-func TestCanaryProbesRealPlaybackBeforeFixedVideos(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestGetCanaryIDsPlayedFirst(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	versionmanager.HookState().CanaryRing = []string{"playedA", "playedB"}
 
 	ids := versionmanager.HookGetCanaryIDs()
@@ -291,8 +291,8 @@ func TestCanaryProbesRealPlaybackBeforeFixedVideos(t *testing.T) {
 	}
 }
 
-func TestCanaryFallsBackToFixedVideosOnAFreshInstall(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestGetCanaryIDsFreshInstall(t *testing.T) {
+	versionmanager := createVersionManager(t)
 
 	ids := versionmanager.HookGetCanaryIDs()
 	if len(ids) != len(*ytdlp.HookFixedCanaryIDs) {
@@ -300,12 +300,12 @@ func TestCanaryFallsBackToFixedVideosOnAFreshInstall(t *testing.T) {
 	}
 }
 
-func TestActiveVersionGoesUnhealthyOnRepeatedPlaybackFailures(t *testing.T) {
+func TestIsActiveHealthyFailures(t *testing.T) {
 	versionmanager := useVersionManager(t)
 	addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{Path: "lib/s/yt-dlp", State: ytdlp.StateActive, Successes: 400})
 	versionmanager.HookState().ActiveVersion = "2026.07.04"
 
-	if !ytdlp.HookActiveVersionIsHealthy() {
+	if !ytdlp.HookIsActiveHealthy() {
 		t.Fatal("a canary-verified active version should start healthy")
 	}
 
@@ -313,18 +313,18 @@ func TestActiveVersionGoesUnhealthyOnRepeatedPlaybackFailures(t *testing.T) {
 		versionmanager.SaveError("2026.07.04", video, "ffmpeg produced no audio: exit status 8: 403 Forbidden")
 	}
 
-	if ytdlp.HookActiveVersionIsHealthy() {
+	if ytdlp.HookIsActiveHealthy() {
 		t.Error("still healthy after repeated playback failures: the auto policy would never leave the broken version")
 	}
 }
 
-func TestActiveNightlyStaysHealthyWithoutReprobingNightly(t *testing.T) {
+func TestUpdateYtDlpNightlyHealthy(t *testing.T) {
 	useChannel(t, config.YtDlpChannelAuto)
 	versionmanager := useVersionManager(t)
 	addVersion(versionmanager, "2026.08.18.122307", &ytdlp.VersionEntry{Path: "lib/n/yt-dlp", State: ytdlp.StateActive, Successes: 40})
 	versionmanager.HookState().ActiveVersion = "2026.08.18.122307"
 
-	attempts := recordChannelAttempts(t, nil)
+	attempts := captureAttempts(t, nil)
 
 	if _, err := ytdlp.UpdateYtDlp(false); err != nil {
 		t.Fatalf("UpdateYtDlp returned %v, want nil", err)
@@ -335,7 +335,7 @@ func TestActiveNightlyStaysHealthyWithoutReprobingNightly(t *testing.T) {
 	}
 }
 
-func TestAutoTriesNightlyWhenStableFailsItsCanary(t *testing.T) {
+func TestUpdateYtDlpStableCanary(t *testing.T) {
 	useChannel(t, config.YtDlpChannelAuto)
 	versionmanager := useVersionManager(t)
 	addVersion(versionmanager, "2026.08.18.122307", &ytdlp.VersionEntry{Path: "lib/n/yt-dlp", State: ytdlp.StateActive, Successes: 40})
@@ -344,7 +344,7 @@ func TestAutoTriesNightlyWhenStableFailsItsCanary(t *testing.T) {
 	attempts := []string{}
 	testutil.Swap(t, ytdlp.HookUpdateChannelFn, func(channel string, force bool) (ytdlp.HookChannelOutcome, error) {
 		attempts = append(attempts, channel)
-		return *ytdlp.HookBuildChannelOutcome(&ytdlp.HookChannelOutcomeFields{CanaryFailed: channel == config.YtDlpChannelStable}), nil
+		return *ytdlp.HookCreateChannelOutcome(&ytdlp.HookChannelOutcomeFields{CanaryFailed: channel == config.YtDlpChannelStable}), nil
 	})
 
 	if _, err := ytdlp.UpdateYtDlp(false); err != nil {
@@ -356,7 +356,7 @@ func TestAutoTriesNightlyWhenStableFailsItsCanary(t *testing.T) {
 	}
 }
 
-func TestAutoReportsBothChannelErrorsWhenNightlyAlsoFails(t *testing.T) {
+func TestUpdateYtDlpBothFail(t *testing.T) {
 	useChannel(t, config.YtDlpChannelAuto)
 	useVersionManager(t)
 	stableErr := errors.New("stable release unreachable")
@@ -377,14 +377,14 @@ func TestAutoReportsBothChannelErrorsWhenNightlyAlsoFails(t *testing.T) {
 	}
 }
 
-func TestAutoDropsTheStableErrorOnceNightlySucceeds(t *testing.T) {
+func TestUpdateYtDlpDropsStableError(t *testing.T) {
 	useChannel(t, config.YtDlpChannelAuto)
 	useVersionManager(t)
 	testutil.Swap(t, ytdlp.HookUpdateChannelFn, func(channel string, force bool) (ytdlp.HookChannelOutcome, error) {
 		if channel == config.YtDlpChannelStable {
 			return ytdlp.HookChannelOutcome{}, errors.New("stable release unreachable")
 		}
-		return *ytdlp.HookBuildChannelOutcome(&ytdlp.HookChannelOutcomeFields{Updated: true}), nil
+		return *ytdlp.HookCreateChannelOutcome(&ytdlp.HookChannelOutcomeFields{Updated: true}), nil
 	})
 
 	updated, err := ytdlp.UpdateYtDlp(false)
@@ -396,7 +396,7 @@ func TestAutoDropsTheStableErrorOnceNightlySucceeds(t *testing.T) {
 	}
 }
 
-func TestAutoMovesToNightlyAfterPlaybackFailures(t *testing.T) {
+func TestUpdateYtDlpPlaybackFailures(t *testing.T) {
 	useChannel(t, config.YtDlpChannelAuto)
 	versionmanager := useVersionManager(t)
 	addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{Path: "lib/s/yt-dlp", State: ytdlp.StateActive, Successes: 400})
@@ -406,7 +406,7 @@ func TestAutoMovesToNightlyAfterPlaybackFailures(t *testing.T) {
 		versionmanager.SaveError("2026.07.04", video, "ffmpeg produced no audio: exit status 8: 403 Forbidden")
 	}
 
-	attempts := recordChannelAttempts(t, nil)
+	attempts := captureAttempts(t, nil)
 
 	if _, err := ytdlp.UpdateYtDlp(false); err != nil {
 		t.Fatalf("UpdateYtDlp returned %v, want nil", err)
@@ -417,7 +417,7 @@ func TestAutoMovesToNightlyAfterPlaybackFailures(t *testing.T) {
 	}
 }
 
-func TestRequestUpdateCheckNeverBlocks(t *testing.T) {
+func TestRequestUpdateCheckAsync(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		for i := 0; i < 100; i++ {
@@ -447,7 +447,7 @@ func stubLatestVersion(t *testing.T, version string) {
 	stubLatestRelease(t, &ytdlp.GitHubRelease{TagName: version})
 }
 
-func TestUpdateFromChannelStaysPutWhenTheActiveVersionIsHealthy(t *testing.T) {
+func TestUpdateFromChannelHealthy(t *testing.T) {
 	versionmanager := useVersionManager(t)
 	stubLatestVersion(t, "2026.07.04")
 	stubCanary(t, true, false)
@@ -468,7 +468,7 @@ func TestUpdateFromChannelStaysPutWhenTheActiveVersionIsHealthy(t *testing.T) {
 	}
 }
 
-func TestUpdateFromChannelReturnsToStableWhenTheActiveVersionIsFailing(t *testing.T) {
+func TestUpdateFromChannelFailing(t *testing.T) {
 	versionmanager := useVersionManager(t)
 	stubLatestVersion(t, "2026.07.04")
 	stubCanary(t, true, false)
@@ -493,7 +493,7 @@ func TestUpdateFromChannelReturnsToStableWhenTheActiveVersionIsFailing(t *testin
 	}
 }
 
-func TestUpdateFromChannelCanariesAPendingReleaseAlreadyOnDisk(t *testing.T) {
+func TestUpdateFromChannelOnDisk(t *testing.T) {
 	versionmanager := useVersionManager(t)
 	stubLatestVersion(t, "2026.08.19")
 	stubCanary(t, true, false)
@@ -514,7 +514,7 @@ func TestUpdateFromChannelCanariesAPendingReleaseAlreadyOnDisk(t *testing.T) {
 	}
 }
 
-func TestUpdateFromChannelReportsABlacklistedLatestWithoutAFallbackChain(t *testing.T) {
+func TestUpdateFromChannelBlacklisted(t *testing.T) {
 	versionmanager := useVersionManager(t)
 	stubLatestVersion(t, "2026.08.19")
 
@@ -539,10 +539,10 @@ func TestUpdateFromChannelReportsABlacklistedLatestWithoutAFallbackChain(t *test
 	}
 }
 
-func TestUpdateFromChannelInstallsAndActivatesANewRelease(t *testing.T) {
+func TestUpdateFromChannelInstalls(t *testing.T) {
 	versionmanager := useVersionManager(t)
 	stubCanary(t, true, false)
-	stubLatestRelease(t, serveInstallableReleases(t, "2026.09.01")[0])
+	stubLatestRelease(t, serveInstallables(t, "2026.09.01")[0])
 
 	addVersion(versionmanager, "2026.08.19", &ytdlp.VersionEntry{Path: "lib/o/yt-dlp", State: ytdlp.StateActive, Successes: 40})
 	versionmanager.HookState().ActiveVersion = "2026.08.19"
@@ -563,10 +563,10 @@ func TestUpdateFromChannelInstallsAndActivatesANewRelease(t *testing.T) {
 	}
 }
 
-func TestUpdateFromChannelReportsAFailedDownload(t *testing.T) {
+func TestUpdateFromChannelBadDownload(t *testing.T) {
 	versionmanager := useVersionManager(t)
 	stubCanary(t, true, false)
-	stubLatestRelease(t, serveInstallableRelease(t, "2026.09.01", []byte("#!/bin/sh\necho 2026.09.01\n"), true))
+	stubLatestRelease(t, serveInstallable(t, "2026.09.01", []byte("#!/bin/sh\necho 2026.09.01\n"), true))
 
 	addVersion(versionmanager, "2026.08.19", &ytdlp.VersionEntry{Path: "lib/o/yt-dlp", State: ytdlp.StateActive, Successes: 40})
 	versionmanager.HookState().ActiveVersion = "2026.08.19"

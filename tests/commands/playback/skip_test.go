@@ -29,7 +29,7 @@ func TestSkipEmptyQueue(t *testing.T) {
 	commandtest.WantReplyText(t, fixture.Requests(), messages.T(commandtest.GuildID).Errors.EmptyQueue)
 }
 
-func TestSkipResultEmbedSwitchesOnAnEmptiedQueue(t *testing.T) {
+func TestSkipResultEmbedEmptied(t *testing.T) {
 	song := &queue.Song{Title: "Song", URL: "https://example.com/song", Thumbnail: "https://example.com/thumb.jpg"}
 
 	skipped := playback.HookSkipResultEmbed("g1", song, false, false)
@@ -46,7 +46,7 @@ func TestSkipResultEmbedSwitchesOnAnEmptiedQueue(t *testing.T) {
 	}
 }
 
-func TestSkipResultEmbedOnlyMentionsLeavingWhenTheBotLeaves(t *testing.T) {
+func TestSkipResultEmbedLeaving(t *testing.T) {
 	song := &queue.Song{Title: "Song", URL: "https://example.com/song"}
 	link := messages.FormatMaskedLink(song.Title, song.URL)
 	music := &messages.T("g1").Music
@@ -62,7 +62,7 @@ func TestSkipResultEmbedOnlyMentionsLeavingWhenTheBotLeaves(t *testing.T) {
 	}
 }
 
-func TestSkipStaysOnlyWhenTheQueueEndedWithAutoLeaveOff(t *testing.T) {
+func TestIsStayingAfterSkip(t *testing.T) {
 	dbtest.Setup(t)
 
 	if playback.HookIsStayingAfterSkip("g1", true) {
@@ -80,13 +80,13 @@ func TestSkipStaysOnlyWhenTheQueueEndedWithAutoLeaveOff(t *testing.T) {
 	}
 }
 
-func TestSkippingTheLastSongEndsThePendingStopVote(t *testing.T) {
+func TestSkipLastEndsStopVote(t *testing.T) {
 	const guildID = "skip-ends-stop-vote"
 	song := queuetest.Song("Last song", "user")
 	queuetest.Seed(t, guildID, song)
 	t.Cleanup(func() { player.DeletePlayer(guildID) })
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
-	t.Cleanup(func() { vote.CancelForEndedPlayback(guildID) })
+	t.Cleanup(func() { vote.CancelOnPlaybackEnd(guildID) })
 
 	stopVote := &vote.Request{Kind: vote.KindStop, Title: "Stop vote", Emoji: "⏹", VoiceChannelID: "voice", RequiredVotes: 2}
 	if err := vote.Start(session, discordtest.SlashInteraction(guildID, "stop", discordtest.Member(guildID, "voter")), stopVote); err != nil {
@@ -114,7 +114,7 @@ func TestSkippingTheLastSongEndsThePendingStopVote(t *testing.T) {
 	}
 }
 
-func runPassedVoteWithAutoLeave(t *testing.T, applyVote func(*discordgo.Session, *vote.Session, vote.Tally), songs ...*queue.Song) {
+func runAutoLeaveVote(t *testing.T, applyVote func(*discordgo.Session, *vote.Session, vote.Tally), songs ...*queue.Song) {
 	for _, isEnabled := range []bool{true, false} {
 		t.Run(fmt.Sprintf("autoleave=%t", isEnabled), func(t *testing.T) {
 			queuetest.Seed(t, commandtest.GuildID, songs...)
@@ -132,16 +132,16 @@ func runPassedVoteWithAutoLeave(t *testing.T, applyVote func(*discordgo.Session,
 	}
 }
 
-func TestAPassedSkipVoteOnTheLastSongFollowsAutoLeave(t *testing.T) {
+func TestApplySkipVoteLastAutoLeave(t *testing.T) {
 	song := queuetest.Song("Last song", "user")
-	runPassedVoteWithAutoLeave(t, playback.HookApplySkipVote(commandtest.GuildID, song), song)
+	runAutoLeaveVote(t, playback.HookApplySkipVote(commandtest.GuildID, song), song)
 }
 
-func TestAPassedStopVoteFollowsAutoLeave(t *testing.T) {
-	runPassedVoteWithAutoLeave(t, playback.HookApplyStopVote(commandtest.GuildID), queuetest.Song("Playing song", "user"))
+func TestApplyStopVoteAutoLeave(t *testing.T) {
+	runAutoLeaveVote(t, playback.HookApplyStopVote(commandtest.GuildID), queuetest.Song("Playing song", "user"))
 }
 
-func TestSkippingTheLastSongDescribesWhetherTheBotStays(t *testing.T) {
+func TestSkipLastDescribesStay(t *testing.T) {
 	for _, isLeaving := range []bool{true, false} {
 		t.Run(fmt.Sprintf("autoleave=%t", isLeaving), func(t *testing.T) {
 			guildID := fmt.Sprintf("skip-last-%t", isLeaving)

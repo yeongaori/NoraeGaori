@@ -168,7 +168,7 @@ func TestConcurrentSettings(t *testing.T) {
 	}
 }
 
-func TestConcurrentCacheInvalidationAndReads(t *testing.T) {
+func TestConcurrentInvalidation(t *testing.T) {
 	setupTestDB(t)
 
 	guildID := "guild1"

@@ -30,7 +30,7 @@ func (s *playbackSession) run(firstFrameCh chan<- struct{}, announceNext func(*q
 					return err
 				}
 				s.outro.flush(s.player, conn, s.stopCh, s.opusEncoder, &s.sentFrames)
-				return classifyDrainedStream(s.stream, s.song, s.sentFrames, s.frameOffset, s.resumeMode)
+				return classifyDrain(s.stream, s.song, s.sentFrames, s.frameOffset, s.resumeMode)
 			}
 
 			if done, err := s.playFrame(pcmData, firstFrameCh, announceNext); done {
@@ -58,7 +58,7 @@ func (s *playbackSession) playFrame(pcmData []int16, firstFrameCh chan<- struct{
 	}
 	s.recheckPreCache()
 
-	s.publishTransitionArmed()
+	s.publishArmed()
 
 	if s.consumeLeadingSilence(pcmData) {
 		return false, nil
@@ -82,12 +82,12 @@ func (s *playbackSession) playFrame(pcmData []int16, firstFrameCh chan<- struct{
 		return true, err
 	} else if s.crossfade.active {
 		if !wasActive {
-			advanceQueueForAutoMix(s.player, s.song, s.crossfade, announceNext)
+			advanceForAutoMix(s.player, s.song, s.crossfade, announceNext)
 		}
 		return false, nil
 	}
 
-	s.replanFadeOutAfterCancel()
+	s.replanFadeOut()
 	s.shapeFrame(pcmData, volumeFactor, gain)
 
 	if err := s.encodeAndSend(firstFrameCh); err != nil {
@@ -164,7 +164,7 @@ func (s *playbackSession) planEndOfStream() {
 	s.endPlanned = true
 	nq, qErr := queue.GetQueue(s.guildID, false)
 	if qErr == nil && nq != nil {
-		s.fade = fadeSettingsFromQueue(nq)
+		s.fade = readFadeSettings(nq)
 	}
 	s.logNextSongReadiness(nq, es)
 	go preCacheNext(s.guildID, s.bitrate)
@@ -180,7 +180,7 @@ func (s *playbackSession) planEndOfStream() {
 		s.player.mu.Unlock()
 	}
 
-	es = adjustEndStateForOffset(es, s.frameOffset)
+	es = offsetEndState(es, s.frameOffset)
 	s.endStateAdj = es
 
 	planned := s.crossfade.plan(s.player, es, s.sentFrames, s.originSec(), &s.fade, s.normalization, s.bitrate)
@@ -256,7 +256,7 @@ func (s *playbackSession) recheckPreCache() {
 	go preCacheNext(s.guildID, s.bitrate)
 }
 
-func (s *playbackSession) publishTransitionArmed() {
+func (s *playbackSession) publishArmed() {
 	armed := s.crossfade.armed || s.outro.armed
 	if armed == s.transitionArmedLast {
 		return
@@ -325,7 +325,7 @@ func (s *playbackSession) frameGain(ramping bool) float64 {
 	return gain
 }
 
-func (s *playbackSession) replanFadeOutAfterCancel() {
+func (s *playbackSession) replanFadeOut() {
 	if !s.crossfade.cancelled || s.fadeOutFrames != 0 {
 		return
 	}

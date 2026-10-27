@@ -214,7 +214,7 @@ func writeJSON(path string, value any) error {
 	return os.WriteFile(path, data, 0600)
 }
 
-func isDuplicateWriteEvent(absPath string, fileInfo os.FileInfo) bool {
+func isDuplicateWrite(absPath string, fileInfo os.FileInfo) bool {
 	if fileInfo == nil {
 		return false
 	}
@@ -236,7 +236,7 @@ func isDuplicateWriteEvent(absPath string, fileInfo os.FileInfo) bool {
 	return false
 }
 
-func notifyReloadCallbacks() {
+func notifyReload() {
 	onReloadMux.Lock()
 	callbacks := make([]func(), len(onReloadCallbacks))
 	copy(callbacks, onReloadCallbacks)
@@ -258,7 +258,7 @@ func reloadWatchedFile(absPath string) {
 			return
 		}
 		logger.Info("Configuration reloaded")
-		notifyReloadCallbacks()
+		notifyReload()
 	case adminsAbsPath:
 		if err := loadAdmins(); err != nil {
 			logger.Errorf("Failed to reload admins: %v", err)
@@ -283,7 +283,7 @@ func handleWatchEvent(event fsnotify.Event) {
 	}
 
 	absPath, _ := filepath.Abs(event.Name)
-	if isDuplicateWriteEvent(absPath, fileInfo) {
+	if isDuplicateWrite(absPath, fileInfo) {
 		logger.Debugf("Skipping duplicate event for %s (same ModTime)", event.Name)
 		return
 	}

@@ -120,7 +120,7 @@ func unreachableMirror(label string) *stubMirror {
 }
 
 func stubTool(name string, mirrors ...mirror.Mirror) *dependency.HookTool {
-	return dependency.HookBuildTool(&dependency.HookToolFields{Name: name, DisplayName: name, VersionFlag: "--version", Mirrors: mirrors})
+	return dependency.HookCreateTool(&dependency.HookToolFields{Name: name, DisplayName: name, VersionFlag: "--version", Mirrors: mirrors})
 }
 
 func useJsRuntimes(t *testing.T, tools ...*dependency.HookTool) {
@@ -132,7 +132,7 @@ func useJsRuntimes(t *testing.T, tools ...*dependency.HookTool) {
 func useFFmpegTool(t *testing.T, mirrors ...mirror.Mirror) {
 	t.Helper()
 
-	testutil.Swap(t, dependency.HookFfmpegTool, dependency.HookBuildTool(&dependency.HookToolFields{Name: "ffmpeg", DisplayName: "ffmpeg", VersionFlag: "-version", Mirrors: mirrors}))
+	testutil.Swap(t, dependency.HookFfmpegTool, dependency.HookCreateTool(&dependency.HookToolFields{Name: "ffmpeg", DisplayName: "ffmpeg", VersionFlag: "-version", Mirrors: mirrors}))
 }
 
 func sha256Hex(payload []byte) string {
@@ -140,7 +140,7 @@ func sha256Hex(payload []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func buildZip(t *testing.T, files map[string]string) []byte {
+func createZip(t *testing.T, files map[string]string) []byte {
 	t.Helper()
 
 	var buffer bytes.Buffer
@@ -161,7 +161,7 @@ func buildZip(t *testing.T, files map[string]string) []byte {
 	return buffer.Bytes()
 }
 
-func buildTarXz(t *testing.T, files map[string]string) []byte {
+func createTarXz(t *testing.T, files map[string]string) []byte {
 	t.Helper()
 
 	var buffer bytes.Buffer
@@ -213,7 +213,7 @@ func serveArchive(t *testing.T, payload []byte, status int) *archiveServer {
 func denoArchive(t *testing.T, version string) (*mirror.Candidate, *archiveServer) {
 	t.Helper()
 
-	payload := buildZip(t, map[string]string{"deno": script("deno " + version + " (stable, release)")})
+	payload := createZip(t, map[string]string{"deno": script("deno " + version + " (stable, release)")})
 	served := serveArchive(t, payload, http.StatusOK)
 	return &mirror.Candidate{
 		Version: version,

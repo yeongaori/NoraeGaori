@@ -25,31 +25,31 @@ func writeWatchedFile(t *testing.T, path, contents string) os.FileInfo {
 	return info
 }
 
-func TestIsDuplicateWriteEventTracksModTimePerPath(t *testing.T) {
+func TestIsDuplicateWritePerPath(t *testing.T) {
 	t.Chdir(t.TempDir())
 
 	path := filepath.Join(t.TempDir(), "config.json")
 	info := writeWatchedFile(t, path, "{}")
 
-	if config.HookIsDuplicateWriteEvent(path, info) {
+	if config.HookIsDuplicateWrite(path, info) {
 		t.Error("the first event for a path was reported as a duplicate")
 	}
-	if !config.HookIsDuplicateWriteEvent(path, info) {
+	if !config.HookIsDuplicateWrite(path, info) {
 		t.Error("a repeat event with the same ModTime was not reported as a duplicate")
 	}
 
 	other := filepath.Join(t.TempDir(), "admins.json")
 	otherInfo := writeWatchedFile(t, other, "{}")
-	if config.HookIsDuplicateWriteEvent(other, otherInfo) {
+	if config.HookIsDuplicateWrite(other, otherInfo) {
 		t.Error("a different path was reported as a duplicate")
 	}
 }
 
-func TestIsDuplicateWriteEventAcceptsAChangedModTime(t *testing.T) {
+func TestIsDuplicateWriteNewModTime(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	info := writeWatchedFile(t, path, "{}")
 
-	if config.HookIsDuplicateWriteEvent(path, info) {
+	if config.HookIsDuplicateWrite(path, info) {
 		t.Fatal("the first event was reported as a duplicate")
 	}
 
@@ -61,18 +61,18 @@ func TestIsDuplicateWriteEventAcceptsAChangedModTime(t *testing.T) {
 		t.Fatalf("failed to stat the changed file: %v", err)
 	}
 
-	if config.HookIsDuplicateWriteEvent(path, changed) {
+	if config.HookIsDuplicateWrite(path, changed) {
 		t.Error("a genuinely modified file was skipped as a duplicate")
 	}
 }
 
-func TestIsDuplicateWriteEventPassesThroughAMissingFile(t *testing.T) {
-	if config.HookIsDuplicateWriteEvent(filepath.Join(t.TempDir(), "gone.json"), nil) {
+func TestIsDuplicateWriteMissingFile(t *testing.T) {
+	if config.HookIsDuplicateWrite(filepath.Join(t.TempDir(), "gone.json"), nil) {
 		t.Error("an event with no file info was reported as a duplicate, which would drop the reload")
 	}
 }
 
-func isolateReloadCallbacks(t *testing.T) {
+func isolateReloads(t *testing.T) {
 	t.Helper()
 
 	config.HookOnReloadMux.Lock()
@@ -88,8 +88,8 @@ func isolateReloadCallbacks(t *testing.T) {
 	})
 }
 
-func TestNotifyReloadCallbacksRunsCallbacksOutsideTheLock(t *testing.T) {
-	isolateReloadCallbacks(t)
+func TestNotifyReloadOutsideLock(t *testing.T) {
+	isolateReloads(t)
 
 	called := 0
 	config.OnReload(func() {
@@ -99,14 +99,14 @@ func TestNotifyReloadCallbacksRunsCallbacksOutsideTheLock(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		config.HookNotifyReloadCallbacks()
+		config.HookNotifyReload()
 		close(done)
 	}()
 
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
-		t.Fatal("notifyReloadCallbacks deadlocked, so a callback cannot register another")
+		t.Fatal("notifyReload deadlocked, so a callback cannot register another")
 	}
 
 	if called != 1 {
@@ -114,7 +114,7 @@ func TestNotifyReloadCallbacksRunsCallbacksOutsideTheLock(t *testing.T) {
 	}
 }
 
-func TestReloadWatchedFileReloadsTheConfigAndNotifies(t *testing.T) {
+func TestReloadWatchedFileNotifies(t *testing.T) {
 	t.Chdir(t.TempDir())
 	setupTestConfig(t)
 	defer teardownTestConfig(t)
@@ -125,7 +125,7 @@ func TestReloadWatchedFileReloadsTheConfigAndNotifies(t *testing.T) {
 
 	writeWatchedFile(t, *config.HookConfigPath, `{"prefix":"?","language":"en","default_volume":50}`)
 
-	isolateReloadCallbacks(t)
+	isolateReloads(t)
 
 	notified := false
 	config.OnReload(func() { notified = true })
@@ -144,7 +144,7 @@ func TestReloadWatchedFileReloadsTheConfigAndNotifies(t *testing.T) {
 	}
 }
 
-func TestReloadWatchedFileIgnoresUnrelatedPaths(t *testing.T) {
+func TestReloadWatchedFileIgnores(t *testing.T) {
 	t.Chdir(t.TempDir())
 	setupTestConfig(t)
 	defer teardownTestConfig(t)
@@ -180,7 +180,7 @@ func waitForWatcherToStop(t *testing.T, fileWatcher *fsnotify.Watcher, stop func
 	}
 }
 
-func TestWatchFilesLogsErrorsAndStopsWhenEitherChannelCloses(t *testing.T) {
+func TestWatchFilesStopsOnClose(t *testing.T) {
 	eventsClosing := &fsnotify.Watcher{Events: make(chan fsnotify.Event), Errors: make(chan error)}
 	waitForWatcherToStop(t, eventsClosing, func() {
 		eventsClosing.Errors <- errors.New("watch failed")
@@ -193,11 +193,11 @@ func TestWatchFilesLogsErrorsAndStopsWhenEitherChannelCloses(t *testing.T) {
 	})
 }
 
-func TestInitializeReloadsTheConfigWhenTheFileChanges(t *testing.T) {
+func TestInitializeReloadsOnChange(t *testing.T) {
 	t.Chdir(t.TempDir())
 	setupTestConfig(t)
 	defer teardownTestConfig(t)
-	isolateReloadCallbacks(t)
+	isolateReloads(t)
 
 	reloaded := make(chan struct{}, 1)
 	config.OnReload(func() {

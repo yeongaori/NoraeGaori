@@ -12,8 +12,8 @@ import (
 	"noraegaori/tests/testutil/discordtest"
 )
 
-func TestVoteProgressEmbedShowsTheRecomputedQuorum(t *testing.T) {
-	embed := vote.HookVoteProgressEmbed("g1", "Skip", "", "⏭", time.Now(), *vote.HookBuildTally(vote.HookTallyFields{Current: 2, Required: 3}))
+func TestVoteProgressEmbedQuorum(t *testing.T) {
+	embed := vote.HookVoteProgressEmbed("g1", "Skip", "", "⏭", time.Now(), *vote.HookCreateTally(vote.HookTallyFields{Current: 2, Required: 3}))
 
 	if len(embed.Fields) != 1 {
 		t.Fatalf("got %d fields, want one vote counter", len(embed.Fields))
@@ -26,22 +26,22 @@ func TestVoteProgressEmbedShowsTheRecomputedQuorum(t *testing.T) {
 	}
 }
 
-func TestVoteProgressEmbedClampsAnExpiredClock(t *testing.T) {
-	embed := vote.HookVoteProgressEmbed("g1", "Skip", "", "⏭", time.Now().Add(-2**vote.HookVoteExpirationTime), *vote.HookBuildTally(vote.HookTallyFields{Current: 1, Required: 2}))
+func TestVoteProgressEmbedClamps(t *testing.T) {
+	embed := vote.HookVoteProgressEmbed("g1", "Skip", "", "⏭", time.Now().Add(-2**vote.HookVoteExpirationTime), *vote.HookCreateTally(vote.HookTallyFields{Current: 1, Required: 2}))
 
 	if !strings.HasSuffix(embed.Footer.Text, "expires in 0s") {
 		t.Errorf("footer = %q, want the remaining seconds clamped at zero", embed.Footer.Text)
 	}
 }
 
-func TestRenderVoteResultAppendsTheRecomputedTally(t *testing.T) {
+func TestRenderVoteResultTally(t *testing.T) {
 	stubs := stubVoteEffects(t)
 
 	session := vote.HookNewVoteSession("g1", vote.KindStop, "Stop", "⏹", "voice1", 5)
 	*session.HookMessageID() = "msg1"
 	*session.HookChannelID() = "chan1"
 
-	vote.RenderResult(&discordgo.Session{}, session, messages.CreateSuccessEmbed("Stopped", "done"), vote.HookBuildTally(vote.HookTallyFields{Current: 2, Required: 2, Passed: true}))
+	vote.RenderResult(&discordgo.Session{}, session, messages.CreateSuccessEmbed("Stopped", "done"), vote.HookCreateTally(vote.HookTallyFields{Current: 2, Required: 2, Passed: true}))
 
 	edits := stubs.snapshotEdits()
 	if len(edits) != 1 {
@@ -54,7 +54,7 @@ func TestRenderVoteResultAppendsTheRecomputedTally(t *testing.T) {
 	}
 }
 
-func TestRenderVoteFailureUsesAnErrorEmbed(t *testing.T) {
+func TestRenderVoteFailureEmbed(t *testing.T) {
 	stubs := stubVoteEffects(t)
 
 	session := vote.HookNewVoteSession("g1", vote.KindStop, "Stop", "⏹", "voice1", 2)
@@ -75,7 +75,7 @@ func TestRenderVoteFailureUsesAnErrorEmbed(t *testing.T) {
 	}
 }
 
-func TestEditVoteMessageSkipsAnUnpostedVote(t *testing.T) {
+func TestEditVoteMessageUnposted(t *testing.T) {
 	api, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 	unposted := vote.HookNewVoteSession("g1", vote.KindSkip, "Skip", "⏭", "voice1", 2)
 	posted := vote.HookNewVoteSession("g1", vote.KindSkip, "Skip", "⏭", "voice1", 2)
@@ -92,13 +92,13 @@ func TestEditVoteMessageSkipsAnUnpostedVote(t *testing.T) {
 	}
 }
 
-func TestVoteProgressEmbedShowsRequesterAgreement(t *testing.T) {
-	without := vote.HookVoteProgressEmbed("g1", "Remove", "Remove it?", "❌", time.Now(), *vote.HookBuildTally(vote.HookTallyFields{Current: 1, Required: 3}))
+func TestVoteProgressEmbedAgreement(t *testing.T) {
+	without := vote.HookVoteProgressEmbed("g1", "Remove", "Remove it?", "❌", time.Now(), *vote.HookCreateTally(vote.HookTallyFields{Current: 1, Required: 3}))
 	if len(without.Fields) != 1 {
 		t.Errorf("got %d fields with no requesters, want only the vote counter", len(without.Fields))
 	}
 
-	with := vote.HookVoteProgressEmbed("g1", "Remove", "Remove it?", "❌", time.Now(), *vote.HookBuildTally(vote.HookTallyFields{Current: 1, Required: 3, AdderVotes: 1, AdderTotal: 2}))
+	with := vote.HookVoteProgressEmbed("g1", "Remove", "Remove it?", "❌", time.Now(), *vote.HookCreateTally(vote.HookTallyFields{Current: 1, Required: 3, AdderVotes: 1, AdderTotal: 2}))
 	if len(with.Fields) != 2 {
 		t.Fatalf("got %d fields, want the vote counter and the requester counter", len(with.Fields))
 	}
@@ -110,7 +110,7 @@ func TestVoteProgressEmbedShowsRequesterAgreement(t *testing.T) {
 	}
 }
 
-func TestRenderVoteResultNotesAdderConsent(t *testing.T) {
+func TestRenderVoteResultConsent(t *testing.T) {
 	stubs := stubVoteEffects(t)
 
 	session := vote.HookNewVoteSession("g1", vote.KindRemove, "Remove", "❌", "voice1", 3)
@@ -118,7 +118,7 @@ func TestRenderVoteResultNotesAdderConsent(t *testing.T) {
 	*session.HookChannelID() = "chan1"
 
 	vote.RenderResult(&discordgo.Session{}, session, messages.CreateSuccessEmbed("Removed", "done"),
-		vote.HookBuildTally(vote.HookTallyFields{Current: 1, Required: 3, AdderVotes: 1, AdderTotal: 1, Passed: true, ByAdderConsent: true}))
+		vote.HookCreateTally(vote.HookTallyFields{Current: 1, Required: 3, AdderVotes: 1, AdderTotal: 1, Passed: true, ByAdderConsent: true}))
 
 	edits := stubs.snapshotEdits()
 	if len(edits) != 1 {

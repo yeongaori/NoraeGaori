@@ -26,7 +26,7 @@ func foundAt(url, version string) *stubMirror {
 	return &stubMirror{label: url, found: &mirror.Candidate{Version: version, URL: url}}
 }
 
-func TestDiscoverTakesTheFirstToolWithABuild(t *testing.T) {
+func TestDiscoverFirstWithBuild(t *testing.T) {
 	deno := stubTool("deno", foundAt("deno-github", "2.9.7"))
 	node := stubTool("node", foundAt("nodejs", "22.23.3"))
 	accept, accepted := acceptAs("lib")
@@ -40,7 +40,7 @@ func TestDiscoverTakesTheFirstToolWithABuild(t *testing.T) {
 	}
 }
 
-func TestDiscoverFallsBackWhenDenoHasNoBuild(t *testing.T) {
+func TestDiscoverDenoNoBuild(t *testing.T) {
 	deno := stubTool("deno", noBuildMirror("deno-github"), noBuildMirror("deno-cdn"))
 	node := stubTool("node", foundAt("nodejs", "22.23.3"))
 	accept, _ := acceptAs("lib")
@@ -57,7 +57,7 @@ func TestDiscoverFallsBackWhenDenoHasNoBuild(t *testing.T) {
 	}
 }
 
-func TestDiscoverTriesTheNextMirrorOfTheSameTool(t *testing.T) {
+func TestDiscoverTriesNextMirror(t *testing.T) {
 	github := unreachableMirror("deno-github")
 	cdn := foundAt("deno-cdn", "2.9.7")
 	node := foundAt("nodejs", "22.23.3")
@@ -72,7 +72,7 @@ func TestDiscoverTriesTheNextMirrorOfTheSameTool(t *testing.T) {
 	}
 }
 
-func TestDiscoverMovesToTheNextMirrorWhenAnInstallFails(t *testing.T) {
+func TestDiscoverNextMirrorOnFailure(t *testing.T) {
 	accept, accepted := acceptAs("lib", "deno-github")
 
 	binary, _ := dependency.HookDiscover([]*dependency.HookTool{stubTool("deno", foundAt("deno-github", "2.9.7"), foundAt("deno-cdn", "2.9.7"))}, linuxAmd64, accept)
@@ -84,7 +84,7 @@ func TestDiscoverMovesToTheNextMirrorWhenAnInstallFails(t *testing.T) {
 	}
 }
 
-func TestDiscoverRecordsWhyEachToolFailed(t *testing.T) {
+func TestDiscoverReportsFailures(t *testing.T) {
 	deno := stubTool("deno", unreachableMirror("deno-github"), noBuildMirror("deno-cdn"))
 	node := stubTool("node", foundAt("nodejs", "22.23.3"))
 	bun := stubTool("bun", noBuildMirror("bun-github"))
@@ -113,7 +113,7 @@ func TestDiscoverRecordsWhyEachToolFailed(t *testing.T) {
 	}
 }
 
-func TestDiscoverKeepsAnInstallFailureOverALaterUnreachableMirror(t *testing.T) {
+func TestDiscoverKeepsInstallFailure(t *testing.T) {
 	accept, _ := acceptAs("lib", "deno-github")
 
 	_, results := dependency.HookDiscover([]*dependency.HookTool{stubTool("deno", foundAt("deno-github", "2.9.7"), unreachableMirror("deno-cdn"))}, linuxAmd64, accept)
@@ -122,7 +122,7 @@ func TestDiscoverKeepsAnInstallFailureOverALaterUnreachableMirror(t *testing.T) 
 	}
 }
 
-func TestDiscoverPassesTheToolBoundsToTheMirror(t *testing.T) {
+func TestDiscoverPassesBounds(t *testing.T) {
 	bun := stubTool("bun", foundAt("bun-github", "1.4.2"))
 	*bun.HookMaximum() = "1.3.14"
 	accept, _ := acceptAs("lib")

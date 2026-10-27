@@ -29,13 +29,13 @@ func requestedCategory(i *discordgo.InteractionCreate, isAdmin bool) string {
 
 func renderPanel(guildID string, target *panelTarget) (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
 	view := newPanelView(guildID, target.category, target.isAdmin)
-	return buildSettingsEmbed(view), buildSettingsComponents(view)
+	return createSettingsEmbed(view), createPanelControls(view)
 }
 
 func OpenMixingPanel(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 	isAdmin := canEditAdminSettings(s, ic.GuildID, ic.Member)
 	embed, components := renderPanel(ic.GuildID, &panelTarget{isAdmin: isAdmin, category: categoryMixing})
-	if err := discord.RespondEphemeralEmbed(s, ic, embed, components...); err != nil {
+	if err := discord.RespondEphemeral(s, ic, embed, components...); err != nil {
 		logger.Errorf("Failed to open the mixing settings: %v", err)
 	}
 }
@@ -44,7 +44,7 @@ func HandleSettingsPanel(s *discordgo.Session, i *discordgo.InteractionCreate) e
 	isAdmin := canEditAdminSettings(s, i.GuildID, i.Member)
 	embed, components := renderPanel(i.GuildID, &panelTarget{isAdmin: isAdmin, category: requestedCategory(i, isAdmin)})
 
-	if _, err := discord.SendEmbedWithComponents(s, i, embed, components); err != nil {
+	if _, err := discord.SendPanel(s, i, embed, components); err != nil {
 		logger.Errorf("Failed to send the settings panel: %v", err)
 		return err
 	}

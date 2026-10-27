@@ -74,9 +74,9 @@ func ShortcutCategories() []Category {
 	return shortcutCategories[:len(shortcutCategories):len(shortcutCategories)]
 }
 
-var shortcutResets = buildShortcutResets()
+var shortcutResets = createShortcutResets()
 
-func buildShortcutResets() map[Category]map[string]string {
+func createShortcutResets() map[Category]map[string]string {
 	resets := make(map[Category]map[string]string, len(shortcutTargets))
 	for category, targets := range shortcutTargets {
 		reset := make(map[string]string, len(targets))

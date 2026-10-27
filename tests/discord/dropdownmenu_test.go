@@ -47,7 +47,7 @@ func pickInteraction(guildID, customID string, values ...string) *discordgo.Inte
 	}
 }
 
-func TestDropdownMenuComponentsUseTheSettingKey(t *testing.T) {
+func TestRenderDropdownMenuKey(t *testing.T) {
 	_, components := discord.HookRenderDropdownMenu(menuGuildID, "repeat", &discord.DropdownMenu{Options: testMenuOptions()})
 	if len(components) != 1 {
 		t.Fatalf("built %d rows, want 1", len(components))
@@ -72,7 +72,7 @@ func TestDropdownMenuComponentsUseTheSettingKey(t *testing.T) {
 	}
 }
 
-func TestDropdownMenuEmbedShowsTheCurrentValue(t *testing.T) {
+func TestRenderDropdownMenuValue(t *testing.T) {
 	embed, _ := discord.HookRenderDropdownMenu(menuGuildID, "repeat", &discord.DropdownMenu{Label: "Repeat", Current: "Off"})
 
 	if embed.Title != "Repeat" {
@@ -83,7 +83,7 @@ func TestDropdownMenuEmbedShowsTheCurrentValue(t *testing.T) {
 	}
 }
 
-func TestDropdownPickIgnoresForeignAndInvalidPicks(t *testing.T) {
+func TestApplyDropdownPickIgnores(t *testing.T) {
 	var picked []string
 	registerTestMenu(t, "test_ignore", trackingApply(&picked))
 	customID := discord.HookDropdownMenuPrefix + "test_ignore"
@@ -109,7 +109,7 @@ func TestDropdownPickIgnoresForeignAndInvalidPicks(t *testing.T) {
 	}
 }
 
-func TestDropdownPickAppliesEveryPickWithoutAnyPriorState(t *testing.T) {
+func TestApplyDropdownPickStateless(t *testing.T) {
 	var picked []string
 	registerTestMenu(t, "test_reuse", trackingApply(&picked))
 	customID := discord.HookDropdownMenuPrefix + "test_reuse"
@@ -129,7 +129,7 @@ func TestDropdownPickAppliesEveryPickWithoutAnyPriorState(t *testing.T) {
 	}
 }
 
-func TestDropdownPickReturnsTheFailureEmbed(t *testing.T) {
+func TestApplyDropdownPickFailure(t *testing.T) {
 	registerTestMenu(t, "test_failure", func(string) (*discordgo.MessageEmbed, error) {
 		return &discordgo.MessageEmbed{Title: "failed"}, errors.New("database is locked")
 	})
@@ -140,7 +140,7 @@ func TestDropdownPickReturnsTheFailureEmbed(t *testing.T) {
 	}
 }
 
-func TestRespondDropdownMenuRejectsAnUnregisteredKey(t *testing.T) {
+func TestRespondDropdownMenuUnknown(t *testing.T) {
 	ic := &discordgo.InteractionCreate{Interaction: &discordgo.Interaction{GuildID: menuGuildID}}
 
 	if err := discord.RespondDropdownMenu(nil, ic, "test_missing"); err == nil {
@@ -148,18 +148,18 @@ func TestRespondDropdownMenuRejectsAnUnregisteredKey(t *testing.T) {
 	}
 }
 
-func TestHandleDropdownMenuPickIgnoresUnrelatedComponents(t *testing.T) {
+func TestHandleDropdownPickIgnores(t *testing.T) {
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 
-	discord.HandleDropdownMenuPick(session, pickInteraction(menuGuildID, "settings_pick_token", "on"))
-	discord.HandleDropdownMenuPick(session, pickInteraction(menuGuildID, discord.HookDropdownMenuPrefix+"test_missing", "on"))
+	discord.HandleDropdownPick(session, pickInteraction(menuGuildID, "settings_pick_token", "on"))
+	discord.HandleDropdownPick(session, pickInteraction(menuGuildID, discord.HookDropdownMenuPrefix+"test_missing", "on"))
 
 	if sent := requests(); len(sent) != 0 {
 		t.Errorf("sent %v, want unrelated and unregistered picks ignored", sent)
 	}
 }
 
-func TestRespondDropdownMenuSendsTheMenuForASlashCommand(t *testing.T) {
+func TestRespondDropdownMenuSlash(t *testing.T) {
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 	var picked []string
 	registerTestMenu(t, "test_send", trackingApply(&picked))
@@ -186,14 +186,14 @@ func TestRespondDropdownMenuSendsTheMenuForASlashCommand(t *testing.T) {
 	}
 }
 
-func TestSendEmbedWithComponentsRepliesWithoutFetchingTheMessage(t *testing.T) {
+func TestSendPanelNoFetch(t *testing.T) {
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 	ic := discordtest.WithToken(&discordgo.InteractionCreate{
 		Interaction: &discordgo.Interaction{Type: discordgo.InteractionApplicationCommand, GuildID: menuGuildID},
 	})
 
-	if message, err := discord.SendEmbedWithComponents(session, ic, &discordgo.MessageEmbed{}, nil); err != nil || message != nil {
-		t.Fatalf("SendEmbedWithComponents = (%v, %v), want no message and no error", message, err)
+	if message, err := discord.SendPanel(session, ic, &discordgo.MessageEmbed{}, nil); err != nil || message != nil {
+		t.Fatalf("SendPanel =(%v, %v), want no message and no error", message, err)
 	}
 
 	sent := requests()
@@ -202,19 +202,19 @@ func TestSendEmbedWithComponentsRepliesWithoutFetchingTheMessage(t *testing.T) {
 	}
 }
 
-func TestSendEmbedWithComponentsSendsTextCommandRepliesToTheChannel(t *testing.T) {
+func TestSendPanelTextChannel(t *testing.T) {
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 	ic := &discordgo.InteractionCreate{Interaction: &discordgo.Interaction{GuildID: menuGuildID, Token: "message_111_222"}}
 
-	if _, err := discord.SendEmbedWithComponents(session, ic, &discordgo.MessageEmbed{}, nil); err == nil {
+	if _, err := discord.SendPanel(session, ic, &discordgo.MessageEmbed{}, nil); err == nil {
 		t.Error("a text command without a responder returned no error")
 	}
 
 	responder := &discord.MessageResponse{Session: session, ChannelID: "222", OriginalMsgID: "111"}
 	defer discord.RegisterResponder(ic.Token, responder)()
-	message, err := discord.SendEmbedWithComponents(session, ic, &discordgo.MessageEmbed{}, nil)
+	message, err := discord.SendPanel(session, ic, &discordgo.MessageEmbed{}, nil)
 	if err != nil || message == nil {
-		t.Fatalf("SendEmbedWithComponents = (%v, %v), want the sent channel message", message, err)
+		t.Fatalf("SendPanel =(%v, %v), want the sent channel message", message, err)
 	}
 	if responder.Message != message {
 		t.Error("the sent reply was not kept for later edits")
@@ -229,7 +229,7 @@ func TestSendEmbedWithComponentsSendsTextCommandRepliesToTheChannel(t *testing.T
 	}
 }
 
-func TestHandleDropdownMenuPickRedrawsTheMenuInPlace(t *testing.T) {
+func TestHandleDropdownPickRedraws(t *testing.T) {
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 
 	current := "off"
@@ -249,7 +249,7 @@ func TestHandleDropdownMenuPickRedrawsTheMenuInPlace(t *testing.T) {
 	})
 	t.Cleanup(func() { discord.HookDropdownMenus.Delete("test_redraw") })
 
-	discord.HandleDropdownMenuPick(session, discordtest.WithToken(pickInteraction(menuGuildID, discord.HookDropdownMenuPrefix+"test_redraw", "all")))
+	discord.HandleDropdownPick(session, discordtest.WithToken(pickInteraction(menuGuildID, discord.HookDropdownMenuPrefix+"test_redraw", "all")))
 
 	sent := requests()
 	if len(sent) != 1 || sent[0].Path != "/api/interactions/111/token/callback" {
@@ -266,13 +266,13 @@ func TestHandleDropdownMenuPickRedrawsTheMenuInPlace(t *testing.T) {
 	}
 }
 
-func TestHandleDropdownMenuPickRepliesPrivatelyWhenApplyFails(t *testing.T) {
+func TestHandleDropdownPickPrivate(t *testing.T) {
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 	registerTestMenu(t, "test_private_failure", func(string) (*discordgo.MessageEmbed, error) {
 		return &discordgo.MessageEmbed{Title: "failed"}, errors.New("database is locked")
 	})
 
-	discord.HandleDropdownMenuPick(session, discordtest.WithToken(pickInteraction(menuGuildID, discord.HookDropdownMenuPrefix+"test_private_failure", "all")))
+	discord.HandleDropdownPick(session, discordtest.WithToken(pickInteraction(menuGuildID, discord.HookDropdownMenuPrefix+"test_private_failure", "all")))
 
 	sent := requests()
 	if len(sent) != 1 {
@@ -289,7 +289,7 @@ func TestHandleDropdownMenuPickRepliesPrivatelyWhenApplyFails(t *testing.T) {
 	}
 }
 
-func TestDropdownRepliesSurviveDiscordRejectingThem(t *testing.T) {
+func TestDropdownRepliesSurvive(t *testing.T) {
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusBadRequest))
 	var picked []string
 	registerTestMenu(t, "test_rejected", trackingApply(&picked))
@@ -304,8 +304,8 @@ func TestDropdownRepliesSurviveDiscordRejectingThem(t *testing.T) {
 		t.Error("a rejected menu reply returned no error")
 	}
 
-	discord.HandleDropdownMenuPick(session, discordtest.WithToken(pickInteraction(menuGuildID, discord.HookDropdownMenuPrefix+"test_rejected", "all")))
-	discord.HandleDropdownMenuPick(session, discordtest.WithToken(pickInteraction(menuGuildID, discord.HookDropdownMenuPrefix+"test_rejected_failure", "all")))
+	discord.HandleDropdownPick(session, discordtest.WithToken(pickInteraction(menuGuildID, discord.HookDropdownMenuPrefix+"test_rejected", "all")))
+	discord.HandleDropdownPick(session, discordtest.WithToken(pickInteraction(menuGuildID, discord.HookDropdownMenuPrefix+"test_rejected_failure", "all")))
 
 	if got := len(requests()); got != 3 {
 		t.Errorf("sent %d requests, want one attempt per reply", got)
@@ -315,7 +315,7 @@ func TestDropdownRepliesSurviveDiscordRejectingThem(t *testing.T) {
 	}
 }
 
-func TestDropdownMenuStringsAreLocalized(t *testing.T) {
+func TestDropdownMenuLocalized(t *testing.T) {
 	t.Cleanup(func() {
 		if err := messages.LoadLocale("en"); err != nil {
 			t.Errorf("failed to restore the English locale: %v", err)
@@ -336,11 +336,11 @@ func TestDropdownMenuStringsAreLocalized(t *testing.T) {
 	}
 }
 
-func TestAttachedDropdownButtonsFollowTheMenuThroughRedraws(t *testing.T) {
+func TestAttachDropdownRedraws(t *testing.T) {
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 	var picked []string
 	registerTestMenu(t, "test_buttons", trackingApply(&picked))
-	discord.AttachDropdownButtons("test_buttons", func(string) []discordgo.MessageComponent {
+	discord.AttachDropdown("test_buttons", func(string) []discordgo.MessageComponent {
 		return []discordgo.MessageComponent{discordgo.Button{Label: "Open", CustomID: "test_open"}}
 	})
 	t.Cleanup(func() { discord.HookDropdownButtons.Delete("test_buttons") })
@@ -351,7 +351,7 @@ func TestAttachedDropdownButtonsFollowTheMenuThroughRedraws(t *testing.T) {
 	if err := discord.RespondDropdownMenu(session, command, "test_buttons"); err != nil {
 		t.Fatalf("RespondDropdownMenu returned %v, want nil", err)
 	}
-	discord.HandleDropdownMenuPick(session, discordtest.WithToken(pickInteraction(menuGuildID, discord.HookDropdownMenuPrefix+"test_buttons", "all")))
+	discord.HandleDropdownPick(session, discordtest.WithToken(pickInteraction(menuGuildID, discord.HookDropdownMenuPrefix+"test_buttons", "all")))
 
 	sent := requests()
 	if len(sent) != 2 {

@@ -11,7 +11,7 @@ import (
 	"noraegaori/tests/testutil/discordtest"
 )
 
-func textSettingInteraction(name string, options ...*discordgo.ApplicationCommandInteractionDataOption) *discordgo.InteractionCreate {
+func createTextInteraction(name string, options ...*discordgo.ApplicationCommandInteractionDataOption) *discordgo.InteractionCreate {
 	return &discordgo.InteractionCreate{
 		Interaction: &discordgo.Interaction{
 			Type:    discordgo.InteractionApplicationCommand,
@@ -47,7 +47,7 @@ func settingOptionName(key string) string {
 	return "setting"
 }
 
-func TestParseSettingArgumentsReadsValuesAndNumbers(t *testing.T) {
+func TestParseArgumentsValues(t *testing.T) {
 	cases := []struct {
 		name        string
 		key         string
@@ -68,7 +68,7 @@ func TestParseSettingArgumentsReadsValuesAndNumbers(t *testing.T) {
 
 	for i := range cases {
 		c := &cases[i]
-		arguments := settings.HookParseSettingArguments(specFor(t, c.key), c.options)
+		arguments := settings.HookParseArguments(specFor(t, c.key), c.options)
 		if *arguments.HookHasValue() != (c.value != "") || *arguments.HookValue() != c.value {
 			t.Errorf("%s: value = (%q, %v), want %q", c.name, *arguments.HookValue(), *arguments.HookHasValue(), c.value)
 		}
@@ -82,7 +82,7 @@ func TestParseSettingArgumentsReadsValuesAndNumbers(t *testing.T) {
 	}
 }
 
-func TestSettingCommandsWithoutArgumentsLeaveTheSettingAlone(t *testing.T) {
+func TestHandleSettingNoArguments(t *testing.T) {
 	dbtest.Setup(t)
 	session := discordtest.Session(t, "bot")
 	settings.HookRegisterSettingMenus()
@@ -92,7 +92,7 @@ func TestSettingCommandsWithoutArgumentsLeaveTheSettingAlone(t *testing.T) {
 		for _, value := range settings.HookSettingMenuValues(spec) {
 			seedSetting(t, key, value)
 
-			_ = settings.HandleSetting(key)(session, textSettingInteraction(key))
+			_ = settings.HandleSetting(key)(session, createTextInteraction(key))
 
 			if got := storedSetting(t, key); got != value {
 				t.Errorf("%s with no argument changed %q to %q", key, value, got)
@@ -101,7 +101,7 @@ func TestSettingCommandsWithoutArgumentsLeaveTheSettingAlone(t *testing.T) {
 	}
 }
 
-func TestSettingCommandsStoreTheGivenValue(t *testing.T) {
+func TestHandleSettingStoresValue(t *testing.T) {
 	dbtest.Setup(t)
 	session := discordtest.Session(t, "bot")
 	settings.HookRegisterSettingMenus()
@@ -109,7 +109,7 @@ func TestSettingCommandsStoreTheGivenValue(t *testing.T) {
 	for _, key := range dropdownSettingKeys {
 		spec := specFor(t, key)
 		for _, value := range settings.HookSettingMenuValues(spec) {
-			_ = settings.HandleSetting(key)(session, textSettingInteraction(key, discordtest.StringOption(settingOptionName(key), value)))
+			_ = settings.HandleSetting(key)(session, createTextInteraction(key, discordtest.StringOption(settingOptionName(key), value)))
 
 			if got := storedSetting(t, key); got != value {
 				t.Errorf("%s %s stored %q", key, value, got)
@@ -118,13 +118,13 @@ func TestSettingCommandsStoreTheGivenValue(t *testing.T) {
 	}
 }
 
-func TestSettingCommandsRejectOutOfRangeNumbers(t *testing.T) {
+func TestHandleSettingOutOfRange(t *testing.T) {
 	dbtest.Setup(t)
 	session := discordtest.Session(t, "bot")
 
 	seedSetting(t, "fadein", settings.HookValueOff)
 	seedSetting(t, "fadein_duration", "3")
-	if err := settings.HandleSetting("fadein")(session, textSettingInteraction("fadein", discordtest.StringOption("setting", "99"))); err != nil {
+	if err := settings.HandleSetting("fadein")(session, createTextInteraction("fadein", discordtest.StringOption("setting", "99"))); err != nil {
 		t.Errorf("a rejected number returned %v, want the rejection handled", err)
 	}
 	if got := storedSetting(t, "fadein"); got != settings.HookValueOff {
@@ -136,7 +136,7 @@ func TestSettingCommandsRejectOutOfRangeNumbers(t *testing.T) {
 
 	seedSetting(t, "automix", settings.HookValueOff)
 	seedSetting(t, "automix_beats", "16")
-	_ = settings.HandleSetting("automix")(session, textSettingInteraction("automix", discordtest.StringOption("setting", "on"), discordtest.IntegerOption("beats", 2)))
+	_ = settings.HandleSetting("automix")(session, createTextInteraction("automix", discordtest.StringOption("setting", "on"), discordtest.IntegerOption("beats", 2)))
 	if got := storedSetting(t, "automix"); got != settings.HookValueOff {
 		t.Errorf("automix on 2 changed AutoMix to %q", got)
 	}
@@ -145,13 +145,13 @@ func TestSettingCommandsRejectOutOfRangeNumbers(t *testing.T) {
 	}
 }
 
-func TestABareNumberTurnsTheSettingOnWithThatNumber(t *testing.T) {
+func TestHandleSettingBareNumber(t *testing.T) {
 	dbtest.Setup(t)
 	session := discordtest.Session(t, "bot")
 
 	seedSetting(t, "fadein", settings.HookValueOff)
 	seedSetting(t, "fadein_duration", "3")
-	_ = settings.HandleSetting("fadein")(session, textSettingInteraction("fadein", discordtest.StringOption("setting", "5")))
+	_ = settings.HandleSetting("fadein")(session, createTextInteraction("fadein", discordtest.StringOption("setting", "5")))
 
 	if got := storedSetting(t, "fadein"); got != settings.HookValueOn {
 		t.Errorf("fadein 5 left fade-in %q", got)
@@ -161,45 +161,45 @@ func TestABareNumberTurnsTheSettingOnWithThatNumber(t *testing.T) {
 	}
 }
 
-func TestHandleSettingWithEmbedUsesTheCustomEmbedOnlyOnSuccess(t *testing.T) {
+func TestHandleSettingEmbedOnSuccess(t *testing.T) {
 	dbtest.Setup(t)
 	session := discordtest.Session(t, "bot")
 
 	calls := 0
-	handle := settings.HandleSettingWithEmbed("fadein", func(guildID string) *discordgo.MessageEmbed {
+	handle := settings.HandleSettingEmbed("fadein", func(guildID string) *discordgo.MessageEmbed {
 		calls++
 		return &discordgo.MessageEmbed{Title: guildID}
 	})
 
-	if err := handle(session, textSettingInteraction("fadein", discordtest.StringOption("setting", "on"))); err != nil {
+	if err := handle(session, createTextInteraction("fadein", discordtest.StringOption("setting", "on"))); err != nil {
 		t.Fatalf("fadein on failed: %v", err)
 	}
 	if calls != 1 {
 		t.Errorf("the custom embed was built %d times after a success, want 1", calls)
 	}
 
-	_ = handle(session, textSettingInteraction("fadein", discordtest.StringOption("setting", "99")))
+	_ = handle(session, createTextInteraction("fadein", discordtest.StringOption("setting", "99")))
 	if calls != 1 {
 		t.Errorf("the custom embed was built after a rejected number")
 	}
 }
 
-func TestApplySettingArgumentsNamesTheSettingThatFailedToSave(t *testing.T) {
+func TestApplyArgumentsNamesFailure(t *testing.T) {
 	dbtest.Setup(t)
 	dbtest.CloseUntilCleanup(t)
 	spec := specFor(t, "automix")
 
-	if failed, err := settings.HookApplySettingArguments(checkGuildID, spec, settings.HookBuildSettingArguments(&settings.HookSettingArgumentsFields{Value: settings.HookValueOn, HasValue: true})); err == nil || failed != spec {
+	if failed, err := settings.HookApplyArguments(checkGuildID, spec, settings.HookCreateSettingArguments(&settings.HookSettingArgumentsFields{Value: settings.HookValueOn, HasValue: true})); err == nil || failed != spec {
 		t.Errorf("state write failure = (%v, %v), want the automix spec and an error", failed, err)
 	}
 
 	beats := specFor(t, "automix_beats")
-	if failed, err := settings.HookApplySettingArguments(checkGuildID, spec, settings.HookBuildSettingArguments(&settings.HookSettingArgumentsFields{Number: beats, NumberValue: "16"})); err == nil || failed != beats {
+	if failed, err := settings.HookApplyArguments(checkGuildID, spec, settings.HookCreateSettingArguments(&settings.HookSettingArgumentsFields{Number: beats, NumberValue: "16"})); err == nil || failed != beats {
 		t.Errorf("number write failure = (%v, %v), want the automix_beats spec and an error", failed, err)
 	}
 }
 
-func TestSettingCommandsReportSaveFailuresInsteadOfReturningThem(t *testing.T) {
+func TestHandleSettingSaveFailure(t *testing.T) {
 	dbtest.Setup(t)
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 	dbtest.CloseUntilCleanup(t)
@@ -218,7 +218,7 @@ func TestSettingCommandsReportSaveFailuresInsteadOfReturningThem(t *testing.T) {
 	}
 }
 
-func TestNormalizationWriteFailureIsReturned(t *testing.T) {
+func TestWriteNormalizationFailure(t *testing.T) {
 	dbtest.Setup(t)
 	dbtest.CloseUntilCleanup(t)
 
@@ -227,8 +227,8 @@ func TestNormalizationWriteFailureIsReturned(t *testing.T) {
 	}
 }
 
-func TestHandleSettingRejectsAnUnknownKey(t *testing.T) {
-	if err := settings.HandleSetting("nope")(nil, textSettingInteraction("nope")); err == nil {
+func TestHandleSettingUnknownKey(t *testing.T) {
+	if err := settings.HandleSetting("nope")(nil, createTextInteraction("nope")); err == nil {
 		t.Error("an undefined setting key was accepted")
 	}
 }

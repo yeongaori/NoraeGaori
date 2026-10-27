@@ -6,7 +6,7 @@ import (
 
 import "testing"
 
-func TestParseDurationToSeconds(t *testing.T) {
+func TestParseDuration(t *testing.T) {
 	cases := []struct {
 		in   string
 		want int
@@ -23,8 +23,8 @@ func TestParseDurationToSeconds(t *testing.T) {
 	}
 	for i := range cases {
 		c := &cases[i]
-		if got := youtube.ParseDurationToSeconds(c.in); got != c.want {
-			t.Errorf("ParseDurationToSeconds(%q) = %d, want %d", c.in, got, c.want)
+		if got := youtube.ParseDuration(c.in); got != c.want {
+			t.Errorf("ParseDuration(%q) = %d, want %d", c.in, got, c.want)
 		}
 	}
 }

@@ -99,19 +99,19 @@ func turnQueuePage(s *discordgo.Session, ic *discordgo.InteractionCreate, argume
 	}
 
 	embed, components := renderQueuePage(ic.GuildID, q.Songs, page)
-	if err := discord.UpdateComponentMessage(s, ic, embed, components); err != nil {
+	if err := discord.UpdatePanel(s, ic, embed, components); err != nil {
 		logger.Errorf("Failed to turn the queue page: %v", err)
 	}
 }
 
 func respondQueueNotice(s *discordgo.Session, ic *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) {
-	if err := discord.RespondEphemeralEmbed(s, ic, embed); err != nil {
+	if err := discord.RespondEphemeral(s, ic, embed); err != nil {
 		logger.Errorf("Failed to answer a queue page turn: %v", err)
 	}
 }
 
 func openMixPanel(s *discordgo.Session, ic *discordgo.InteractionCreate, _ []string) {
 	if ic.Type == discordgo.InteractionMessageComponent {
-		automix.OpenPanelFromComponent(s, ic)
+		automix.OpenPanelOnClick(s, ic)
 	}
 }

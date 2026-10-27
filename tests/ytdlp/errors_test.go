@@ -16,8 +16,8 @@ func checkErrorClassifier(t *testing.T, name string, classify func(message strin
 	}
 }
 
-func TestIsDefinitiveUnavailableError(t *testing.T) {
-	checkErrorClassifier(t, "IsDefinitiveUnavailableError", ytdlp.IsDefinitiveUnavailableError, map[string]bool{
+func TestIsDefinitiveUnavailable(t *testing.T) {
+	checkErrorClassifier(t, "IsDefinitiveUnavailable", ytdlp.IsDefinitiveUnavailable, map[string]bool{
 		"ERROR: Video unavailable":                    true,
 		"This is a private video":                     true,
 		"Sign in to confirm your age":                 true,
@@ -63,9 +63,9 @@ func TestIsRateLimitError(t *testing.T) {
 	}
 }
 
-func TestErrorClassifiersAreCaseInsensitive(t *testing.T) {
-	if !ytdlp.IsDefinitiveUnavailableError("PRIVATE VIDEO") {
-		t.Error("IsDefinitiveUnavailableError missed an uppercase pattern")
+func TestErrorClassifiersIgnoreCase(t *testing.T) {
+	if !ytdlp.IsDefinitiveUnavailable("PRIVATE VIDEO") {
+		t.Error("IsDefinitiveUnavailable missed an uppercase pattern")
 	}
 	if !ytdlp.IsNetworkError("CONNECTION REFUSED") {
 		t.Error("IsNetworkError missed an uppercase pattern")

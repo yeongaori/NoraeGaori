@@ -50,11 +50,11 @@ type HookSettingSpecFields struct {
 
 var HookAllowedToEdit = allowedToEdit
 var HookApplySetting = applySetting
-var HookApplySettingArguments = applySettingArguments
-var HookBuildSettingMenu = buildSettingMenu
-var HookBuildSettingModal = buildSettingModal
-var HookBuildSettingsComponents = buildSettingsComponents
-var HookBuildSettingsEmbed = buildSettingsEmbed
+var HookApplyArguments = applyArguments
+var HookCreateSettingMenu = createSettingMenu
+var HookCreateSettingModal = createSettingModal
+var HookCreatePanelControls = createPanelControls
+var HookCreateSettingsEmbed = createSettingsEmbed
 var HookCanEditAdminSettings = canEditAdminSettings
 var HookCategoryLabel = categoryLabel
 var HookChoiceOptions = choiceOptions
@@ -78,7 +78,7 @@ var HookNextValue = nextValue
 var HookNormalizeValue = normalizeValue
 var HookPanelStrings = panelStrings
 var HookParsePanelArguments = parsePanelArguments
-var HookParseSettingArguments = parseSettingArguments
+var HookParseArguments = parseArguments
 var HookRegisterPanelRoutes = registerPanelRoutes
 var HookRegisterSettingMenus = registerSettingMenus
 var HookRenderPanel = renderPanel
@@ -94,11 +94,11 @@ var HookValidationMessage = validationMessage
 var HookVisibleCategories = visibleCategories
 var HookWriteNormalization = writeNormalization
 
-func HookBuildPanelTarget(fields HookPanelTargetFields) *panelTarget {
+func HookCreatePanelTarget(fields HookPanelTargetFields) *panelTarget {
 	return &panelTarget{isAdmin: fields.IsAdmin, category: fields.Category, key: fields.Key}
 }
 
-func HookBuildSettingArguments(fields *HookSettingArgumentsFields) *settingArguments {
+func HookCreateSettingArguments(fields *HookSettingArgumentsFields) *settingArguments {
 	return &settingArguments{
 		value:       fields.Value,
 		hasValue:    fields.HasValue,
@@ -107,7 +107,7 @@ func HookBuildSettingArguments(fields *HookSettingArgumentsFields) *settingArgum
 	}
 }
 
-func HookBuildSettingSpec(fields *HookSettingSpecFields) *settingSpec {
+func HookCreateSettingSpec(fields *HookSettingSpecFields) *settingSpec {
 	return &settingSpec{
 		key:        fields.Key,
 		category:   fields.Category,

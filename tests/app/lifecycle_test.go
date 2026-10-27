@@ -7,7 +7,7 @@ import (
 	"noraegaori/internal/app"
 )
 
-func TestForceExitAfterExitsWhenShutdownStalls(t *testing.T) {
+func TestForceExitAfterStall(t *testing.T) {
 	codes := make(chan int, 1)
 
 	app.HookForceExitAfter(10*time.Millisecond, func(code int) { codes <- code })
@@ -22,7 +22,7 @@ func TestForceExitAfterExitsWhenShutdownStalls(t *testing.T) {
 	}
 }
 
-func TestForceExitAfterStaysQuietBeforeTheTimeout(t *testing.T) {
+func TestForceExitAfterWaits(t *testing.T) {
 	codes := make(chan int, 1)
 
 	app.HookForceExitAfter(time.Hour, func(code int) { codes <- code })

@@ -75,7 +75,7 @@ func probeInteraction(name string, member *discordgo.Member) *discordgo.Interact
 	}
 }
 
-func TestHandleInteractionRunsTheHandlerForAGuildMember(t *testing.T) {
+func TestHandleInteractionGuildMember(t *testing.T) {
 	called := registerProbeCommand(t, "probe", false)
 	session := &discordgo.Session{State: discordgo.NewState()}
 	member := &discordgo.Member{GuildID: "guild", User: &discordgo.User{ID: "user"}}

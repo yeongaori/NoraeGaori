@@ -175,7 +175,7 @@ func (versionmanager *VersionManager) testExtraction(binaryPath, videoID string)
 		if IsNetworkError(errMsg) || ctx.Err() != nil {
 			return canaryResult{videoID: videoID, network: true, errMsg: errMsg}
 		}
-		if IsDefinitiveUnavailableError(errMsg) {
+		if IsDefinitiveUnavailable(errMsg) {
 			return canaryResult{videoID: videoID, inconclusive: true, errMsg: errMsg}
 		}
 		return canaryResult{videoID: videoID, errMsg: errMsg}

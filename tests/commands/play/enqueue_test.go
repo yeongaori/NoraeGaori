@@ -11,11 +11,11 @@ import (
 	"noraegaori/tests/testutil/queuetest"
 )
 
-func TestCheckSongsAvailabilityIndex(t *testing.T) {
+func TestCheckAvailabilityIndex(t *testing.T) {
 	testutil.Swap(t, youtube.GetAvailabilityPool().HookCheckFn(), func(string) (bool, bool, error) { return true, false, nil })
 	songs := []*youtube.Song{{URL: "https://youtu.be/first"}, {URL: "https://youtu.be/second"}, {URL: "https://youtu.be/third"}}
 
-	results := play.HookCheckSongsAvailability(songs)
+	results := play.HookCheckAvailability(songs)
 	for i := range songs {
 		if results[i].URL != songs[i].URL {
 			t.Errorf("result %d = %q, want %q", i, results[i].URL, songs[i].URL)
@@ -23,7 +23,7 @@ func TestCheckSongsAvailabilityIndex(t *testing.T) {
 	}
 }
 
-func TestEnqueueAvailableSongsSkipsUnavailableAndDuplicates(t *testing.T) {
+func TestEnqueueAvailableSkips(t *testing.T) {
 	const guildID = "enqueue-guild"
 	queuetest.Seed(t, guildID, &queue.Song{URL: "https://youtu.be/queued", Title: "Already queued", RequestedByID: "user", RequestedByTag: "user"})
 
@@ -42,7 +42,7 @@ func TestEnqueueAvailableSongsSkipsUnavailableAndDuplicates(t *testing.T) {
 		{Index: 4, Available: true},
 	}
 
-	added, skipped, skippedURLs := play.HookEnqueueAvailableSongs(guildID, songs, results)
+	added, skipped, skippedURLs := play.HookEnqueueAvailable(guildID, songs, results)
 
 	if added != 3 {
 		t.Errorf("added: got %d, want %d", added, 3)

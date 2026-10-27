@@ -21,7 +21,7 @@ func teardownTestConfig(t *testing.T) {
 	config.HookAdminsConf.Store(nil)
 }
 
-func TestDefaultVolumeFallsBackWithoutAConfig(t *testing.T) {
+func TestDefaultVolumeFallback(t *testing.T) {
 	previous := config.HookConfig.Load()
 	t.Cleanup(func() { config.HookConfig.Store(previous) })
 
@@ -179,7 +179,7 @@ func TestGetAdmins(t *testing.T) {
 	}
 }
 
-func TestConcurrentConfigAccess(t *testing.T) {
+func TestGetConfigConcurrent(t *testing.T) {
 	setupTestConfig(t)
 	defer teardownTestConfig(t)
 
@@ -280,19 +280,19 @@ func loadYtDlpChannel(t *testing.T, body string) string {
 	return config.GetConfig().YtDlpChannel
 }
 
-func TestLoadConfigDefaultsTheYtDlpChannel(t *testing.T) {
+func TestLoadConfigDefaultChannel(t *testing.T) {
 	if got := loadYtDlpChannel(t, `{"prefix":"!","language":"en","default_volume":100}`); got != config.YtDlpChannelAuto {
 		t.Errorf("got channel %q for a config without the key, want %q", got, config.YtDlpChannelAuto)
 	}
 }
 
-func TestLoadConfigRejectsAnUnknownYtDlpChannel(t *testing.T) {
+func TestLoadConfigUnknownChannel(t *testing.T) {
 	if got := loadYtDlpChannel(t, `{"prefix":"!","ytdlp_channel":"bleeding-edge"}`); got != config.YtDlpChannelAuto {
 		t.Errorf("got channel %q, want the fallback %q", got, config.YtDlpChannelAuto)
 	}
 }
 
-func TestLoadConfigKeepsAnExplicitStableChannel(t *testing.T) {
+func TestLoadConfigStableChannel(t *testing.T) {
 	if got := loadYtDlpChannel(t, `{"prefix":"!","ytdlp_channel":"stable"}`); got != config.YtDlpChannelStable {
 		t.Errorf("got channel %q, want %q to be honoured", got, config.YtDlpChannelStable)
 	}

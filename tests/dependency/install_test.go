@@ -13,7 +13,7 @@ import (
 	"noraegaori/internal/dependency/mirror"
 )
 
-func TestCompareVersionsComparesNumerically(t *testing.T) {
+func TestCompareVersionsNumeric(t *testing.T) {
 	cases := []struct {
 		a, b string
 		want int
@@ -37,8 +37,8 @@ func TestCompareVersionsComparesNumerically(t *testing.T) {
 	}
 }
 
-func TestToolAcceptsVersionsInsideItsBounds(t *testing.T) {
-	bun := dependency.HookBuildTool(&dependency.HookToolFields{Minimum: "1.2.11", Maximum: "1.3.14"})
+func TestToolAcceptsBounds(t *testing.T) {
+	bun := dependency.HookCreateTool(&dependency.HookToolFields{Minimum: "1.2.11", Maximum: "1.3.14"})
 	cases := map[string]bool{"1.2.10": false, "1.2.11": true, "1.3.14": true, "1.3.15": false, "1.4.2": false}
 
 	for version, want := range cases {
@@ -51,7 +51,7 @@ func TestToolAcceptsVersionsInsideItsBounds(t *testing.T) {
 	}
 }
 
-func TestReadVersionFindsTheVersionInTheOutput(t *testing.T) {
+func TestReadVersionParsesOutput(t *testing.T) {
 	directory := t.TempDir()
 	deno := writeExecutable(t, filepath.Join(directory, "deno"), script("deno 2.9.7 (stable, release, x86_64-unknown-linux-gnu)"))
 	silent := writeExecutable(t, filepath.Join(directory, "silent"), script("no numbers here"))
@@ -67,7 +67,7 @@ func TestReadVersionFindsTheVersionInTheOutput(t *testing.T) {
 	}
 }
 
-func TestInstalledVersionsAreNewestFirstAndSkipPartialInstalls(t *testing.T) {
+func TestInstalledVersionsOrder(t *testing.T) {
 	useWorkingDirectory(t)
 	for _, name := range []string{"deno-2.9.7", "deno-2.10.0", "deno-2.3.0", "deno-2.11.0.part", "denort-9.9.9"} {
 		if err := os.MkdirAll(filepath.Join(dependency.HookLibDirectory, name), 0755); err != nil {
@@ -82,7 +82,7 @@ func TestInstalledVersionsAreNewestFirstAndSkipPartialInstalls(t *testing.T) {
 	}
 }
 
-func TestNewestInstalledSkipsABrokenNewerVersion(t *testing.T) {
+func TestNewestInstalledSkipsBroken(t *testing.T) {
 	useWorkingDirectory(t)
 	writeExecutable(t, filepath.Join(dependency.HookLibDirectory, "deno-2.10.0", "deno"), failingScript)
 	writeExecutable(t, filepath.Join(dependency.HookLibDirectory, "deno-2.9.7", "deno"), script("deno 2.9.7"))
@@ -101,7 +101,7 @@ func TestNewestInstalledSkipsABrokenNewerVersion(t *testing.T) {
 	}
 }
 
-func TestInstallUnpacksAndVerifiesAZip(t *testing.T) {
+func TestInstallUnpacksZip(t *testing.T) {
 	useWorkingDirectory(t)
 	skipOnWindows(t)
 	found, served := denoArchive(t, "2.9.7")
@@ -132,10 +132,10 @@ func TestInstallUnpacksAndVerifiesAZip(t *testing.T) {
 	}
 }
 
-func TestInstallUnpacksBothFFmpegBinariesFromATarball(t *testing.T) {
+func TestInstallUnpacksTarball(t *testing.T) {
 	useWorkingDirectory(t)
 	skipOnWindows(t)
-	payload := buildTarXz(t, map[string]string{
+	payload := createTarXz(t, map[string]string{
 		"bundle/bin/ffmpeg":  script("ffmpeg version N-121234-g0123456"),
 		"bundle/bin/ffprobe": script("ffprobe version N-121234-g0123456"),
 		"bundle/bin/ffplay":  script("ffplay"),
@@ -150,7 +150,7 @@ func TestInstallUnpacksBothFFmpegBinariesFromATarball(t *testing.T) {
 		Members: []string{"bundle/bin/ffmpeg", "bundle/bin/ffprobe"},
 	}
 
-	binary, err := dependency.HookInstall(dependency.HookBuildTool(&dependency.HookToolFields{Name: "ffmpeg", VersionFlag: "-version"}), linuxAmd64, found)
+	binary, err := dependency.HookInstall(dependency.HookCreateTool(&dependency.HookToolFields{Name: "ffmpeg", VersionFlag: "-version"}), linuxAmd64, found)
 	if err != nil {
 		t.Fatalf("install returned %v, want nil", err)
 	}
@@ -168,7 +168,7 @@ func TestInstallUnpacksBothFFmpegBinariesFromATarball(t *testing.T) {
 	}
 }
 
-func requireNothingInstalled(t *testing.T, toolName, version string) {
+func requireNoInstalls(t *testing.T, toolName, version string) {
 	t.Helper()
 
 	for _, path := range []string{dependency.HookInstallDirectory(toolName, version), dependency.HookInstallDirectory(toolName, version) + dependency.HookPartialSuffix} {
@@ -178,7 +178,7 @@ func requireNothingInstalled(t *testing.T, toolName, version string) {
 	}
 }
 
-func TestInstallRejectsAChecksumMismatch(t *testing.T) {
+func TestInstallChecksumMismatch(t *testing.T) {
 	useWorkingDirectory(t)
 	skipOnWindows(t)
 	found, _ := denoArchive(t, "2.9.7")
@@ -188,25 +188,25 @@ func TestInstallRejectsAChecksumMismatch(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "checksum mismatch") {
 		t.Errorf("got %v, want a checksum mismatch", err)
 	}
-	requireNothingInstalled(t, "deno", "2.9.7")
+	requireNoInstalls(t, "deno", "2.9.7")
 }
 
-func TestInstallRejectsABinaryThatDoesNotRun(t *testing.T) {
+func TestInstallRejectsDeadBinary(t *testing.T) {
 	useWorkingDirectory(t)
 	skipOnWindows(t)
-	payload := buildZip(t, map[string]string{"deno": failingScript})
+	payload := createZip(t, map[string]string{"deno": failingScript})
 	served := serveArchive(t, payload, http.StatusOK)
 	found := &mirror.Candidate{Version: "2.9.7", URL: served.server.URL, SHA256: sha256Hex(payload), Members: []string{"deno"}}
 
 	if _, err := dependency.HookInstall(stubTool("deno"), linuxAmd64, found); err == nil {
 		t.Error("got nil, want an error for a binary that fails --version")
 	}
-	requireNothingInstalled(t, "deno", "2.9.7")
+	requireNoInstalls(t, "deno", "2.9.7")
 }
 
-func TestInstallRejectsAnArchiveWithoutTheMember(t *testing.T) {
+func TestInstallMissingMember(t *testing.T) {
 	useWorkingDirectory(t)
-	payload := buildZip(t, map[string]string{"denort": script("denort 2.9.7")})
+	payload := createZip(t, map[string]string{"denort": script("denort 2.9.7")})
 	served := serveArchive(t, payload, http.StatusOK)
 	found := &mirror.Candidate{Version: "2.9.7", URL: served.server.URL, SHA256: sha256Hex(payload), Members: []string{"deno"}}
 
@@ -214,10 +214,10 @@ func TestInstallRejectsAnArchiveWithoutTheMember(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "has no deno") {
 		t.Errorf("got %v, want the missing member named", err)
 	}
-	requireNothingInstalled(t, "deno", "2.9.7")
+	requireNoInstalls(t, "deno", "2.9.7")
 }
 
-func TestInstallRejectsAFailedDownload(t *testing.T) {
+func TestInstallFailedDownload(t *testing.T) {
 	useWorkingDirectory(t)
 	served := serveArchive(t, nil, http.StatusBadGateway)
 	found := &mirror.Candidate{Version: "2.9.7", URL: served.server.URL, SHA256: sha256Hex(nil), Members: []string{"deno"}}
@@ -225,10 +225,10 @@ func TestInstallRejectsAFailedDownload(t *testing.T) {
 	if _, err := dependency.HookInstall(stubTool("deno"), linuxAmd64, found); err == nil {
 		t.Error("got nil, want an error for a failed download")
 	}
-	requireNothingInstalled(t, "deno", "2.9.7")
+	requireNoInstalls(t, "deno", "2.9.7")
 }
 
-func TestInstallReplacesABrokenInstallOfTheSameVersion(t *testing.T) {
+func TestInstallReplacesBroken(t *testing.T) {
 	useWorkingDirectory(t)
 	writeExecutable(t, filepath.Join(dependency.HookLibDirectory, "deno-2.9.7", "deno"), failingScript)
 	found, _ := denoArchive(t, "2.9.7")
@@ -242,7 +242,7 @@ func TestInstallReplacesABrokenInstallOfTheSameVersion(t *testing.T) {
 	}
 }
 
-func TestInstallFailsWhenLibIsNotADirectory(t *testing.T) {
+func TestInstallLibNotDirectory(t *testing.T) {
 	useWorkingDirectory(t)
 	if err := os.WriteFile(dependency.HookLibDirectory, []byte("not a directory"), 0644); err != nil {
 		t.Fatalf("failed to write %s: %v", dependency.HookLibDirectory, err)
@@ -257,10 +257,10 @@ func TestInstallFailsWhenLibIsNotADirectory(t *testing.T) {
 	}
 }
 
-func TestExtractMembersFailsWhenTheDestinationIsMissing(t *testing.T) {
+func TestExtractMembersNoDestination(t *testing.T) {
 	directory := t.TempDir()
 	archive := filepath.Join(directory, "archive")
-	if err := os.WriteFile(archive, buildZip(t, map[string]string{"deno": "binary"}), 0644); err != nil {
+	if err := os.WriteFile(archive, createZip(t, map[string]string{"deno": "binary"}), 0644); err != nil {
 		t.Fatalf("failed to write the archive: %v", err)
 	}
 
@@ -269,7 +269,7 @@ func TestExtractMembersFailsWhenTheDestinationIsMissing(t *testing.T) {
 	}
 }
 
-func TestExtractMembersRejectsDamagedContent(t *testing.T) {
+func TestExtractMembersDamagedContent(t *testing.T) {
 	directory := t.TempDir()
 	var buffer bytes.Buffer
 	writer := zip.NewWriter(&buffer)
@@ -291,7 +291,7 @@ func TestExtractMembersRejectsDamagedContent(t *testing.T) {
 	}
 }
 
-func TestExtractMembersRejectsACorruptArchive(t *testing.T) {
+func TestExtractMembersCorruptArchive(t *testing.T) {
 	directory := t.TempDir()
 	corrupt := filepath.Join(directory, "archive")
 	if err := os.WriteFile(corrupt, []byte("not an archive"), 0644); err != nil {
@@ -312,7 +312,7 @@ func TestExtractMembersRejectsACorruptArchive(t *testing.T) {
 func denoPayload(t *testing.T, version string) []byte {
 	t.Helper()
 
-	return buildZip(t, map[string]string{"deno": script("deno " + version + " (stable, release)")})
+	return createZip(t, map[string]string{"deno": script("deno " + version + " (stable, release)")})
 }
 
 func servedDeno(t *testing.T, payload []byte) (*mirror.Candidate, *archiveServer) {
@@ -345,7 +345,7 @@ func leaveStoppedInstall(t *testing.T, archive []byte, strays ...string) {
 	}
 }
 
-func TestInstallReusesAVerifiedArchiveLeftByAStoppedRun(t *testing.T) {
+func TestInstallReusesVerified(t *testing.T) {
 	useWorkingDirectory(t)
 	skipOnWindows(t)
 	payload := denoPayload(t, "2.9.7")
@@ -371,7 +371,7 @@ func TestInstallReusesAVerifiedArchiveLeftByAStoppedRun(t *testing.T) {
 	}
 }
 
-func TestInstallDownloadsAgainWhenTheLeftoverArchiveIsIncomplete(t *testing.T) {
+func TestInstallPartialLeftover(t *testing.T) {
 	useWorkingDirectory(t)
 	skipOnWindows(t)
 	payload := denoPayload(t, "2.9.7")
@@ -386,7 +386,7 @@ func TestInstallDownloadsAgainWhenTheLeftoverArchiveIsIncomplete(t *testing.T) {
 	}
 }
 
-func TestInstallDownloadsAgainWhenTheLeftoverArchiveIsForAnotherBuild(t *testing.T) {
+func TestInstallForeignLeftover(t *testing.T) {
 	useWorkingDirectory(t)
 	skipOnWindows(t)
 	found, served := servedDeno(t, denoPayload(t, "2.9.7"))
@@ -404,7 +404,7 @@ func TestInstallDownloadsAgainWhenTheLeftoverArchiveIsForAnotherBuild(t *testing
 	}
 }
 
-func TestInstallDownloadsAgainWhenTheLeftoverArchiveCannotBeRead(t *testing.T) {
+func TestInstallUnreadableLeftover(t *testing.T) {
 	useWorkingDirectory(t)
 	skipOnWindows(t)
 	found, served := servedDeno(t, denoPayload(t, "2.9.7"))
@@ -420,7 +420,7 @@ func TestInstallDownloadsAgainWhenTheLeftoverArchiveCannotBeRead(t *testing.T) {
 	}
 }
 
-func TestInstallFailsWhenTheStoppedRunCannotBeCleared(t *testing.T) {
+func TestInstallStuckStoppedRun(t *testing.T) {
 	skipOnWindows(t)
 	for name, check := range map[string]struct {
 		mode os.FileMode
@@ -451,9 +451,9 @@ func TestInstallFailsWhenTheStoppedRunCannotBeCleared(t *testing.T) {
 	}
 }
 
-func TestInstallDropsAReusedArchiveThatFailsToExtract(t *testing.T) {
+func TestInstallDropsBadReuse(t *testing.T) {
 	useWorkingDirectory(t)
-	payload := buildZip(t, map[string]string{"denort": script("denort 2.9.7")})
+	payload := createZip(t, map[string]string{"denort": script("denort 2.9.7")})
 	found, served := servedDeno(t, payload)
 	leaveStoppedInstall(t, payload)
 
@@ -463,5 +463,5 @@ func TestInstallDropsAReusedArchiveThatFailsToExtract(t *testing.T) {
 	if served.downloads.Load() != 0 {
 		t.Errorf("got %d downloads, want the verified archive tried first", served.downloads.Load())
 	}
-	requireNothingInstalled(t, "deno", "2.9.7")
+	requireNoInstalls(t, "deno", "2.9.7")
 }

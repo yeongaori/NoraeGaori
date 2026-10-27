@@ -82,7 +82,7 @@ func wantVoicePolicy(t *testing.T, guildID, off string) {
 	}
 }
 
-func TestVoicePolicySettingsDefaultToOn(t *testing.T) {
+func TestVoicePolicyDefaultsOn(t *testing.T) {
 	setupTestDB(t)
 
 	wantVoicePolicy(t, "no-settings-row", "")
@@ -93,7 +93,7 @@ func TestVoicePolicySettingsDefaultToOn(t *testing.T) {
 	wantVoicePolicy(t, "guild1", "")
 }
 
-func TestVoicePolicySettingsRoundTripIndependently(t *testing.T) {
+func TestVoicePolicyRoundTrip(t *testing.T) {
 	setupTestDB(t)
 
 	for i := range voicePolicySettings {

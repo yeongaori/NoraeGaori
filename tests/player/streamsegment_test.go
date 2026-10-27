@@ -40,7 +40,7 @@ func clickTrackWave(seconds, silentSeconds int) []byte {
 	return wave.Bytes()
 }
 
-func TestStreamSegmentSeeksAndTrimsTheEnding(t *testing.T) {
+func TestAnalyzeStreamSegmentTrims(t *testing.T) {
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
 		t.Skip("ffmpeg is not installed; skipping the test that drives it")
 	}
@@ -75,7 +75,7 @@ func TestStreamSegmentSeeksAndTrimsTheEnding(t *testing.T) {
 	}
 }
 
-func TestStreamSegmentRejectsASilentStretch(t *testing.T) {
+func TestAnalyzeStreamSegmentSilent(t *testing.T) {
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
 		t.Skip("ffmpeg is not installed; skipping the test that drives it")
 	}

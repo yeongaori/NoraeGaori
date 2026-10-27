@@ -6,7 +6,7 @@ import (
 	"noraegaori/internal/messages"
 )
 
-func TestFormatDurationShowsHoursOnlyWhenNeeded(t *testing.T) {
+func TestFormatDurationHours(t *testing.T) {
 	cases := []struct {
 		seconds int
 		want    string

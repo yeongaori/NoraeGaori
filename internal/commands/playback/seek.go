@@ -60,7 +60,7 @@ func parseSeekPosition(input string) (int, error) {
 }
 
 func HandleSeek(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	if _, errEmbed := discord.CheckUserInBotVoiceChannel(s, i); errEmbed != nil {
+	if _, errEmbed := discord.RequireSameVoice(s, i); errEmbed != nil {
 		discord.RespondEmbed(s, i, errEmbed)
 		return nil
 	}
@@ -91,7 +91,7 @@ func HandleSeek(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Music.SeekLiveStream)
 		return nil
 	}
-	durationMs := youtube.ParseDurationToSeconds(currentSong.Duration) * 1000
+	durationMs := youtube.ParseDuration(currentSong.Duration) * 1000
 	if durationMs > 0 && posMs > durationMs {
 		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Music.SeekOutOfBounds)
 		return nil

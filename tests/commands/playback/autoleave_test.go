@@ -38,7 +38,7 @@ func TestStopFollowsAutoLeave(t *testing.T) {
 	commandtest.Run(t, "stop", playback.HandleStop, cases)
 }
 
-func TestSkippingTheLastSongFollowsAutoLeave(t *testing.T) {
+func TestSkipLastAutoLeave(t *testing.T) {
 	song := queuetest.Song("Last song", commandtest.CallerID)
 	link := messages.FormatMaskedLink(song.Title, song.URL)
 

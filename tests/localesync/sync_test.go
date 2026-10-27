@@ -106,7 +106,7 @@ func section(t *testing.T, locale map[string]any, name string) map[string]any {
 	return values
 }
 
-func TestSyncCreatesMissingLocaleFiles(t *testing.T) {
+func TestSyncCreatesMissingFiles(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "locales")
 	shipped := `{"player": {"now_playing": "Now playing"}}`
 	store := storeWith(map[string]string{})
@@ -127,7 +127,7 @@ func TestSyncCreatesMissingLocaleFiles(t *testing.T) {
 	}
 }
 
-func TestSyncUpdatesStringsTheUserNeverTouched(t *testing.T) {
+func TestSyncUpdatesUntouched(t *testing.T) {
 	locale := syncOne(t,
 		`{"player": {"now_playing": "Now playing ▶"}}`,
 		`{"player": {"now_playing": "Now playing"}}`,
@@ -139,7 +139,7 @@ func TestSyncUpdatesStringsTheUserNeverTouched(t *testing.T) {
 	}
 }
 
-func TestSyncKeepsEditsAcrossSeveralUpgrades(t *testing.T) {
+func TestSyncKeepsEditsAcrossUpgrades(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "ko.json")
 	store := storeWith(map[string]string{})
@@ -164,7 +164,7 @@ func TestSyncKeepsEditsAcrossSeveralUpgrades(t *testing.T) {
 	}
 }
 
-func TestSyncKeepsTheUsersStringsWhenALanguageStartsShipping(t *testing.T) {
+func TestSyncKeepsUserLanguage(t *testing.T) {
 	locale := syncOne(t,
 		`{"player": {"now_playing": "지금 재생 중", "paused": "일시정지됨"}}`,
 		"",
@@ -180,7 +180,7 @@ func TestSyncKeepsTheUsersStringsWhenALanguageStartsShipping(t *testing.T) {
 	}
 }
 
-func TestSyncTreatsDifferentlyEscapedTextAsUntouched(t *testing.T) {
+func TestSyncEscapingCountsUntouched(t *testing.T) {
 	escaped := strconv.QuoteToASCII("지금 재생 중")
 	if !strings.Contains(escaped, `\`) {
 		t.Fatalf("%s has no escapes, so the test would compare identical bytes", escaped)
@@ -196,7 +196,7 @@ func TestSyncTreatsDifferentlyEscapedTextAsUntouched(t *testing.T) {
 	}
 }
 
-func TestSyncKeepsStringsTheUserEdited(t *testing.T) {
+func TestSyncKeepsUserEdits(t *testing.T) {
 	locale := syncOne(t,
 		`{"player": {"now_playing": "Now playing ▶"}}`,
 		`{"player": {"now_playing": "Now playing"}}`,
@@ -227,7 +227,7 @@ func TestSyncAddsNewStrings(t *testing.T) {
 	}
 }
 
-func TestSyncLeavesStringsTheUserDeletedDeleted(t *testing.T) {
+func TestSyncKeepsUserDeletions(t *testing.T) {
 	locale := syncOne(t,
 		`{"player": {"now_playing": "Now playing", "paused": "Paused"}}`,
 		`{"player": {"now_playing": "Now playing", "paused": "Paused"}}`,
@@ -239,7 +239,7 @@ func TestSyncLeavesStringsTheUserDeletedDeleted(t *testing.T) {
 	}
 }
 
-func TestSyncDropsUntouchedStringsRemovedUpstream(t *testing.T) {
+func TestSyncDropsRemovedUntouched(t *testing.T) {
 	locale := syncOne(t,
 		`{"player": {"now_playing": "Now playing"}}`,
 		`{"player": {"now_playing": "Now playing", "legacy": "Old text"}}`,
@@ -251,7 +251,7 @@ func TestSyncDropsUntouchedStringsRemovedUpstream(t *testing.T) {
 	}
 }
 
-func TestSyncKeepsEditedStringsRemovedUpstream(t *testing.T) {
+func TestSyncKeepsRemovedEdits(t *testing.T) {
 	locale := syncOne(t,
 		`{"player": {"now_playing": "Now playing"}}`,
 		`{"player": {"now_playing": "Now playing", "legacy": "Old text"}}`,
@@ -263,7 +263,7 @@ func TestSyncKeepsEditedStringsRemovedUpstream(t *testing.T) {
 	}
 }
 
-func TestSyncKeepsStringsTheUserAdded(t *testing.T) {
+func TestSyncKeepsUserAdditions(t *testing.T) {
 	dir := t.TempDir()
 	path := writeUserLocale(t, dir, "ko.json", "{\n  \"player\": {\n    \"mine\": \"Mine\",\n    \"now_playing\": \"Now playing\"\n  }\n}\n")
 	shipped := shippedLocales(map[string]string{"ko.json": "{\n  \"player\": {\n    \"now_playing\": \"Now playing\",\n    \"paused\": \"Paused\"\n  }\n}\n"})
@@ -283,7 +283,7 @@ func TestSyncKeepsStringsTheUserAdded(t *testing.T) {
 	}
 }
 
-func TestSyncKeepsTheUserValueWhenTheTypeDiffers(t *testing.T) {
+func TestSyncKeepsUserTypeChange(t *testing.T) {
 	locale := syncOne(t,
 		`{"player": {"now_playing": "Now playing"}}`,
 		`{"player": {"now_playing": "Now playing"}}`,
@@ -295,7 +295,7 @@ func TestSyncKeepsTheUserValueWhenTheTypeDiffers(t *testing.T) {
 	}
 }
 
-func TestSyncTreatsAliasListsAsOneValue(t *testing.T) {
+func TestSyncAliasListsAsOneValue(t *testing.T) {
 	locale := syncOne(t,
 		`{"commands": {"play": {"aliases": ["play", "p", "pl"]}, "skip": {"aliases": ["skip", "s", "sk"]}}}`,
 		`{"commands": {"play": {"aliases": ["play", "p"]}, "skip": {"aliases": ["skip", "s"]}}}`,
@@ -313,7 +313,7 @@ func TestSyncTreatsAliasListsAsOneValue(t *testing.T) {
 	}
 }
 
-func TestSyncWithoutABaselineKeepsDifferencesAndAddsMissingStrings(t *testing.T) {
+func TestSyncNoBaseline(t *testing.T) {
 	locale := syncOne(t,
 		`{"player": {"now_playing": "Now playing ▶", "paused": "Paused", "stopped": "Stopped"}}`,
 		"",
@@ -329,7 +329,7 @@ func TestSyncWithoutABaselineKeepsDifferencesAndAddsMissingStrings(t *testing.T)
 	}
 }
 
-func TestSyncLeavesAnInvalidUserFileAlone(t *testing.T) {
+func TestSyncLeavesInvalidUserFile(t *testing.T) {
 	dir := t.TempDir()
 	broken := `{"player": {"now_playing": "Now playing",}}`
 	path := writeUserLocale(t, dir, "ko.json", broken)
@@ -352,7 +352,7 @@ func TestSyncLeavesAnInvalidUserFileAlone(t *testing.T) {
 	}
 }
 
-func TestSyncDoesNotRewriteAFileThatNeedsNoChange(t *testing.T) {
+func TestSyncSkipsUnchangedFile(t *testing.T) {
 	dir := t.TempDir()
 	user := "{\"player\":{\"paused\":\"Paused\",\"now_playing\":\"Now playing\"}}"
 	path := writeUserLocale(t, dir, "ko.json", user)
@@ -379,7 +379,7 @@ func TestSyncDoesNotRewriteAFileThatNeedsNoChange(t *testing.T) {
 	}
 }
 
-func TestSyncFormatsLikeTheShippedFiles(t *testing.T) {
+func TestSyncFormatsLikeShipped(t *testing.T) {
 	dir := t.TempDir()
 	path := writeUserLocale(t, dir, "ko.json", `{"a": {"text": "<b>Tom & Jerry</b>"}}`)
 	shipped := "{\n" +
@@ -416,7 +416,7 @@ func TestSyncFormatsLikeTheShippedFiles(t *testing.T) {
 	}
 }
 
-func TestSyncReproducesTheShippedLocalesByteForByte(t *testing.T) {
+func TestSyncReproducesShipped(t *testing.T) {
 	for _, name := range []string{"en.json", "ko.json"} {
 		t.Run(name, func(t *testing.T) {
 			shipped, err := locales.Files.ReadFile(name)
@@ -454,7 +454,7 @@ func TestSyncReproducesTheShippedLocalesByteForByte(t *testing.T) {
 	}
 }
 
-func TestSyncLeavesLanguagesTheUserAddedAlone(t *testing.T) {
+func TestSyncLeavesUserLanguages(t *testing.T) {
 	dir := t.TempDir()
 	added := "{\"player\":{\"now_playing\":\"再生中\"}}"
 	path := writeUserLocale(t, dir, "ja.json", added)
@@ -484,7 +484,7 @@ func TestSyncLeavesLanguagesTheUserAddedAlone(t *testing.T) {
 	}
 }
 
-func TestSyncKeepsASectionRemovedUpstreamThatTheUserChanged(t *testing.T) {
+func TestSyncKeepsChangedSection(t *testing.T) {
 	locale := syncOne(t,
 		`{"player": {"now_playing": "Now playing"}}`,
 		`{"player": {"now_playing": "Now playing"}, "legacy": {"one": "One"}}`,
@@ -496,7 +496,7 @@ func TestSyncKeepsASectionRemovedUpstreamThatTheUserChanged(t *testing.T) {
 	}
 }
 
-func TestSyncKeepsARemovedStringTheUserTurnedIntoASection(t *testing.T) {
+func TestSyncKeepsUserSection(t *testing.T) {
 	locale := syncOne(t,
 		`{"player": {"now_playing": "Now playing"}}`,
 		`{"player": {"now_playing": "Now playing"}, "legacy": "Old text"}`,

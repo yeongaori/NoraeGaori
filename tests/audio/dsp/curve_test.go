@@ -7,7 +7,7 @@ import (
 	"noraegaori/internal/audio/dsp"
 )
 
-func TestStepPointsRenderAsTheMeasuredCubicBlend(t *testing.T) {
+func TestCurveStepPointsCubic(t *testing.T) {
 	curve := dsp.Curve{{Start: 0, End: 1, Points: []dsp.Point{{X: 0, Y: 1}, {X: 0.5, Y: 1}, {X: 0.5, Y: 0.25}, {X: 1, Y: 0.25}}}}
 
 	wants := []struct{ x, y float64 }{{0.297, 0.883}, {0.5, 0.625}, {0.703, 0.367}}
@@ -19,7 +19,7 @@ func TestStepPointsRenderAsTheMeasuredCubicBlend(t *testing.T) {
 	}
 }
 
-func TestTwoPointSegmentIsLinear(t *testing.T) {
+func TestCurveTwoPointLinear(t *testing.T) {
 	curve := dsp.Curve{{Start: 0.2, End: 0.6, Points: []dsp.Point{{X: 0, Y: 0}, {X: 1, Y: 1}}}}
 
 	wants := []struct{ x, y float64 }{{0.3, 0.25}, {0.4, 0.5}, {0.5, 0.75}}
@@ -31,7 +31,7 @@ func TestTwoPointSegmentIsLinear(t *testing.T) {
 	}
 }
 
-func TestRampSettlesOnTheFortyStepBisection(t *testing.T) {
+func TestCurveRampBisection(t *testing.T) {
 	curve := dsp.Curve{{Start: 0, End: 1, Points: []dsp.Point{{X: 0, Y: 0}, {X: 1, Y: 1}}}}
 
 	wants := []struct{ x, y float64 }{
@@ -46,7 +46,7 @@ func TestRampSettlesOnTheFortyStepBisection(t *testing.T) {
 	}
 }
 
-func TestTwoPointSegmentEndingEarlyStretchesItsLine(t *testing.T) {
+func TestCurveTwoPointEarlyEnd(t *testing.T) {
 	curve := dsp.Curve{{Start: 0, End: 1, Points: []dsp.Point{{X: 0, Y: 0}, {X: 0.5, Y: 1}}}}
 
 	wants := []struct{ x, y float64 }{{0.1, 0.2}, {0.25, 0.5}, {0.4, 0.8}, {0.7, 1}}
@@ -58,7 +58,7 @@ func TestTwoPointSegmentEndingEarlyStretchesItsLine(t *testing.T) {
 	}
 }
 
-func TestNinePointSegmentFollowsItsControlLine(t *testing.T) {
+func TestCurveNinePointSegment(t *testing.T) {
 	points := make([]dsp.Point, 9)
 	for i := range points {
 		points[i] = dsp.Point{X: float64(i) / 8, Y: 1 - float64(i)/8}
@@ -72,7 +72,7 @@ func TestNinePointSegmentFollowsItsControlLine(t *testing.T) {
 	}
 }
 
-func TestNegativeZeroLevelBlendsToPositiveZero(t *testing.T) {
+func TestCurveBlendsNegativeZero(t *testing.T) {
 	negativeZero := math.Copysign(0, -1)
 	curve := dsp.Curve{{Start: 0, End: 1, Points: []dsp.Point{{X: 0, Y: negativeZero}, {X: 0.5, Y: negativeZero}, {X: 1, Y: negativeZero}}}}
 
@@ -81,7 +81,7 @@ func TestNegativeZeroLevelBlendsToPositiveZero(t *testing.T) {
 	}
 }
 
-func TestCurveHoldsItsEndsOutsideTheSegments(t *testing.T) {
+func TestCurveHoldsEnds(t *testing.T) {
 	curve := dsp.Curve{
 		{Start: 0, End: 0.5, Points: []dsp.Point{{X: 0, Y: 1}, {X: 1, Y: 1}}},
 		{Start: 0.5, End: 1, Points: []dsp.Point{{X: 0, Y: 1}, {X: 1, Y: 0}}},
@@ -96,7 +96,7 @@ func TestCurveHoldsItsEndsOutsideTheSegments(t *testing.T) {
 	}
 }
 
-func TestCurveSwitchesAtTheStartOfTheNextSegment(t *testing.T) {
+func TestCurveSwitchesAtSegment(t *testing.T) {
 	curve := dsp.Curve{
 		{Start: 0, End: 0.5, Points: []dsp.Point{{X: 0, Y: 1}, {X: 1, Y: 1}}},
 		{Start: 0.5, End: 1, Points: []dsp.Point{{X: 0, Y: 0}, {X: 1, Y: 0}}},

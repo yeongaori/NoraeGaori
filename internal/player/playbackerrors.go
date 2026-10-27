@@ -13,7 +13,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-func isDefinitivePlaybackError(errMsg string) bool {
+func isDefinitiveError(errMsg string) bool {
 	errorLower := strings.ToLower(errMsg)
 	definitivePatterns := []string{
 		"video unavailable",
@@ -40,7 +40,7 @@ func isDefinitivePlaybackError(errMsg string) bool {
 	return false
 }
 
-func cleanPlaybackErrorMessage(guildID, errMsg string) string {
+func cleanErrorMessage(guildID, errMsg string) string {
 	errorLower := strings.ToLower(errMsg)
 	t := messages.T(guildID)
 	errorMappings := map[string]string{
@@ -100,11 +100,11 @@ func clearAnnounced(guildID string) {
 	delete(announcedSongs, guildID)
 }
 
-func resolveRestartStreamURL(guildID string, song *queue.Song, sponsorBlock bool, bitrate int, current string) (string, error) {
+func resolveRestartURL(guildID string, song *queue.Song, sponsorBlock bool, bitrate int, current string) (string, error) {
 	if current != "" || song.IsLive {
 		return current, nil
 	}
-	invalidatePreCacheSong(guildID, song.ID)
+	invalidatePreCache(guildID, song.ID)
 	return fetchStreamURL(song.URL, sponsorBlock, bitrate)
 }
 
@@ -114,7 +114,7 @@ func clearRetryCount(guildID, songURL string) {
 	playbackRetriesMu.Unlock()
 }
 
-func clearRetryCountsForGuild(guildID string) {
+func clearRetryCounts(guildID string) {
 	clearAnnounced(guildID)
 	prefix := guildID + ":"
 	playbackRetriesMu.Lock()
@@ -126,7 +126,7 @@ func clearRetryCountsForGuild(guildID string) {
 	playbackRetriesMu.Unlock()
 }
 
-func isVoiceConnectionError(errMsg string) bool {
+func isVoiceError(errMsg string) bool {
 	return strings.Contains(errMsg, "voice connection")
 }
 
@@ -135,7 +135,7 @@ func isStreamFetchFailure(errMsg string) bool {
 	return strings.Contains(errorLower, "produced no audio") || strings.Contains(errorLower, "403")
 }
 
-func reportPlaybackFailure(song *queue.Song, errMsg string) {
+func reportFailure(song *queue.Song, errMsg string) {
 	if !isStreamFetchFailure(errMsg) {
 		return
 	}
@@ -181,10 +181,10 @@ func dropFailedSong(guildID string) {
 func handlePlaybackError(session *discordgo.Session, guildID string, song *queue.Song, err error) bool {
 	errMsg := err.Error()
 
-	reportPlaybackFailure(song, errMsg)
+	reportFailure(song, errMsg)
 
-	if isDefinitivePlaybackError(errMsg) {
-		reason := cleanPlaybackErrorMessage(guildID, errMsg)
+	if isDefinitiveError(errMsg) {
+		reason := cleanErrorMessage(guildID, errMsg)
 		logger.Warnf("Definitive error for song %s in guild %s: %s", song.Title, guildID, reason)
 		song.SetState(queue.SongStateFailed)
 		announceSongError(session, guildID, song, reason)
@@ -208,7 +208,7 @@ func handlePlaybackError(session *discordgo.Session, guildID string, song *queue
 		return true
 	}
 
-	if isVoiceConnectionError(errMsg) {
+	if isVoiceError(errMsg) {
 		logger.Warnf("Voice connection dropped, keeping %s queued in guild: %s", song.Title, guildID)
 		return true
 	}

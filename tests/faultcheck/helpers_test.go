@@ -13,7 +13,7 @@ import (
 	"noraegaori/internal/discord/command"
 )
 
-func TestOwnerRotationCyclesThroughTheOwners(t *testing.T) {
+func TestOwnerRotationCycles(t *testing.T) {
 	if got := OwnerRotation(5, "a", "b"); !slices.Equal(got, []string{"a", "b", "a", "b", "a"}) {
 		t.Errorf("OwnerRotation = %v", got)
 	}
@@ -22,7 +22,7 @@ func TestOwnerRotationCyclesThroughTheOwners(t *testing.T) {
 	}
 }
 
-func TestArgumentsCoverEveryChoiceAndTheExtras(t *testing.T) {
+func TestArgumentsCoverChoices(t *testing.T) {
 	cmd := &command.Command{
 		Name: "remove",
 		Options: []*discordgo.ApplicationCommandOption{
@@ -43,7 +43,7 @@ func TestArgumentsCoverEveryChoiceAndTheExtras(t *testing.T) {
 	}
 }
 
-func TestCommandsLeaveOutAudioCommands(t *testing.T) {
+func TestCommandsSkipAudio(t *testing.T) {
 	command.RegisterCommand(&command.Command{Name: "play"})
 	command.RegisterCommand(&command.Command{Name: "faultcheckprobe"})
 
@@ -59,7 +59,7 @@ func TestCommandsLeaveOutAudioCommands(t *testing.T) {
 	}
 }
 
-func TestTargetsFindComponentsAndModalFields(t *testing.T) {
+func TestTargetsFindFields(t *testing.T) {
 	message := map[string]any{
 		"type": float64(discordgo.InteractionResponseChannelMessageWithSource),
 		"data": map[string]any{
@@ -94,7 +94,7 @@ func TestTargetsFindComponentsAndModalFields(t *testing.T) {
 	}
 }
 
-func TestReportPrintsSortedFailuresAndTotals(t *testing.T) {
+func TestReportPrintsSorted(t *testing.T) {
 	report := &Report{}
 	report.Pass()
 	report.Fail(Failure{Step: "b", Detail: "second"})
@@ -114,7 +114,7 @@ func TestReportPrintsSortedFailuresAndTotals(t *testing.T) {
 	}
 }
 
-func TestGuardReportsErrorsPanicsAndTimeouts(t *testing.T) {
+func TestGuardReportsFaults(t *testing.T) {
 	failure := errors.New("failed")
 	if outcome := Guard(time.Second, func() error { return failure }); !errors.Is(outcome.Err, failure) || outcome.Crash() != "" {
 		t.Errorf("error outcome = %+v", outcome)

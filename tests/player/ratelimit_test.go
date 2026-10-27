@@ -22,7 +22,7 @@ func useQuickRetries(t *testing.T, cooldown time.Duration) {
 	testutil.Swap(t, player.HookRateLimitCooldown, func() time.Duration { return cooldown })
 }
 
-func countRateLimitNotices(t *testing.T) *int {
+func countLimitNotices(t *testing.T) *int {
 	t.Helper()
 
 	notices := 0
@@ -30,12 +30,12 @@ func countRateLimitNotices(t *testing.T) *int {
 	return &notices
 }
 
-func TestPlaySingleSongKeepsARateLimitedSong(t *testing.T) {
+func TestPlaySingleSongRateLimited(t *testing.T) {
 	guildID := "ratelimitedsong"
 	preparedPlayer(t, guildID, 1)
 	stubStreamURL(t, "", errTooManyRequests)
 	useQuickRetries(t, time.Millisecond)
-	notices := countRateLimitNotices(t)
+	notices := countLimitNotices(t)
 
 	for attempt := 1; attempt <= player.HookMaxRetries+2; attempt++ {
 		if got := player.HookPlaySingleSong(nil, guildID); got != player.HookPlayContinue {
@@ -58,12 +58,12 @@ func TestPlaySingleSongKeepsARateLimitedSong(t *testing.T) {
 	}
 }
 
-func TestPlaySingleSongPrefersARealErrorOverARateLimit(t *testing.T) {
+func TestPlaySingleSongRealError(t *testing.T) {
 	guildID := "ratelimitedprivate"
 	preparedPlayer(t, guildID, 1)
 	stubStreamURL(t, "", errors.New("ERROR: [youtube] abc: Private video. Too many requests were made to find this out"))
 	useQuickRetries(t, time.Millisecond)
-	notices := countRateLimitNotices(t)
+	notices := countLimitNotices(t)
 
 	if got := player.HookPlaySingleSong(nil, guildID); got != player.HookPlayContinue {
 		t.Fatalf("got %v, want playContinue after dropping the song", got)
@@ -81,7 +81,7 @@ func TestPlaySingleSongPrefersARealErrorOverARateLimit(t *testing.T) {
 	}
 }
 
-func TestWaitBeforeRetryStopsOnAStopSignal(t *testing.T) {
+func TestWaitBeforeRetryStops(t *testing.T) {
 	useQuickRetries(t, time.Hour)
 	guildPlayer := &player.GuildPlayer{StopChan: make(chan struct{}, 1)}
 	guildPlayer.StopChan <- struct{}{}
@@ -99,7 +99,7 @@ func TestWaitBeforeRetryStopsOnAStopSignal(t *testing.T) {
 	}
 }
 
-func TestWaitBeforeRetryWaitsForTheCooldownOnlyForRateLimits(t *testing.T) {
+func TestWaitBeforeRetryCooldown(t *testing.T) {
 	const cooldown = 300 * time.Millisecond
 	useQuickRetries(t, cooldown)
 	guildPlayer := &player.GuildPlayer{StopChan: make(chan struct{})}
@@ -121,7 +121,7 @@ func TestWaitBeforeRetryWaitsForTheCooldownOnlyForRateLimits(t *testing.T) {
 	}
 }
 
-func TestRateLimitNoticeIsPostedOnceAndEditedOnResume(t *testing.T) {
+func TestPostRateLimitNoticeOnce(t *testing.T) {
 	guildID := "ratelimitnotice"
 	setupPlayerDB(t, guildID, 1)
 	t.Cleanup(func() { player.HookRateLimitNotices.HookRemove(guildID) })

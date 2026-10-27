@@ -40,7 +40,7 @@ func TestLoadLocaleRacesWithReaders(t *testing.T) {
 	wg.Wait()
 }
 
-func TestActiveLocaleAndLangStayConsistent(t *testing.T) {
+func TestActiveLocaleConsistent(t *testing.T) {
 	if err := messages.LoadLocale("en"); err != nil {
 		t.Fatalf("LoadLocale returned %v, want nil", err)
 	}
@@ -67,7 +67,7 @@ func TestActiveLocaleAndLangStayConsistent(t *testing.T) {
 	}
 }
 
-func TestLoadLocaleFallsBackToEmbeddedEnglish(t *testing.T) {
+func TestLoadLocaleEnglishFallback(t *testing.T) {
 	err := messages.LoadLocale("definitely-not-a-locale")
 	if err == nil {
 		t.Fatal("LoadLocale returned nil, want an error for an unknown locale")

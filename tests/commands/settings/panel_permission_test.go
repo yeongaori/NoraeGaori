@@ -48,7 +48,7 @@ func componentInteraction(customID string, member *discordgo.Member, values ...s
 	return discordtest.ComponentInteraction(checkGuildID, customID, member, values...)
 }
 
-func TestAServerAdministratorMayEditAdminSettings(t *testing.T) {
+func TestCanEditAdminSettingsAdmin(t *testing.T) {
 	session := guildSession(t)
 
 	if !settings.HookCanEditAdminSettings(session, checkGuildID, memberWithRoles("boss", adminRoleID)) {
@@ -56,7 +56,7 @@ func TestAServerAdministratorMayEditAdminSettings(t *testing.T) {
 	}
 }
 
-func TestAPlainMemberMayNotEditAdminSettings(t *testing.T) {
+func TestCanEditAdminSettingsMember(t *testing.T) {
 	session := guildSession(t)
 
 	if settings.HookCanEditAdminSettings(session, checkGuildID, memberWithRoles("regular", memberRoleID)) {
@@ -67,7 +67,7 @@ func TestAPlainMemberMayNotEditAdminSettings(t *testing.T) {
 	}
 }
 
-func TestNonAdminSettingsAreOpenToEveryone(t *testing.T) {
+func TestAllowedToEditOpen(t *testing.T) {
 	session := guildSession(t)
 
 	if !settings.HookAllowedToEdit(session, componentInteraction("", memberWithRoles("regular", memberRoleID)), specFor(t, "sponsorblock")) {
@@ -75,7 +75,7 @@ func TestNonAdminSettingsAreOpenToEveryone(t *testing.T) {
 	}
 }
 
-func TestAdminOnlySettingsStayOpenToAdmins(t *testing.T) {
+func TestAllowedToEditAdminOnly(t *testing.T) {
 	session := guildSession(t)
 
 	if !settings.HookAllowedToEdit(session, componentInteraction("", memberWithRoles("boss", adminRoleID)), specFor(t, "prefix")) {
@@ -83,7 +83,7 @@ func TestAdminOnlySettingsStayOpenToAdmins(t *testing.T) {
 	}
 }
 
-func assertSponsorBlockUnchanged(t *testing.T, fire func()) {
+func assertSponsorBlockKept(t *testing.T, fire func()) {
 	t.Helper()
 
 	spec := specFor(t, "sponsorblock")
@@ -102,11 +102,11 @@ func assertSponsorBlockUnchanged(t *testing.T, fire func()) {
 	}
 }
 
-func TestThePanelIgnoresMalformedCustomIDs(t *testing.T) {
+func TestPanelIgnoresMalformedIDs(t *testing.T) {
 	dbtest.Setup(t)
 	settings.HookRegisterPanelRoutes()
 
-	assertSponsorBlockUnchanged(t, func() {
+	assertSponsorBlockKept(t, func() {
 		for _, id := range []string{
 			settings.HookPickRoute + ":owner:" + settings.HookCategoryPlayback,
 			settings.HookPickRoute + ":admin",
@@ -120,12 +120,12 @@ func TestThePanelIgnoresMalformedCustomIDs(t *testing.T) {
 	})
 }
 
-func TestThePanelIgnoresEmptyUnknownAndMismatchedSelections(t *testing.T) {
+func TestPanelIgnoresBadSelections(t *testing.T) {
 	dbtest.Setup(t)
 	session, requests := panelActionSession(t, http.StatusOK)
 	pick := pickID(settings.HookCategoryPlayback)
 
-	assertSponsorBlockUnchanged(t, func() {
+	assertSponsorBlockKept(t, func() {
 		for _, ic := range []*discordgo.InteractionCreate{
 			componentInteraction(pick, nil),
 			componentInteraction(pick, nil, "no-such-setting"),
@@ -143,8 +143,8 @@ func TestThePanelIgnoresEmptyUnknownAndMismatchedSelections(t *testing.T) {
 	}
 }
 
-func TestLanguageChoicesCoverEveryAvailableLocale(t *testing.T) {
-	choices := settings.BuildLanguageChoices()
+func TestCreateLanguageChoicesAll(t *testing.T) {
+	choices := settings.CreateLanguageChoices()
 	values := make([]string, 0, len(choices))
 	for _, choice := range choices {
 		value, _ := choice.Value.(string)

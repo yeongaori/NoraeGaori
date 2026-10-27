@@ -19,7 +19,7 @@ var teardownCommands = map[string]bool{
 	"skipto": true,
 }
 
-func recoverPlaybackSession(session *discordgo.Session, player *GuildPlayer) {
+func recoverSession(session *discordgo.Session, player *GuildPlayer) {
 	reason := recover()
 	if reason == nil {
 		return

@@ -15,6 +15,6 @@ func CancelSkipVotes(guildID string) {
 	activeVotes.cancel(guildID, voteEndCancelled, KindSkip)
 }
 
-func CancelForEndedPlayback(guildID string) {
+func CancelOnPlaybackEnd(guildID string) {
 	activeVotes.cancel(guildID, voteEndQueueEnded)
 }

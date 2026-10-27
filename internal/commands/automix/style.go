@@ -21,7 +21,7 @@ func optionByName(options []*discordgo.ApplicationCommandInteractionDataOption, 
 	return nil
 }
 
-func autoMixStyleOptionValue(options []*discordgo.ApplicationCommandInteractionDataOption, name string) string {
+func readStyleOption(options []*discordgo.ApplicationCommandInteractionDataOption, name string) string {
 	opt := optionByName(options, name)
 	if opt == nil {
 		return ""
@@ -77,8 +77,8 @@ func HandleAutoMixStyle(s *discordgo.Session, i *discordgo.InteractionCreate) er
 	t := messages.T(guildID)
 	options := i.ApplicationCommandData().Options
 
-	categoryName := autoMixStyleOptionValue(options, "category")
-	style := autoMixStyleOptionValue(options, "style")
+	categoryName := readStyleOption(options, "category")
+	style := readStyleOption(options, "style")
 
 	if categoryName == "" {
 		discord.RespondEmbed(s, i, &discordgo.MessageEmbed{

@@ -41,7 +41,7 @@ func assertSongDetails(t *testing.T, embed *discordgo.MessageEmbed) {
 	}
 }
 
-func assertCancelledFooter(t *testing.T, footer *discordgo.MessageEmbedFooter) {
+func assertCancelFooter(t *testing.T, footer *discordgo.MessageEmbedFooter) {
 	t.Helper()
 
 	want := messages.T("guild1").Music.PlaylistTimeoutDesc
@@ -50,7 +50,7 @@ func assertCancelledFooter(t *testing.T, footer *discordgo.MessageEmbedFooter) {
 	}
 }
 
-func TestPlaylistTimeoutEmbedKeepsTheAddedSong(t *testing.T) {
+func TestPlaylistTimeoutEmbedAdded(t *testing.T) {
 	embed := play.HookPlaylistTimeoutEmbed("guild1", timeoutSong(), false)
 
 	if want := messages.T("guild1").Titles.Added; embed.Title != want {
@@ -66,10 +66,10 @@ func TestPlaylistTimeoutEmbedKeepsTheAddedSong(t *testing.T) {
 		t.Errorf("got description %q, want no duplicate notice", embed.Description)
 	}
 	assertSongDetails(t, embed)
-	assertCancelledFooter(t, embed.Footer)
+	assertCancelFooter(t, embed.Footer)
 }
 
-func TestPlaylistTimeoutEmbedKeepsTheDuplicateSong(t *testing.T) {
+func TestPlaylistTimeoutEmbedQueued(t *testing.T) {
 	embed := play.HookPlaylistTimeoutEmbed("guild1", timeoutSong(), true)
 
 	if want := messages.T("guild1").Titles.Duplicate; embed.Title != want {
@@ -82,10 +82,10 @@ func TestPlaylistTimeoutEmbedKeepsTheDuplicateSong(t *testing.T) {
 		t.Errorf("got description %q, want the song and the duplicate notice", embed.Description)
 	}
 	assertSongDetails(t, embed)
-	assertCancelledFooter(t, embed.Footer)
+	assertCancelFooter(t, embed.Footer)
 }
 
-func TestPlaylistTimeoutEmbedWarnsWhenTheVideoWasUnavailable(t *testing.T) {
+func TestPlaylistTimeoutEmbedMissing(t *testing.T) {
 	embed := play.HookPlaylistTimeoutEmbed("guild1", nil, false)
 
 	if want := messages.T("guild1").Music.PlaylistTimeoutTitle; embed.Title != want {

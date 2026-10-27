@@ -15,7 +15,7 @@ import (
 	"noraegaori/tests/testutil/queuetest"
 )
 
-func checkMovedWhilePlaying(t *testing.T, name string, handle commandtest.Handler, wantTitle func(locale *messages.Locale) string) {
+func checkPlayingMove(t *testing.T, name string, handle commandtest.Handler, wantTitle func(locale *messages.Locale) string) {
 	t.Helper()
 
 	probe := stubPlayer(t, true, nil, nil)
@@ -28,11 +28,11 @@ func checkMovedWhilePlaying(t *testing.T, name string, handle commandtest.Handle
 	wantCalls(t, probe, "suspend", "join "+commandtest.VoiceChannelID, "resume")
 }
 
-func TestSwitchVCWhilePlayingSuspendsJoinsAndResumes(t *testing.T) {
-	checkMovedWhilePlaying(t, "switchvc", voice.HandleSwitchVC, func(locale *messages.Locale) string { return locale.Voice.SwitchSuccessTitle })
+func TestSwitchVCPlaying(t *testing.T) {
+	checkPlayingMove(t, "switchvc", voice.HandleSwitchVC, func(locale *messages.Locale) string { return locale.Voice.SwitchSuccessTitle })
 }
 
-func TestSwitchVCWhileIdleDoesNotStartPlayback(t *testing.T) {
+func TestSwitchVCIdle(t *testing.T) {
 	probe := stubPlayer(t, false, nil, nil)
 	fixture := voiceFixture(t, otherChannelID, queuetest.SongsBy(commandtest.CallerID, 1)...)
 
@@ -43,7 +43,7 @@ func TestSwitchVCWhileIdleDoesNotStartPlayback(t *testing.T) {
 	wantCalls(t, probe, "suspend", "join "+commandtest.VoiceChannelID)
 }
 
-func TestSwitchVCReportsAFailedJoin(t *testing.T) {
+func TestSwitchVCJoinFailure(t *testing.T) {
 	probe := stubPlayer(t, true, nil, errors.New("join timed out"))
 	fixture := voiceFixture(t, otherChannelID, queuetest.SongsBy(commandtest.CallerID, 1)...)
 
@@ -54,7 +54,7 @@ func TestSwitchVCReportsAFailedJoin(t *testing.T) {
 	wantCalls(t, probe, "suspend", "join "+commandtest.VoiceChannelID)
 }
 
-func TestSwitchVCReportsAFailedQueueUpdate(t *testing.T) {
+func TestSwitchVCQueueFailure(t *testing.T) {
 	stubPlayer(t, true, nil, nil)
 	fixture := voiceFixture(t, otherChannelID, queuetest.SongsBy(commandtest.CallerID, 1)...)
 	testutil.Swap(t, voice.HookJoinVoice, func(*discordgo.Session, string, string) error {
@@ -67,11 +67,11 @@ func TestSwitchVCReportsAFailedQueueUpdate(t *testing.T) {
 	wantText(t, reply, messages.T(commandtest.GuildID).Voice.SwitchFailedQueue)
 }
 
-func TestJoinMovesAPlayingBotFromAnotherChannel(t *testing.T) {
-	checkMovedWhilePlaying(t, "join", voice.HandleJoin, func(locale *messages.Locale) string { return locale.Voice.JoinSuccessTitle })
+func TestJoinMovesPlayingBot(t *testing.T) {
+	checkPlayingMove(t, "join", voice.HandleJoin, func(locale *messages.Locale) string { return locale.Voice.JoinSuccessTitle })
 }
 
-func TestJoinWithoutAPlayingSessionOnlyJoins(t *testing.T) {
+func TestJoinIdleOnlyJoins(t *testing.T) {
 	cases := []struct {
 		name         string
 		botChannelID string

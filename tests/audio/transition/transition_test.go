@@ -39,7 +39,7 @@ func TestStyleCatalogueValidates(t *testing.T) {
 	}
 }
 
-func TestEveryKnownCategoryParses(t *testing.T) {
+func TestParseCategoryKnown(t *testing.T) {
 	for _, category := range allCategories() {
 		if parsed, ok := transition.ParseCategory(string(category)); !ok || parsed != category {
 			t.Errorf("%s parses as %q (%t), want itself", category, parsed, ok)
@@ -52,7 +52,7 @@ func TestEveryKnownCategoryParses(t *testing.T) {
 	}
 }
 
-func TestEveryAdvertisedStyleRoundTripsThroughItsName(t *testing.T) {
+func TestStyleOfRoundTrip(t *testing.T) {
 	for _, category := range transition.StyleCategories() {
 		for _, value := range legacyNames(category) {
 			recipe := combinedRecipe(sideStyle(category, value))
@@ -63,7 +63,7 @@ func TestEveryAdvertisedStyleRoundTripsThroughItsName(t *testing.T) {
 	}
 }
 
-func TestSideOnlyStylesStayOnTheirSide(t *testing.T) {
+func TestValidStyleSideOnly(t *testing.T) {
 	cases := map[transition.Category][]string{
 		transition.CategoryVolumeIn:  {"fast_at_end", "semi_fast_at_end"},
 		transition.CategoryVolumeOut: {"fast_at_start"},
@@ -80,7 +80,7 @@ func TestSideOnlyStylesStayOnTheirSide(t *testing.T) {
 	}
 }
 
-func TestUnknownCategoryRejected(t *testing.T) {
+func TestValidStyleUnknownCategory(t *testing.T) {
 	if values := transition.StyleValues("bogus"); values != nil {
 		t.Errorf("got %v, want nil", values)
 	}
@@ -89,13 +89,13 @@ func TestUnknownCategoryRejected(t *testing.T) {
 	}
 }
 
-func TestUnknownStyleRejected(t *testing.T) {
+func TestValidStyleUnknown(t *testing.T) {
 	if transition.ValidStyle(transition.CategoryEQOut, "super_bass") {
 		t.Error("eq_out accepted the unknown style super_bass")
 	}
 }
 
-func TestUnknownOverridesAreIgnored(t *testing.T) {
+func TestResolveStylesUnknownIgnored(t *testing.T) {
 	resolved := transition.ResolveStyles(transition.PresetRecipe(2),
 		map[string]string{"fx": "phaser", "volume": "cut", "eq_out": "super_bass"},
 		map[string]string{"loop": "spin", "": "none"})
@@ -135,7 +135,7 @@ func TestStoredStyleNamesStayValid(t *testing.T) {
 	}
 }
 
-func TestCombinedStylesExpandToTheirSidePairs(t *testing.T) {
+func TestExpandLegacySidePairs(t *testing.T) {
 	cases := []struct {
 		category transition.Category
 		value    string
@@ -178,7 +178,7 @@ func TestCombinedStylesExpandToTheirSidePairs(t *testing.T) {
 	}
 }
 
-func TestSharedCataloguesCannotBeGrownThroughAppend(t *testing.T) {
+func TestCataloguesResistAppend(t *testing.T) {
 	values := transition.StyleValues(transition.CategoryEQOut)
 	if cap(values) != len(values) {
 		t.Errorf("eq_out values have spare capacity %d over %d, want an append to copy", cap(values), len(values))
@@ -195,7 +195,7 @@ func TestSharedCataloguesCannotBeGrownThroughAppend(t *testing.T) {
 	}
 }
 
-func TestCatalogueLookupsDoNotAllocate(t *testing.T) {
+func TestCatalogueLookupsNoAlloc(t *testing.T) {
 	allocations := testing.AllocsPerRun(100, func() {
 		_ = transition.StyleValues(transition.CategoryFXOut)
 		_ = transition.ExpandLegacy(transition.ShortcutVolume, "smooth")
@@ -208,7 +208,7 @@ func TestCatalogueLookupsDoNotAllocate(t *testing.T) {
 	}
 }
 
-func TestPresetRecipesMatchTheirCombinedStyles(t *testing.T) {
+func TestPresetRecipeCombinedStyles(t *testing.T) {
 	want := combinedRecipe(volumeStyle("overlap"), eqStyle("end_bass_swap"), filterStyle("lowpass_in_highpass_out"))
 	if got := transition.PresetRecipe(3); *got != *want {
 		t.Errorf("preset 3 = %s, want %s", got, want)
@@ -221,7 +221,7 @@ func TestPresetRecipesMatchTheirCombinedStyles(t *testing.T) {
 	}
 }
 
-func TestOverridesApplyOnlyForKnownValues(t *testing.T) {
+func TestRecipeApplyKnownOnly(t *testing.T) {
 	recipe := combinedRecipe()
 	recipe.Apply(overridesOf(
 		sideStyle(transition.CategoryVolumeOut, "fast_at_end"),
@@ -249,7 +249,7 @@ func TestOverridesApplyOnlyForKnownValues(t *testing.T) {
 	}
 }
 
-func TestSongOverridesBeatGuildOverrides(t *testing.T) {
+func TestResolveStylesSongWins(t *testing.T) {
 	resolved := transition.ResolveStyles(transition.PresetRecipe(2),
 		overridesOf(sideStyle(transition.CategoryVolumeOut, "fast"), sideStyle(transition.CategoryEQIn, "none")),
 		transition.CategoryVolumeOut.Override("crossfade"))
@@ -271,7 +271,7 @@ func TestSongOverridesBeatGuildOverrides(t *testing.T) {
 	}
 }
 
-func TestSettingsResolveFromSongOverrides(t *testing.T) {
+func TestResolveSettingsSongOverrides(t *testing.T) {
 	settings := transition.ResolveSettings(overridesOf(
 		sideStyle(transition.CategoryPreset, "3"), sideStyle(transition.CategoryLength, "eight_bars"),
 		sideStyle(transition.CategoryBeatmatch, "off"), sideStyle(transition.CategoryFXOut, "phaser"),
@@ -316,7 +316,7 @@ func clampedStyle(category transition.Category, style string, periodSec float64,
 	return transition.StyleOf(&resolved.Recipe, category)
 }
 
-func TestLoopsMustFitTheOverlap(t *testing.T) {
+func TestLoopsFitOverlap(t *testing.T) {
 	cases := []struct {
 		loop   string
 		frames int
@@ -346,7 +346,7 @@ func TestLoopsMustFitTheOverlap(t *testing.T) {
 	}
 }
 
-func TestIncomingRollsMustFitTheOverlap(t *testing.T) {
+func TestIncomingRollsFitOverlap(t *testing.T) {
 	cases := []struct {
 		fx     string
 		frames int
@@ -366,7 +366,7 @@ func TestIncomingRollsMustFitTheOverlap(t *testing.T) {
 	}
 }
 
-func TestOutroRecipeLeavesTheSongAlone(t *testing.T) {
+func TestOutroRecipeLeavesSong(t *testing.T) {
 	recipe := transition.OutroRecipe()
 	if recipe.Out.EQ != transition.EQNone || recipe.Out.Filter != transition.FilterNone || recipe.Out.FX != transition.FXNone || recipe.Loop != transition.LoopNone {
 		t.Errorf("outro recipe %s, want no EQ, filter, effect or loop", recipe)
@@ -377,7 +377,7 @@ func TestOutroRecipeLeavesTheSongAlone(t *testing.T) {
 	}
 }
 
-func TestOnlyOutgoingChoicesChangeTheOutro(t *testing.T) {
+func TestOutroRecipeOutgoingOnly(t *testing.T) {
 	cases := []struct {
 		overrides map[string]string
 		isDefault bool

@@ -5,7 +5,7 @@ import (
 	"noraegaori/internal/messages"
 )
 
-func BuildLanguageChoices() []*discordgo.ApplicationCommandOptionChoice {
+func CreateLanguageChoices() []*discordgo.ApplicationCommandOptionChoice {
 	codes := messages.AvailableLocales()
 	choices := make([]*discordgo.ApplicationCommandOptionChoice, 0, len(codes))
 	for _, code := range codes {

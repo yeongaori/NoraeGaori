@@ -75,7 +75,7 @@ func wantStoredStyles(want map[transition.Category]string) func(t *testing.T, re
 	}
 }
 
-func joinedCommandCategories() string {
+func joinCategories() string {
 	categories := append(transition.StyleCategories(), transition.ShortcutCategories()...)
 	names := make([]string, 0, len(categories))
 	for _, category := range categories {
@@ -94,12 +94,12 @@ func saveStyles(t *testing.T) {
 
 func TestAutoMixStyleCommand(t *testing.T) {
 	commandtest.Run(t, "automixstyle", automix.HandleAutoMixStyle, slices.Concat(
-		autoMixStyleShowCases(),
+		styleShowCases(),
 		autoMixStyleSetCases(),
 	))
 }
 
-func autoMixStyleShowCases() []commandtest.Case {
+func styleShowCases() []commandtest.Case {
 	everyAuto := map[string]string{}
 	for _, category := range transition.StyleCategories() {
 		everyAuto[string(category)] = transition.StyleAuto
@@ -122,14 +122,14 @@ func autoMixStyleShowCases() []commandtest.Case {
 			Name:    "an unknown category",
 			Options: styleOptions("bogus", ""),
 			WantText: func(locale *messages.Locale) string {
-				return fmt.Sprintf(locale.Settings.AutoMixStyleInvalidCategory, "bogus", joinedCommandCategories())
+				return fmt.Sprintf(locale.Settings.AutoMixStyleInvalidCategory, "bogus", joinCategories())
 			},
 		},
 		{
 			Name:    "a song-only setting",
 			Options: styleOptions("preset", "3"),
 			WantText: func(locale *messages.Locale) string {
-				return fmt.Sprintf(locale.Settings.AutoMixStyleInvalidCategory, "preset", joinedCommandCategories())
+				return fmt.Sprintf(locale.Settings.AutoMixStyleInvalidCategory, "preset", joinCategories())
 			},
 		},
 		{

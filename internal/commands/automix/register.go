@@ -18,7 +18,7 @@ func categoryChoices() []*discordgo.ApplicationCommandOptionChoice {
 
 func Register(cmd func(string) messages.CommandStrings) {
 	for _, name := range []string{"fadein", "fadeout", "automix", "crossfade", "fadeonstop", "trimsilence"} {
-		settings.RegisterToggleCommand(cmd, name)
+		settings.RegisterToggle(cmd, name)
 	}
 	command.RegisterLocalized(cmd, &command.Command{
 		Name: "automixstyle",

@@ -55,7 +55,7 @@ func volumeOnly(style string) *transition.Processor {
 	return transition.NewProcessor(combinedRecipe(volumeStyle(style)), eightBarWindow(800))
 }
 
-func TestVolumeStylesStartOnTheOutgoingSongAndEndOnTheIncoming(t *testing.T) {
+func TestProcessorVolumeEndpoints(t *testing.T) {
 	for _, style := range legacyNames(transition.ShortcutVolume) {
 		processor := volumeOnly(style)
 		startOut, startIn := processor.Gains(0)
@@ -75,7 +75,7 @@ func TestVolumeStylesStartOnTheOutgoingSongAndEndOnTheIncoming(t *testing.T) {
 	}
 }
 
-func TestVolumeStylesFollowTheirCurves(t *testing.T) {
+func TestProcessorVolumeCurves(t *testing.T) {
 	quarter := 1.0 / (8 * 16)
 	tick := 1.0 / (8 * 256)
 	cases := []struct {
@@ -108,7 +108,7 @@ func TestVolumeStylesFollowTheirCurves(t *testing.T) {
 	}
 }
 
-func TestShortOverlapsShapeCurvesAsTwoBars(t *testing.T) {
+func TestProcessorShortOverlapCurves(t *testing.T) {
 	fallback := transition.NewProcessor(combinedRecipe(volumeStyle("cut")), &transition.Window{Frames: 250})
 	twoBars := transition.NewProcessor(combinedRecipe(volumeStyle("cut")), &transition.Window{Frames: 250, Bars: 2})
 
@@ -141,7 +141,7 @@ func shaped(choices ...styleChoice) *transition.Processor {
 	return transition.NewProcessor(combinedRecipe(append([]styleChoice{volumeStyle("overlap")}, choices...)...), eightBarWindow(800))
 }
 
-func TestBassSwapTradesTheLowsAtTheMiddle(t *testing.T) {
+func TestProcessorBassSwap(t *testing.T) {
 	cases := []struct {
 		outgoing bool
 		progress float64
@@ -164,7 +164,7 @@ func TestBassSwapTradesTheLowsAtTheMiddle(t *testing.T) {
 	}
 }
 
-func TestThreeBandFadeDipsTheHighsByTheMeasuredCut(t *testing.T) {
+func TestProcessorThreeBandFade(t *testing.T) {
 	level := steadyLevel(shaped(eqStyle("three_band_fade")), true, 12000, 0.75)
 	if math.Abs(level+11.7) > 1 {
 		t.Errorf("outgoing 12kHz after the highs swap = %+.1f dB, want about -11.7 dB", level)
@@ -174,7 +174,7 @@ func TestThreeBandFadeDipsTheHighsByTheMeasuredCut(t *testing.T) {
 	}
 }
 
-func TestLowPassOutClosesOverTheSecondHalf(t *testing.T) {
+func TestProcessorLowPassOut(t *testing.T) {
 	processor := func() *transition.Processor { return shaped(filterStyle("lowpass_out")) }
 
 	if level := steadyLevel(processor(), true, 6000, 0.4); math.Abs(level) > 0.5 {
@@ -188,7 +188,7 @@ func TestLowPassOutClosesOverTheSecondHalf(t *testing.T) {
 	}
 }
 
-func TestHighPassInOpensOverTheFirstHalf(t *testing.T) {
+func TestProcessorHighPassIn(t *testing.T) {
 	processor := func() *transition.Processor { return shaped(filterStyle("highpass_in")) }
 
 	if level := steadyLevel(processor(), false, 300, 0.01); level > -20 {
@@ -199,7 +199,7 @@ func TestHighPassInOpensOverTheFirstHalf(t *testing.T) {
 	}
 }
 
-func TestFullOverlapIsAPlainSum(t *testing.T) {
+func TestProcessorFullOverlapSum(t *testing.T) {
 	processor := volumeOnly("overlap")
 	aTone := &audiotest.ToneGenerator{Frequency: 220, Amplitude: 9000}
 	bTone := &audiotest.ToneGenerator{Frequency: 330, Amplitude: 9000}
@@ -239,17 +239,17 @@ func dryThroughout(t *testing.T, recipe *transition.Recipe, outgoing bool) {
 	}
 }
 
-func TestIncomingSideNeverGetsTheOutgoingEffect(t *testing.T) {
+func TestProcessorIncomingIsolated(t *testing.T) {
 	dryThroughout(t, combinedRecipe(volumeStyle("overlap"), sideStyle(transition.CategoryFXOut, "reverb_out_center")), false)
 }
 
-func TestOutgoingSideNeverGetsTheIncomingEffect(t *testing.T) {
+func TestProcessorOutgoingIsolated(t *testing.T) {
 	for _, fx := range []string{"phaser", "bitcrusher", "delay_one_bar", "delay_one_bar_at_end"} {
 		dryThroughout(t, combinedRecipe(volumeStyle("overlap"), sideStyle(transition.CategoryFXIn, fx)), true)
 	}
 }
 
-func TestSendIsFedBeforeItIsHeard(t *testing.T) {
+func TestProcessorSendFedEarly(t *testing.T) {
 	processor := transition.NewProcessor(combinedRecipe(volumeStyle("overlap"), effectStyle("echo_beat_out_end")), eightBarWindow(200))
 	frame := make([]int16, dsp.FrameSize*dsp.Channels)
 	silent := make([]int16, dsp.FrameSize*dsp.Channels)
@@ -273,7 +273,7 @@ func TestSendIsFedBeforeItIsHeard(t *testing.T) {
 	}
 }
 
-func TestNoiseRiserBuildsFromItsStart(t *testing.T) {
+func TestProcessorNoiseRiserBuilds(t *testing.T) {
 	for _, c := range []struct {
 		fx    string
 		start int
@@ -294,7 +294,7 @@ func TestNoiseRiserBuildsFromItsStart(t *testing.T) {
 	}
 }
 
-func TestLegacyNoiseRiserBecomesTheOutgoingNoise(t *testing.T) {
+func TestProcessorLegacyNoiseRiser(t *testing.T) {
 	recipe := combinedRecipe(filterStyle("noise_riser"))
 	if recipe.Out.FX != transition.FXNoise || recipe.Out.Filter != transition.FilterNone || recipe.In.Filter != transition.FilterNone {
 		t.Errorf("noise_riser expands to %s, want fx_out noise and no filters", recipe)
@@ -316,7 +316,7 @@ func jogPeaks(loop string, frames int) []float64 {
 	return peaks
 }
 
-func TestVinylStopEndsInSilence(t *testing.T) {
+func TestProcessorVinylStopSilence(t *testing.T) {
 	peaks := jogPeaks("vinyl_stop_end", 200)
 	if peaks[50] < 8000 {
 		t.Errorf("outgoing peak before the stop = %.0f, want the song playing", peaks[50])
@@ -326,7 +326,7 @@ func TestVinylStopEndsInSilence(t *testing.T) {
 	}
 }
 
-func TestVinylStopAtCenterStaysSilentAfterTheMiddle(t *testing.T) {
+func TestProcessorVinylStopCenter(t *testing.T) {
 	for _, loop := range []string{"vinyl_stop_center", "vinyl_stop_center_short"} {
 		peaks := jogPeaks(loop, 400)
 		if peaks[10] < 8000 {
@@ -340,7 +340,7 @@ func TestVinylStopAtCenterStaysSilentAfterTheMiddle(t *testing.T) {
 	}
 }
 
-func TestShortVinylStopStartsLater(t *testing.T) {
+func TestProcessorShortVinylStop(t *testing.T) {
 	long := jogPeaks("vinyl_stop_end", 400)
 	short := jogPeaks("vinyl_stop_end_short", 400)
 	quietLong, quietShort := 0, 0
@@ -357,7 +357,7 @@ func TestShortVinylStopStartsLater(t *testing.T) {
 	}
 }
 
-func TestJogwheelStaysFinitePastItsStop(t *testing.T) {
+func TestProcessorJogwheelFinite(t *testing.T) {
 	for _, loop := range []string{"spinback_two_beats", "vinyl_stop_end", "vinyl_stop_center"} {
 		recipe := combinedRecipe(volumeStyle("crossfade"), sideStyle(transition.CategoryLoop, loop))
 		processor := transition.NewProcessor(recipe, eightBarWindow(200))
@@ -372,7 +372,7 @@ func TestJogwheelStaysFinitePastItsStop(t *testing.T) {
 	}
 }
 
-func TestSpinbackEngagesWithoutADropout(t *testing.T) {
+func TestProcessorSpinbackNoDropout(t *testing.T) {
 	frames := 200
 	processor := transition.NewProcessor(combinedRecipe(volumeStyle("overlap"), sideStyle(transition.CategoryLoop, "spinback_four_beats")), eightBarWindow(frames))
 	silent := make([]int16, dsp.FrameSize*dsp.Channels)
@@ -402,7 +402,7 @@ func TestSpinbackEngagesWithoutADropout(t *testing.T) {
 	}
 }
 
-func TestSpinbackStartsAtFullSpeed(t *testing.T) {
+func TestProcessorSpinbackFullSpeed(t *testing.T) {
 	frames := 200
 	recipe := combinedRecipe(sideStyle(transition.CategoryVolumeOut, "fast_at_end"), sideStyle(transition.CategoryLoop, "spinback_four_beats"))
 	processor := transition.NewProcessor(recipe, eightBarWindow(frames))
@@ -435,7 +435,7 @@ func TestSpinbackStartsAtFullSpeed(t *testing.T) {
 	}
 }
 
-func TestSpinbackRacesBackwards(t *testing.T) {
+func TestProcessorSpinbackReverses(t *testing.T) {
 	processor := transition.NewProcessor(combinedRecipe(volumeStyle("overlap"), effectStyle("spinback_one_beat")), eightBarWindow(200))
 	tone := &audiotest.ToneGenerator{Frequency: 100, Amplitude: 9000}
 	silent := make([]int16, dsp.FrameSize*dsp.Channels)
@@ -493,7 +493,7 @@ func runTransitionWindow(recipe *transition.Recipe, window *transition.Window) (
 	return true, maxJump
 }
 
-func TestEveryShapeCombinationStaysFiniteAndClickFree(t *testing.T) {
+func TestProcessorShapesClickFree(t *testing.T) {
 	for _, volume := range legacyNames(transition.ShortcutVolume) {
 		for _, eq := range legacyNames(transition.ShortcutEQ) {
 			for _, filter := range legacyNames(transition.ShortcutFilter) {
@@ -510,7 +510,7 @@ func TestEveryShapeCombinationStaysFiniteAndClickFree(t *testing.T) {
 	}
 }
 
-func TestEverySideStyleStaysFiniteAndClickFree(t *testing.T) {
+func TestProcessorSidesClickFree(t *testing.T) {
 	for _, category := range transition.StyleCategories() {
 		for _, style := range legacyNames(category) {
 			recipe := combinedRecipe(volumeStyle("crossfade"), sideStyle(category, style))
@@ -525,7 +525,7 @@ func TestEverySideStyleStaysFiniteAndClickFree(t *testing.T) {
 	}
 }
 
-func TestEveryEffectStaysFiniteAndClickFree(t *testing.T) {
+func TestProcessorEffectsClickFree(t *testing.T) {
 	for _, volume := range legacyNames(transition.ShortcutVolume) {
 		for _, effect := range legacyNames(transition.ShortcutEffect) {
 			recipe := combinedRecipe(volumeStyle(volume), effectStyle(effect))
@@ -540,7 +540,7 @@ func TestEveryEffectStaysFiniteAndClickFree(t *testing.T) {
 	}
 }
 
-func TestDegenerateWindowsStayFinite(t *testing.T) {
+func TestProcessorDegenerateWindows(t *testing.T) {
 	recipe := combinedRecipe(volumeStyle("cut"), eqStyle("quick_bass"), effectStyle("spinback_four_beats"),
 		sideStyle(transition.CategoryFXOut, "noise"), sideStyle(transition.CategoryFXIn, "phaser"),
 		sideStyle(transition.CategoryVolumeIn, "switcharoo"))
@@ -566,7 +566,7 @@ func TestNilFramesAreSilence(t *testing.T) {
 	}
 }
 
-func TestOutroFadeStartsAtThePlayingLevelAndEndsSilent(t *testing.T) {
+func TestProcessorOutroFade(t *testing.T) {
 	processor := transition.NewProcessor(combinedRecipe(volumeStyle("crossfade")), eightBarWindow(200))
 	frame := make([]int16, dsp.FrameSize*dsp.Channels)
 	for i := range frame {

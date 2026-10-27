@@ -25,7 +25,7 @@ func dmCapableCommand(name string) *discordgo.ApplicationCommand {
 	}
 }
 
-func TestCanonicalContextsTreatsNilAsEveryContext(t *testing.T) {
+func TestCanonicalContextsNil(t *testing.T) {
 	got := command.HookCanonicalContexts(nil)
 
 	want := []discordgo.InteractionContextType{
@@ -43,7 +43,7 @@ func TestCanonicalContextsTreatsNilAsEveryContext(t *testing.T) {
 	}
 }
 
-func TestCanonicalContextsIsOrderIndependent(t *testing.T) {
+func TestCanonicalContextsOrder(t *testing.T) {
 	forward := []discordgo.InteractionContextType{
 		discordgo.InteractionContextGuild,
 		discordgo.InteractionContextBotDM,
@@ -63,7 +63,7 @@ func TestCanonicalContextsIsOrderIndependent(t *testing.T) {
 	}
 }
 
-func TestCanonicalContextsDoesNotMutateItsInput(t *testing.T) {
+func TestCanonicalContextsKeepsInput(t *testing.T) {
 	contexts := []discordgo.InteractionContextType{
 		discordgo.InteractionContextPrivateChannel,
 		discordgo.InteractionContextGuild,
@@ -76,7 +76,7 @@ func TestCanonicalContextsDoesNotMutateItsInput(t *testing.T) {
 	}
 }
 
-func TestDiffCommandSetsReportsGuildOnlyDrift(t *testing.T) {
+func TestDiffCommandSetsDrift(t *testing.T) {
 	desired, err := command.HookCanonicalCommandMap([]*discordgo.ApplicationCommand{guildOnlyCommand("play")})
 	if err != nil {
 		t.Fatalf("failed to canonicalize the desired commands: %v", err)
@@ -96,7 +96,7 @@ func TestDiffCommandSetsReportsGuildOnlyDrift(t *testing.T) {
 	}
 }
 
-func TestDiffCommandSetsIgnoresCommandsAlreadyGuildOnly(t *testing.T) {
+func TestDiffCommandSetsGuildOnly(t *testing.T) {
 	desired, err := command.HookCanonicalCommandMap([]*discordgo.ApplicationCommand{guildOnlyCommand("play")})
 	if err != nil {
 		t.Fatalf("failed to canonicalize the desired commands: %v", err)

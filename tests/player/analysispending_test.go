@@ -40,7 +40,7 @@ func pendingSongIDs(guildID string) map[int]bool {
 	return songIDs
 }
 
-func TestPendingFollowsTheBackfillPass(t *testing.T) {
+func TestPendingAnalysesFollowPass(t *testing.T) {
 	const guildID = "backfill-pending"
 	songs := seedBackfillQueue(t, guildID, "3:00", "3:00", "3:00", "3:00")
 	registerIdlePlayer(t, guildID)
@@ -58,7 +58,7 @@ func TestPendingFollowsTheBackfillPass(t *testing.T) {
 
 	done := make(chan int, 1)
 	go func() {
-		analyzed, _ := player.HookRunAnalysisBackfillPass(context.Background(), guildID, 128000)
+		analyzed, _ := player.HookRunBackfillPass(context.Background(), guildID, 128000)
 		done <- analyzed
 	}()
 
@@ -81,7 +81,7 @@ func TestPendingFollowsTheBackfillPass(t *testing.T) {
 	}
 }
 
-func TestCancelledPassClearsItsPendingSongs(t *testing.T) {
+func TestRunBackfillPassCancelled(t *testing.T) {
 	const guildID = "backfill-cancel"
 	seedBackfillQueue(t, guildID, "3:00", "3:00", "3:00")
 	fake := installBackfillFake(t)
@@ -93,7 +93,7 @@ func TestCancelledPassClearsItsPendingSongs(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		_, err := player.HookRunAnalysisBackfillPass(ctx, guildID, 128000)
+		_, err := player.HookRunBackfillPass(ctx, guildID, 128000)
 		done <- err
 	}()
 	waitForReads(t, fake, 1)
@@ -109,7 +109,7 @@ func TestCancelledPassClearsItsPendingSongs(t *testing.T) {
 	}
 }
 
-func TestDeferredPassClearsItsPendingSongs(t *testing.T) {
+func TestRunBackfillPassDeferred(t *testing.T) {
 	const guildID = "backfill-deferred"
 	seedBackfillQueue(t, guildID, "3:00", "3:00")
 	guildPlayer := registerIdlePlayer(t, guildID)
@@ -127,7 +127,7 @@ func TestDeferredPassClearsItsPendingSongs(t *testing.T) {
 	}
 }
 
-func TestPendingCountsEachMark(t *testing.T) {
+func TestMarkAnalysisPendingCounts(t *testing.T) {
 	const guildID = "pending-counts"
 	player.HookMarkAnalysisPending(guildID, 7)
 	player.HookMarkAnalysisPending(guildID, 7, 8)

@@ -75,7 +75,7 @@ func joinEvent(guildID, userID, channelID string) *discordgo.VoiceStateUpdate {
 	return &discordgo.VoiceStateUpdate{VoiceState: discordtest.VoiceState(guildID, userID, channelID, strings.HasPrefix(userID, "bot"))}
 }
 
-func TestAHumanJoiningTheAutoPausedChannelResumesOnce(t *testing.T) {
+func TestHandleVoiceStateResumesOnce(t *testing.T) {
 	for _, isBotConnected := range []bool{false, true} {
 		t.Run(fmt.Sprintf("botconnected=%t", isBotConnected), func(t *testing.T) {
 			guildID := fmt.Sprintf("autoresume-join-%t", isBotConnected)
@@ -91,8 +91,8 @@ func TestAHumanJoiningTheAutoPausedChannelResumesOnce(t *testing.T) {
 				t.Fatalf("failed to move the stored queue: %v", err)
 			}
 
-			player.HandleVoiceStateUpdate(session, joinEvent(guildID, "listener", "voice"))
-			player.HandleVoiceStateUpdate(session, joinEvent(guildID, "listener", "voice"))
+			player.HandleVoiceState(session, joinEvent(guildID, "listener", "voice"))
+			player.HandleVoiceState(session, joinEvent(guildID, "listener", "voice"))
 
 			if got := resumes.Load(); got != 1 {
 				t.Errorf("resumed %d times, want 1", got)
@@ -119,7 +119,7 @@ type ignoredJoinCase struct {
 	wantRemember bool
 }
 
-func TestAutoResumeIgnoresJoinsThatShouldNotResume(t *testing.T) {
+func TestHandleVoiceStateIgnoresJoins(t *testing.T) {
 	cases := ignoredJoinCases()
 
 	for i := range cases {
@@ -133,7 +133,7 @@ func TestAutoResumeIgnoresJoinsThatShouldNotResume(t *testing.T) {
 			}
 			session := voiceSession(t, guildID, discordtest.VoiceState(guildID, testCase.userID, testCase.channelID, false))
 
-			player.HandleVoiceStateUpdate(session, joinEvent(guildID, testCase.userID, testCase.channelID))
+			player.HandleVoiceState(session, joinEvent(guildID, testCase.userID, testCase.channelID))
 
 			if got := resumes.Load(); got != 0 {
 				t.Errorf("resumed %d times, want 0", got)
@@ -186,7 +186,7 @@ func ignoredJoinCases() []ignoredJoinCase {
 	}
 }
 
-func TestAnEmptyChannelStartsTheTimerOnlyWithAutoPauseOn(t *testing.T) {
+func TestHandleVoiceStateStartsTimer(t *testing.T) {
 	for _, isEnabled := range []bool{true, false} {
 		t.Run(fmt.Sprintf("autopause=%t", isEnabled), func(t *testing.T) {
 			guildID := fmt.Sprintf("autopause-timer-%t", isEnabled)
@@ -195,7 +195,7 @@ func TestAnEmptyChannelStartsTheTimerOnlyWithAutoPauseOn(t *testing.T) {
 			t.Cleanup(func() { player.HookCancelAutoPauseTimer(guildID) })
 			session := voiceSession(t, guildID, discordtest.VoiceState(guildID, "bot", "voice", true))
 
-			player.HandleVoiceStateUpdate(session, joinEvent(guildID, "listener", ""))
+			player.HandleVoiceState(session, joinEvent(guildID, "listener", ""))
 
 			player.HookAutoPauseTimersMu.Lock()
 			_, hasTimer := (*player.HookAutoPauseTimers)[guildID]
@@ -207,9 +207,9 @@ func TestAnEmptyChannelStartsTheTimerOnlyWithAutoPauseOn(t *testing.T) {
 	}
 }
 
-func TestAnEmptiedChannelIsRememberedForAutoResume(t *testing.T) {
+func TestHandleVoiceStateRemembers(t *testing.T) {
 	guildID := "autopause-remembers-channel"
-	guildPlayer, _, sessionDone := playingPlayerWithVoice(t, guildID)
+	guildPlayer, _, sessionDone := createVoicePlayer(t, guildID)
 	setAutoLeave(t, guildID, false)
 	testutil.Swap(t, player.HookAutoPauseDelay, time.Millisecond)
 	t.Cleanup(func() {
@@ -219,7 +219,7 @@ func TestAnEmptiedChannelIsRememberedForAutoResume(t *testing.T) {
 	endSessionOnStop(guildPlayer, sessionDone)
 	session := voiceSession(t, guildID, discordtest.VoiceState(guildID, "bot", "voice", true))
 
-	player.HandleVoiceStateUpdate(session, joinEvent(guildID, "listener", ""))
+	player.HandleVoiceState(session, joinEvent(guildID, "listener", ""))
 
 	waitUntil(t, func() bool { return player.HookAutoPausedChannel(guildID) != "" }, "the auto-pause never fired")
 	if got := player.HookAutoPausedChannel(guildID); got != "voice" {
@@ -227,7 +227,7 @@ func TestAnEmptiedChannelIsRememberedForAutoResume(t *testing.T) {
 	}
 }
 
-func TestTheAutoPauseNoticeFollowsAutoResume(t *testing.T) {
+func TestSendAutoPauseNoticeResume(t *testing.T) {
 	voiceStrings := &messages.T("g1").VoiceHandler
 
 	for _, isResuming := range []bool{true, false} {
@@ -237,7 +237,7 @@ func TestTheAutoPauseNoticeFollowsAutoResume(t *testing.T) {
 			setAutoResume(t, guildID, isResuming)
 			session, requests := discordtest.StubAPIResponder(t, respondAsDiscord)
 
-			player.HookSendAutoPauseNotification(session, guildID, "voice")
+			player.HookSendAutoPauseNotice(session, guildID, "voice")
 
 			want := fmt.Sprintf(voiceStrings.AutoPauseDesc, "Lounge")
 			if isResuming {
@@ -258,7 +258,7 @@ func TestTheAutoPauseNoticeFollowsAutoResume(t *testing.T) {
 	}
 }
 
-func TestAutoPauseEmbedDescribesHowPlaybackComesBack(t *testing.T) {
+func TestAutoPauseEmbedDescribes(t *testing.T) {
 	voiceStrings := &messages.T("g1").VoiceHandler
 
 	if got := player.HookAutoPauseEmbed("g1", "Lounge", false).Description; got != fmt.Sprintf(voiceStrings.AutoPauseDesc, "Lounge") {

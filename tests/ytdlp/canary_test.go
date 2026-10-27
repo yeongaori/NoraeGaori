@@ -12,7 +12,7 @@ import (
 )
 
 func TestCanaryRingIsCapped(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+	versionmanager := createVersionManager(t)
 
 	for i := 0; i < ytdlp.HookCanaryRingSize*2; i++ {
 		versionmanager.HookAddToCanaryRing(string(rune('a' + i)))
@@ -28,8 +28,8 @@ func TestCanaryRingIsCapped(t *testing.T) {
 	}
 }
 
-func TestGetCanaryIDsAlwaysIncludesFixedVideos(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestGetCanaryIDsFixedVideos(t *testing.T) {
+	versionmanager := createVersionManager(t)
 
 	ids := versionmanager.HookGetCanaryIDs()
 	if len(ids) != len(*ytdlp.HookFixedCanaryIDs) {
@@ -55,8 +55,8 @@ func TestGetCanaryIDsAlwaysIncludesFixedVideos(t *testing.T) {
 	}
 }
 
-func TestRunCanaryPassesOnFirstSuccessfulExtraction(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestRunCanaryFirstSuccess(t *testing.T) {
+	versionmanager := createVersionManager(t)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write(make([]byte, 2048))
@@ -75,8 +75,8 @@ func TestRunCanaryPassesOnFirstSuccessfulExtraction(t *testing.T) {
 	}
 }
 
-func TestRunCanaryFailsOnBrokenExtractor(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestRunCanaryBrokenExtractor(t *testing.T) {
+	versionmanager := createVersionManager(t)
 
 	path := writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.07.04"), `echo "ERROR: unable to extract player response" >&2; exit 1`)
 	addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{Path: path, State: ytdlp.StatePending})
@@ -90,8 +90,8 @@ func TestRunCanaryFailsOnBrokenExtractor(t *testing.T) {
 	}
 }
 
-func TestRunCanaryReportsNetworkFailuresSeparately(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestRunCanaryNetworkFailure(t *testing.T) {
+	versionmanager := createVersionManager(t)
 
 	path := writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.07.04"), `echo "ERROR: unable to download webpage: connection refused" >&2; exit 1`)
 	addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{Path: path, State: ytdlp.StatePending})
@@ -105,8 +105,8 @@ func TestRunCanaryReportsNetworkFailuresSeparately(t *testing.T) {
 	}
 }
 
-func TestRunCanaryTreatsUnavailableVideosAsInconclusive(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestRunCanaryUnavailableVideos(t *testing.T) {
+	versionmanager := createVersionManager(t)
 
 	path := writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.07.04"), `echo "ERROR: Private video" >&2; exit 1`)
 	addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{Path: path, State: ytdlp.StatePending})
@@ -120,8 +120,8 @@ func TestRunCanaryTreatsUnavailableVideosAsInconclusive(t *testing.T) {
 	}
 }
 
-func TestCanaryRequestsAWellFormedWatchURL(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestRunCanaryWatchURL(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	versionmanager.HookState().CanaryRing = []string{"https://www.youtube.com/watch?v=ezXluhqaqfI", "tXHXkDqn_Ic"}
 
 	argsFile := filepath.Join(t.TempDir(), "args")
@@ -142,8 +142,8 @@ func TestCanaryRequestsAWellFormedWatchURL(t *testing.T) {
 	}
 }
 
-func TestCanaryTreatsAnUnusableTargetAsInconclusive(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestCanaryUnusableTarget(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	versionmanager.HookState().CanaryRing = []string{"https://youtu.be/xjbleyEIFyA"}
 
 	path := writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.07.04"), `echo "ERROR: Unsupported URL: $*" >&2; exit 1`)
@@ -155,8 +155,8 @@ func TestCanaryTreatsAnUnusableTargetAsInconclusive(t *testing.T) {
 	}
 }
 
-func TestRunCanaryClearsABinaryWhenOnlyOneVideoIsBroken(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestRunCanaryOneBrokenVideo(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	versionmanager.HookState().CanaryRing = []string{"ezXluhqaqfI"}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -180,8 +180,8 @@ esac`
 	}
 }
 
-func TestRunCanaryCondemnsABinaryTwoPlayedVideosBreak(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestRunCanaryTwoBrokenVideos(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	versionmanager.HookState().CanaryRing = []string{"ezXluhqaqfI", "tXHXkDqn_Ic"}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -217,8 +217,8 @@ esac`
 	}
 }
 
-func TestRunCanaryPassesWhenAPlayedVideoStillWorks(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestRunCanaryPlayedVideoWorks(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	versionmanager.HookState().CanaryRing = []string{"ezXluhqaqfI", "tXHXkDqn_Ic"}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -242,8 +242,8 @@ esac`
 	}
 }
 
-func TestRunCanaryStillFailsWhenTheFixedVideosBreakToo(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestRunCanaryFixedVideosBreak(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	versionmanager.HookState().CanaryRing = []string{"ezXluhqaqfI"}
 
 	path := writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.07.04"), `echo "ERROR: unable to extract player response" >&2; exit 1`)
@@ -258,8 +258,8 @@ func TestRunCanaryStillFailsWhenTheFixedVideosBreakToo(t *testing.T) {
 	}
 }
 
-func TestRunCanaryRejectsUnknownVersions(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestRunCanaryUnknownVersion(t *testing.T) {
+	versionmanager := createVersionManager(t)
 
 	if passed, networkError := versionmanager.RunCanary("2026.07.04"); passed || networkError {
 		t.Errorf("got (%v, %v), want (false, false) for an untracked version", passed, networkError)

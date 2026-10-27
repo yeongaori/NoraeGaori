@@ -27,7 +27,7 @@ var (
 
 	isDisconnected       atomic.Bool
 	isShuttingDown       = shutdown.IsShuttingDown
-	resumeAfterReconnect = resumePlayersAfterReconnect
+	resumeAfterReconnect = resumePlayers
 	resumeWaitingPlayers = player.ResumeAfterReconnect
 	reconnectResumeDelay = 2 * time.Second
 )
@@ -99,13 +99,13 @@ func onReady(s *discordgo.Session, r *discordgo.Ready) {
 
 	commands.InitializeCommands()
 
-	player.SetOnSongStartCallback(vote.CancelSkipVotes)
-	player.SetOnPlaybackEndedCallback(vote.CancelForEndedPlayback)
+	player.SetOnSongStart(vote.CancelSkipVotes)
+	player.SetOnPlaybackEnded(vote.CancelOnPlaybackEnd)
 	command.SetBeforeCommand(player.ReconcileState)
 
 	vote.RegisterDispatcher(s)
 
-	if err := command.RegisterSlashCommands(s); err != nil {
+	if err := command.SyncSlashCommands(s); err != nil {
 		logger.Errorf("Failed to register slash commands: %v", err)
 	}
 
@@ -128,7 +128,7 @@ func onConnect(s *discordgo.Session, _ *discordgo.Connect) {
 	}
 }
 
-func resumePlayersAfterReconnect(s *discordgo.Session) {
+func resumePlayers(s *discordgo.Session) {
 	time.Sleep(reconnectResumeDelay)
 	if isShuttingDown() {
 		return
@@ -145,7 +145,7 @@ func onMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 }
 
 func onVoiceStateUpdate(s *discordgo.Session, vsu *discordgo.VoiceStateUpdate) {
-	player.HandleVoiceStateUpdate(s, vsu)
+	player.HandleVoiceState(s, vsu)
 }
 
 func onGuildDelete(s *discordgo.Session, g *discordgo.GuildDelete) {

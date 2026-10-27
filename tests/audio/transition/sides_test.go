@@ -9,7 +9,7 @@ import (
 	"noraegaori/internal/audio/transition"
 )
 
-func TestSwitcharooGatesMatchTheClientPattern(t *testing.T) {
+func TestProcessorSwitcharooGates(t *testing.T) {
 	gates := map[int]int{2: 24, 4: 30, 8: 38, 16: 54, 32: 86}
 	for bars, want := range gates {
 		recipe := combinedRecipe(sideStyle(transition.CategoryVolumeOut, "switcharoo"), sideStyle(transition.CategoryVolumeIn, "switcharoo"))
@@ -37,7 +37,7 @@ func TestSwitcharooGatesMatchTheClientPattern(t *testing.T) {
 	}
 }
 
-func TestSwitcharooQuarterBeatGatesFillTheLastBar(t *testing.T) {
+func TestProcessorSwitcharooQuarter(t *testing.T) {
 	recipe := combinedRecipe(sideStyle(transition.CategoryVolumeOut, "switcharoo"))
 	processor := transition.NewProcessor(recipe, &transition.Window{Frames: 1000, Bars: 8})
 	gate := 1.0 / 128
@@ -54,7 +54,7 @@ func lowLevel(choice styleChoice, outgoing bool, progress float64) float64 {
 	return steadyLevel(shaped(choice), outgoing, 50, progress)
 }
 
-func TestBassFadeCutsTheOutgoingLowsEarly(t *testing.T) {
+func TestProcessorBassFadeEarly(t *testing.T) {
 	fade := sideStyle(transition.CategoryEQOut, "bass_fade")
 	if level := lowLevel(fade, true, 0.02); math.Abs(level) > 0.5 {
 		t.Errorf("outgoing 50Hz at the start = %+.1f dB, want untouched", level)
@@ -67,14 +67,14 @@ func TestBassFadeCutsTheOutgoingLowsEarly(t *testing.T) {
 	}
 }
 
-func TestBassFadeHoldsMostOfTheBassAtAQuarter(t *testing.T) {
+func TestProcessorBassFadeQuarter(t *testing.T) {
 	level := lowLevel(sideStyle(transition.CategoryEQOut, "bass_fade"), true, 0.25)
 	if math.Abs(level+2.9) > 1.2 {
 		t.Errorf("outgoing 50Hz at a quarter = %+.1f dB, want about -2.9 dB from the late knee of the client curve", level)
 	}
 }
 
-func TestBassCrossfadeMeetsAtTheMiddle(t *testing.T) {
+func TestProcessorBassCrossfade(t *testing.T) {
 	for _, outgoing := range []bool{true, false} {
 		category := transition.CategoryEQIn
 		if outgoing {
@@ -87,7 +87,7 @@ func TestBassCrossfadeMeetsAtTheMiddle(t *testing.T) {
 	}
 }
 
-func TestSingleBandSwapsLeaveTheOtherBands(t *testing.T) {
+func TestProcessorSingleBandSwap(t *testing.T) {
 	cases := []struct {
 		style     string
 		frequency float64
@@ -126,7 +126,7 @@ func outgoingThrough(fx string, frames int, progressAt func(int) float64) [][]fl
 	return outputs
 }
 
-func TestInsertEffectsStartAtTheMiddle(t *testing.T) {
+func TestProcessorInsertsAtMiddle(t *testing.T) {
 	for _, fx := range []string{"phaser", "bitcrusher"} {
 		changes := outgoingThrough(fx, 200, func(i int) float64 { return float64(i) / 200 })
 		for i := 0; i < 99; i++ {
@@ -140,7 +140,7 @@ func TestInsertEffectsStartAtTheMiddle(t *testing.T) {
 	}
 }
 
-func TestDelayRampAndOneBarDelayWaitForTheirWindow(t *testing.T) {
+func TestProcessorDelaysWaitWindow(t *testing.T) {
 	for _, c := range []struct {
 		fx    string
 		start int
@@ -157,7 +157,7 @@ func TestDelayRampAndOneBarDelayWaitForTheirWindow(t *testing.T) {
 	}
 }
 
-func TestDelayRampShortensTheRepeats(t *testing.T) {
+func TestProcessorDelayRamp(t *testing.T) {
 	processor := transition.NewProcessor(combinedRecipe(volumeStyle("overlap"), sideStyle(transition.CategoryFXOut, "delay_ramp")), eightBarWindow(400))
 	silent := make([]int16, dsp.FrameSize*dsp.Channels)
 	click := make([]int16, dsp.FrameSize*dsp.Channels)
@@ -186,7 +186,7 @@ func TestDelayRampShortensTheRepeats(t *testing.T) {
 	}
 }
 
-func TestIncomingDelayAtEndIsCutAtTheEnd(t *testing.T) {
+func TestProcessorDelayAtEndCut(t *testing.T) {
 	processor := transition.NewProcessor(combinedRecipe(volumeStyle("overlap"), sideStyle(transition.CategoryFXIn, "delay_one_bar_at_end")), eightBarWindow(200))
 	tone := &audiotest.ToneGenerator{Frequency: 440, Amplitude: 9000}
 	silent := make([]int16, dsp.FrameSize*dsp.Channels)
@@ -203,7 +203,7 @@ func TestIncomingDelayAtEndIsCutAtTheEnd(t *testing.T) {
 	}
 }
 
-func TestIncomingOneBarDelayEchoesTheFirstBar(t *testing.T) {
+func TestProcessorOneBarDelay(t *testing.T) {
 	processor := transition.NewProcessor(combinedRecipe(volumeStyle("overlap"), sideStyle(transition.CategoryFXIn, "delay_one_bar")), eightBarWindow(800))
 	tone := &audiotest.ToneGenerator{Frequency: 440, Amplitude: 9000}
 	silent := make([]int16, dsp.FrameSize*dsp.Channels)
@@ -229,7 +229,7 @@ func TestIncomingOneBarDelayEchoesTheFirstBar(t *testing.T) {
 	}
 }
 
-func TestIncomingPhaserFadesOutByTheMiddle(t *testing.T) {
+func TestProcessorIncomingPhaser(t *testing.T) {
 	processor := transition.NewProcessor(combinedRecipe(volumeStyle("overlap"), sideStyle(transition.CategoryFXIn, "phaser")), eightBarWindow(200))
 	tone := &audiotest.ToneGenerator{Frequency: 1000, Amplitude: 9000}
 	silent := make([]int16, dsp.FrameSize*dsp.Channels)

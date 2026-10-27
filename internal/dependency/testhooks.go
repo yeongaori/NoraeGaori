@@ -64,11 +64,11 @@ var HookRunVersionCommand = runVersionCommand
 var HookShowProgress = &showProgress
 var HookUpdateJsRuntime = updateJsRuntime
 
-func HookBuildBinary(fields *HookBinaryFields) *Binary {
+func HookCreateBinary(fields *HookBinaryFields) *Binary {
 	return &Binary{Tool: fields.Tool, Path: fields.Path, isSystem: fields.IsSystem}
 }
 
-func HookBuildTool(fields *HookToolFields) *tool {
+func HookCreateTool(fields *HookToolFields) *tool {
 	return &tool{
 		name:        fields.Name,
 		displayName: fields.DisplayName,

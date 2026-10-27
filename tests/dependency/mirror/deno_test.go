@@ -27,7 +27,7 @@ func publishDenoRelease(t *testing.T, fake *releasetest.Server, tag string, dige
 	})
 }
 
-func TestDenoGitHubFindsTheLinuxBuild(t *testing.T) {
+func TestDenoGitHubFindsLinuxBuild(t *testing.T) {
 	fake := releasetest.Serve(t)
 	publishDenoRelease(t, fake, "v2.9.7", "sha256:"+releasetest.SumA)
 
@@ -46,7 +46,7 @@ func TestDenoGitHubFindsTheLinuxBuild(t *testing.T) {
 	}
 }
 
-func TestDenoGitHubReadsThePowerShellChecksumOnWindows(t *testing.T) {
+func TestDenoGitHubWindowsChecksum(t *testing.T) {
 	fake := releasetest.Serve(t)
 	publishDenoRelease(t, fake, "v2.9.7", "")
 
@@ -80,7 +80,7 @@ func TestDenoGitHubReportsNoBuild(t *testing.T) {
 	releasetest.RequireErrorIs(t, err, mirror.ErrNoBuild)
 }
 
-func TestDenoGitHubRejectsAChecksumFileForAnotherAsset(t *testing.T) {
+func TestDenoGitHubForeignChecksum(t *testing.T) {
 	fake := releasetest.Serve(t)
 	publishDenoRelease(t, fake, "v2.9.7", "")
 	fake.Files["/deno/deno-x86_64-unknown-linux-gnu.zip.sha256sum"] = releasetest.SumA + "  deno-aarch64-unknown-linux-gnu.zip\n"
@@ -89,7 +89,7 @@ func TestDenoGitHubRejectsAChecksumFileForAnotherAsset(t *testing.T) {
 	releasetest.RequireOtherError(t, err, mirror.ErrNoBuild)
 }
 
-func TestDenoGitHubFailsClosedOnBadChecksums(t *testing.T) {
+func TestDenoGitHubBadChecksums(t *testing.T) {
 	fake := releasetest.Serve(t)
 	publishDenoRelease(t, fake, "v2.9.7", "sha256:"+releasetest.SumB)
 	source := mirror.DenoGitHub{APIURL: fake.URL("")}
@@ -101,7 +101,7 @@ func TestDenoGitHubFailsClosedOnBadChecksums(t *testing.T) {
 	releasetest.RequireOtherError(t, err, mirror.ErrNoBuild)
 }
 
-func TestDenoGitHubFailsWhenTheChecksumCannotBeFetched(t *testing.T) {
+func TestDenoGitHubChecksumFetchFails(t *testing.T) {
 	fake := releasetest.Serve(t)
 	publishDenoRelease(t, fake, "v2.9.7", "")
 	fake.Status["/deno/deno-x86_64-unknown-linux-gnu.zip.sha256sum"] = http.StatusBadGateway
@@ -110,7 +110,7 @@ func TestDenoGitHubFailsWhenTheChecksumCannotBeFetched(t *testing.T) {
 	releasetest.RequireOtherError(t, err, mirror.ErrNoBuild)
 }
 
-func TestDenoGitHubFailsWhenTheAPIFails(t *testing.T) {
+func TestDenoGitHubAPIFailure(t *testing.T) {
 	fake := releasetest.Serve(t)
 	fake.Status["/repos/denoland/deno/releases/latest"] = http.StatusInternalServerError
 
@@ -118,7 +118,7 @@ func TestDenoGitHubFailsWhenTheAPIFails(t *testing.T) {
 	releasetest.RequireOtherError(t, err, mirror.ErrNoBuild)
 }
 
-func TestDenoCDNFindsTheBuild(t *testing.T) {
+func TestDenoCDNFindsBuild(t *testing.T) {
 	fake := releasetest.Serve(t)
 	fake.Files["/release-latest.txt"] = "v2.9.7\n"
 	fake.Files["/release/v2.9.7/deno-x86_64-pc-windows-msvc.zip.sha256sum"] = powerShellSum
@@ -135,7 +135,7 @@ func TestDenoCDNFindsTheBuild(t *testing.T) {
 	}
 }
 
-func TestDenoCDNReportsNoBuildForAMissingChecksum(t *testing.T) {
+func TestDenoCDNMissingChecksum(t *testing.T) {
 	fake := releasetest.Serve(t)
 	fake.Files["/release-latest.txt"] = "v2.9.7\n"
 	source := mirror.DenoCDN{BaseURL: fake.URL("")}
@@ -150,7 +150,7 @@ func TestDenoCDNReportsNoBuildForAMissingChecksum(t *testing.T) {
 	releasetest.RequireErrorIs(t, err, mirror.ErrNoBuild)
 }
 
-func TestDenoCDNFailsWhenItCannotBeChecked(t *testing.T) {
+func TestDenoCDNUncheckable(t *testing.T) {
 	fake := releasetest.Serve(t)
 	fake.Files["/release-latest.txt"] = "v2.9.7\n"
 	fake.Status["/release/v2.9.7/deno-x86_64-unknown-linux-gnu.zip.sha256sum"] = http.StatusServiceUnavailable
@@ -168,7 +168,7 @@ func TestDenoCDNFailsWhenItCannotBeChecked(t *testing.T) {
 	releasetest.RequireOtherError(t, err, mirror.ErrNoBuild)
 }
 
-func TestDenoChecksumForValidatesThePowerShellListing(t *testing.T) {
+func TestDenoChecksumForPowerShell(t *testing.T) {
 	cases := map[string]string{
 		"another asset": "Algorithm : SHA256\r\nHash : " + releasetest.SumB + "\r\nPath : C:\\x\\deno-aarch64-pc-windows-msvc.zip\r\n",
 		"sha512":        "Algorithm : SHA512\r\nHash : " + releasetest.SumB + "\r\nPath : C:\\x\\deno-x86_64-pc-windows-msvc.zip\r\n",

@@ -11,7 +11,7 @@ import (
 	"noraegaori/tests/testutil"
 )
 
-func assertInitializeFails(t *testing.T, want string) {
+func assertInitFails(t *testing.T, want string) {
 	t.Helper()
 
 	err := config.Initialize()
@@ -20,7 +20,7 @@ func assertInitializeFails(t *testing.T, want string) {
 	}
 }
 
-func TestInitializeFailsWhenTheConfigDirectoryCannotBeCreated(t *testing.T) {
+func TestInitializeNoConfigDir(t *testing.T) {
 	t.Chdir(t.TempDir())
 	setupTestConfig(t)
 	defer teardownTestConfig(t)
@@ -29,30 +29,30 @@ func TestInitializeFailsWhenTheConfigDirectoryCannotBeCreated(t *testing.T) {
 		t.Fatalf("failed to block the config directory: %v", err)
 	}
 
-	assertInitializeFails(t, "failed to create config directory")
+	assertInitFails(t, "failed to create config directory")
 }
 
-func TestInitializeFailsOnAnEmptyConfigFile(t *testing.T) {
+func TestInitializeEmptyConfig(t *testing.T) {
 	t.Chdir(t.TempDir())
 	setupTestConfig(t)
 	defer teardownTestConfig(t)
 
 	writeWatchedFile(t, *config.HookConfigPath, "")
 
-	assertInitializeFails(t, "config file is empty")
+	assertInitFails(t, "config file is empty")
 }
 
-func TestInitializeFailsOnACorruptAdminsFile(t *testing.T) {
+func TestInitializeCorruptAdmins(t *testing.T) {
 	t.Chdir(t.TempDir())
 	setupTestConfig(t)
 	defer teardownTestConfig(t)
 
 	writeWatchedFile(t, *config.HookAdminsPath, "{not json")
 
-	assertInitializeFails(t, "failed to parse admins file")
+	assertInitFails(t, "failed to parse admins file")
 }
 
-func TestInitializeFailsWhenNoFileWatcherCanBeCreated(t *testing.T) {
+func TestInitializeNoWatcher(t *testing.T) {
 	t.Chdir(t.TempDir())
 	setupTestConfig(t)
 	defer teardownTestConfig(t)
@@ -61,10 +61,10 @@ func TestInitializeFailsWhenNoFileWatcherCanBeCreated(t *testing.T) {
 		return nil, errors.New("inotify watch limit reached")
 	})
 
-	assertInitializeFails(t, "failed to create file watcher")
+	assertInitFails(t, "failed to create file watcher")
 }
 
-func TestInitializeStillLoadsWhenTheFilesCannotBeWatched(t *testing.T) {
+func TestInitializeUnwatchedFiles(t *testing.T) {
 	t.Chdir(t.TempDir())
 	setupTestConfig(t)
 	defer teardownTestConfig(t)

@@ -37,6 +37,6 @@ func HandleSwitchVC(s *discordgo.Session, i *discordgo.InteractionCreate) error 
 	}
 
 	voice := &messages.T(i.GuildID).Voice
-	respondChannelSuccess(s, i, targetChannelID, voice.SwitchSuccessTitle, voice.SwitchSuccessDesc, voice.SwitchSuccessChannel)
+	respondChannel(s, i, targetChannelID, voice.SwitchSuccessTitle, voice.SwitchSuccessDesc, voice.SwitchSuccessChannel)
 	return nil
 }

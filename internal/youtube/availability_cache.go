@@ -71,7 +71,7 @@ func saveAvailability(key string, result *AvailabilityResult) {
 	}
 }
 
-func resetAvailabilityCache() {
+func resetCache() {
 	availabilityCacheMutex.Lock()
 	defer availabilityCacheMutex.Unlock()
 

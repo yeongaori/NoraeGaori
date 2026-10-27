@@ -55,22 +55,22 @@ func syncSession(t *testing.T, existing string, fetchStatus, overwriteStatus int
 	return session, requests
 }
 
-func TestSlashCommandsSkipTheOverwriteWhenAlreadyInSync(t *testing.T) {
+func TestSyncSlashCommandsInSync(t *testing.T) {
 	session, requests := syncSession(t, registeredJSON(t), http.StatusOK, http.StatusOK)
 
-	if err := command.RegisterSlashCommands(session); err != nil {
-		t.Fatalf("RegisterSlashCommands returned %v", err)
+	if err := command.SyncSlashCommands(session); err != nil {
+		t.Fatalf("SyncSlashCommands returned %v", err)
 	}
 	if sent := requests(); len(sent) != 1 || sent[0].Method != http.MethodGet {
 		t.Errorf("sent %v, want only the lookup of the registered commands", sent)
 	}
 }
 
-func TestSlashCommandsOverwriteChangedCommandsWithoutTextOnlyOnes(t *testing.T) {
+func TestSyncSlashCommandsOverwrites(t *testing.T) {
 	session, requests := syncSession(t, "[]", http.StatusOK, http.StatusOK)
 
-	if err := command.RegisterSlashCommands(session); err != nil {
-		t.Fatalf("RegisterSlashCommands returned %v", err)
+	if err := command.SyncSlashCommands(session); err != nil {
+		t.Fatalf("SyncSlashCommands returned %v", err)
 	}
 
 	sent := requests()
@@ -92,7 +92,7 @@ func TestSlashCommandsOverwriteChangedCommandsWithoutTextOnlyOnes(t *testing.T) 
 	}
 }
 
-func TestSlashCommandSyncReportsDiscordFailures(t *testing.T) {
+func TestSyncSlashCommandsFailure(t *testing.T) {
 	for name, check := range map[string]struct {
 		fetchStatus     int
 		overwriteStatus int
@@ -104,20 +104,20 @@ func TestSlashCommandSyncReportsDiscordFailures(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			session, _ := syncSession(t, "[]", check.fetchStatus, check.overwriteStatus)
 
-			if err := command.RegisterSlashCommands(session); err == nil || !strings.Contains(err.Error(), check.want) {
-				t.Errorf("RegisterSlashCommands returned %v, want an error containing %q", err, check.want)
+			if err := command.SyncSlashCommands(session); err == nil || !strings.Contains(err.Error(), check.want) {
+				t.Errorf("SyncSlashCommands returned %v, want an error containing %q", err, check.want)
 			}
 		})
 	}
 }
 
-func TestMissingDescriptionsFallBackToNames(t *testing.T) {
+func TestFillDescriptionsUsesNames(t *testing.T) {
 	commands := []*discordgo.ApplicationCommand{
 		{Name: "blank", Options: []*discordgo.ApplicationCommandOption{{Name: "empty"}, {Name: "filled", Description: "Filled"}}},
 		{Name: "described", Description: "Described"},
 	}
 
-	command.HookFillMissingCommandDescriptions(commands)
+	command.HookFillDescriptions(commands)
 
 	if commands[0].Description != "blank" || commands[0].Options[0].Description != "empty" {
 		t.Errorf("missing descriptions became %q and %q, want the names", commands[0].Description, commands[0].Options[0].Description)

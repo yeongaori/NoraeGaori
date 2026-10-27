@@ -4,7 +4,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-func BuildCategoryChoices() []*discordgo.ApplicationCommandOptionChoice {
+func CreateCategoryChoices() []*discordgo.ApplicationCommandOptionChoice {
 	choices := make([]*discordgo.ApplicationCommandOptionChoice, 0, len(settingCategories))
 	for _, category := range settingCategories {
 		choices = append(choices, &discordgo.ApplicationCommandOptionChoice{

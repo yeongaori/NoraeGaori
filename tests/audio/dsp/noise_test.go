@@ -8,7 +8,7 @@ import (
 	"noraegaori/internal/audio/dsp"
 )
 
-func TestNoiseRiserSweepsTheMeasuredBand(t *testing.T) {
+func TestNoiseRiserFrequencyBand(t *testing.T) {
 	cases := []struct{ colour, frequency float64 }{{0.62, 457}, {0.83, 6430}}
 	for i := range cases {
 		want := &cases[i]
@@ -28,7 +28,7 @@ func TestNoiseRiserIsSilentAtRest(t *testing.T) {
 	}
 }
 
-func TestNoiseRiserHoldsItsLevelAcrossTheSweep(t *testing.T) {
+func TestNoiseRiserHoldsLevel(t *testing.T) {
 	for _, colour := range []float64{0.65, 0.75, 0.83} {
 		var riser dsp.NoiseRiser
 		buf := make([]float64, dsp.FrameSize*dsp.Channels)
@@ -43,7 +43,7 @@ func TestNoiseRiserHoldsItsLevelAcrossTheSweep(t *testing.T) {
 	}
 }
 
-func TestNoiseRiserChannelsAreIndependent(t *testing.T) {
+func TestNoiseRiserDecorrelated(t *testing.T) {
 	var riser dsp.NoiseRiser
 	buf := make([]float64, dsp.FrameSize*dsp.Channels)
 	var leftRight, leftLeft, rightRight float64

@@ -8,14 +8,14 @@ import (
 	"noraegaori/tests/testutil/dbtest"
 )
 
-func TestPanelArgumentsCarryTheViewCategoryAndKey(t *testing.T) {
+func TestParsePanelArgumentsCarry(t *testing.T) {
 	checks := []struct {
 		arguments []string
 		want      settings.HookPanelTarget
 	}{
-		{[]string{"admin"}, *settings.HookBuildPanelTarget(settings.HookPanelTargetFields{IsAdmin: true})},
-		{[]string{"member", settings.HookCategoryMixing}, *settings.HookBuildPanelTarget(settings.HookPanelTargetFields{Category: settings.HookCategoryMixing})},
-		{[]string{"admin", settings.HookCategoryGeneral, "language"}, *settings.HookBuildPanelTarget(settings.HookPanelTargetFields{IsAdmin: true, Category: settings.HookCategoryGeneral, Key: "language"})},
+		{[]string{"admin"}, *settings.HookCreatePanelTarget(settings.HookPanelTargetFields{IsAdmin: true})},
+		{[]string{"member", settings.HookCategoryMixing}, *settings.HookCreatePanelTarget(settings.HookPanelTargetFields{Category: settings.HookCategoryMixing})},
+		{[]string{"admin", settings.HookCategoryGeneral, "language"}, *settings.HookCreatePanelTarget(settings.HookPanelTargetFields{IsAdmin: true, Category: settings.HookCategoryGeneral, Key: "language"})},
 	}
 
 	for i := range checks {
@@ -27,7 +27,7 @@ func TestPanelArgumentsCarryTheViewCategoryAndKey(t *testing.T) {
 	}
 }
 
-func TestPanelArgumentsRejectUnknownViewsAndHiddenCategories(t *testing.T) {
+func TestParsePanelArgumentsRejects(t *testing.T) {
 	for name, arguments := range map[string][]string{
 		"nothing":             nil,
 		"an unknown view":     {"owner", settings.HookCategoryMixing},
@@ -41,12 +41,12 @@ func TestPanelArgumentsRejectUnknownViewsAndHiddenCategories(t *testing.T) {
 	}
 }
 
-func TestPanelComponentsRouteBackToTheirView(t *testing.T) {
+func TestCreatePanelControlsRoutes(t *testing.T) {
 	dbtest.Setup(t)
 
 	for _, isAdmin := range []bool{true, false} {
 		view := settings.HookNewPanelView(checkGuildID, settings.HookDefaultCategory(isAdmin), isAdmin)
-		components := settings.HookBuildSettingsComponents(view)
+		components := settings.HookCreatePanelControls(view)
 
 		if got := rowMenu(t, components[0]).CustomID; got != discord.ComponentID(settings.HookCategoryRoute, discord.ViewArgument(isAdmin)) {
 			t.Errorf("admin=%v category select routes to %q", isAdmin, got)

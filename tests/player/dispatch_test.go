@@ -12,7 +12,7 @@ import (
 )
 
 func newTestPlayer(guildID string, handler func(player.PlayerCommand) error) *player.GuildPlayer {
-	p := player.HookBuildGuildPlayer(&player.HookGuildPlayerFields{
+	p := player.HookCreateGuildPlayer(&player.HookGuildPlayerFields{
 		GuildID:          guildID,
 		Volume:           1.0,
 		StopChan:         make(chan struct{}),
@@ -141,7 +141,7 @@ func TestDispatchUnknownCommand(t *testing.T) {
 	}
 }
 
-func TestForceSkipSpamAdvancesQueueCleanly(t *testing.T) {
+func TestForceSkipSpam(t *testing.T) {
 	guildID := "spamguild"
 	setupPlayerDB(t, guildID, 2)
 
@@ -233,7 +233,7 @@ func registerTestPlayer(t *testing.T, guildID string, handler func(player.Player
 	return p
 }
 
-func TestResumeOrStartAnnouncesResumedSong(t *testing.T) {
+func TestResumeOrStartResumed(t *testing.T) {
 	guildID := "resumeannounce"
 
 	dispatched := make(chan string, 4)
@@ -264,7 +264,7 @@ func TestResumeOrStartAnnouncesResumedSong(t *testing.T) {
 	}
 }
 
-func TestResumeOrStartLeavesActivePlaybackAlone(t *testing.T) {
+func TestResumeOrStartActive(t *testing.T) {
 	guildID := "resumeactive"
 
 	dispatched := make(chan string, 4)
@@ -292,7 +292,7 @@ func TestResumeOrStartLeavesActivePlaybackAlone(t *testing.T) {
 	}
 }
 
-func TestResumeOrStartAnnouncesFirstStartedSong(t *testing.T) {
+func TestResumeOrStartFirstSong(t *testing.T) {
 	guildID := "resumeidle"
 
 	dispatched := make(chan string, 4)
@@ -319,7 +319,7 @@ func TestResumeOrStartAnnouncesFirstStartedSong(t *testing.T) {
 	}
 }
 
-func TestDeletePlayerKeepsCommandDeliveryHonest(t *testing.T) {
+func TestDeletePlayerDelivery(t *testing.T) {
 	guildID := "deletedguild"
 
 	stale := player.GetPlayer(guildID)
@@ -336,7 +336,7 @@ func TestDeletePlayerKeepsCommandDeliveryHonest(t *testing.T) {
 	}
 }
 
-func TestConcurrentSendAndDeleteNeverPanic(t *testing.T) {
+func TestConcurrentSendAndDelete(t *testing.T) {
 	guildID := "racyguild"
 	t.Cleanup(func() { player.DeletePlayer(guildID) })
 

@@ -7,7 +7,7 @@ import (
 	"noraegaori/internal/youtube"
 )
 
-func TestDurationLabelMarksLiveAndUnknown(t *testing.T) {
+func TestDurationLabelLiveUnknown(t *testing.T) {
 	live := ytdlp.ExtractedLiveStatusIsLive
 	upcoming := ytdlp.ExtractedLiveStatusIsUpcoming
 	wasLive := ytdlp.ExtractedLiveStatusWasLive
@@ -36,7 +36,7 @@ func TestDurationLabelMarksLiveAndUnknown(t *testing.T) {
 	}
 }
 
-func TestLastThumbnailPicksTheLargest(t *testing.T) {
+func TestLastThumbnailLargest(t *testing.T) {
 	cases := []struct {
 		name string
 		info *ytdlp.ExtractedInfo

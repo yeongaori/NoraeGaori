@@ -12,7 +12,7 @@ import (
 	"noraegaori/tests/testutil/discordtest"
 )
 
-func newConfirmationFixture(t *testing.T) (*discordgo.Session, *discordgo.Message, *discordgo.InteractionCreate) {
+func createConfirmFixture(t *testing.T) (*discordgo.Session, *discordgo.Message, *discordgo.InteractionCreate) {
 	session := discordtest.Session(t, "bot")
 
 	msg := &discordgo.Message{ID: "msg1", ChannelID: "chan1"}
@@ -27,8 +27,8 @@ func newConfirmationFixture(t *testing.T) (*discordgo.Session, *discordgo.Messag
 	return session, msg, interaction
 }
 
-func TestConfirmedByRequesterAcceptsOnlyTheRequester(t *testing.T) {
-	session, msg, interaction := newConfirmationFixture(t)
+func TestConfirmedByRequester(t *testing.T) {
+	session, msg, interaction := createConfirmFixture(t)
 
 	removed := []string{}
 	testutil.Swap(t, &discord.RemoveUserReaction, func(_ *discordgo.Session, _, _, _, userID string) {
@@ -60,7 +60,7 @@ func TestConfirmedByRequesterAcceptsOnlyTheRequester(t *testing.T) {
 	}
 }
 
-func TestExcludeVideoDropsOnlyTheNamedVideo(t *testing.T) {
+func TestExcludeVideoDropsNamed(t *testing.T) {
 	videos := []*youtube.Song{
 		{URL: "https://www.youtube.com/watch?v=keepme1", Title: "First"},
 		{URL: "https://www.youtube.com/watch?v=dropme", Title: "Excluded"},
@@ -78,7 +78,7 @@ func TestExcludeVideoDropsOnlyTheNamedVideo(t *testing.T) {
 	}
 }
 
-func TestExcludeVideoKeepsEverythingWithoutAnID(t *testing.T) {
+func TestExcludeVideoKeepsUnnamed(t *testing.T) {
 	videos := []*youtube.Song{
 		{URL: "https://www.youtube.com/watch?v=a"},
 		{URL: "https://www.youtube.com/watch?v=b"},

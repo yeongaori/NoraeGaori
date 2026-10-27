@@ -41,7 +41,7 @@ func TestAcquireSerializesSameKey(t *testing.T) {
 	}
 }
 
-func TestAcquireAllowsDifferentKeysConcurrently(t *testing.T) {
+func TestAcquireDifferentKeys(t *testing.T) {
 	var locks lockmap.Map
 
 	firstEntered := make(chan struct{})
@@ -67,7 +67,7 @@ func TestAcquireAllowsDifferentKeysConcurrently(t *testing.T) {
 	}
 }
 
-func TestAcquireWithTimeoutFailsWhileHeld(t *testing.T) {
+func TestAcquireWithTimeoutHeld(t *testing.T) {
 	var locks lockmap.Map
 
 	release := locks.Acquire("guild")
@@ -82,7 +82,7 @@ func TestAcquireWithTimeoutFailsWhileHeld(t *testing.T) {
 	}
 }
 
-func TestAcquireWithTimeoutDoesNotStrandTheLock(t *testing.T) {
+func TestAcquireWithTimeoutReleases(t *testing.T) {
 	var locks lockmap.Map
 
 	release := locks.Acquire("guild")
@@ -104,7 +104,7 @@ func TestAcquireWithTimeoutDoesNotStrandTheLock(t *testing.T) {
 	}
 }
 
-func TestTryAcquireFailsWhileHeldWithoutStrandingTheLock(t *testing.T) {
+func TestTryAcquireHeld(t *testing.T) {
 	var locks lockmap.Map
 
 	release := locks.Acquire("guild")
@@ -151,7 +151,7 @@ func TestReleaseIsIdempotent(t *testing.T) {
 	}
 }
 
-func TestEntriesAreReapedWhenIdle(t *testing.T) {
+func TestIdleEntriesAreReaped(t *testing.T) {
 	var locks lockmap.Map
 
 	var waitGroup sync.WaitGroup

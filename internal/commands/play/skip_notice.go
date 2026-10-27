@@ -17,7 +17,7 @@ type skippedSong struct {
 	Error     string
 }
 
-func sendBatchedSkipNotice(s *discordgo.Session, guildID, channelID string, skipped []skippedSong) {
+func sendSkipNotice(s *discordgo.Session, guildID, channelID string, skipped []skippedSong) {
 	if len(skipped) == 0 {
 		return
 	}

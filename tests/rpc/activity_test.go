@@ -26,13 +26,13 @@ func (m *mockStatusUpdater) UpdateStatusComplex(data discordgo.UpdateStatusData)
 }
 
 func newTestUpdater(status rpc.HookStatusUpdater, activities ...rpc.Activity) *rpc.HookUpdater {
-	return rpc.HookBuildUpdater(rpc.HookUpdaterFields{
+	return rpc.HookCreateUpdater(rpc.HookUpdaterFields{
 		Session: status,
 		Cfg:     &rpc.Config{Activities: activities},
 	})
 }
 
-func TestUpdateStaysMarkedFailingWhileTheGatewayIsGone(t *testing.T) {
+func TestUpdateActivityStaysFailing(t *testing.T) {
 	status := &mockStatusUpdater{err: discordgo.ErrWSNotFound}
 	activities := newTestUpdater(status, rpc.Activity{Name: "Testing", Type: "Playing"})
 
@@ -52,7 +52,7 @@ func TestUpdateStaysMarkedFailingWhileTheGatewayIsGone(t *testing.T) {
 	}
 }
 
-func TestUpdateClearsFailingStateOnRecovery(t *testing.T) {
+func TestUpdateActivityRecovers(t *testing.T) {
 	status := &mockStatusUpdater{err: discordgo.ErrWSNotFound}
 	activities := newTestUpdater(status, rpc.Activity{Name: "Testing", Type: "Playing"})
 
@@ -69,7 +69,7 @@ func TestUpdateClearsFailingStateOnRecovery(t *testing.T) {
 	}
 }
 
-func TestUpdateRotatesActivitiesInOrder(t *testing.T) {
+func TestUpdateActivityRotates(t *testing.T) {
 	status := &mockStatusUpdater{}
 	activities := newTestUpdater(status,
 		rpc.Activity{Name: "First", Type: "Playing"},
@@ -92,7 +92,7 @@ func TestUpdateRotatesActivitiesInOrder(t *testing.T) {
 	}
 }
 
-func TestUpdateSkipsAnInvalidActivityType(t *testing.T) {
+func TestUpdateActivitySkipsInvalid(t *testing.T) {
 	status := &mockStatusUpdater{}
 	activities := newTestUpdater(status, rpc.Activity{Name: "Testing", Type: "Dancing"})
 
@@ -103,7 +103,7 @@ func TestUpdateSkipsAnInvalidActivityType(t *testing.T) {
 	}
 }
 
-func TestLoadIdentifyPresenceBuildsAResolvedActivity(t *testing.T) {
+func TestLoadIdentifyPresenceBuilds(t *testing.T) {
 	configPath := isolatedConfigDir(t)
 	writeConfig(t, configPath, []byte(`{
 		"RPC_ENABLED": true,
@@ -127,7 +127,7 @@ func TestLoadIdentifyPresenceBuildsAResolvedActivity(t *testing.T) {
 	}
 }
 
-func TestLoadIdentifyPresenceResolvesLocaleKeys(t *testing.T) {
+func TestLoadIdentifyPresenceLocale(t *testing.T) {
 	if err := messages.LoadLocale("en"); err != nil {
 		t.Fatalf("failed to load the English locale: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestLoadIdentifyPresenceResolvesLocaleKeys(t *testing.T) {
 	}
 }
 
-func TestLoadIdentifyPresenceReportsNothingWhenDisabled(t *testing.T) {
+func TestLoadIdentifyPresenceDisabled(t *testing.T) {
 	configPath := isolatedConfigDir(t)
 	writeConfig(t, configPath, []byte(`{
 		"RPC_ENABLED": false,
@@ -163,7 +163,7 @@ func TestLoadIdentifyPresenceReportsNothingWhenDisabled(t *testing.T) {
 	}
 }
 
-func TestLoadIdentifyPresenceReportsNothingForAnInvalidType(t *testing.T) {
+func TestLoadIdentifyPresenceBadType(t *testing.T) {
 	configPath := isolatedConfigDir(t)
 	writeConfig(t, configPath, []byte(`{
 		"RPC_ENABLED": true,
@@ -176,7 +176,7 @@ func TestLoadIdentifyPresenceReportsNothingForAnInvalidType(t *testing.T) {
 	}
 }
 
-func TestUpdateActivityKeepsThePositionAfterAFailedSend(t *testing.T) {
+func TestUpdateActivityFailedSend(t *testing.T) {
 	status := &mockStatusUpdater{err: errors.New("send failed")}
 	activities := newTestUpdater(status,
 		rpc.Activity{Name: "First", Type: "Playing"},
@@ -199,7 +199,7 @@ func TestUpdateActivityKeepsThePositionAfterAFailedSend(t *testing.T) {
 	}
 }
 
-func TestUpdateActivityAdvancesPastAnInvalidType(t *testing.T) {
+func TestUpdateActivityAdvancesIndex(t *testing.T) {
 	status := &mockStatusUpdater{}
 	activities := newTestUpdater(status,
 		rpc.Activity{Name: "First", Type: "Playing"},
@@ -222,9 +222,9 @@ func TestUpdateActivityAdvancesPastAnInvalidType(t *testing.T) {
 	}
 }
 
-func TestUpdateActivityKeepsTheIndexParkedWhenRandomized(t *testing.T) {
+func TestUpdateActivityRandomized(t *testing.T) {
 	status := &mockStatusUpdater{}
-	activities := rpc.HookBuildUpdater(rpc.HookUpdaterFields{
+	activities := rpc.HookCreateUpdater(rpc.HookUpdaterFields{
 		Session: status,
 		Cfg: &rpc.Config{
 			RandomizeRPC: true,
@@ -240,7 +240,7 @@ func TestUpdateActivityKeepsTheIndexParkedWhenRandomized(t *testing.T) {
 	}
 }
 
-func TestUpdateActivityStaysQuietWhileReconnecting(t *testing.T) {
+func TestUpdateActivityReconnecting(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "test.log")
 	logger.SetLogFile(logPath)
 	defer logger.SetLogFile("")
@@ -260,7 +260,7 @@ func TestUpdateActivityStaysQuietWhileReconnecting(t *testing.T) {
 	}
 }
 
-func TestUpdateActivityWarnsOnARealFailure(t *testing.T) {
+func TestUpdateActivityRealFailure(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "test.log")
 	logger.SetLogFile(logPath)
 	defer logger.SetLogFile("")

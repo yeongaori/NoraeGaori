@@ -88,7 +88,7 @@ func runReplyCases(t *testing.T, cases []replyCase) {
 	}
 }
 
-func TestReplyHelpersOnEveryPath(t *testing.T) {
+func TestReplyHelpersPaths(t *testing.T) {
 	respondErrorEmbed := func(s *discordgo.Session, i *discordgo.InteractionCreate) { discord.RespondErrorEmbed(s, i, "broken") }
 	updateErrorEmbed := func(s *discordgo.Session, i *discordgo.InteractionCreate) { discord.UpdateErrorEmbed(s, i, "broken") }
 	respondEmbed := func(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -122,7 +122,7 @@ func TestReplyHelpersOnEveryPath(t *testing.T) {
 	})
 }
 
-func TestUpdateResponseEmbedOnEveryPath(t *testing.T) {
+func TestUpdateResponseEmbedPaths(t *testing.T) {
 	embed := &discordgo.MessageEmbed{Title: "final"}
 
 	t.Run("a slash command", func(t *testing.T) {
@@ -174,15 +174,15 @@ func TestUpdateResponseEmbedOnEveryPath(t *testing.T) {
 	})
 }
 
-func TestUpdateResponseEmbedWithComponentsOnEveryPath(t *testing.T) {
+func TestUpdateResponsePanelPaths(t *testing.T) {
 	components := []discordgo.MessageComponent{discordgo.ActionsRow{Components: []discordgo.MessageComponent{discordgo.Button{Label: "Next", CustomID: "next"}}}}
 	embed := &discordgo.MessageEmbed{Title: "results"}
 
 	t.Run("a slash command", func(t *testing.T) {
 		session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 
-		if err := discord.UpdateResponseEmbedWithComponents(session, replyInteraction(false), embed, components); err != nil {
-			t.Fatalf("UpdateResponseEmbedWithComponents returned %v", err)
+		if err := discord.UpdateResponsePanel(session, replyInteraction(false), embed, components); err != nil {
+			t.Fatalf("UpdateResponsePanel returned %v", err)
 		}
 		if sent := requests(); len(sent) != 1 || sent[0].Method != http.MethodPatch || sent[0].Path != originalReplyPath || !strings.Contains(string(sent[0].RawBody), `"custom_id":"next"`) {
 			t.Errorf("sent %v, want an edit of the original reply with the button", sent)
@@ -194,8 +194,8 @@ func TestUpdateResponseEmbedWithComponentsOnEveryPath(t *testing.T) {
 		ic := replyInteraction(true)
 		defer discord.RegisterResponder(ic.Token, newResponder(session, &discordgo.Message{ID: storedMessageID}))()
 
-		if err := discord.UpdateResponseEmbedWithComponents(session, ic, embed, components); err != nil {
-			t.Fatalf("UpdateResponseEmbedWithComponents returned %v", err)
+		if err := discord.UpdateResponsePanel(session, ic, embed, components); err != nil {
+			t.Fatalf("UpdateResponsePanel returned %v", err)
 		}
 		if sent := requests(); len(sent) != 1 || sent[0].Method != http.MethodPatch || sent[0].Path != channelMessagePath+"/"+storedMessageID || !strings.Contains(string(sent[0].RawBody), `"custom_id":"next"`) {
 			t.Errorf("sent %v, want an edit of the stored reply with the button", sent)
@@ -207,8 +207,8 @@ func TestUpdateResponseEmbedWithComponentsOnEveryPath(t *testing.T) {
 		ic := replyInteraction(true)
 		defer discord.RegisterResponder(ic.Token, newResponder(session, nil))()
 
-		if err := discord.UpdateResponseEmbedWithComponents(session, ic, embed, components); err != nil {
-			t.Fatalf("UpdateResponseEmbedWithComponents returned %v", err)
+		if err := discord.UpdateResponsePanel(session, ic, embed, components); err != nil {
+			t.Fatalf("UpdateResponsePanel returned %v", err)
 		}
 		if sent := requests(); len(sent) != 1 || sent[0].Method != http.MethodPost || sent[0].Path != channelMessagePath || !strings.Contains(string(sent[0].RawBody), `"custom_id":"next"`) || !strings.Contains(string(sent[0].RawBody), replyingToCommand) {
 			t.Errorf("sent %v, want the embed and button posted as a fresh reply to the command", sent)
@@ -218,8 +218,8 @@ func TestUpdateResponseEmbedWithComponentsOnEveryPath(t *testing.T) {
 	t.Run("a text command without responder", func(t *testing.T) {
 		session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 
-		if err := discord.UpdateResponseEmbedWithComponents(session, replyInteraction(true), embed, components); err == nil || err.Error() != "message responder not found" {
-			t.Errorf("UpdateResponseEmbedWithComponents returned %v, want %q", err, "message responder not found")
+		if err := discord.UpdateResponsePanel(session, replyInteraction(true), embed, components); err == nil || err.Error() != "message responder not found" {
+			t.Errorf("UpdateResponsePanel returned %v, want %q", err, "message responder not found")
 		}
 		if sent := requests(); len(sent) != 0 {
 			t.Errorf("sent %v, want nothing", sent)
@@ -227,7 +227,7 @@ func TestUpdateResponseEmbedWithComponentsOnEveryPath(t *testing.T) {
 	})
 }
 
-func TestGetResponseMessageOnEveryPath(t *testing.T) {
+func TestGetResponseMessagePaths(t *testing.T) {
 	t.Run("a slash command", func(t *testing.T) {
 		session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 
@@ -266,7 +266,7 @@ func TestGetResponseMessageOnEveryPath(t *testing.T) {
 	}
 }
 
-func TestCheckUserInBotVoiceChannel(t *testing.T) {
+func TestRequireSameVoice(t *testing.T) {
 	const (
 		guildID      = "voice-check-guild"
 		callerID     = "caller"
@@ -294,7 +294,7 @@ func TestCheckUserInBotVoiceChannel(t *testing.T) {
 			session := discordtest.SessionWithGuild(t, "bot", guildID, states, nil)
 			ic := &discordgo.InteractionCreate{Interaction: &discordgo.Interaction{GuildID: guildID, Member: discordtest.Member(guildID, callerID)}}
 
-			channel, embed := discord.CheckUserInBotVoiceChannel(session, ic)
+			channel, embed := discord.RequireSameVoice(session, ic)
 
 			if channel != check.wantChannel {
 				t.Errorf("channel = %q, want %q", channel, check.wantChannel)

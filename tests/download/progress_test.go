@@ -12,7 +12,7 @@ func recordingWriter(total int64) (*download.ProgressWriter, *[]int) {
 	return &download.ProgressWriter{Total: total, Report: func(percent int) { reports = append(reports, percent) }}, &reports
 }
 
-func TestProgressWriterReportsEveryPercentOnce(t *testing.T) {
+func TestProgressWriterEachPercent(t *testing.T) {
 	writer, reports := recordingWriter(1000)
 
 	for range 100 {
@@ -30,7 +30,7 @@ func TestProgressWriterReportsEveryPercentOnce(t *testing.T) {
 	}
 }
 
-func TestProgressWriterReportsOnlyTheLatestPercentOfABigWrite(t *testing.T) {
+func TestProgressWriterBigWrite(t *testing.T) {
 	writer, reports := recordingWriter(1000)
 
 	writer.Write(make([]byte, 375))
@@ -42,7 +42,7 @@ func TestProgressWriterReportsOnlyTheLatestPercentOfABigWrite(t *testing.T) {
 	}
 }
 
-func TestProgressWriterStopsAtOneHundred(t *testing.T) {
+func TestProgressWriterStopsAtFull(t *testing.T) {
 	writer, reports := recordingWriter(1000)
 
 	writer.Write(make([]byte, 999))
@@ -54,7 +54,7 @@ func TestProgressWriterStopsAtOneHundred(t *testing.T) {
 	}
 }
 
-func TestProgressWriterIgnoresAnUnknownTotal(t *testing.T) {
+func TestProgressWriterUnknownTotal(t *testing.T) {
 	for _, total := range []int64{0, -1} {
 		writer, reports := recordingWriter(total)
 

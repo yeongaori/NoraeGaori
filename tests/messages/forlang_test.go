@@ -6,7 +6,7 @@ import (
 	"noraegaori/internal/messages"
 )
 
-func TestForLangLoadsTheRequestedLocale(t *testing.T) {
+func TestForLangLoadsLocale(t *testing.T) {
 	english := messages.ForLang("en")
 	korean := messages.ForLang("ko")
 	if english == nil || korean == nil {
@@ -20,7 +20,7 @@ func TestForLangLoadsTheRequestedLocale(t *testing.T) {
 	}
 }
 
-func TestForLangFallsBackToTheActiveLocale(t *testing.T) {
+func TestForLangFallback(t *testing.T) {
 	if got := messages.ForLang("zz-missing"); got != messages.T() {
 		t.Error("an unknown language did not fall back to the active locale")
 	}

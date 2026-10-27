@@ -52,7 +52,7 @@ func simulateRunningLoop() {
 	rpc.HookRunningMu.Unlock()
 }
 
-func TestLoadConfigCreatesDefaultWhenMissing(t *testing.T) {
+func TestLoadConfigCreatesDefault(t *testing.T) {
 	configPath := isolatedConfigDir(t)
 
 	cfg, err := rpc.LoadConfig()
@@ -115,7 +115,7 @@ func TestLoadConfigReadsExistingFile(t *testing.T) {
 	}
 }
 
-func TestLoadConfigRejectsMalformedJSON(t *testing.T) {
+func TestLoadConfigMalformedJSON(t *testing.T) {
 	configPath := isolatedConfigDir(t)
 	writeConfig(t, configPath, []byte("{not json"))
 
@@ -145,7 +145,7 @@ func TestDefaultConfigIsUsable(t *testing.T) {
 	}
 }
 
-func TestActivityTypeMapCoversDiscordTypes(t *testing.T) {
+func TestActivityTypeMapComplete(t *testing.T) {
 	want := map[string]discordgo.ActivityType{
 		"Playing":   discordgo.ActivityTypeGame,
 		"Streaming": discordgo.ActivityTypeStreaming,
@@ -165,7 +165,7 @@ func TestActivityTypeMapCoversDiscordTypes(t *testing.T) {
 	}
 }
 
-func TestResolveActivityNamePassesThroughPlainNames(t *testing.T) {
+func TestResolveActivityNamePlain(t *testing.T) {
 	for _, name := range []string{"Music", "", "activity_default_1", "lang"} {
 		if got := rpc.HookResolveActivityName(name); got != name {
 			t.Errorf("resolveActivityName(%q) = %q, want it unchanged", name, got)
@@ -173,13 +173,13 @@ func TestResolveActivityNamePassesThroughPlainNames(t *testing.T) {
 	}
 }
 
-func TestResolveActivityNameFallsThroughOnUnknownKey(t *testing.T) {
+func TestResolveActivityNameUnknown(t *testing.T) {
 	if got := rpc.HookResolveActivityName("lang.nonexistent"); got != "lang.nonexistent" {
 		t.Errorf("got %q, want the input returned unchanged", got)
 	}
 }
 
-func TestResolveActivityNameMapsEachLocaleKey(t *testing.T) {
+func TestResolveActivityNameLocale(t *testing.T) {
 	if err := messages.LoadLocale("en"); err != nil {
 		t.Fatalf("failed to load the English locale: %v", err)
 	}
@@ -217,7 +217,7 @@ func TestStopIsIdempotent(t *testing.T) {
 	rpc.Stop()
 }
 
-func TestStopClosesTheChannelOnce(t *testing.T) {
+func TestStopClosesChannelOnce(t *testing.T) {
 	resetRPCState(t)
 	simulateRunningLoop()
 
@@ -234,7 +234,7 @@ func TestStopClosesTheChannelOnce(t *testing.T) {
 	}
 }
 
-func TestStopWithoutStartIsNoop(t *testing.T) {
+func TestStopNeverStarted(t *testing.T) {
 	resetRPCState(t)
 
 	rpc.HookRunningMu.Lock()
@@ -246,7 +246,7 @@ func TestStopWithoutStartIsNoop(t *testing.T) {
 	rpc.Stop()
 }
 
-func TestUpdateRPCReturnsWhenDisabled(t *testing.T) {
+func TestUpdateRPCDisabled(t *testing.T) {
 	resetRPCState(t)
 	configPath := isolatedConfigDir(t)
 	writeConfig(t, configPath, []byte(`{"RPC_ENABLED": false, "activities": [{"name": "x", "type": "Playing"}]}`))
@@ -260,7 +260,7 @@ func TestUpdateRPCReturnsWhenDisabled(t *testing.T) {
 	}
 }
 
-func TestUpdateRPCReturnsWithoutActivities(t *testing.T) {
+func TestUpdateRPCNoActivities(t *testing.T) {
 	resetRPCState(t)
 	configPath := isolatedConfigDir(t)
 	writeConfig(t, configPath, []byte(`{"RPC_ENABLED": true, "activities": []}`))
@@ -288,7 +288,7 @@ func TestUpdateRPCReturnsOnBadConfig(t *testing.T) {
 	}
 }
 
-func TestUpdateRPCRefusesConcurrentLoops(t *testing.T) {
+func TestUpdateRPCSingleLoop(t *testing.T) {
 	resetRPCState(t)
 	configPath := isolatedConfigDir(t)
 	writeConfig(t, configPath, []byte(`{"RPC_ENABLED": true, "activities": [{"name": "x", "type": "Playing"}]}`))
@@ -308,7 +308,7 @@ func TestUpdateRPCRefusesConcurrentLoops(t *testing.T) {
 	}
 }
 
-func TestLoadConfigReplacesANonPositiveInterval(t *testing.T) {
+func TestLoadConfigFixesInterval(t *testing.T) {
 	for name, interval := range map[string]string{"zero": "0", "negative": "-30"} {
 		t.Run(name, func(t *testing.T) {
 			configPath := isolatedConfigDir(t)
@@ -330,7 +330,7 @@ func TestLoadConfigReplacesANonPositiveInterval(t *testing.T) {
 	}
 }
 
-func TestLoadConfigKeepsAPositiveInterval(t *testing.T) {
+func TestLoadConfigKeepsInterval(t *testing.T) {
 	configPath := isolatedConfigDir(t)
 	writeConfig(t, configPath, []byte(`{
 		"RPC_ENABLED": true,
@@ -348,7 +348,7 @@ func TestLoadConfigKeepsAPositiveInterval(t *testing.T) {
 	}
 }
 
-func TestUpdateRPCSurvivesAConfigWithoutAnInterval(t *testing.T) {
+func TestUpdateRPCNoInterval(t *testing.T) {
 	resetRPCState(t)
 	configPath := isolatedConfigDir(t)
 	writeConfig(t, configPath, []byte(`{

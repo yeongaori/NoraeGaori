@@ -175,7 +175,7 @@ func Seek(guildID string, positionMs int) error {
 	return nil
 }
 
-func RestartForNormalization(guildID string) {
+func RestartToNormalize(guildID string) {
 	player := GetPlayer(guildID)
 	player.mu.Lock()
 	defer player.mu.Unlock()
@@ -285,14 +285,14 @@ func Skip(session *discordgo.Session, guildID string) error {
 	wasLoading := player.Loading
 
 	if wasPlaying || wasLoading {
-		player.drainPlaybackDoneLocked()
+		player.drainDoneLocked()
 		player.signalStopLocked()
 	}
 	player.mu.Unlock()
 
 	if wasPlaying {
 		player.awaitPlaybackDone(guildID, 5*time.Second)
-		player.clearPlaybackAndPendingStream()
+		player.clearPlayback()
 	}
 
 	if err := removeSkippedSong(guildID, logger.Infof); err != nil {
@@ -315,7 +315,7 @@ func SkipTo(session *discordgo.Session, guildID string) error {
 	wasLoading := player.Loading
 
 	if wasPlaying || wasLoading {
-		player.drainPlaybackDoneLocked()
+		player.drainDoneLocked()
 		player.signalStopLocked()
 	}
 	player.mu.Unlock()
@@ -350,7 +350,7 @@ func skipInternal(session *discordgo.Session, guildID string) error {
 
 	wasPlaying := player.Playing
 	if wasPlaying {
-		player.drainPlaybackDoneLocked()
+		player.drainDoneLocked()
 		player.signalStopLocked()
 	}
 
@@ -358,7 +358,7 @@ func skipInternal(session *discordgo.Session, guildID string) error {
 
 	if wasPlaying {
 		player.awaitPlaybackDone(guildID, 2*time.Second)
-		player.clearPlaybackAndPendingStream()
+		player.clearPlayback()
 	}
 
 	if err := removeSkippedSong(guildID, logger.Debugf); err != nil {
@@ -412,7 +412,7 @@ func stopPlayback(guildID string, isLeaving bool) error {
 	wasPlaying := player.Playing
 
 	if wasPlaying || player.Loading {
-		player.drainPlaybackDoneLocked()
+		player.drainDoneLocked()
 	}
 
 	player.haltLocked()
@@ -459,7 +459,7 @@ func releasePlayback(guildID string, isLeaving bool) error {
 	ClearPreCache(guildID)
 	StopAnalysisBackfill(guildID)
 	forgetAutoPause(guildID)
-	forgetAwaitingDiscord(guildID)
+	forgetAwaiting(guildID)
 
 	if isLeaving {
 		DeletePlayer(guildID)

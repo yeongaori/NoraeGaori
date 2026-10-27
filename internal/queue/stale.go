@@ -7,7 +7,7 @@ import (
 	"noraegaori/internal/logger"
 )
 
-func ClearStalePlaybackStates() error {
+func ClearStaleStates() error {
 
 	_, err := database.DB.Exec(`UPDATE queues SET playing = 0, loading = 0 WHERE playing = 1 OR loading = 1`)
 	if err != nil {

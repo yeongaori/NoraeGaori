@@ -6,7 +6,7 @@ import (
 	"noraegaori/internal/youtube"
 )
 
-func TestParseYouTubeURLAcceptsEveryShapeUsersSend(t *testing.T) {
+func TestParseYouTubeURLShapes(t *testing.T) {
 	cases := []struct {
 		name         string
 		url          string
@@ -49,7 +49,7 @@ func TestParseYouTubeURLAcceptsEveryShapeUsersSend(t *testing.T) {
 	}
 }
 
-func TestParseYouTubeURLRejectsHostsTheBotMustNeverFetch(t *testing.T) {
+func TestParseYouTubeURLRejectsHosts(t *testing.T) {
 	cases := []struct {
 		name string
 		url  string

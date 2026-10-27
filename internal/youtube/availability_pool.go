@@ -308,7 +308,7 @@ func GetAvailabilityPool() *AvailabilityPool {
 	return globalPool
 }
 
-func CloseAvailabilityPool() {
+func ClosePool() {
 	globalPoolMu.Lock()
 	pool := globalPool
 	globalPool = nil

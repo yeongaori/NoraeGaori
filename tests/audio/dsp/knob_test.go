@@ -8,17 +8,17 @@ import (
 	"noraegaori/internal/audio/dsp"
 )
 
-func TestKnobCutoffsSpanTheMeasuredRange(t *testing.T) {
+func TestKnobCutoffsSpanRange(t *testing.T) {
 	cases := []struct {
 		name string
 		got  float64
 		want float64
 	}{
-		{"low-pass closed", dsp.LowpassKnobFrequency(0), 120},
-		{"low-pass open", dsp.LowpassKnobFrequency(0.5), 16000},
-		{"low-pass quarter", dsp.LowpassKnobFrequency(0.25), 120 * math.Sqrt(16000.0/120)},
-		{"high-pass open", dsp.HighpassKnobFrequency(0.5), 20},
-		{"high-pass closed", dsp.HighpassKnobFrequency(1), 9000},
+		{"low-pass closed", dsp.KnobLowpass(0), 120},
+		{"low-pass open", dsp.KnobLowpass(0.5), 16000},
+		{"low-pass quarter", dsp.KnobLowpass(0.25), 120 * math.Sqrt(16000.0/120)},
+		{"high-pass open", dsp.KnobHighpass(0.5), 20},
+		{"high-pass closed", dsp.KnobHighpass(1), 9000},
 	}
 	for i := range cases {
 		c := &cases[i]
@@ -28,7 +28,7 @@ func TestKnobCutoffsSpanTheMeasuredRange(t *testing.T) {
 	}
 }
 
-func TestKnobResonanceFollowsTheMeasuredTable(t *testing.T) {
+func TestKnobQFollowsTable(t *testing.T) {
 	cases := []struct{ knob, q float64 }{
 		{0.48, 0.70}, {0.35, 2.20}, {0.05, 0.65}, {0.01, 0.65}, {0.335, 2.15},
 		{0.52, 0.70}, {0.85, 1.95}, {0.98, 0.80}, {1, 0.80},
@@ -41,7 +41,7 @@ func TestKnobResonanceFollowsTheMeasuredTable(t *testing.T) {
 	}
 }
 
-func TestCentredKnobIsTransparent(t *testing.T) {
+func TestSetKnobCentreTransparent(t *testing.T) {
 	for _, knob := range []float64{0.499, 0.5, 0.501} {
 		for _, frequency := range []float64{50, 15000} {
 			gain := audiotest.FilterResponse(func(f *dsp.Filter) { f.SetKnob(knob) }, frequency)
@@ -52,7 +52,7 @@ func TestCentredKnobIsTransparent(t *testing.T) {
 	}
 }
 
-func TestKnobBelowCentreLowPasses(t *testing.T) {
+func TestSetKnobBelowCentre(t *testing.T) {
 	setup := func(f *dsp.Filter) { f.SetKnob(0.25) }
 
 	if gain := audiotest.FilterResponse(setup, 200); gain < 0.95 {
@@ -63,7 +63,7 @@ func TestKnobBelowCentreLowPasses(t *testing.T) {
 	}
 }
 
-func TestKnobAboveCentreHighPasses(t *testing.T) {
+func TestSetKnobAboveCentre(t *testing.T) {
 	setup := func(f *dsp.Filter) { f.SetKnob(0.75) }
 
 	if gain := audiotest.FilterResponse(setup, 50); gain > 0.05 {

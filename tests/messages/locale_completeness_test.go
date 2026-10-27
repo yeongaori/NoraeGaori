@@ -14,7 +14,7 @@ func isListIndex(key string) bool {
 	return err == nil
 }
 
-func TestEveryLocaleTranslatesEveryEnglishKey(t *testing.T) {
+func TestLocalesTranslateEveryKey(t *testing.T) {
 	english := localeStrings(t, "en")
 
 	for _, code := range messages.AvailableLocales() {
@@ -47,14 +47,14 @@ func emptyLocaleStrings(path string, value reflect.Value, into *[]string) {
 	}
 }
 
-func TestStayingTextsNeverSayTheBotLeaves(t *testing.T) {
+func TestStayingTextsNoLeaving(t *testing.T) {
 	leavingWords := map[string][]string{
 		"en": {"leav", "left"},
 		"ko": {"나갑", "나갔"},
 	}
 
 	for code, words := range leavingWords {
-		locale, err := messages.HookBuildLocale(code)
+		locale, err := messages.HookCreateLocale(code)
 		if err != nil {
 			t.Fatalf("failed to build locale %s: %v", code, err)
 		}
@@ -75,9 +75,9 @@ func TestStayingTextsNeverSayTheBotLeaves(t *testing.T) {
 	}
 }
 
-func TestEveryLocaleStringIsFilled(t *testing.T) {
+func TestLocaleStringsAreFilled(t *testing.T) {
 	for _, code := range messages.AvailableLocales() {
-		locale, err := messages.HookBuildLocale(code)
+		locale, err := messages.HookCreateLocale(code)
 		if err != nil {
 			t.Fatalf("failed to build locale %s: %v", code, err)
 		}

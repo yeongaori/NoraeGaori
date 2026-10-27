@@ -19,7 +19,7 @@ func GetTrimRange(guildID string) (int, int) {
 	return player.TrimStartMs, player.TrimEndMs
 }
 
-func fadeSettingsFromQueue(q *queue.Queue) fadeSettings {
+func readFadeSettings(q *queue.Queue) fadeSettings {
 	return fadeSettings{
 		fadeIn:         q.FadeIn,
 		fadeOut:        q.FadeOut,
@@ -47,7 +47,7 @@ func planFadeOutWindow(totalFrames, sentFrames int, fadeOutSec float64) (int, in
 	return totalFrames - frames, frames
 }
 
-func advanceQueueForAutoMix(player *GuildPlayer, song *queue.Song, crossfade *crossfadeState, announceNext func(*queue.Song)) {
+func advanceForAutoMix(player *GuildPlayer, song *queue.Song, crossfade *crossfadeState, announceNext func(*queue.Song)) {
 	guildID := player.GuildID
 
 	song.ResetRetry()
@@ -186,7 +186,7 @@ func acquireOpusEncoder(resumeMode bool, pending *PendingStream, bitrate int, gu
 	return encoder, nil
 }
 
-func classifyDrainedStream(stream audioStream, song *queue.Song, sentFrames, frameOffset int, resumeMode bool) error {
+func classifyDrain(stream audioStream, song *queue.Song, sentFrames, frameOffset int, resumeMode bool) error {
 	select {
 	case err := <-stream.Errs():
 		return err
@@ -209,7 +209,7 @@ func classifyDrainedStream(stream audioStream, song *queue.Song, sentFrames, fra
 	return nil
 }
 
-func adjustEndStateForOffset(es *ffmpeg.EndState, frameOffset int) *ffmpeg.EndState {
+func offsetEndState(es *ffmpeg.EndState, frameOffset int) *ffmpeg.EndState {
 	if frameOffset <= 0 {
 		return es
 	}
@@ -281,7 +281,7 @@ func playAudio(player *GuildPlayer, song *queue.Song, streamURL string, seekTime
 
 	defer player.transitionArmed.Store(false)
 
-	session = buildPlaybackSession(player, song, stopCh, stream, opusEncoder, resumed, seekTime, normalization, bitrate, fade)
+	session = createPlaybackSession(player, song, stopCh, stream, opusEncoder, resumed, seekTime, normalization, bitrate, fade)
 	return session.run(firstFrameCh, announceNext)
 }
 
@@ -373,7 +373,7 @@ func adoptPendingStream(player *GuildPlayer, song *queue.Song, seekTime int, fad
 	return pending.Stream, pending
 }
 
-func buildPlaybackSession(player *GuildPlayer, song *queue.Song, stopCh chan struct{}, stream audioStream, opusEncoder *opus.Encoder, resumed *PendingStream, seekTime int, normalization bool, bitrate int, fade *fadeSettings) *playbackSession {
+func createPlaybackSession(player *GuildPlayer, song *queue.Song, stopCh chan struct{}, stream audioStream, opusEncoder *opus.Encoder, resumed *PendingStream, seekTime int, normalization bool, bitrate int, fade *fadeSettings) *playbackSession {
 	resumeMode := resumed != nil
 	frameOffset := 0
 	baseOffsetMs := seekTime

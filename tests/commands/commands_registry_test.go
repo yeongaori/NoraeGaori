@@ -57,7 +57,7 @@ var expectedCommands = []string{
 	"volume|admin=false|textonly=false|opts=1|handler=true|autocomplete=false",
 }
 
-func registeredCommandFingerprint(t *testing.T) ([]string, []string) {
+func fingerprintCommands(t *testing.T) ([]string, []string) {
 	t.Helper()
 
 	if err := messages.LoadLocale("en"); err != nil {
@@ -84,8 +84,8 @@ func registeredCommandFingerprint(t *testing.T) ([]string, []string) {
 	return fingerprints, pairs
 }
 
-func TestRegisteredCommandsMatchTheExpectedList(t *testing.T) {
-	fingerprints, _ := registeredCommandFingerprint(t)
+func TestRegisteredCommandsList(t *testing.T) {
+	fingerprints, _ := fingerprintCommands(t)
 
 	if len(fingerprints) != len(expectedCommands) {
 		t.Fatalf("got %d registered commands, want %d", len(fingerprints), len(expectedCommands))
@@ -97,7 +97,7 @@ func TestRegisteredCommandsMatchTheExpectedList(t *testing.T) {
 	}
 }
 
-func TestReloadingAliasesKeepsTheStartupAliases(t *testing.T) {
+func TestReloadKeepsStartupAliases(t *testing.T) {
 	previousCommands := command.HookCommands.Load()
 	previousAliases := command.HookAliases.Load()
 	t.Cleanup(func() {
@@ -133,8 +133,8 @@ func TestReloadingAliasesKeepsTheStartupAliases(t *testing.T) {
 	}
 }
 
-func TestEveryAliasTargetsARegisteredCommand(t *testing.T) {
-	fingerprints, pairs := registeredCommandFingerprint(t)
+func TestAliasesTargetCommands(t *testing.T) {
+	fingerprints, pairs := fingerprintCommands(t)
 
 	registered := make(map[string]bool, len(fingerprints))
 	for _, fingerprint := range fingerprints {
@@ -150,7 +150,7 @@ func TestEveryAliasTargetsARegisteredCommand(t *testing.T) {
 	}
 }
 
-func TestNoAliasBelongsToTwoCommands(t *testing.T) {
+func TestAliasesAreUnique(t *testing.T) {
 	t.Cleanup(func() {
 		if err := messages.LoadLocale("en"); err != nil {
 			t.Errorf("failed to restore the English locale: %v", err)

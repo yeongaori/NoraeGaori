@@ -42,7 +42,7 @@ func longTitledSongs(count int, requesterID string) []*queue.Song {
 	return songs
 }
 
-func wantTargetSongsRemoved() func(t *testing.T, reply map[string]any) {
+func wantTargetsRemoved() func(t *testing.T, reply map[string]any) {
 	return func(t *testing.T, reply map[string]any) {
 		commandtest.ReplyContains("Song 3", "Song 4")(t, reply)
 		commandtest.WantTitles("Song 1", "Song 2")(t, reply)
@@ -54,13 +54,13 @@ func TestForceRemove(t *testing.T) {
 	userCache := precachetest.Track(commandtest.GuildID)
 
 	commandtest.Run(t, "forceremove", admin.HandleForceRemove, slices.Concat(
-		forceRemoveInputCases(),
+		forceInputCases(),
 		forceRemoveUserCases(),
-		forceRemovePreCacheCases(positionCache, userCache),
+		forcePreCacheCases(positionCache, userCache),
 	))
 }
 
-func forceRemoveInputCases() []commandtest.Case {
+func forceInputCases() []commandtest.Case {
 	caller := commandtest.CallerID
 	validRange := func(count int) func(*messages.Locale) string {
 		return func(locale *messages.Locale) string { return fmt.Sprintf(locale.Admin.EnterValidRange, count) }
@@ -159,7 +159,7 @@ func forceRemoveUserCases() []commandtest.Case {
 			WantText: func(locale *messages.Locale) string {
 				return fmt.Sprintf(locale.Admin.DeleteCompleteDesc, stubUsername, 2)
 			},
-			Check: wantTargetSongsRemoved(),
+			Check: wantTargetsRemoved(),
 		},
 		{
 			Name:    "a user's songs while one of them loads",
@@ -169,12 +169,12 @@ func forceRemoveUserCases() []commandtest.Case {
 			WantText: func(locale *messages.Locale) string {
 				return fmt.Sprintf(locale.Admin.DeleteCompleteDesc, stubUsername, 2)
 			},
-			Check: wantTargetSongsRemoved(),
+			Check: wantTargetsRemoved(),
 		},
 	}
 }
 
-func forceRemovePreCacheCases(positionCache, userCache *precachetest.Tracker) []commandtest.Case {
+func forcePreCacheCases(positionCache, userCache *precachetest.Tracker) []commandtest.Case {
 	caller := commandtest.CallerID
 	mention := "<@" + targetUserID + ">"
 
@@ -206,7 +206,7 @@ func forceRemovePreCacheCases(positionCache, userCache *precachetest.Tracker) []
 	}
 }
 
-func TestForceRemoveSplitsALongSummary(t *testing.T) {
+func TestForceRemoveSplitsSummary(t *testing.T) {
 	songs := append(queuetest.Songs(commandtest.CallerID), longTitledSongs(30, targetUserID)...)
 	fixture := commandtest.NewFixture(t, nil, songs...)
 	ic := discordtest.SlashInteraction(commandtest.GuildID, "forceremove", discordtest.Member(commandtest.GuildID, commandtest.CallerID), targetOption(targetUserID)...)
@@ -243,7 +243,7 @@ func TestForceRemoveSplitsALongSummary(t *testing.T) {
 	}
 }
 
-func TestRegisterAddsTheAdminCommands(t *testing.T) {
+func TestRegisterAdminCommands(t *testing.T) {
 	admin.Register(func(string) messages.CommandStrings { return messages.CommandStrings{} })
 
 	commandtest.WantRegistered(t, map[string]commandtest.Registration{

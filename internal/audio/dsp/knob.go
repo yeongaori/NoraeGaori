@@ -28,17 +28,17 @@ func (f *Filter) SetKnob(knob float64) {
 	case math.Abs(knob-KnobCenter) <= knobBypassWidth:
 		f.SetBypass()
 	case knob < KnobCenter:
-		f.SetLowpass(LowpassKnobFrequency(knob), KnobQ(knob))
+		f.SetLowpass(KnobLowpass(knob), KnobQ(knob))
 	default:
-		f.SetHighpass(HighpassKnobFrequency(knob), KnobQ(knob))
+		f.SetHighpass(KnobHighpass(knob), KnobQ(knob))
 	}
 }
 
-func LowpassKnobFrequency(knob float64) float64 {
+func KnobLowpass(knob float64) float64 {
 	return lowpassClosedFreq * math.Pow(lowpassOpenFreq/lowpassClosedFreq, 2*knob)
 }
 
-func HighpassKnobFrequency(knob float64) float64 {
+func KnobHighpass(knob float64) float64 {
 	return highpassOpenFreq * math.Pow(highpassClosedFreq/highpassOpenFreq, 2*(knob-KnobCenter))
 }
 

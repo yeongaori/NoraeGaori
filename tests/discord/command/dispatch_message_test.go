@@ -79,7 +79,7 @@ func failingHandler(*discordgo.Session, *discordgo.InteractionCreate) error {
 	return errors.New("probe failed")
 }
 
-func TestHandleInteractionAnswersAutocompleteForUnknownCommands(t *testing.T) {
+func TestHandleInteractionUnknown(t *testing.T) {
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 
 	command.HandleInteraction(session, &discordgo.InteractionCreate{
@@ -100,7 +100,7 @@ func TestHandleInteractionAnswersAutocompleteForUnknownCommands(t *testing.T) {
 	}
 }
 
-func TestHandleMessageIgnoresMessagesThatAreNotCommands(t *testing.T) {
+func TestHandleMessageIgnoresText(t *testing.T) {
 	session, requests := dispatchSession(t)
 	called := registerProbeCommand(t, "probe", false)
 	registerProbeAlias(t, "probe", "probe")
@@ -127,7 +127,7 @@ func TestHandleMessageIgnoresMessagesThatAreNotCommands(t *testing.T) {
 	}
 }
 
-func TestHandleMessageUsesTheServersOwnPrefix(t *testing.T) {
+func TestHandleMessageServerPrefix(t *testing.T) {
 	session, _ := dispatchSession(t)
 	called := registerProbeCommand(t, "probe", false)
 	registerProbeAlias(t, "probe", "probe")
@@ -144,7 +144,7 @@ func TestHandleMessageUsesTheServersOwnPrefix(t *testing.T) {
 	}
 }
 
-func TestHandleMessageFallsBackToTheConfiguredPrefixWhenTheServerPrefixCannotBeRead(t *testing.T) {
+func TestHandleMessagePrefixFallback(t *testing.T) {
 	session, _ := dispatchSession(t)
 	called := registerProbeCommand(t, "probe", false)
 	registerProbeAlias(t, "probe", "probe")
@@ -166,7 +166,7 @@ func TestHandleMessageFallsBackToTheConfiguredPrefixWhenTheServerPrefixCannotBeR
 	}
 }
 
-func TestHandleMessageRefusesAdminCommandsForPlainMembers(t *testing.T) {
+func TestHandleMessageRefusesMember(t *testing.T) {
 	session, requests := dispatchSession(t)
 	called := registerProbeCommand(t, "probeadmin", true)
 	registerProbeAlias(t, "probeadmin", "probeadmin")
@@ -183,7 +183,7 @@ func TestHandleMessageRefusesAdminCommandsForPlainMembers(t *testing.T) {
 	wantChannelReply(t, &sent[0], messages.T(dispatchGuildID).Errors.AdminOnly)
 }
 
-func TestHandleMessageRunsAdminCommandsFromTheMessagesOwnRoles(t *testing.T) {
+func TestHandleMessageAdminRoles(t *testing.T) {
 	session, requests := dispatchSession(t)
 	called := registerProbeCommand(t, "probeadmin", true)
 	registerProbeAlias(t, "probeadmin", "probeadmin")
@@ -202,7 +202,7 @@ func TestHandleMessageRunsAdminCommandsFromTheMessagesOwnRoles(t *testing.T) {
 	}
 }
 
-func TestHandleMessageReportsAFailingHandlerThatSentNothing(t *testing.T) {
+func TestHandleMessageReportsFailure(t *testing.T) {
 	session, requests := dispatchSession(t)
 	called := registerProbe(t, "probefail", false, failingHandler)
 	registerProbeAlias(t, "probefail", "probefail")
@@ -219,7 +219,7 @@ func TestHandleMessageReportsAFailingHandlerThatSentNothing(t *testing.T) {
 	wantChannelReply(t, &sent[0], "probe failed")
 }
 
-func TestHandleMessageKeepsQuietWhenAFailingHandlerAlreadyReplied(t *testing.T) {
+func TestHandleMessageQuietOnReply(t *testing.T) {
 	session, requests := dispatchSession(t)
 	called := registerProbe(t, "probereply", false, func(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		discord.RespondEmbed(s, i, &discordgo.MessageEmbed{Title: "partial"})

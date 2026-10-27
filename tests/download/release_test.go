@@ -19,7 +19,7 @@ func sampleRelease() *download.Release {
 	}
 }
 
-func TestFindAssetReturnsTheNamedAsset(t *testing.T) {
+func TestFindAsset(t *testing.T) {
 	release := sampleRelease()
 
 	asset, ok := release.FindAsset("deno-x86_64-pc-windows-msvc.zip")
@@ -31,7 +31,7 @@ func TestFindAssetReturnsTheNamedAsset(t *testing.T) {
 	}
 }
 
-func TestAssetURLIsEmptyForAMissingAsset(t *testing.T) {
+func TestAssetURLMissing(t *testing.T) {
 	release := sampleRelease()
 
 	if got := release.AssetURL("deno-x86_64-unknown-linux-gnu.zip"); got != "https://example.invalid/linux" {
@@ -42,7 +42,7 @@ func TestAssetURLIsEmptyForAMissingAsset(t *testing.T) {
 	}
 }
 
-func TestAssetDigestReadsOnlySHA256Digests(t *testing.T) {
+func TestAssetDigestSHA256Only(t *testing.T) {
 	release := sampleRelease()
 
 	if got := release.AssetDigest("deno-x86_64-unknown-linux-gnu.zip"); got != "abcdef" {
@@ -71,7 +71,7 @@ func serveBody(t *testing.T, status int, body string) string {
 	return server.URL
 }
 
-func TestFetchReleaseDecodesTheRelease(t *testing.T) {
+func TestFetchReleaseDecodes(t *testing.T) {
 	url := serveBody(t, http.StatusOK, `{"tag_name":"v2.9.7","name":"v2.9.7","published_at":"2026-09-24T12:28:11Z","assets":[{"name":"deno.zip","browser_download_url":"https://example.invalid/deno.zip","size":41,"digest":"sha256:ab"}]}`)
 
 	release, err := download.FetchRelease(url)
@@ -86,7 +86,7 @@ func TestFetchReleaseDecodesTheRelease(t *testing.T) {
 	}
 }
 
-func TestFetchReleasesDecodesTheList(t *testing.T) {
+func TestFetchReleasesDecodes(t *testing.T) {
 	url := serveBody(t, http.StatusOK, `[{"tag_name":"bun-v1.4.2"},{"tag_name":"bun-v1.3.14"}]`)
 
 	releases, err := download.FetchReleases(url)
@@ -98,7 +98,7 @@ func TestFetchReleasesDecodesTheList(t *testing.T) {
 	}
 }
 
-func TestFetchReportsTheHTTPStatus(t *testing.T) {
+func TestFetchBytesHTTPStatus(t *testing.T) {
 	url := serveBody(t, http.StatusNotFound, "")
 
 	_, err := download.FetchBytes(url)
@@ -117,7 +117,7 @@ func TestFetchReportsTheHTTPStatus(t *testing.T) {
 	}
 }
 
-func TestFetchJSONRejectsMalformedBodies(t *testing.T) {
+func TestFetchJSONMalformed(t *testing.T) {
 	url := serveBody(t, http.StatusOK, "not json")
 
 	var target map[string]string
@@ -128,7 +128,7 @@ func TestFetchJSONRejectsMalformedBodies(t *testing.T) {
 	}
 }
 
-func TestFetchBytesReturnsTheBody(t *testing.T) {
+func TestFetchBytesReturnsBody(t *testing.T) {
 	url := serveBody(t, http.StatusOK, "v2.9.7\n")
 
 	body, err := download.FetchBytes(url)
@@ -137,13 +137,13 @@ func TestFetchBytesReturnsTheBody(t *testing.T) {
 	}
 }
 
-func TestFetchRejectsAMalformedURL(t *testing.T) {
+func TestFetchBytesMalformedURL(t *testing.T) {
 	if _, err := download.FetchBytes("://no-scheme"); err == nil {
 		t.Error("got nil, want an error for a malformed URL")
 	}
 }
 
-func TestFetchFailsOnAnUnreachableHost(t *testing.T) {
+func TestFetchBytesUnreachable(t *testing.T) {
 	server := httptest.NewServer(http.NotFoundHandler())
 	url := server.URL
 	server.Close()

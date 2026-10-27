@@ -14,9 +14,9 @@ type panelTarget struct {
 type panelHandler func(s *discordgo.Session, ic *discordgo.InteractionCreate, target *panelTarget)
 
 func registerPanelRoutes() {
-	discord.RegisterComponentRoute(categoryRoute, routePanel(1, switchCategory))
-	discord.RegisterComponentRoute(pickRoute, routePanel(2, pickSetting))
-	discord.RegisterComponentRoute(modalRoute, routePanel(3, submitSettingModal))
+	discord.RegisterRoute(categoryRoute, routePanel(1, switchCategory))
+	discord.RegisterRoute(pickRoute, routePanel(2, pickSetting))
+	discord.RegisterRoute(modalRoute, routePanel(3, submitSettingModal))
 }
 
 func routePanel(argumentCount int, handle panelHandler) discord.ComponentRoute {

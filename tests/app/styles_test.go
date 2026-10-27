@@ -10,7 +10,7 @@ import (
 	"noraegaori/tests/testutil/dbtest"
 )
 
-func TestStartupConvertsStoredShortcutStyles(t *testing.T) {
+func TestConvertStoredStyles(t *testing.T) {
 	dbtest.Setup(t)
 	if _, err := database.DB.Exec(`ALTER TABLE guild_settings ADD COLUMN automix_style_volume TEXT DEFAULT 'auto'`); err != nil {
 		t.Fatalf("failed to add the legacy column: %v", err)
@@ -30,7 +30,7 @@ func TestStartupConvertsStoredShortcutStyles(t *testing.T) {
 	}
 }
 
-func TestStartupReportsAFailedConversion(t *testing.T) {
+func TestConvertStoredStylesFailure(t *testing.T) {
 	dbtest.Setup(t)
 	dbtest.WhileClosed(t, func() {
 		if err := app.HookConvertStoredStyles(); err == nil || !strings.Contains(err.Error(), "AutoMix styles") {

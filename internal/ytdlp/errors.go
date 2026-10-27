@@ -2,7 +2,7 @@ package ytdlp
 
 import "strings"
 
-func IsDefinitiveUnavailableError(errorMsg string) bool {
+func IsDefinitiveUnavailable(errorMsg string) bool {
 	errorLower := strings.ToLower(errorMsg)
 	definitivePatterns := []string{
 		"video unavailable",

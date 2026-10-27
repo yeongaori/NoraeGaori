@@ -10,7 +10,7 @@ import (
 	"noraegaori/internal/player"
 )
 
-func TestSetLoadingMessageClearsAnnouncement(t *testing.T) {
+func TestSetLoadingMessageClears(t *testing.T) {
 	guildID := "loadingannounce"
 	t.Cleanup(func() {
 		player.DeleteLoadingMessage(guildID)
@@ -30,7 +30,7 @@ func TestSetLoadingMessageClearsAnnouncement(t *testing.T) {
 	}
 }
 
-func TestDeliverNowPlayingEditsLoadingMessage(t *testing.T) {
+func TestDeliverNowPlayingEdits(t *testing.T) {
 	guildID := "deliveredit"
 	t.Cleanup(func() { player.DeleteLoadingMessage(guildID) })
 
@@ -61,7 +61,7 @@ func TestDeliverNowPlayingEditsLoadingMessage(t *testing.T) {
 	}
 }
 
-func TestDeliverNowPlayingFallsBackWhenEditFails(t *testing.T) {
+func TestDeliverNowPlayingEditFails(t *testing.T) {
 	guildID := "deliverfallback"
 	t.Cleanup(func() { player.DeleteLoadingMessage(guildID) })
 
@@ -82,7 +82,7 @@ func TestDeliverNowPlayingFallsBackWhenEditFails(t *testing.T) {
 	}
 }
 
-func TestDeliverNowPlayingStaysQuietWhenFallbackDisabled(t *testing.T) {
+func TestDeliverNowPlayingQuiet(t *testing.T) {
 	guildID := "deliverquietfallback"
 	t.Cleanup(func() { player.DeleteLoadingMessage(guildID) })
 
@@ -114,7 +114,7 @@ func TestSongNoticeRequester(t *testing.T) {
 	}
 }
 
-func TestDeliverNowPlayingPostsWithoutLoadingMessage(t *testing.T) {
+func TestDeliverNowPlayingPosts(t *testing.T) {
 	guildID := "deliverpost"
 	song, q := nowPlayingFixture(guildID, true)
 
@@ -136,7 +136,7 @@ func TestDeliverNowPlayingPostsWithoutLoadingMessage(t *testing.T) {
 	}
 }
 
-func TestDeliverNowPlayingRespectsShowStartedTrack(t *testing.T) {
+func TestDeliverNowPlayingShowSetting(t *testing.T) {
 	guildID := "deliverquiet"
 	song, q := nowPlayingFixture(guildID, false)
 
@@ -148,7 +148,7 @@ func TestDeliverNowPlayingRespectsShowStartedTrack(t *testing.T) {
 	}
 }
 
-func TestDeliverNowPlayingResolvesReconnectMessage(t *testing.T) {
+func TestDeliverNowPlayingReconnect(t *testing.T) {
 	guildID := "deliverreconnect"
 	t.Cleanup(func() { player.HookReconnectNotices.HookRemove(guildID) })
 

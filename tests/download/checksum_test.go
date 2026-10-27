@@ -35,7 +35,7 @@ func TestParseChecksums(t *testing.T) {
 	}
 }
 
-func TestParseChecksumsRejectsMalformedInput(t *testing.T) {
+func TestParseChecksumsMalformed(t *testing.T) {
 	cases := map[string]string{
 		"empty":         "",
 		"missing name":  "495be29ff4d9d4e9be7eabdfef225221e5d5282e77f2f505abc6dca80349f3fd\n",
@@ -52,7 +52,7 @@ func TestParseChecksumsRejectsMalformedInput(t *testing.T) {
 	}
 }
 
-func TestCheckDigestAcceptsAMatchingOrMissingDigest(t *testing.T) {
+func TestCheckDigestAccepts(t *testing.T) {
 	sum := "495be29ff4d9d4e9be7eabdfef225221e5d5282e77f2f505abc6dca80349f3fd"
 
 	if err := download.CheckDigest("deno.zip", sum, sum); err != nil {
@@ -63,7 +63,7 @@ func TestCheckDigestAcceptsAMatchingOrMissingDigest(t *testing.T) {
 	}
 }
 
-func TestCheckDigestRejectsADisagreeingDigest(t *testing.T) {
+func TestCheckDigestRejects(t *testing.T) {
 	published := "495be29ff4d9d4e9be7eabdfef225221e5d5282e77f2f505abc6dca80349f3fd"
 	digest := "52fe3c26dcf71fbdc85b528589020bb0b8e383155cfa81b64dd447bbe35e24b8"
 

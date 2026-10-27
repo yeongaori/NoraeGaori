@@ -12,14 +12,14 @@ import (
 	"noraegaori/tests/testutil/queuetest"
 )
 
-func reconciledAfterLoading(t *testing.T) {
+func reconcileAfterLoad(t *testing.T) {
 	t.Helper()
 
 	commandtest.Loading(t)
 	player.ReconcileState(commandtest.GuildID)
 }
 
-func TestPlaybackCommandsWithoutAPlayingSession(t *testing.T) {
+func TestPlaybackCommandsIdle(t *testing.T) {
 	notPlaying := func(locale *messages.Locale) string { return locale.Music.NotPlayingOrLoading }
 
 	commandtest.Run(t, "pause", playback.HandlePause, []commandtest.Case{
@@ -46,7 +46,7 @@ func TestPlaybackCommandsWithoutAPlayingSession(t *testing.T) {
 		{
 			Name:     "a stale loading flag reconciled before the command",
 			Songs:    queuetest.SongsBy(commandtest.CallerID, 1),
-			Prepare:  reconciledAfterLoading,
+			Prepare:  reconcileAfterLoad,
 			WantText: func(locale *messages.Locale) string { return locale.Music.NowPlayingPaused },
 		},
 	})

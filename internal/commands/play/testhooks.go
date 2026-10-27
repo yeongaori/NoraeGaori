@@ -30,27 +30,27 @@ var HookAutocompleteCacheMutex = &autocompleteCacheMutex
 var HookAutocompleteCacheOrder = &autocompleteCacheOrder
 var HookAutocompleteGates = &autocompleteGates
 var HookAutocompleteGatesMutex = &autocompleteGatesMutex
-var HookBeginAutocompleteFetch = beginAutocompleteFetch
-var HookBuildVideoChoiceName = buildVideoChoiceName
-var HookCheckSongsAvailability = checkSongsAvailability
+var HookBeginAutocomplete = beginAutocomplete
+var HookCreateVideoChoiceName = createVideoChoiceName
+var HookCheckAvailability = checkAvailability
 var HookConfirmedByRequester = confirmedByRequester
 var HookExcludeVideo = excludeVideo
-var HookExpireSearchSelection = expireSearchSelection
-var HookHandlePlaylistConfirmationReaction = handlePlaylistConfirmationReaction
-var HookHandlePlaylistRestConfirmationReaction = handlePlaylistRestConfirmationReaction
-var HookIsLatestAutocompleteFetch = isLatestAutocompleteFetch
-var HookLoadAutocompleteChoices = loadAutocompleteChoices
-var HookLoadNearestAutocompleteChoices = loadNearestAutocompleteChoices
-var HookNormalizeAutocompleteQuery = normalizeAutocompleteQuery
+var HookExpireSearch = expireSearch
+var HookConfirmPlaylist = confirmPlaylist
+var HookConfirmPlaylistRest = confirmPlaylistRest
+var HookIsLatestAutocomplete = isLatestAutocomplete
+var HookLoadChoices = loadChoices
+var HookLoadNearestChoices = loadNearestChoices
+var HookNormalizeQuery = normalizeQuery
 var HookParseSearchSelection = parseSearchSelection
 var HookPlaylistPromptExpiry = &playlistPromptExpiry
 var HookPlaylistTimeoutEmbed = playlistTimeoutEmbed
 var HookReadPlayRequest = readPlayRequest
-var HookSaveAutocompleteChoices = saveAutocompleteChoices
+var HookSaveChoices = saveChoices
 var HookSearchResultsPanel = searchResultsPanel
 var HookSearchSelectionExpiry = &searchSelectionExpiry
 
-func HookBuildSearchSelection(fields *HookSearchSelectionFields) *searchSelection {
+func HookCreateSearchSelection(fields *HookSearchSelectionFields) *searchSelection {
 	return &searchSelection{
 		searchMessageID: fields.SearchMessageID,
 		original:        fields.Original,
@@ -71,8 +71,8 @@ func (c *searchSelection) HookPanelMsg() **discordgo.Message {
 	return &c.panelMsg
 }
 
-func HookEnqueueAvailableSongs(guildID string, songs []*youtube.Song, results []youtube.BatchResult) (int, int, []string) {
-	outcome := enqueueAvailableSongs(guildID, songs, results, false)
+func HookEnqueueAvailable(guildID string, songs []*youtube.Song, results []youtube.BatchResult) (int, int, []string) {
+	outcome := enqueueAvailable(guildID, songs, results, false)
 	skippedURLs := make([]string, 0, len(outcome.skippedSongs))
 	for i := range outcome.skippedSongs {
 		skippedURLs = append(skippedURLs, outcome.skippedSongs[i].URL)

@@ -42,7 +42,7 @@ func syncStoredData() error {
 	}
 
 	logger.Debug("Clearing stale playback states...")
-	if err := queue.ClearStalePlaybackStates(); err != nil {
+	if err := queue.ClearStaleStates(); err != nil {
 		logger.Warnf("Failed to clear stale states: %v", err)
 	}
 
@@ -134,7 +134,7 @@ func Run(token string) error {
 
 	updaterCtx, updaterCancel := context.WithCancel(context.Background())
 	defer updaterCancel()
-	ytdlpUpdater.StartBackgroundUpdater(updaterCtx, dependency.CheckUpdates)
+	ytdlpUpdater.StartUpdater(updaterCtx, dependency.CheckUpdates)
 
 	logger.Debugf("Opus encoder: %s", opus.GetEncoderType())
 	logger.Info("Starting Discord bot...")

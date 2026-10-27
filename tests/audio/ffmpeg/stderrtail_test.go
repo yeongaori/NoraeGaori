@@ -9,7 +9,7 @@ import (
 	"noraegaori/internal/audio/ffmpeg"
 )
 
-func TestStderrTailKeepsOnlyTheTail(t *testing.T) {
+func TestStderrTailKeepsTail(t *testing.T) {
 	tail := &ffmpeg.HookStderrTail{}
 
 	if _, err := tail.Write([]byte(strings.Repeat("a", ffmpeg.HookStderrTailBytes))); err != nil {
@@ -36,7 +36,7 @@ func requireFFmpeg(t *testing.T) {
 	}
 }
 
-func TestFailedFFmpegReportsItsOwnDiagnostics(t *testing.T) {
+func TestStartReportsDiagnostics(t *testing.T) {
 	requireFFmpeg(t)
 
 	stream, err := ffmpeg.Start("ffmpeg", ffmpeg.Args("/nonexistent/definitely-not-a-media-file", 0, false, ffmpeg.Tempo{}), false, nil)

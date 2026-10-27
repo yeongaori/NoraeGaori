@@ -18,8 +18,8 @@ func useCircuitBreaker(t *testing.T, breaker *youtube.HookCircuitBreaker) {
 
 var errTooManyRequests = errors.New("WARNING: [youtube] f_2PqUwdijI: Unable to download webpage: HTTP Error 429: Too Many Requests")
 
-func TestCircuitReopensWhenTheTestRequestIsRateLimited(t *testing.T) {
-	breaker := youtube.HookBuildCircuitBreaker(&youtube.HookCircuitBreakerFields{State: youtube.HookCircuitOpen, LastFailureTime: time.Now().Add(-2 * *youtube.HookCircuitCooldownPeriod)})
+func TestCircuitBreakerReopens(t *testing.T) {
+	breaker := youtube.HookCreateCircuitBreaker(&youtube.HookCircuitBreakerFields{State: youtube.HookCircuitOpen, LastFailureTime: time.Now().Add(-2 * *youtube.HookCircuitCooldownPeriod)})
 	useCircuitBreaker(t, breaker)
 
 	if err := breaker.HookCanAttempt(); err != nil {
@@ -36,8 +36,8 @@ func TestCircuitReopensWhenTheTestRequestIsRateLimited(t *testing.T) {
 	}
 }
 
-func TestCircuitClosesWhenTheTestRequestSucceeds(t *testing.T) {
-	breaker := youtube.HookBuildCircuitBreaker(&youtube.HookCircuitBreakerFields{State: youtube.HookCircuitOpen, LastFailureTime: time.Now().Add(-2 * *youtube.HookCircuitCooldownPeriod)})
+func TestCircuitBreakerCloses(t *testing.T) {
+	breaker := youtube.HookCreateCircuitBreaker(&youtube.HookCircuitBreakerFields{State: youtube.HookCircuitOpen, LastFailureTime: time.Now().Add(-2 * *youtube.HookCircuitCooldownPeriod)})
 	useCircuitBreaker(t, breaker)
 
 	if err := breaker.HookCanAttempt(); err != nil {
@@ -51,7 +51,7 @@ func TestCircuitClosesWhenTheTestRequestSucceeds(t *testing.T) {
 	}
 }
 
-func TestCircuitIgnoresFailuresThatAreNotRateLimits(t *testing.T) {
+func TestCircuitBreakerIgnoresOther(t *testing.T) {
 	breaker := &youtube.HookCircuitBreaker{}
 	useCircuitBreaker(t, breaker)
 
@@ -64,15 +64,15 @@ func TestCircuitIgnoresFailuresThatAreNotRateLimits(t *testing.T) {
 	}
 }
 
-func TestRateLimitCooldownReportsTheRemainingWait(t *testing.T) {
+func TestRateLimitCooldownRemaining(t *testing.T) {
 	cases := map[string]struct {
 		breaker  *youtube.HookCircuitBreaker
 		min, max time.Duration
 	}{
 		"closed":         {&youtube.HookCircuitBreaker{}, 0, 0},
-		"open":           {youtube.HookBuildCircuitBreaker(&youtube.HookCircuitBreakerFields{State: youtube.HookCircuitOpen, LastFailureTime: time.Now().Add(-10 * time.Second)}), *youtube.HookCircuitCooldownPeriod - 11*time.Second, *youtube.HookCircuitCooldownPeriod - 10*time.Second},
-		"open, expired":  {youtube.HookBuildCircuitBreaker(&youtube.HookCircuitBreakerFields{State: youtube.HookCircuitOpen, LastFailureTime: time.Now().Add(-2 * *youtube.HookCircuitCooldownPeriod)}), 0, 0},
-		"half-open test": {youtube.HookBuildCircuitBreaker(&youtube.HookCircuitBreakerFields{State: youtube.HookCircuitHalfOpen, LastFailureTime: time.Now()}), 0, 0},
+		"open":           {youtube.HookCreateCircuitBreaker(&youtube.HookCircuitBreakerFields{State: youtube.HookCircuitOpen, LastFailureTime: time.Now().Add(-10 * time.Second)}), *youtube.HookCircuitCooldownPeriod - 11*time.Second, *youtube.HookCircuitCooldownPeriod - 10*time.Second},
+		"open, expired":  {youtube.HookCreateCircuitBreaker(&youtube.HookCircuitBreakerFields{State: youtube.HookCircuitOpen, LastFailureTime: time.Now().Add(-2 * *youtube.HookCircuitCooldownPeriod)}), 0, 0},
+		"half-open test": {youtube.HookCreateCircuitBreaker(&youtube.HookCircuitBreakerFields{State: youtube.HookCircuitHalfOpen, LastFailureTime: time.Now()}), 0, 0},
 	}
 
 	for name, check := range cases {
@@ -86,8 +86,8 @@ func TestRateLimitCooldownReportsTheRemainingWait(t *testing.T) {
 	}
 }
 
-func TestIsRateLimitErrorRecognisesTheOpenCircuit(t *testing.T) {
-	useCircuitBreaker(t, youtube.HookBuildCircuitBreaker(&youtube.HookCircuitBreakerFields{State: youtube.HookCircuitOpen, LastFailureTime: time.Now()}))
+func TestIsRateLimitErrorOpenCircuit(t *testing.T) {
+	useCircuitBreaker(t, youtube.HookCreateCircuitBreaker(&youtube.HookCircuitBreakerFields{State: youtube.HookCircuitOpen, LastFailureTime: time.Now()}))
 
 	err := (*youtube.HookYtCircuitBreaker).HookCanAttempt()
 	if !youtube.IsRateLimitError(err) {

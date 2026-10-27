@@ -27,7 +27,7 @@ func hasArg(args []string, flag string) bool {
 	return false
 }
 
-func TestStreamPipeArgsAlwaysEndsWithTheURL(t *testing.T) {
+func TestStreamPipeArgsEndsWithURL(t *testing.T) {
 	args := youtube.HookStreamPipeArgs("https://example.invalid/watch?v=abc", false, 128000, 0, nil)
 
 	if len(args) == 0 || args[len(args)-1] != "https://example.invalid/watch?v=abc" {
@@ -41,7 +41,7 @@ func TestStreamPipeArgsAlwaysEndsWithTheURL(t *testing.T) {
 	}
 }
 
-func TestStreamPipeArgsOmitsOptionalFlagsByDefault(t *testing.T) {
+func TestStreamPipeArgsDefaults(t *testing.T) {
 	args := youtube.HookStreamPipeArgs("https://example.invalid/watch?v=abc", false, 128000, 0, nil)
 
 	for _, flag := range []string{"--sponsorblock-mark", "--sponsorblock-remove", "--download-sections", "--ffmpeg-location"} {
@@ -51,7 +51,7 @@ func TestStreamPipeArgsOmitsOptionalFlagsByDefault(t *testing.T) {
 	}
 }
 
-func TestStreamPipeArgsPointYtDlpAtADownloadedFFmpeg(t *testing.T) {
+func TestStreamPipeArgsFFmpegPath(t *testing.T) {
 	ffmpeg := &dependency.Binary{Tool: "ffmpeg", Version: "2026.09.25.1845", Path: filepath.Join("/app", "lib", "ffmpeg-2026.09.25.1845", "ffmpeg")}
 	args := youtube.HookStreamPipeArgs("https://example.invalid/watch?v=abc", true, 128000, 0, ffmpeg)
 
@@ -63,7 +63,7 @@ func TestStreamPipeArgsPointYtDlpAtADownloadedFFmpeg(t *testing.T) {
 	}
 }
 
-func TestStreamPipeArgsAddsSponsorBlockWhenRequested(t *testing.T) {
+func TestStreamPipeArgsSponsorBlock(t *testing.T) {
 	args := youtube.HookStreamPipeArgs("https://example.invalid/watch?v=abc", true, 128000, 0, nil)
 
 	if mark, ok := argValue(args, "--sponsorblock-mark"); !ok || mark != "all" {
@@ -80,7 +80,7 @@ func TestStreamPipeArgsAddsSponsorBlockWhenRequested(t *testing.T) {
 	}
 }
 
-func TestStreamPipeArgsConvertsSeekMillisecondsToASection(t *testing.T) {
+func TestStreamPipeArgsSeekSection(t *testing.T) {
 	args := youtube.HookStreamPipeArgs("https://example.invalid/watch?v=abc", false, 128000, 90500, nil)
 
 	section, ok := argValue(args, "--download-sections")
@@ -92,7 +92,7 @@ func TestStreamPipeArgsConvertsSeekMillisecondsToASection(t *testing.T) {
 	}
 }
 
-func TestStreamPipeArgsTracksTheRequestedBitrate(t *testing.T) {
+func TestStreamPipeArgsBitrate(t *testing.T) {
 	low := youtube.HookStreamPipeArgs("https://example.invalid/watch?v=abc", false, 64000, 0, nil)
 	high := youtube.HookStreamPipeArgs("https://example.invalid/watch?v=abc", false, 384000, 0, nil)
 

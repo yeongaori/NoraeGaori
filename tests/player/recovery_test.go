@@ -87,7 +87,7 @@ func runPanickingSession(t *testing.T, guildID string, beforePanic func(guildPla
 	if err := player.HookStartPlaybackSession(nil, guildID); err != nil {
 		t.Fatalf("session returned %v, want nil", err)
 	}
-	waitForPlayLockRelease(t, guildID)
+	waitForPlayLock(t, guildID)
 }
 
 func wantIdleState(t *testing.T, guildID string) {
@@ -102,7 +102,7 @@ func wantIdleState(t *testing.T, guildID string) {
 	}
 }
 
-func TestUnexpectedPanicRetriesTheSong(t *testing.T) {
+func TestRecoverSessionRetries(t *testing.T) {
 	guildID := "recover-retry"
 	setupPlayerDB(t, guildID, 2)
 	markStoredActive(t, guildID)
@@ -128,7 +128,7 @@ func TestUnexpectedPanicRetriesTheSong(t *testing.T) {
 	}
 }
 
-func TestPanicAfterExhaustedRetriesSkipsTheSong(t *testing.T) {
+func TestRecoverSessionSkipsSong(t *testing.T) {
 	guildID := "recover-exhausted"
 	setupPlayerDB(t, guildID, 2)
 	markStoredActive(t, guildID)
@@ -156,7 +156,7 @@ func TestPanicAfterExhaustedRetriesSkipsTheSong(t *testing.T) {
 	wantIdleState(t, guildID)
 }
 
-func TestPanicOnTheLastSongAfterExhaustedRetriesLeaves(t *testing.T) {
+func TestRecoverSessionLastSong(t *testing.T) {
 	guildID := "recover-last-song"
 	setupPlayerDB(t, guildID, 1)
 	markStoredActive(t, guildID)
@@ -177,7 +177,7 @@ func TestPanicOnTheLastSongAfterExhaustedRetriesLeaves(t *testing.T) {
 	}
 }
 
-func TestPanicWithAnEmptyQueueLeavesWithAnError(t *testing.T) {
+func TestRecoverSessionEmptyQueue(t *testing.T) {
 	guildID := "recover-empty"
 	setupPlayerDB(t, guildID, 0)
 	probe := probeRecovery(t)
@@ -193,7 +193,7 @@ func TestPanicWithAnEmptyQueueLeavesWithAnError(t *testing.T) {
 	}
 }
 
-func TestQueuedCommandsAreRememberedForRecovery(t *testing.T) {
+func TestRecentCommandRemembered(t *testing.T) {
 	guildPlayer := newTestPlayer("recover-remember", func(player.PlayerCommand) error { return nil })
 	defer stopTestProcessor(guildPlayer)
 
@@ -216,7 +216,7 @@ type teardownPanicCase struct {
 	wantRetry   bool
 }
 
-func TestPanicCausedByATeardownIsLeftToThatCommand(t *testing.T) {
+func TestRecoverSessionTeardown(t *testing.T) {
 	cases := teardownPanicCases()
 
 	for i := range cases {

@@ -11,7 +11,7 @@ import (
 
 func analyzeClicks(t *testing.T, jitterSec float64) *analysis.TrackAnalysis {
 	t.Helper()
-	samples := audiotest.SynthesizeJitteredClickTrack(124, 40, analysis.SampleRate, 4, 0, jitterSec)
+	samples := audiotest.SynthesizeJitterClicks(124, 40, analysis.SampleRate, 4, 0, jitterSec)
 	track, err := analysis.AnalyzeTrackSamples(samples, analysis.SampleRate)
 	if err != nil {
 		t.Fatalf("click track failed: %v", err)
@@ -45,7 +45,7 @@ func TestSteadyClicksAreBeatmatchable(t *testing.T) {
 	}
 }
 
-func TestLooseTimingFailsTheSteadinessCheck(t *testing.T) {
+func TestLooseTimingFailsSteadiness(t *testing.T) {
 	track := analyzeClicks(t, 0.06)
 
 	failing := 0
@@ -61,7 +61,7 @@ func TestLooseTimingFailsTheSteadinessCheck(t *testing.T) {
 	}
 }
 
-func TestBarOffsetsFollowASectionThatDriftsLate(t *testing.T) {
+func TestAnalyzeTrackSamplesDrift(t *testing.T) {
 	early := audiotest.SynthesizeClickTrack(124, 20, analysis.SampleRate, 4, 0)
 	late := audiotest.SynthesizeClickTrack(124, 20, analysis.SampleRate, 4, 0)
 	gap := make([]float32, int(0.04*analysis.SampleRate))
@@ -78,7 +78,7 @@ func TestBarOffsetsFollowASectionThatDriftsLate(t *testing.T) {
 	}
 }
 
-func TestBarVarianceNeedsMeasuredBars(t *testing.T) {
+func TestBarLengthVarianceNeedsBars(t *testing.T) {
 	track := analyzeClicks(t, 0)
 
 	if _, ok := track.BarLengthVariance(track.FirstDownbeat()-track.BarLength(), track.FirstDownbeat()+4*track.BarLength()); ok {
@@ -90,7 +90,7 @@ func TestBarVarianceNeedsMeasuredBars(t *testing.T) {
 	}
 }
 
-func TestNoiseHasNoBeatStrength(t *testing.T) {
+func TestAnalyzeTrackSamplesNoise(t *testing.T) {
 	source := rand.New(rand.NewSource(5))
 	samples := make([]float32, int(40*analysis.SampleRate))
 	for i := range samples {
@@ -106,7 +106,7 @@ func TestNoiseHasNoBeatStrength(t *testing.T) {
 	}
 }
 
-func TestLeadSilenceShiftsTheBeatGridAndDuration(t *testing.T) {
+func TestAnalyzeAfterLeadShiftsGrid(t *testing.T) {
 	clicks := audiotest.SynthesizeClickTrack(124, 40, analysis.SampleRate, 4, 0)
 	lead := int(1.5 * analysis.SampleRate)
 	padded := append(make([]float32, lead), clicks...)
@@ -128,7 +128,7 @@ func keyed(tonic int, minor bool) *analysis.TrackAnalysis {
 	return &analysis.TrackAnalysis{Tonic: tonic, Minor: minor, KeyConfidence: 0.5}
 }
 
-func TestKeyTiersFollowTheFifthsRules(t *testing.T) {
+func TestKeyTierFifthsRules(t *testing.T) {
 	cMajor := keyed(0, false)
 	cases := []struct {
 		name  string
@@ -151,7 +151,7 @@ func TestKeyTiersFollowTheFifthsRules(t *testing.T) {
 	}
 }
 
-func TestKeyTierKeepsTheWrapQuirk(t *testing.T) {
+func TestKeyTierWrapQuirk(t *testing.T) {
 	eMajor, aMajor, bMajor := keyed(4, false), keyed(9, false), keyed(11, false)
 
 	if got := analysis.KeyTier(eMajor, bMajor); got != 0 {
@@ -162,7 +162,7 @@ func TestKeyTierKeepsTheWrapQuirk(t *testing.T) {
 	}
 }
 
-func TestUnknownKeysCountAsCompatible(t *testing.T) {
+func TestKeyTierUnknownKeys(t *testing.T) {
 	unsure := keyed(6, false)
 	unsure.KeyConfidence = 0.001
 

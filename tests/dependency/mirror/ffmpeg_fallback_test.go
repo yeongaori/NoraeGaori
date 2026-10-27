@@ -7,7 +7,7 @@ import (
 	"noraegaori/tests/testutil/releasetest"
 )
 
-func TestFFmpegGitHubFallsBackToGitHubWeb(t *testing.T) {
+func TestFFmpegGitHubWebFallback(t *testing.T) {
 	api, web := releasetest.Serve(t), releasetest.Serve(t)
 	repo := "yt-dlp/FFmpeg-Builds"
 	api.RateLimit("/repos/" + repo + "/releases/latest")
@@ -30,7 +30,7 @@ func TestFFmpegGitHubFallsBackToGitHubWeb(t *testing.T) {
 	}
 }
 
-func TestFFmpegGitHubWithoutAFeedCannotDateTheBuild(t *testing.T) {
+func TestFFmpegGitHubNoFeedNoDate(t *testing.T) {
 	api, web := releasetest.Serve(t), releasetest.Serve(t)
 	repo := "BtbN/FFmpeg-Builds"
 	api.RateLimit("/repos/" + repo + "/releases/latest")

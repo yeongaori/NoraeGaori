@@ -9,7 +9,7 @@ import (
 	"noraegaori/tests/testutil/dbtest"
 )
 
-func TestPausedDescriptionFollowsAutoLeave(t *testing.T) {
+func TestPausedDescriptionAutoLeave(t *testing.T) {
 	dbtest.Setup(t)
 	descriptions := &messages.T("g1").Descriptions
 

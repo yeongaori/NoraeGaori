@@ -150,7 +150,7 @@ func volumeRejectedCases() []commandtest.Case {
 	}
 }
 
-func TestRegisterAddsThePlaybackCommands(t *testing.T) {
+func TestRegisterPlaybackCommands(t *testing.T) {
 	commandStrings := func(string) messages.CommandStrings { return messages.CommandStrings{} }
 	settings.Register(commandStrings)
 	playback.Register(commandStrings)

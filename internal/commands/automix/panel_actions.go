@@ -30,13 +30,13 @@ type panelLocation struct {
 }
 
 func registerPanelRoutes() {
-	discord.RegisterComponentRoute(transitionPageRoute, turnTransitionPage)
-	discord.RegisterComponentRoute(transitionPickRoute, pickTransition)
-	discord.RegisterComponentRoute(transitionStyleRoute, chooseTransitionStyle)
-	discord.RegisterComponentRoute(transitionTabRoute, turnEditorTab)
-	discord.RegisterComponentRoute(mixingSettingsRoute, openMixingSettings)
-	discord.RegisterComponentRoute(panelOpenRoute, openPanel)
-	discord.AttachDropdownButtons("automix", panelOpenButtons)
+	discord.RegisterRoute(transitionPageRoute, turnTransitionPage)
+	discord.RegisterRoute(transitionPickRoute, pickTransition)
+	discord.RegisterRoute(transitionStyleRoute, chooseStyle)
+	discord.RegisterRoute(transitionTabRoute, turnEditorTab)
+	discord.RegisterRoute(mixingSettingsRoute, openMixingSettings)
+	discord.RegisterRoute(panelOpenRoute, openPanel)
+	discord.AttachDropdown("automix", panelOpenButtons)
 }
 
 func panelOpenButtons(guildID string) []discordgo.MessageComponent {
@@ -48,7 +48,7 @@ func panelOpenButtons(guildID string) []discordgo.MessageComponent {
 }
 
 func openPanel(s *discordgo.Session, ic *discordgo.InteractionCreate, _ []string) {
-	OpenPanelFromComponent(s, ic)
+	OpenPanelOnClick(s, ic)
 }
 
 func openMixingSettings(s *discordgo.Session, ic *discordgo.InteractionCreate, _ []string) {
@@ -61,46 +61,46 @@ func HandleAutoMixPanel(s *discordgo.Session, i *discordgo.InteractionCreate) er
 		page = int(options[0].IntValue())
 	}
 
-	embed, components, hasTransitions := prepareTransitionPanel(s, i.GuildID, page)
+	embed, components, hasTransitions := preparePanel(s, i.GuildID, page)
 	if !hasTransitions {
 		discord.RespondEmbed(s, i, emptyPanelEmbed(i.GuildID))
 		return nil
 	}
 
-	if _, err := discord.SendEmbedWithComponents(s, i, embed, components); err != nil {
+	if _, err := discord.SendPanel(s, i, embed, components); err != nil {
 		logger.Errorf("Failed to send panel: %v", err)
 		return err
 	}
 	return nil
 }
 
-func OpenPanelFromComponent(s *discordgo.Session, ic *discordgo.InteractionCreate) {
-	embed, components, hasTransitions := prepareTransitionPanel(s, ic.GuildID, 1)
+func OpenPanelOnClick(s *discordgo.Session, ic *discordgo.InteractionCreate) {
+	embed, components, hasTransitions := preparePanel(s, ic.GuildID, 1)
 	if !hasTransitions {
 		respondPanelNotice(s, ic, emptyPanelEmbed(ic.GuildID))
 		return
 	}
 
-	if _, err := discord.SendEmbedWithComponents(s, ic, embed, components); err != nil {
+	if _, err := discord.SendPanel(s, ic, embed, components); err != nil {
 		logger.Errorf("Failed to open panel from component: %v", err)
 	}
 }
 
-func prepareTransitionPanel(s *discordgo.Session, guildID string, page int) (*discordgo.MessageEmbed, []discordgo.MessageComponent, bool) {
+func preparePanel(s *discordgo.Session, guildID string, page int) (*discordgo.MessageEmbed, []discordgo.MessageComponent, bool) {
 	state, isLoaded := loadPanelState(guildID)
 	if !isLoaded || len(state.pairs) == 0 {
 		return nil, nil, false
 	}
 
 	if state.autoSelect {
-		go player.StartAnalysisBackfill(guildID, voiceChannelBitrate(s, guildID))
+		go player.StartBackfill(guildID, voiceChannelBitrate(s, guildID))
 	}
 
 	embed, components := renderTransitionPage(guildID, state, page)
 	return embed, components, true
 }
 
-func renderTransitionPanel(guildID string, page int) (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
+func renderPanel(guildID string, page int) (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
 	state, isLoaded := loadPanelState(guildID)
 	if !isLoaded {
 		return emptyPanelEmbed(guildID), nil
@@ -111,9 +111,9 @@ func renderTransitionPanel(guildID string, page int) (*discordgo.MessageEmbed, [
 func renderTransitionPage(guildID string, state *panelState, page int) (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
 	totalPages := transitionPageCount(state.pairs)
 	page = discord.ClampPage(page, totalPages)
-	rows := hydrateTransitionRows(guildID, state, transitionPageSlice(state.pairs, page))
-	return createTransitionPanelEmbed(guildID, state, rows, page, totalPages),
-		createTransitionPanelComponents(guildID, rows, page, totalPages)
+	rows := hydrateRows(guildID, state, transitionPageSlice(state.pairs, page))
+	return createPanelEmbed(guildID, state, rows, page, totalPages),
+		createPanelControls(guildID, rows, page, totalPages)
 }
 
 func emptyPanelEmbed(guildID string) *discordgo.MessageEmbed {
@@ -122,7 +122,7 @@ func emptyPanelEmbed(guildID string) *discordgo.MessageEmbed {
 }
 
 func respondPanelNotice(s *discordgo.Session, ic *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) {
-	if err := discord.RespondEphemeralEmbed(s, ic, embed); err != nil {
+	if err := discord.RespondEphemeral(s, ic, embed); err != nil {
 		logger.Errorf("Failed to report a transition panel notice: %v", err)
 	}
 }
@@ -133,8 +133,8 @@ func turnTransitionPage(s *discordgo.Session, ic *discordgo.InteractionCreate, a
 		return
 	}
 
-	embed, components := renderTransitionPanel(ic.GuildID, page)
-	if err := discord.UpdateComponentMessage(s, ic, embed, components); err != nil {
+	embed, components := renderPanel(ic.GuildID, page)
+	if err := discord.UpdatePanel(s, ic, embed, components); err != nil {
 		logger.Errorf("Failed to turn the transition panel page: %v", err)
 	}
 }
@@ -152,7 +152,7 @@ func pickTransition(s *discordgo.Session, ic *discordgo.InteractionCreate, argum
 
 	location := &panelLocation{messageID: ic.Message.ID, page: page}
 	openTransitionEditor(s, ic, songID, location)
-	refreshTransitionPanel(s, ic, location)
+	refreshPanel(s, ic, location)
 }
 
 func parseEditorArguments(ic *discordgo.InteractionCreate, arguments []string) (int, *panelLocation, bool) {
@@ -177,10 +177,10 @@ func turnEditorTab(s *discordgo.Session, ic *discordgo.InteractionCreate, argume
 		logger.Errorf("AutoMix panel received the unknown tab %q", arguments[0])
 		return
 	}
-	redrawTransitionEditor(s, ic, songID, location, tab, "")
+	redrawEditor(s, ic, songID, location, tab, "")
 }
 
-func chooseTransitionStyle(s *discordgo.Session, ic *discordgo.InteractionCreate, arguments []string) {
+func chooseStyle(s *discordgo.Session, ic *discordgo.InteractionCreate, arguments []string) {
 	songID, location, isValid := parseEditorArguments(ic, arguments)
 	style, isSelected := discord.SelectedValue(ic)
 	if !isValid || !isSelected {
@@ -197,21 +197,21 @@ func chooseTransitionStyle(s *discordgo.Session, ic *discordgo.InteractionCreate
 
 	if !transition.ValidStyle(category, style) {
 		logger.Errorf("AutoMix panel received the unknown %s style %q", category, style)
-		redrawTransitionEditor(s, ic, songID, location, tab, fmt.Sprintf(panel.UpdateFailed, style))
+		redrawEditor(s, ic, songID, location, tab, fmt.Sprintf(panel.UpdateFailed, style))
 		return
 	}
 
-	if err := queue.SetSongAutoMixOverrides(ic.GuildID, songID, category.Override(style)); err != nil {
+	if err := queue.SetSongOverrides(ic.GuildID, songID, category.Override(style)); err != nil {
 		if errors.Is(err, queue.ErrSongNotInQueue) {
-			closeTransitionEditor(s, ic, messages.CreateErrorEmbed(panel.EmptyTitle, panel.SongGone))
+			closeEditor(s, ic, messages.CreateErrorEmbed(panel.EmptyTitle, panel.SongGone))
 			return
 		}
-		redrawTransitionEditor(s, ic, songID, location, tab, fmt.Sprintf(panel.UpdateFailed, err))
+		redrawEditor(s, ic, songID, location, tab, fmt.Sprintf(panel.UpdateFailed, err))
 		return
 	}
 
-	if redrawTransitionEditor(s, ic, songID, location, tab, "") {
-		refreshTransitionPanel(s, ic, location)
+	if redrawEditor(s, ic, songID, location, tab, "") {
+		refreshPanel(s, ic, location)
 	}
 }
 
@@ -223,21 +223,21 @@ func openTransitionEditor(s *discordgo.Session, ic *discordgo.InteractionCreate,
 	}
 
 	tab := &editorTabs[0]
-	embed := createTransitionEditorEmbed(ic.GuildID, row, tab, "")
-	if err := discord.RespondEphemeralEmbed(s, ic, embed, createTransitionEditorComponents(ic.GuildID, row, tab, location)...); err != nil {
+	embed := createEditorEmbed(ic.GuildID, row, tab, "")
+	if err := discord.RespondEphemeral(s, ic, embed, createEditorControls(ic.GuildID, row, tab, location)...); err != nil {
 		logger.Errorf("Failed to open editor: %v", err)
 	}
 }
 
-func redrawTransitionEditor(s *discordgo.Session, ic *discordgo.InteractionCreate, songID int, location *panelLocation, tab *editorTab, errorMessage string) bool {
+func redrawEditor(s *discordgo.Session, ic *discordgo.InteractionCreate, songID int, location *panelLocation, tab *editorTab, errorMessage string) bool {
 	row, notice := loadTransitionRow(ic.GuildID, songID)
 	if notice != nil {
-		closeTransitionEditor(s, ic, notice)
+		closeEditor(s, ic, notice)
 		return false
 	}
 
-	embed := createTransitionEditorEmbed(ic.GuildID, row, tab, errorMessage)
-	if err := discord.UpdateComponentMessage(s, ic, embed, createTransitionEditorComponents(ic.GuildID, row, tab, location)); err != nil {
+	embed := createEditorEmbed(ic.GuildID, row, tab, errorMessage)
+	if err := discord.UpdatePanel(s, ic, embed, createEditorControls(ic.GuildID, row, tab, location)); err != nil {
 		logger.Errorf("Failed to redraw the transition editor: %v", err)
 	}
 	return true
@@ -257,14 +257,14 @@ func loadTransitionRow(guildID string, songID int) (*transitionRow, *discordgo.M
 	return hydrateTransitionRow(guildID, state, pair), nil
 }
 
-func closeTransitionEditor(s *discordgo.Session, ic *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) {
-	if err := discord.UpdateComponentMessage(s, ic, embed, nil); err != nil {
+func closeEditor(s *discordgo.Session, ic *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) {
+	if err := discord.UpdatePanel(s, ic, embed, nil); err != nil {
 		logger.Errorf("Failed to close the transition editor: %v", err)
 	}
 }
 
-func refreshTransitionPanel(s *discordgo.Session, ic *discordgo.InteractionCreate, location *panelLocation) {
-	embed, components := renderTransitionPanel(ic.GuildID, location.page)
+func refreshPanel(s *discordgo.Session, ic *discordgo.InteractionCreate, location *panelLocation) {
+	embed, components := renderPanel(ic.GuildID, location.page)
 	if _, err := s.ChannelMessageEditComplex(&discordgo.MessageEdit{
 		ID:         location.messageID,
 		Channel:    ic.ChannelID,

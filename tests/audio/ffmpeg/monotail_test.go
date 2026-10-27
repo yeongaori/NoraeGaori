@@ -6,7 +6,7 @@ import (
 	"noraegaori/internal/audio/ffmpeg"
 )
 
-func TestMonoTailKeepsMostRecentSamples(t *testing.T) {
+func TestMonoTailKeepsRecent(t *testing.T) {
 	cases := []struct {
 		capacity int
 		appends  int

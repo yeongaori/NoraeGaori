@@ -252,7 +252,7 @@ func songFromInfo(url string, info *ytdlp.ExtractedInfo, requesterName, requeste
 	}
 }
 
-func GetOptimalAudioFormat(bitrate int) string {
+func GetAudioFormat(bitrate int) string {
 	if bitrate <= 0 {
 
 		logger.Debugf("Voice channel bitrate unknown, using bestaudio")
@@ -296,7 +296,7 @@ func GetStreamURLContext(parent context.Context, url string, sponsorBlock bool, 
 		return "", err
 	}
 
-	audioFormat := GetOptimalAudioFormat(bitrate)
+	audioFormat := GetAudioFormat(bitrate)
 	logger.Debugf("Getting stream URL for: %s (SponsorBlock: %v, Format: %s)", url, sponsorBlock, audioFormat)
 
 	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
@@ -355,7 +355,7 @@ func retryDelay(attempt int, base, limit time.Duration) time.Duration {
 	return delay
 }
 
-func ParseDurationToSeconds(duration string) int {
+func ParseDuration(duration string) int {
 	if duration == "" || duration == "Unknown" || duration == LiveDuration {
 		return 0
 	}

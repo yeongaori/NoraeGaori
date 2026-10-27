@@ -38,7 +38,7 @@ var (
 	autocompleteGatesMutex sync.Mutex
 )
 
-func normalizeAutocompleteQuery(query string) string {
+func normalizeQuery(query string) string {
 	return strings.ToLower(strings.Join(strings.Fields(query), " "))
 }
 
@@ -46,7 +46,7 @@ func autocompleteCacheKey(kind, language, query string) string {
 	return kind + "|" + language + "|" + query
 }
 
-func loadAutocompleteChoices(key string) ([]*discordgo.ApplicationCommandOptionChoice, bool) {
+func loadChoices(key string) ([]*discordgo.ApplicationCommandOptionChoice, bool) {
 	autocompleteCacheMutex.Lock()
 	defer autocompleteCacheMutex.Unlock()
 
@@ -68,7 +68,7 @@ func loadAutocompleteChoices(key string) ([]*discordgo.ApplicationCommandOptionC
 	return choices, true
 }
 
-func saveAutocompleteChoices(key string, choices []*discordgo.ApplicationCommandOptionChoice) {
+func saveChoices(key string, choices []*discordgo.ApplicationCommandOptionChoice) {
 	autocompleteCacheMutex.Lock()
 	defer autocompleteCacheMutex.Unlock()
 
@@ -99,11 +99,11 @@ func saveAutocompleteChoices(key string, choices []*discordgo.ApplicationCommand
 	}
 }
 
-func loadNearestAutocompleteChoices(kind, language, query string) []*discordgo.ApplicationCommandOptionChoice {
+func loadNearestChoices(kind, language, query string) []*discordgo.ApplicationCommandOptionChoice {
 	runes := []rune(query)
 	for length := len(runes); length >= minAutocompleteQueryRunes; length-- {
 		key := autocompleteCacheKey(kind, language, string(runes[:length]))
-		if choices, found := loadAutocompleteChoices(key); found {
+		if choices, found := loadChoices(key); found {
 			return choices
 		}
 	}
@@ -114,7 +114,7 @@ func autocompleteGateKey(userID, guildID, commandName string) string {
 	return userID + "|" + guildID + "|" + commandName
 }
 
-func beginAutocompleteFetch(userID, guildID, commandName string) uint64 {
+func beginAutocomplete(userID, guildID, commandName string) uint64 {
 	key := autocompleteGateKey(userID, guildID, commandName)
 
 	autocompleteGatesMutex.Lock()
@@ -139,7 +139,7 @@ func beginAutocompleteFetch(userID, guildID, commandName string) uint64 {
 	return state.generation
 }
 
-func isLatestAutocompleteFetch(userID, guildID, commandName string, generation uint64) bool {
+func isLatestAutocomplete(userID, guildID, commandName string, generation uint64) bool {
 	key := autocompleteGateKey(userID, guildID, commandName)
 
 	autocompleteGatesMutex.Lock()

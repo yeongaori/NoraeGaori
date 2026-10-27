@@ -11,12 +11,12 @@ import (
 	"noraegaori/internal/ytdlp"
 )
 
-func newTestVersionManager(t *testing.T) *ytdlp.VersionManager {
+func createVersionManager(t *testing.T) *ytdlp.VersionManager {
 	t.Helper()
 
 	t.Chdir(t.TempDir())
 
-	return ytdlp.HookBuildVersionManager(&ytdlp.HookVersionManagerFields{
+	return ytdlp.HookCreateVersionManager(&ytdlp.HookVersionManagerFields{
 		State: ytdlp.HookPersistedState{
 			Versions:   make(map[string]*ytdlp.VersionEntry),
 			CanaryRing: []string{},
@@ -50,8 +50,8 @@ func writeFakeBinary(t *testing.T, dir, script string) string {
 	return path
 }
 
-func TestRegisterVersionIgnoresDuplicates(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestRegisterVersionDuplicates(t *testing.T) {
+	versionmanager := createVersionManager(t)
 
 	versionmanager.RegisterVersion("2026.07.04", "lib/yt-dlp-2026.07.04/yt-dlp")
 	versionmanager.RegisterVersion("2026.07.04", "lib/other/yt-dlp")
@@ -68,8 +68,8 @@ func TestRegisterVersionIgnoresDuplicates(t *testing.T) {
 	}
 }
 
-func TestSetVersionStateRecordsBlacklistTime(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestSetVersionStateBlacklistTime(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	versionmanager.RegisterVersion("2026.07.04", "lib/a/yt-dlp")
 
 	versionmanager.SetVersionState("2026.07.04", ytdlp.StateBlacklisted)
@@ -88,8 +88,8 @@ func TestSetVersionStateRecordsBlacklistTime(t *testing.T) {
 	}
 }
 
-func TestGetVersionStateReportsUnknownVersions(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestGetVersionStateUnknown(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	versionmanager.RegisterVersion("2026.07.04", "lib/a/yt-dlp")
 
 	if state, ok := versionmanager.GetVersionState("2026.07.04"); !ok || state != ytdlp.StatePending {
@@ -100,8 +100,8 @@ func TestGetVersionStateReportsUnknownVersions(t *testing.T) {
 	}
 }
 
-func TestSetActiveVersionDemotesThePreviousActive(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestSetActiveVersionDemotes(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{Path: "lib/a/yt-dlp", State: ytdlp.StateActive})
 	addVersion(versionmanager, "2026.07.05", &ytdlp.VersionEntry{Path: "lib/b/yt-dlp", State: ytdlp.StateVerified})
 	versionmanager.HookState().ActiveVersion = "2026.07.04"
@@ -119,15 +119,15 @@ func TestSetActiveVersionDemotesThePreviousActive(t *testing.T) {
 	}
 }
 
-func TestProvisionallyActivateClearsBlacklist(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestActivateProvisionalClears(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{
 		Path:          "lib/a/yt-dlp",
 		State:         ytdlp.StateBlacklisted,
 		BlacklistedAt: time.Now(),
 	})
 
-	versionmanager.ProvisionallyActivate("2026.07.04", "lib/a/yt-dlp")
+	versionmanager.ActivateProvisional("2026.07.04", "lib/a/yt-dlp")
 
 	entry := versionmanager.HookState().Versions["2026.07.04"]
 	if entry.State != ytdlp.StateProvisional {
@@ -141,10 +141,10 @@ func TestProvisionallyActivateClearsBlacklist(t *testing.T) {
 	}
 }
 
-func TestProvisionallyActivateRegistersUnknownVersions(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestActivateProvisionalRegisters(t *testing.T) {
+	versionmanager := createVersionManager(t)
 
-	versionmanager.ProvisionallyActivate("2026.07.04", "lib/a/yt-dlp")
+	versionmanager.ActivateProvisional("2026.07.04", "lib/a/yt-dlp")
 
 	entry := versionmanager.HookState().Versions["2026.07.04"]
 	if entry == nil {
@@ -155,8 +155,8 @@ func TestProvisionallyActivateRegistersUnknownVersions(t *testing.T) {
 	}
 }
 
-func TestSaveErrorIgnoresUnactionableFailures(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestSaveErrorUnactionable(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{Path: "lib/a/yt-dlp", State: ytdlp.StateActive})
 
 	versionmanager.SaveError("2026.07.04", "video1", "ERROR: Private video")
@@ -168,7 +168,7 @@ func TestSaveErrorIgnoresUnactionableFailures(t *testing.T) {
 }
 
 func TestSaveErrorIgnoresRateLimits(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+	versionmanager := createVersionManager(t)
 	addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{Path: "lib/a/yt-dlp", State: ytdlp.StateActive})
 	versionmanager.HookState().ActiveVersion = "2026.07.04"
 
@@ -179,13 +179,13 @@ func TestSaveErrorIgnoresRateLimits(t *testing.T) {
 	if got := len(versionmanager.HookState().Versions["2026.07.04"].Errors); got != 0 {
 		t.Errorf("got %d saved errors, want YouTube rate limits not blamed on yt-dlp", got)
 	}
-	if versionmanager.ActiveVersionIsFailing() {
+	if versionmanager.IsActiveFailing() {
 		t.Error("the active version is reported failing because of YouTube rate limits")
 	}
 }
 
 func TestSaveErrorDeduplicatesByVideo(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+	versionmanager := createVersionManager(t)
 	addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{Path: "lib/a/yt-dlp", State: ytdlp.StateActive})
 
 	versionmanager.SaveError("2026.07.04", "video1", "extractor broke")
@@ -197,8 +197,8 @@ func TestSaveErrorDeduplicatesByVideo(t *testing.T) {
 	}
 }
 
-func TestSaveErrorPrunesOutsideTheRollbackWindow(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestSaveErrorPrunesWindow(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{
 		Path:  "lib/a/yt-dlp",
 		State: ytdlp.StateActive,
@@ -218,7 +218,7 @@ func TestSaveErrorPrunesOutsideTheRollbackWindow(t *testing.T) {
 	}
 }
 
-func TestShouldRollbackHonoursThresholdAndWindow(t *testing.T) {
+func TestShouldRollbackThreshold(t *testing.T) {
 	recent := func(n int, age time.Duration) []ytdlp.ErrorRecord {
 		records := make([]ytdlp.ErrorRecord, 0, n)
 		for i := 0; i < n; i++ {
@@ -240,7 +240,7 @@ func TestShouldRollbackHonoursThresholdAndWindow(t *testing.T) {
 	for i := range cases {
 		testCase := &cases[i]
 		t.Run(testCase.name, func(t *testing.T) {
-			versionmanager := newTestVersionManager(t)
+			versionmanager := createVersionManager(t)
 			addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{
 				Path:   "lib/a/yt-dlp",
 				State:  ytdlp.StateActive,
@@ -255,8 +255,8 @@ func TestShouldRollbackHonoursThresholdAndWindow(t *testing.T) {
 	}
 }
 
-func TestShouldRollbackIgnoresUnknownActiveVersion(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestShouldRollbackUnknown(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	versionmanager.HookState().ActiveVersion = "2026.07.04"
 
 	if versionmanager.HookShouldRollback() {
@@ -264,8 +264,8 @@ func TestShouldRollbackIgnoresUnknownActiveVersion(t *testing.T) {
 	}
 }
 
-func TestSelectBestVersionSkipsUnusableCandidates(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestSelectBestVersionUnusable(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	addVersion(versionmanager, "2026.07.01", &ytdlp.VersionEntry{State: ytdlp.StateVerified, Successes: 5})
 	addVersion(versionmanager, "2026.07.02", &ytdlp.VersionEntry{State: ytdlp.StateBlacklisted, Successes: 9})
 	addVersion(versionmanager, "2026.07.03", &ytdlp.VersionEntry{State: ytdlp.StateVerified, Successes: 0})
@@ -277,8 +277,8 @@ func TestSelectBestVersionSkipsUnusableCandidates(t *testing.T) {
 	}
 }
 
-func TestSelectBestVersionFallsBackToActive(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestSelectBestVersionActive(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{State: ytdlp.StateActive, Successes: 3})
 	versionmanager.HookState().ActiveVersion = "2026.07.04"
 
@@ -287,8 +287,8 @@ func TestSelectBestVersionFallsBackToActive(t *testing.T) {
 	}
 }
 
-func TestTryPromoteVerifiedPromotesNewerVersions(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestTryPromoteVerifiedNewer(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{Path: "lib/a/yt-dlp", State: ytdlp.StateActive})
 	addVersion(versionmanager, "2026.07.05", &ytdlp.VersionEntry{Path: "lib/b/yt-dlp", State: ytdlp.StateVerified})
 	versionmanager.HookState().ActiveVersion = "2026.07.04"
@@ -303,8 +303,8 @@ func TestTryPromoteVerifiedPromotesNewerVersions(t *testing.T) {
 	}
 }
 
-func TestTryPromoteVerifiedIgnoresOlderVersions(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestTryPromoteVerifiedOlder(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{Path: "lib/a/yt-dlp", State: ytdlp.StateActive})
 	addVersion(versionmanager, "2026.07.01", &ytdlp.VersionEntry{Path: "lib/b/yt-dlp", State: ytdlp.StateVerified})
 	versionmanager.HookState().ActiveVersion = "2026.07.04"
@@ -316,8 +316,8 @@ func TestTryPromoteVerifiedIgnoresOlderVersions(t *testing.T) {
 	}
 }
 
-func TestSaveSuccessPromotesProvisionalAfterStableRun(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestSaveSuccessPromotes(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{Path: "lib/a/yt-dlp", State: ytdlp.StateProvisional})
 	versionmanager.HookState().ActiveVersion = "2026.07.04"
 
@@ -335,8 +335,8 @@ func TestSaveSuccessPromotesProvisionalAfterStableRun(t *testing.T) {
 	}
 }
 
-func TestSaveSuccessRecordsCanaryVideos(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestSaveSuccessCanaryVideos(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{Path: "lib/a/yt-dlp", State: ytdlp.StateActive})
 
 	versionmanager.SaveSuccess("2026.07.04", "video1")
@@ -350,8 +350,8 @@ func TestSaveSuccessRecordsCanaryVideos(t *testing.T) {
 	}
 }
 
-func TestCleanupOldVersionsKeepsActiveAndFallback(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestCleanupOldVersionsKeeps(t *testing.T) {
+	versionmanager := createVersionManager(t)
 
 	paths := map[string]string{}
 	for _, version := range []string{"2026.07.01", "2026.07.02", "2026.07.03", "2026.07.04"} {
@@ -387,8 +387,8 @@ func TestCleanupOldVersionsKeepsActiveAndFallback(t *testing.T) {
 	}
 }
 
-func TestCleanupOldVersionsRemovesStalePending(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestCleanupOldVersionsStale(t *testing.T) {
+	versionmanager := createVersionManager(t)
 
 	stale := writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.01.01"), "exit 0")
 	fresh := writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.07.03"), "exit 0")
@@ -413,8 +413,8 @@ func TestCleanupOldVersionsRemovesStalePending(t *testing.T) {
 	}
 }
 
-func TestCleanupTakesTheLockItself(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestCleanupTakesLock(t *testing.T) {
+	versionmanager := createVersionManager(t)
 
 	stale := writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.01.01"), "exit 0")
 	active := writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.07.04"), "exit 0")
@@ -434,8 +434,8 @@ func TestCleanupTakesTheLockItself(t *testing.T) {
 	}
 }
 
-func TestCleanupIsSafeAlongsidePlaybackResults(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestCleanupConcurrentResults(t *testing.T) {
+	versionmanager := createVersionManager(t)
 
 	active := writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.07.04"), "exit 0")
 	addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{Path: active, State: ytdlp.StateActive})
@@ -460,8 +460,8 @@ func TestCleanupIsSafeAlongsidePlaybackResults(t *testing.T) {
 	waiter.Wait()
 }
 
-func TestActiveBinaryPathRollsBackAfterRepeatedErrors(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestActiveBinaryPathRollsBack(t *testing.T) {
+	versionmanager := createVersionManager(t)
 
 	good := writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.07.01"), "exit 0")
 	bad := writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.07.04"), "exit 0")
@@ -486,8 +486,8 @@ func TestActiveBinaryPathRollsBackAfterRepeatedErrors(t *testing.T) {
 	}
 }
 
-func TestActiveBinaryPathFallsBackToLegacyWhenBinaryIsMissing(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestActiveBinaryPathLegacy(t *testing.T) {
+	versionmanager := createVersionManager(t)
 	addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{Path: "lib/yt-dlp-2026.07.04/yt-dlp", State: ytdlp.StateActive})
 	versionmanager.HookState().ActiveVersion = "2026.07.04"
 
@@ -496,8 +496,8 @@ func TestActiveBinaryPathFallsBackToLegacyWhenBinaryIsMissing(t *testing.T) {
 	}
 }
 
-func TestHasUsableBinaryChecksCandidatesOnDisk(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestHasUsableBinaryOnDisk(t *testing.T) {
+	versionmanager := createVersionManager(t)
 
 	broken := writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.07.01"), "exit 1")
 	working := writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.07.04"), "exit 0")
@@ -513,8 +513,8 @@ func TestHasUsableBinaryChecksCandidatesOnDisk(t *testing.T) {
 	}
 }
 
-func TestHasUsableBinaryIgnoresBlacklistedAndMissing(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+func TestHasUsableBinaryIgnores(t *testing.T) {
+	versionmanager := createVersionManager(t)
 
 	blacklisted := writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.07.01"), "exit 0")
 	addVersion(versionmanager, "2026.07.01", &ytdlp.VersionEntry{Path: blacklisted, State: ytdlp.StateBlacklisted})

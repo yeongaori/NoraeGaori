@@ -24,7 +24,7 @@ func publishFFmpegRelease(t *testing.T, fake *releasetest.Server, repo, publishe
 	})
 }
 
-func TestFFmpegGitHubFindsTheLinuxTarball(t *testing.T) {
+func TestFFmpegGitHubLinuxTarball(t *testing.T) {
 	fake := releasetest.Serve(t)
 	publishFFmpegRelease(t, fake, "yt-dlp/FFmpeg-Builds", "2026-09-25T18:45:57Z")
 
@@ -41,7 +41,7 @@ func TestFFmpegGitHubFindsTheLinuxTarball(t *testing.T) {
 	}
 }
 
-func TestFFmpegGitHubFindsTheWindowsZip(t *testing.T) {
+func TestFFmpegGitHubWindowsZip(t *testing.T) {
 	fake := releasetest.Serve(t)
 	publishFFmpegRelease(t, fake, "BtbN/FFmpeg-Builds", "2026-09-27T13:23:55+09:00")
 	source := mirror.FFmpegGitHub{APIURL: fake.URL(""), Repo: "BtbN/FFmpeg-Builds"}
@@ -76,7 +76,7 @@ func TestFFmpegGitHubReportsNoBuild(t *testing.T) {
 	releasetest.RequireErrorIs(t, err, mirror.ErrNoBuild)
 }
 
-func TestFFmpegGitHubFailsWhenItCannotBeChecked(t *testing.T) {
+func TestFFmpegGitHubUncheckable(t *testing.T) {
 	fake := releasetest.Serve(t)
 	publishFFmpegRelease(t, fake, "yt-dlp/FFmpeg-Builds", "yesterday")
 	source := mirror.FFmpegGitHub{APIURL: fake.URL(""), Repo: "yt-dlp/FFmpeg-Builds"}

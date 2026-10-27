@@ -11,7 +11,7 @@ import (
 	"noraegaori/internal/player"
 )
 
-func waitForPlayLockRelease(t *testing.T, guildID string) {
+func waitForPlayLock(t *testing.T, guildID string) {
 	t.Helper()
 
 	deadline := time.Now().Add(2 * time.Second)
@@ -23,7 +23,7 @@ func waitForPlayLockRelease(t *testing.T, guildID string) {
 	}
 }
 
-func TestPlayLockTimeoutDoesNotStrandGuild(t *testing.T) {
+func TestPlayLockTimeoutReleases(t *testing.T) {
 	testutil.Swap(t, player.HookPlayLockWait, 20*time.Millisecond)
 
 	guildID := "strandguild"
@@ -54,15 +54,15 @@ func TestPlayLockTimeoutDoesNotStrandGuild(t *testing.T) {
 	}
 
 	close(release)
-	waitForPlayLockRelease(t, guildID)
+	waitForPlayLock(t, guildID)
 
 	if err := player.HookStartPlaybackSession(nil, guildID); err != nil {
 		t.Fatalf("guild was left stranded after a timed-out acquisition: %v", err)
 	}
-	waitForPlayLockRelease(t, guildID)
+	waitForPlayLock(t, guildID)
 }
 
-func TestPlaySessionsAreExclusivePerGuild(t *testing.T) {
+func TestPlaySessionsExclusive(t *testing.T) {
 	testutil.Swap(t, player.HookPlayLockWait, time.Second)
 
 	entered := make(chan string, 2)
@@ -90,10 +90,10 @@ func TestPlaySessionsAreExclusivePerGuild(t *testing.T) {
 	}
 
 	close(release)
-	waitForPlayLockRelease(t, "guildA")
+	waitForPlayLock(t, "guildA")
 }
 
-func TestPlaybackSessionRecoversFromPanic(t *testing.T) {
+func TestPlaybackSessionRecovers(t *testing.T) {
 	guildID := "panicguild"
 	t.Cleanup(func() { player.DeletePlayer(guildID) })
 
@@ -113,7 +113,7 @@ func TestPlaybackSessionRecoversFromPanic(t *testing.T) {
 		t.Fatal("session never started")
 	}
 
-	waitForPlayLockRelease(t, guildID)
+	waitForPlayLock(t, guildID)
 
 	guildPlayer := player.GetPlayer(guildID)
 	guildPlayer.HookMu().Lock()
@@ -126,7 +126,7 @@ func TestPlaybackSessionRecoversFromPanic(t *testing.T) {
 	}
 }
 
-func TestPlayCommandDoesNotBlockTheProcessor(t *testing.T) {
+func TestPlayNonBlocking(t *testing.T) {
 	guildID := "busyguild"
 	t.Cleanup(func() { player.DeletePlayer(guildID) })
 
@@ -161,10 +161,10 @@ func TestPlayCommandDoesNotBlockTheProcessor(t *testing.T) {
 	}
 
 	close(release)
-	waitForPlayLockRelease(t, guildID)
+	waitForPlayLock(t, guildID)
 }
 
-func TestIsPlaybackActiveDoesNotCreateAPlayer(t *testing.T) {
+func TestIsPlaybackActiveNoCreate(t *testing.T) {
 	guildID := "unknownguild"
 
 	player.HookPlayersMu.RLock()

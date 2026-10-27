@@ -8,7 +8,7 @@ import (
 	"noraegaori/internal/discord"
 )
 
-func TestPageCountNeverDropsBelowOne(t *testing.T) {
+func TestPageCountAtLeastOne(t *testing.T) {
 	checks := []struct{ items, perPage, want int }{
 		{0, 10, 1}, {10, 10, 1}, {11, 10, 2}, {25, 10, 3},
 	}
@@ -20,7 +20,7 @@ func TestPageCountNeverDropsBelowOne(t *testing.T) {
 	}
 }
 
-func TestClampPageKeepsPagesInRange(t *testing.T) {
+func TestClampPageInRange(t *testing.T) {
 	checks := []struct{ page, totalPages, want int }{
 		{0, 3, 1}, {-4, 3, 1}, {2, 3, 2}, {9, 3, 3}, {5, 0, 1},
 	}
@@ -32,7 +32,7 @@ func TestClampPageKeepsPagesInRange(t *testing.T) {
 	}
 }
 
-func TestPageBoundsStayInsideTheItems(t *testing.T) {
+func TestPageBoundsInsideItems(t *testing.T) {
 	checks := []struct{ page, items, start, end int }{
 		{1, 12, 0, 5}, {3, 12, 10, 12}, {4, 12, 0, 0}, {0, 12, 0, 0}, {1, 0, 0, 0}, {math.MaxInt, 12, 0, 0},
 	}
@@ -59,7 +59,7 @@ func pageButtons(t *testing.T, row *discordgo.ActionsRow) []discordgo.Button {
 	return buttons
 }
 
-func TestPageButtonRowPointsAtTheNeighbouringPages(t *testing.T) {
+func TestPageButtonRowNeighbours(t *testing.T) {
 	arguments := []string{"admin"}
 	built := discord.PageButtonRow("help_page", 2, 3, "Previous", "Next", arguments, discordgo.Button{CustomID: "extra"})
 	buttons := pageButtons(t, &built)

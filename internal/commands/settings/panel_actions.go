@@ -45,7 +45,7 @@ func toggleSetting(s *discordgo.Session, ic *discordgo.InteractionCreate, target
 }
 
 func openSettingModal(s *discordgo.Session, ic *discordgo.InteractionCreate, target *panelTarget, spec *settingSpec) {
-	if err := s.InteractionRespond(ic.Interaction, buildSettingModal(ic.GuildID, target, spec)); err != nil {
+	if err := s.InteractionRespond(ic.Interaction, createSettingModal(ic.GuildID, target, spec)); err != nil {
 		logger.Errorf("Failed to open the settings modal for %s: %v", spec.key, err)
 		respondPanelError(s, ic, fmt.Sprintf(panelStrings(ic.GuildID).ModalFailed, settingLabel(ic.GuildID, spec.key)))
 	}
@@ -85,14 +85,14 @@ func allowedToEdit(s *discordgo.Session, ic *discordgo.InteractionCreate, spec *
 
 func refreshPanel(s *discordgo.Session, ic *discordgo.InteractionCreate, target *panelTarget) {
 	embed, components := renderPanel(ic.GuildID, target)
-	if err := discord.UpdateComponentMessage(s, ic, embed, components); err != nil {
+	if err := discord.UpdatePanel(s, ic, embed, components); err != nil {
 		logger.Errorf("Failed to refresh the settings panel: %v", err)
 	}
 }
 
 func respondPanelError(s *discordgo.Session, ic *discordgo.InteractionCreate, message string) {
 	embed := messages.CreateErrorEmbed(messages.T(ic.GuildID).Titles.Error, message)
-	if err := discord.RespondEphemeralEmbed(s, ic, embed); err != nil {
+	if err := discord.RespondEphemeral(s, ic, embed); err != nil {
 		logger.Errorf("Failed to report a settings panel error: %v", err)
 	}
 }

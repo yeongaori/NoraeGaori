@@ -9,7 +9,7 @@ import (
 	"noraegaori/internal/audio/transition"
 )
 
-func TestLongestOverlapSecFollowsTheBarsAndCaps(t *testing.T) {
+func TestLongestOverlapSecCaps(t *testing.T) {
 	period := func(seconds float64) *analysis.TrackAnalysis {
 		return &analysis.TrackAnalysis{PeriodSec: seconds}
 	}
@@ -77,7 +77,7 @@ func onGrid(position, origin, length float64) bool {
 	return math.Abs(bars-math.Round(bars)) < 1e-6
 }
 
-func TestCompatiblePairBeatmatchesOnTheDownbeats(t *testing.T) {
+func TestSelectOverlapCompatible(t *testing.T) {
 	pair := beatPair()
 	overlap, ok := transition.SelectOverlap(pair)
 	if !ok || !overlap.Beatmatched {
@@ -109,7 +109,7 @@ func TestCompatiblePairBeatmatchesOnTheDownbeats(t *testing.T) {
 	}
 }
 
-func TestWindowsStartOnTheMeasuredDownbeats(t *testing.T) {
+func TestSelectOverlapDownbeats(t *testing.T) {
 	plain, _ := transition.SelectOverlap(beatPair())
 	pair := beatPair()
 	for bar := range pair.From.Analysis.BarOffsets {
@@ -125,7 +125,7 @@ func TestWindowsStartOnTheMeasuredDownbeats(t *testing.T) {
 	}
 }
 
-func TestOneUnsteadyStretchOnlyRulesOutItsOwnWindows(t *testing.T) {
+func TestSelectOverlapUnsteadyStretch(t *testing.T) {
 	plain, _ := transition.SelectOverlap(beatPair())
 	pair := beatPair()
 	a := pair.From.Analysis
@@ -141,7 +141,7 @@ func TestOneUnsteadyStretchOnlyRulesOutItsOwnWindows(t *testing.T) {
 	}
 }
 
-func TestClashingKeysKeepTheOverlapShort(t *testing.T) {
+func TestSelectOverlapKeyClash(t *testing.T) {
 	for name, tonic := range map[string]int{"two numbers away 10B": 2, "far away 2B": 6} {
 		pair := beatPair()
 		pair.To = incomingTrack(210, 124, tonic)
@@ -152,7 +152,7 @@ func TestClashingKeysKeepTheOverlapShort(t *testing.T) {
 	}
 }
 
-func TestIncomingWindowMustSitEarlyInAShortSong(t *testing.T) {
+func TestSelectOverlapShortIncoming(t *testing.T) {
 	pair := beatPair()
 	pair.From = outgoingTrack(600, 128, 0)
 	pair.To = incomingTrack(120, 124, 7)
@@ -163,7 +163,7 @@ func TestIncomingWindowMustSitEarlyInAShortSong(t *testing.T) {
 	}
 }
 
-func TestFourBarOverlapsDrawFromTheLongTable(t *testing.T) {
+func TestSelectOverlapFourBars(t *testing.T) {
 	short := map[int]bool{1: true, 10: true, 19: true}
 	outsideShort := false
 	for index := 0; index < 100; index++ {
@@ -183,7 +183,7 @@ func TestFourBarOverlapsDrawFromTheLongTable(t *testing.T) {
 	}
 }
 
-func TestBeatSettingCapsTheOverlap(t *testing.T) {
+func TestSelectOverlapBeatCap(t *testing.T) {
 	pair := beatPair()
 	pair.MaxBeats = 16
 
@@ -192,7 +192,7 @@ func TestBeatSettingCapsTheOverlap(t *testing.T) {
 	}
 }
 
-func TestHalfTimeTrackFoldsOntoTheTempo(t *testing.T) {
+func TestSelectOverlapHalfTime(t *testing.T) {
 	pair := beatPair()
 	pair.To = incomingTrack(210, 64, 7)
 
@@ -202,7 +202,7 @@ func TestHalfTimeTrackFoldsOntoTheTempo(t *testing.T) {
 	}
 }
 
-func TestUnmatchablePairsFallBackToAShortFade(t *testing.T) {
+func TestSelectOverlapUnmatchable(t *testing.T) {
 	cases := map[string]func(*transition.Pair){
 		"weak beat": func(p *transition.Pair) { p.To.Analysis.BeatStrength = 0.1 },
 		"unsteady tempo": func(p *transition.Pair) {
@@ -230,7 +230,7 @@ func TestUnmatchablePairsFallBackToAShortFade(t *testing.T) {
 	}
 }
 
-func TestFallbackShrinksForShortTracks(t *testing.T) {
+func TestSelectOverlapShortTracks(t *testing.T) {
 	cases := []struct {
 		durationA, durationB float64
 		length               float64
@@ -254,7 +254,7 @@ func TestFallbackShrinksForShortTracks(t *testing.T) {
 	}
 }
 
-func TestUnknownDurationsFallBackToWhatTheAnalysisKnows(t *testing.T) {
+func TestSelectOverlapUnknownLength(t *testing.T) {
 	pair := beatPair()
 	pair.From.Duration = 0
 	pair.To.Duration = 0
@@ -268,7 +268,7 @@ func TestUnknownDurationsFallBackToWhatTheAnalysisKnows(t *testing.T) {
 	}
 }
 
-func TestLatePlanningSkipsWindowsThatAlreadyStarted(t *testing.T) {
+func TestSelectOverlapLatePlan(t *testing.T) {
 	pair := beatPair()
 	pair.EarliestStart = 196
 
@@ -278,7 +278,7 @@ func TestLatePlanningSkipsWindowsThatAlreadyStarted(t *testing.T) {
 	}
 }
 
-func TestSelectionIsRepeatable(t *testing.T) {
+func TestSelectOverlapRepeatable(t *testing.T) {
 	first, _ := transition.SelectOverlap(beatPair())
 	second, _ := transition.SelectOverlap(beatPair())
 
@@ -287,7 +287,7 @@ func TestSelectionIsRepeatable(t *testing.T) {
 	}
 }
 
-func TestPresetsComeFromTheTwoTables(t *testing.T) {
+func TestSelectOverlapPresetTables(t *testing.T) {
 	long := map[int]bool{1: true, 2: true, 3: true, 4: true, 5: true, 8: true, 9: true, 10: true, 17: true, 18: true, 19: true}
 	short := map[int]bool{1: true, 10: true, 19: true}
 	seenLong := map[int]bool{}
@@ -314,7 +314,7 @@ func TestPresetsComeFromTheTwoTables(t *testing.T) {
 	}
 }
 
-func TestPresetRecipesMatchTheirStyles(t *testing.T) {
+func TestPresetRecipeMatchesStyle(t *testing.T) {
 	cases := map[int]*transition.Recipe{
 		1:  combinedRecipe(volumeStyle("smooth"), eqStyle("center_bass_swap")),
 		2:  combinedRecipe(volumeStyle("overlap"), eqStyle("three_band_fade")),
@@ -331,7 +331,7 @@ func TestPresetRecipesMatchTheirStyles(t *testing.T) {
 	}
 }
 
-func TestForcedLengthPicksThatBarCount(t *testing.T) {
+func TestSelectOverlapForcedBars(t *testing.T) {
 	pair := beatPair()
 	pair.MaxBeats = 16
 	pair.Settings.Bars = 8
@@ -342,7 +342,7 @@ func TestForcedLengthPicksThatBarCount(t *testing.T) {
 	}
 }
 
-func TestBeatmatchOffFallsBackToTheFade(t *testing.T) {
+func TestSelectOverlapBeatmatchOff(t *testing.T) {
 	pair := beatPair()
 	pair.Settings.Beatmatch = transition.BeatmatchOff
 
@@ -352,7 +352,7 @@ func TestBeatmatchOffFallsBackToTheFade(t *testing.T) {
 	}
 }
 
-func TestBeatmatchOnOverridesTheBeatAndSteadinessChecks(t *testing.T) {
+func TestSelectOverlapBeatmatchOn(t *testing.T) {
 	pair := beatPair()
 	pair.To.Analysis.BeatStrength = 0.1
 	for bar := range pair.From.Analysis.BarOffsets {
@@ -373,7 +373,7 @@ func TestBeatmatchOnOverridesTheBeatAndSteadinessChecks(t *testing.T) {
 	}
 }
 
-func TestPresetOverrideReplacesTheHashedPick(t *testing.T) {
+func TestSelectOverlapPresetOverride(t *testing.T) {
 	pair := beatPair()
 	pair.Settings.Preset = 11
 	if overlap, _ := transition.SelectOverlap(pair); !overlap.Beatmatched || overlap.Preset != 11 {
@@ -386,7 +386,7 @@ func TestPresetOverrideReplacesTheHashedPick(t *testing.T) {
 	}
 }
 
-func TestForcedLengthStretchesTheFallback(t *testing.T) {
+func TestSelectOverlapForcedFade(t *testing.T) {
 	cases := []struct {
 		name   string
 		change func(*transition.Pair)

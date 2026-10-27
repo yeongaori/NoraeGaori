@@ -7,21 +7,21 @@ import (
 	"noraegaori/internal/vote"
 )
 
-func newTestRegistrySession(guildID string, kind vote.Kind) *vote.Session {
+func createRegistrySession(guildID string, kind vote.Kind) *vote.Session {
 	return vote.HookNewVoteSession(guildID, kind, "Vote", "⏭", "voice1", 2)
 }
 
 func TestClaimHoldsOneSessionPerKind(t *testing.T) {
 	registry := vote.HookNewVoteRegistry()
 
-	first := newTestRegistrySession("g1", vote.KindSkip)
+	first := createRegistrySession("g1", vote.KindSkip)
 	if _, claimed := registry.HookClaim(first); !claimed {
 		t.Fatal("the first claim was rejected")
 	}
 
 	registry.HookAttachMessage(first, "msg1", "chan1")
 
-	second := newTestRegistrySession("g1", vote.KindSkip)
+	second := createRegistrySession("g1", vote.KindSkip)
 	snapshot, claimed := registry.HookClaim(second)
 	if claimed {
 		t.Error("a second claim of the same kind was accepted")
@@ -30,25 +30,25 @@ func TestClaimHoldsOneSessionPerKind(t *testing.T) {
 		t.Errorf("the refused claim saw %+v, want the running vote's message", snapshot)
 	}
 
-	stop := newTestRegistrySession("g1", vote.KindStop)
+	stop := createRegistrySession("g1", vote.KindStop)
 	if _, claimed := registry.HookClaim(stop); !claimed {
 		t.Error("a different kind in the same guild was rejected")
 	}
 
-	otherGuild := newTestRegistrySession("g2", vote.KindSkip)
+	otherGuild := createRegistrySession("g2", vote.KindSkip)
 	if _, claimed := registry.HookClaim(otherGuild); !claimed {
 		t.Error("the same kind in another guild was rejected")
 	}
 }
 
-func TestReleaseOnlyEvictsItsOwnSession(t *testing.T) {
+func TestReleaseEvictsOwnSession(t *testing.T) {
 	registry := vote.HookNewVoteRegistry()
 
-	session := newTestRegistrySession("g1", vote.KindSkip)
+	session := createRegistrySession("g1", vote.KindSkip)
 	registry.HookClaim(session)
 	registry.HookAttachMessage(session, "msg1", "chan1")
 
-	registry.HookRelease(newTestRegistrySession("g1", vote.KindSkip))
+	registry.HookRelease(createRegistrySession("g1", vote.KindSkip))
 	if _, live := registry.HookSnapshotOf("g1", vote.KindSkip); !live {
 		t.Error("release evicted a session it does not own")
 	}
@@ -68,7 +68,7 @@ func TestReleaseOnlyEvictsItsOwnSession(t *testing.T) {
 func TestResolveSucceedsExactlyOnce(t *testing.T) {
 	registry := vote.HookNewVoteRegistry()
 
-	session := newTestRegistrySession("g1", vote.KindStop)
+	session := createRegistrySession("g1", vote.KindStop)
 	registry.HookClaim(session)
 	registry.HookAttachMessage(session, "msg1", "chan1")
 
@@ -105,8 +105,8 @@ func TestResolveSucceedsExactlyOnce(t *testing.T) {
 func TestCancelEndsNamedKindsOnly(t *testing.T) {
 	registry := vote.HookNewVoteRegistry()
 
-	skip := newTestRegistrySession("g1", vote.KindSkip)
-	stop := newTestRegistrySession("g1", vote.KindStop)
+	skip := createRegistrySession("g1", vote.KindSkip)
+	stop := createRegistrySession("g1", vote.KindStop)
 	registry.HookClaim(skip)
 	registry.HookClaim(stop)
 	registry.HookAttachMessage(skip, "msgSkip", "chan1")
@@ -133,35 +133,35 @@ func TestCancelEndsNamedKindsOnly(t *testing.T) {
 func TestRecordVoteReportsQuorum(t *testing.T) {
 	registry := vote.HookNewVoteRegistry()
 
-	session := newTestRegistrySession("g1", vote.KindSkip)
+	session := createRegistrySession("g1", vote.KindSkip)
 	registry.HookClaim(session)
 
-	tally, counted := registry.HookRecordVote(session, presentBallot("u1"), *vote.HookBuildVoteThreshold(vote.HookVoteThresholdFields{Quorum: 2}))
+	tally, counted := registry.HookRecordVote(session, presentBallot("u1"), *vote.HookCreateVoteThreshold(vote.HookVoteThresholdFields{Quorum: 2}))
 	if !counted || *tally.HookCurrent() != 1 || *tally.HookRequired() != 2 || *tally.HookPassed() {
 		t.Errorf("first vote = %+v counted=%v, want current 1 of 2 and not passed", tally, counted)
 	}
 
-	if _, counted = registry.HookRecordVote(session, presentBallot("u1"), *vote.HookBuildVoteThreshold(vote.HookVoteThresholdFields{Quorum: 2})); counted {
+	if _, counted = registry.HookRecordVote(session, presentBallot("u1"), *vote.HookCreateVoteThreshold(vote.HookVoteThresholdFields{Quorum: 2})); counted {
 		t.Error("a repeated vote from the same user was counted")
 	}
 
-	tally, counted = registry.HookRecordVote(session, presentBallot("u2"), *vote.HookBuildVoteThreshold(vote.HookVoteThresholdFields{Quorum: 2}))
+	tally, counted = registry.HookRecordVote(session, presentBallot("u2"), *vote.HookCreateVoteThreshold(vote.HookVoteThresholdFields{Quorum: 2}))
 	if !counted || !*tally.HookPassed() {
 		t.Errorf("second voter = %+v counted=%v, want passed", tally, counted)
 	}
 }
 
-func TestVotesOnAnEvictedSessionAreRejected(t *testing.T) {
+func TestEvictedSessionRejectsVotes(t *testing.T) {
 	registry := vote.HookNewVoteRegistry()
 
-	session := newTestRegistrySession("g1", vote.KindSkip)
+	session := createRegistrySession("g1", vote.KindSkip)
 	registry.HookClaim(session)
 	registry.HookResolve(session)
 
-	if _, counted := registry.HookRecordVote(session, presentBallot("u1"), *vote.HookBuildVoteThreshold(vote.HookVoteThresholdFields{Quorum: 2})); counted {
+	if _, counted := registry.HookRecordVote(session, presentBallot("u1"), *vote.HookCreateVoteThreshold(vote.HookVoteThresholdFields{Quorum: 2})); counted {
 		t.Error("a vote on a resolved session was counted")
 	}
-	if _, withdrawn := registry.HookRetractVote(session, *vote.HookBuildVoteBallot(vote.HookVoteBallotFields{UserID: "u1"}), *vote.HookBuildVoteThreshold(vote.HookVoteThresholdFields{Quorum: 2})); withdrawn {
+	if _, withdrawn := registry.HookRetractVote(session, *vote.HookCreateVoteBallot(vote.HookVoteBallotFields{UserID: "u1"}), *vote.HookCreateVoteThreshold(vote.HookVoteThresholdFields{Quorum: 2})); withdrawn {
 		t.Error("a withdrawal on a resolved session was counted")
 	}
 }
@@ -169,27 +169,27 @@ func TestVotesOnAnEvictedSessionAreRejected(t *testing.T) {
 func TestRetractVoteDecrements(t *testing.T) {
 	registry := vote.HookNewVoteRegistry()
 
-	session := newTestRegistrySession("g1", vote.KindSkip)
+	session := createRegistrySession("g1", vote.KindSkip)
 	registry.HookClaim(session)
-	registry.HookRecordVote(session, presentBallot("u1"), *vote.HookBuildVoteThreshold(vote.HookVoteThresholdFields{Quorum: 3}))
-	registry.HookRecordVote(session, presentBallot("u2"), *vote.HookBuildVoteThreshold(vote.HookVoteThresholdFields{Quorum: 3}))
+	registry.HookRecordVote(session, presentBallot("u1"), *vote.HookCreateVoteThreshold(vote.HookVoteThresholdFields{Quorum: 3}))
+	registry.HookRecordVote(session, presentBallot("u2"), *vote.HookCreateVoteThreshold(vote.HookVoteThresholdFields{Quorum: 3}))
 
-	tally, withdrawn := registry.HookRetractVote(session, *vote.HookBuildVoteBallot(vote.HookVoteBallotFields{UserID: "u2"}), *vote.HookBuildVoteThreshold(vote.HookVoteThresholdFields{Quorum: 3}))
+	tally, withdrawn := registry.HookRetractVote(session, *vote.HookCreateVoteBallot(vote.HookVoteBallotFields{UserID: "u2"}), *vote.HookCreateVoteThreshold(vote.HookVoteThresholdFields{Quorum: 3}))
 	if !withdrawn || *tally.HookCurrent() != 1 {
 		t.Errorf("retract = %+v withdrawn=%v, want current 1", tally, withdrawn)
 	}
 
-	if _, withdrawn = registry.HookRetractVote(session, *vote.HookBuildVoteBallot(vote.HookVoteBallotFields{UserID: "u3"}), *vote.HookBuildVoteThreshold(vote.HookVoteThresholdFields{Quorum: 3})); withdrawn {
+	if _, withdrawn = registry.HookRetractVote(session, *vote.HookCreateVoteBallot(vote.HookVoteBallotFields{UserID: "u3"}), *vote.HookCreateVoteThreshold(vote.HookVoteThresholdFields{Quorum: 3})); withdrawn {
 		t.Error("a withdrawal from a non-voter was counted")
 	}
-	registry.HookRecordVote(session, presentBallot("u2"), *vote.HookBuildVoteThreshold(vote.HookVoteThresholdFields{Quorum: 1}))
-	tally, withdrawn = registry.HookRetractVote(session, *vote.HookBuildVoteBallot(vote.HookVoteBallotFields{UserID: "u2"}), *vote.HookBuildVoteThreshold(vote.HookVoteThresholdFields{Quorum: 1, Adders: []string{"u1"}}))
+	registry.HookRecordVote(session, presentBallot("u2"), *vote.HookCreateVoteThreshold(vote.HookVoteThresholdFields{Quorum: 1}))
+	tally, withdrawn = registry.HookRetractVote(session, *vote.HookCreateVoteBallot(vote.HookVoteBallotFields{UserID: "u2"}), *vote.HookCreateVoteThreshold(vote.HookVoteThresholdFields{Quorum: 1, Adders: []string{"u1"}}))
 	if !withdrawn || *tally.HookCurrent() != 1 || *tally.HookPassed() || *tally.HookByAdderConsent() {
 		t.Errorf("retract = %+v, want a withdrawal never to pass the vote even when the rest still meet the quorum", tally)
 	}
 }
 
-func TestConcurrentClaimAndSnapshotStayConsistent(t *testing.T) {
+func TestClaimSnapshotConcurrent(t *testing.T) {
 	registry := vote.HookNewVoteRegistry()
 
 	var wg sync.WaitGroup
@@ -199,7 +199,7 @@ func TestConcurrentClaimAndSnapshotStayConsistent(t *testing.T) {
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
-			session := newTestRegistrySession("g1", vote.KindSkip)
+			session := createRegistrySession("g1", vote.KindSkip)
 			snapshot, claimed := registry.HookClaim(session)
 			if claimed {
 				registry.HookAttachMessage(session, "msg", "chan")

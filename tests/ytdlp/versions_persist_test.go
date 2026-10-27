@@ -11,7 +11,7 @@ import (
 )
 
 func TestPersistAndLoadRoundTrip(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+	versionmanager := createVersionManager(t)
 
 	addVersion(versionmanager, "2026.07.04", &ytdlp.VersionEntry{Path: "lib/a/yt-dlp", State: ytdlp.StateActive, Successes: 4})
 	versionmanager.HookState().ActiveVersion = "2026.07.04"
@@ -38,8 +38,8 @@ func TestPersistAndLoadRoundTrip(t *testing.T) {
 	}
 }
 
-func TestLoadNormalizesEmptyCollections(t *testing.T) {
-	newTestVersionManager(t)
+func TestLoadNormalizesEmpty(t *testing.T) {
+	createVersionManager(t)
 
 	if err := os.MkdirAll(filepath.Dir(ytdlp.HookVersionDataFile), 0755); err != nil {
 		t.Fatalf("failed to create the data directory: %v", err)
@@ -62,7 +62,7 @@ func TestLoadNormalizesEmptyCollections(t *testing.T) {
 }
 
 func TestLoadRejectsCorruptState(t *testing.T) {
-	newTestVersionManager(t)
+	createVersionManager(t)
 
 	if err := os.MkdirAll(filepath.Dir(ytdlp.HookVersionDataFile), 0755); err != nil {
 		t.Fatalf("failed to create the data directory: %v", err)
@@ -77,7 +77,7 @@ func TestLoadRejectsCorruptState(t *testing.T) {
 	}
 }
 
-func TestInitVersionManagerStartsFreshWithoutState(t *testing.T) {
+func TestInitVersionManagerFresh(t *testing.T) {
 	t.Chdir(t.TempDir())
 	t.Cleanup(func() { *ytdlp.HookVersionMgr = nil })
 
@@ -95,7 +95,7 @@ func TestInitVersionManagerStartsFreshWithoutState(t *testing.T) {
 }
 
 func TestPersistWritesReadableJSON(t *testing.T) {
-	versionmanager := newTestVersionManager(t)
+	versionmanager := createVersionManager(t)
 	versionmanager.RegisterVersion("2026.07.04", "lib/a/yt-dlp")
 
 	data, err := os.ReadFile(ytdlp.HookVersionDataFile)

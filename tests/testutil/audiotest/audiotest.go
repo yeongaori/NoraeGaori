@@ -116,10 +116,10 @@ func (p *PinkNoise) Fill(buf []float64, amplitude float64) {
 }
 
 func SynthesizeClickTrack(bpm, seconds, sampleRate float64, accentEvery, accentPhase int) []float32 {
-	return SynthesizeJitteredClickTrack(bpm, seconds, sampleRate, accentEvery, accentPhase, 0)
+	return SynthesizeJitterClicks(bpm, seconds, sampleRate, accentEvery, accentPhase, 0)
 }
 
-func SynthesizeJitteredClickTrack(bpm, seconds, sampleRate float64, accentEvery, accentPhase int, jitterSec float64) []float32 {
+func SynthesizeJitterClicks(bpm, seconds, sampleRate float64, accentEvery, accentPhase int, jitterSec float64) []float32 {
 	total := int(seconds * sampleRate)
 	samples := make([]float32, total)
 	interval := 60 / bpm * sampleRate
@@ -143,7 +143,7 @@ func SynthesizeJitteredClickTrack(bpm, seconds, sampleRate float64, accentEvery,
 	return samples
 }
 
-func AnalyzeAccentedClickTrack(t *testing.T) *analysis.TrackAnalysis {
+func AnalyzeAccentClicks(t *testing.T) *analysis.TrackAnalysis {
 	t.Helper()
 
 	track, err := analysis.AnalyzeTrackSamples(SynthesizeClickTrack(120, 40, analysis.SampleRate, 4, 0), analysis.SampleRate)

@@ -149,7 +149,7 @@ func loadQueueRow(guildID string) (*queueRow, error) {
 	}, nil
 }
 
-func defaultGuildSettingsRow() guildSettingsRow {
+func defaultSettingsRow() guildSettingsRow {
 	return guildSettingsRow{
 		volume:            config.DefaultVolume(),
 		showStartedTrack:  true,
@@ -188,7 +188,7 @@ func loadGuildSettingsRow(guildID string) (guildSettingsRow, error) {
 		&autoLeave, &autoPause, &autoResume)
 
 	if err == sql.ErrNoRows {
-		settings := defaultGuildSettingsRow()
+		settings := defaultSettingsRow()
 		logger.Debugf("No guild_settings found for guild %s, using defaults (volume=%g)", guildID, settings.volume)
 		return settings, nil
 	}

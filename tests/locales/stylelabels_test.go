@@ -23,7 +23,7 @@ func parseLocale(t *testing.T, file string) *messages.Locale {
 	return &locale
 }
 
-func TestEveryTransitionChoiceHasALabel(t *testing.T) {
+func TestMissingLabelsEmpty(t *testing.T) {
 	for _, file := range []string{"en.json", "ko.json"} {
 		for _, key := range automix.MissingLabels(&parseLocale(t, file).AutoMixPanel) {
 			t.Errorf("%s has no AutoMix panel label for %s", file, key)
@@ -31,7 +31,7 @@ func TestEveryTransitionChoiceHasALabel(t *testing.T) {
 	}
 }
 
-func TestMissingLabelsAreFound(t *testing.T) {
+func TestMissingLabelsFound(t *testing.T) {
 	locale := parseLocale(t, "en.json")
 	delete(locale.AutoMixPanel.StyleLabels, "fx.phaser")
 	delete(locale.AutoMixPanel.CategoryLabels, "beatmatch")

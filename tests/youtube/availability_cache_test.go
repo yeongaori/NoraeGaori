@@ -8,9 +8,9 @@ import (
 	"noraegaori/internal/youtube"
 )
 
-func TestAvailabilityCacheEvictsTheOldestEntryPastCapacity(t *testing.T) {
-	youtube.HookResetAvailabilityCache()
-	t.Cleanup(youtube.HookResetAvailabilityCache)
+func TestSaveAvailabilityEvictsOldest(t *testing.T) {
+	youtube.HookResetCache()
+	t.Cleanup(youtube.HookResetCache)
 
 	oldest := "https://www.youtube.com/watch?v=oldestVideo"
 	youtube.HookSaveAvailability(oldest, &youtube.AvailabilityResult{Available: true})
@@ -33,9 +33,9 @@ func TestAvailabilityCacheEvictsTheOldestEntryPastCapacity(t *testing.T) {
 	}
 }
 
-func TestAvailabilityCacheKeepsAReadEntryAlive(t *testing.T) {
-	youtube.HookResetAvailabilityCache()
-	t.Cleanup(youtube.HookResetAvailabilityCache)
+func TestLoadAvailabilityKeepsAlive(t *testing.T) {
+	youtube.HookResetCache()
+	t.Cleanup(youtube.HookResetCache)
 
 	kept := "https://www.youtube.com/watch?v=keptVideo01"
 	youtube.HookSaveAvailability(kept, &youtube.AvailabilityResult{Available: true})
@@ -48,9 +48,9 @@ func TestAvailabilityCacheKeepsAReadEntryAlive(t *testing.T) {
 	}
 }
 
-func TestAvailabilityCacheMissesExpiredEntries(t *testing.T) {
-	youtube.HookResetAvailabilityCache()
-	t.Cleanup(youtube.HookResetAvailabilityCache)
+func TestLoadAvailabilityExpired(t *testing.T) {
+	youtube.HookResetCache()
+	t.Cleanup(youtube.HookResetCache)
 
 	expired := "https://www.youtube.com/watch?v=expiredVid"
 	youtube.HookSaveAvailability(expired, &youtube.AvailabilityResult{Available: true})
@@ -68,9 +68,9 @@ func TestAvailabilityCacheMissesExpiredEntries(t *testing.T) {
 	}
 }
 
-func TestAvailabilityCacheRefreshesAnExistingKeyInPlace(t *testing.T) {
-	youtube.HookResetAvailabilityCache()
-	t.Cleanup(youtube.HookResetAvailabilityCache)
+func TestSaveAvailabilityRefreshes(t *testing.T) {
+	youtube.HookResetCache()
+	t.Cleanup(youtube.HookResetCache)
 
 	refreshed := "https://www.youtube.com/watch?v=refreshVid"
 	youtube.HookSaveAvailability(refreshed, &youtube.AvailabilityResult{Available: false, Error: "stale"})

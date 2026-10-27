@@ -60,7 +60,7 @@ func localeStrings(t *testing.T, code string) map[string]string {
 	return flattened
 }
 
-func TestFormatVerbsReadPositionsAndIndexes(t *testing.T) {
+func TestFormatVerbsPositions(t *testing.T) {
 	for format, want := range map[string]map[int]string{
 		"%d songs by %s":           {1: "d", 2: "s"},
 		"%[2]d songs by %[1]s":     {1: "s", 2: "d"},
@@ -74,7 +74,7 @@ func TestFormatVerbsReadPositionsAndIndexes(t *testing.T) {
 	}
 }
 
-func TestEveryLocaleUsesTheEnglishFormatVerbs(t *testing.T) {
+func TestLocalesMatchFormatVerbs(t *testing.T) {
 	english := localeStrings(t, "en")
 
 	for _, code := range messages.AvailableLocales() {

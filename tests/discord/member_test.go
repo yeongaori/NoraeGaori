@@ -26,7 +26,7 @@ func guildAdminSession(t *testing.T, guildID, roleID string) *discordgo.Session 
 	return session
 }
 
-func TestInteractionMemberRejectsInteractionsWithoutAMember(t *testing.T) {
+func TestInteractionMemberMissing(t *testing.T) {
 	cases := map[string]*discordgo.InteractionCreate{
 		"nil interaction": nil,
 		"nil member": {
@@ -46,7 +46,7 @@ func TestInteractionMemberRejectsInteractionsWithoutAMember(t *testing.T) {
 	}
 }
 
-func TestInteractionMemberReturnsThePopulatedMember(t *testing.T) {
+func TestInteractionMemberPresent(t *testing.T) {
 	member := &discordgo.Member{User: &discordgo.User{ID: "user"}}
 	interaction := &discordgo.InteractionCreate{
 		Interaction: &discordgo.Interaction{GuildID: "guild", Member: member},
@@ -57,7 +57,7 @@ func TestInteractionMemberReturnsThePopulatedMember(t *testing.T) {
 	}
 }
 
-func TestIsAdminMemberAcceptsAMemberHoldingAnAdministratorRole(t *testing.T) {
+func TestIsAdminMemberAdminRole(t *testing.T) {
 	session := guildAdminSession(t, "guild", "admins")
 	member := &discordgo.Member{
 		GuildID: "guild",
@@ -70,7 +70,7 @@ func TestIsAdminMemberAcceptsAMemberHoldingAnAdministratorRole(t *testing.T) {
 	}
 }
 
-func TestIsAdminMemberRejectsAMemberWithoutAdministrator(t *testing.T) {
+func TestIsAdminMemberPlain(t *testing.T) {
 	session := guildAdminSession(t, "guild", "admins")
 	member := &discordgo.Member{
 		GuildID: "guild",
@@ -82,7 +82,7 @@ func TestIsAdminMemberRejectsAMemberWithoutAdministrator(t *testing.T) {
 	}
 }
 
-func TestIsAdminMemberRejectsAMissingMember(t *testing.T) {
+func TestIsAdminMemberMissing(t *testing.T) {
 	session := guildAdminSession(t, "guild", "admins")
 
 	if discord.IsAdminMember(session, "guild", nil) {

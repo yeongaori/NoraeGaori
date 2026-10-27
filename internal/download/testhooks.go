@@ -6,5 +6,5 @@ const HookUserAgent = userAgent
 
 var HookDownloadStallTimeout = &downloadStallTimeout
 var HookEndProgress = &endProgress
-var HookRateLimitBytesPerSecond = rateLimitBytesPerSecond
+var HookReadRateLimit = readRateLimit
 var HookShowProgress = &showProgress

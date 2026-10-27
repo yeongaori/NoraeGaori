@@ -15,7 +15,7 @@ var dropdownSettingKeys = []string{
 	"autoleave", "autopause", "autoresume",
 }
 
-func TestEverySettingCommandHasAMenuSpec(t *testing.T) {
+func TestHasSettingMenuEveryCommand(t *testing.T) {
 	for _, key := range dropdownSettingKeys {
 		spec := specFor(t, key)
 		if !settings.HookHasSettingMenu(spec) {
@@ -24,7 +24,7 @@ func TestEverySettingCommandHasAMenuSpec(t *testing.T) {
 	}
 }
 
-func TestInputAndAdminSettingsGetNoMenu(t *testing.T) {
+func TestHasSettingMenuExclusions(t *testing.T) {
 	for _, key := range []string{"prefix", "language", "volume", "fadein_duration", "automix_beats"} {
 		spec := specFor(t, key)
 		if settings.HookHasSettingMenu(spec) {
@@ -33,14 +33,14 @@ func TestInputAndAdminSettingsGetNoMenu(t *testing.T) {
 	}
 }
 
-func TestSettingMenusShowTheStoredValueAndAcceptRepeatedPicks(t *testing.T) {
+func TestCreateSettingMenuStoredValue(t *testing.T) {
 	dbtest.Setup(t)
 
 	for _, key := range dropdownSettingKeys {
 		spec := specFor(t, key)
 		values := settings.HookSettingMenuValues(spec)
 
-		menu := settings.HookBuildSettingMenu(checkGuildID, spec)
+		menu := settings.HookCreateSettingMenu(checkGuildID, spec)
 		if menu.Label != settings.HookSettingLabel(checkGuildID, key) {
 			t.Errorf("%s dropdown label = %q", key, menu.Label)
 		}
@@ -66,7 +66,7 @@ func checkRepeatedPick(t *testing.T, key string, spec *settings.HookSettingSpec,
 		t.Errorf("%s pick %q stored %q", key, picked, stored)
 	}
 
-	refreshed := settings.HookBuildSettingMenu(checkGuildID, spec)
+	refreshed := settings.HookCreateSettingMenu(checkGuildID, spec)
 	if refreshed.Current != settings.HookFormatSettingValue(checkGuildID, spec, picked) {
 		t.Errorf("%s after picking %q shows %q", key, picked, refreshed.Current)
 	}
@@ -103,17 +103,17 @@ func TestPanelLabelFallback(t *testing.T) {
 	}
 }
 
-func TestSettingMenuRejectsAnUnknownPick(t *testing.T) {
+func TestCreateSettingMenuUnknownPick(t *testing.T) {
 	dbtest.Setup(t)
 
 	spec := specFor(t, "sponsorblock")
-	embed, err := settings.HookBuildSettingMenu(checkGuildID, spec).Apply("maybe")
+	embed, err := settings.HookCreateSettingMenu(checkGuildID, spec).Apply("maybe")
 	if !errors.Is(err, *settings.HookErrUnknownValue) || embed == nil {
 		t.Errorf("unknown pick = (%v, %v), want an error embed and errUnknownValue", embed, err)
 	}
 }
 
-func TestThePanelShowsUnavailableForAnUnreadableSetting(t *testing.T) {
+func TestPanelViewUnreadableSetting(t *testing.T) {
 	dbtest.Setup(t)
 	dbtest.CloseUntilCleanup(t)
 

@@ -27,7 +27,7 @@ func isDiscordUnreachable(err error) bool {
 		return true
 	}
 	errMsg := err.Error()
-	return strings.Contains(errMsg, "timeout waiting for voice") || isVoiceConnectionError(errMsg)
+	return strings.Contains(errMsg, "timeout waiting for voice") || isVoiceError(errMsg)
 }
 
 func markAwaitingDiscord(guildID string) {
@@ -36,7 +36,7 @@ func markAwaitingDiscord(guildID string) {
 	awaitingDiscord[guildID] = struct{}{}
 }
 
-func forgetAwaitingDiscord(guildID string) {
+func forgetAwaiting(guildID string) {
 	awaitingDiscordMu.Lock()
 	defer awaitingDiscordMu.Unlock()
 	delete(awaitingDiscord, guildID)

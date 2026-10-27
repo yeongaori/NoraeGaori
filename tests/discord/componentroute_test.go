@@ -24,14 +24,14 @@ func registerTestRoute(t *testing.T, prefix string) *[][]string {
 	t.Helper()
 
 	var calls [][]string
-	discord.RegisterComponentRoute(prefix, func(_ *discordgo.Session, _ *discordgo.InteractionCreate, arguments []string) {
+	discord.RegisterRoute(prefix, func(_ *discordgo.Session, _ *discordgo.InteractionCreate, arguments []string) {
 		calls = append(calls, arguments)
 	})
 	t.Cleanup(func() { discord.HookComponentRoutes.Delete(prefix) })
 	return &calls
 }
 
-func TestComponentIDJoinsThePrefixAndArguments(t *testing.T) {
+func TestComponentIDJoins(t *testing.T) {
 	if got := discord.ComponentID("settings_modal", "admin", "mixing", "fadein_duration"); got != "settings_modal:admin:mixing:fadein_duration" {
 		t.Errorf("ComponentID = %q", got)
 	}
@@ -40,7 +40,7 @@ func TestComponentIDJoinsThePrefixAndArguments(t *testing.T) {
 	}
 }
 
-func TestComponentRoutesReceiveTheirArguments(t *testing.T) {
+func TestHandleComponentRouteArgs(t *testing.T) {
 	calls := registerTestRoute(t, "test_route")
 
 	for _, ic := range []*discordgo.InteractionCreate{
@@ -71,7 +71,7 @@ func TestComponentRoutesReceiveTheirArguments(t *testing.T) {
 	}
 }
 
-func TestComponentRoutesIgnoreUnknownPrefixesMissingGuildsAndCommands(t *testing.T) {
+func TestHandleComponentRouteIgnores(t *testing.T) {
 	calls := registerTestRoute(t, "test_ignored")
 
 	command := routeInteraction(discordgo.InteractionApplicationCommand, menuGuildID, "")
@@ -93,7 +93,7 @@ func TestComponentRoutesIgnoreUnknownPrefixesMissingGuildsAndCommands(t *testing
 	}
 }
 
-func TestInteractionsWithoutDataAreIgnoredSafely(t *testing.T) {
+func TestHandleComponentRouteNoData(t *testing.T) {
 	calls := registerTestRoute(t, "test_empty")
 
 	for _, interactionType := range []discordgo.InteractionType{discordgo.InteractionMessageComponent, discordgo.InteractionModalSubmit} {
@@ -118,7 +118,7 @@ func TestInteractionsWithoutDataAreIgnoredSafely(t *testing.T) {
 	}
 }
 
-func TestModalComponentsOnlyReadModalSubmissions(t *testing.T) {
+func TestModalComponentsModalOnly(t *testing.T) {
 	modal := routeInteraction(discordgo.InteractionModalSubmit, menuGuildID, "test:1")
 	modal.Data = discordgo.ModalSubmitInteractionData{
 		CustomID:   "test:1",
@@ -137,7 +137,7 @@ func TestModalComponentsOnlyReadModalSubmissions(t *testing.T) {
 	}
 }
 
-func TestViewArgumentsRoundTrip(t *testing.T) {
+func TestViewArgumentRoundTrip(t *testing.T) {
 	if discord.ViewArgument(true) != "admin" || discord.ViewArgument(false) != "member" {
 		t.Errorf("views = %q and %q, want admin and member as already posted in custom IDs", discord.ViewArgument(true), discord.ViewArgument(false))
 	}
@@ -152,7 +152,7 @@ func TestViewArgumentsRoundTrip(t *testing.T) {
 	}
 }
 
-func TestSelectedValueAndPageArgumentOnlyReadComponents(t *testing.T) {
+func TestSelectedValueComponentsOnly(t *testing.T) {
 	pick := routeInteraction(discordgo.InteractionMessageComponent, menuGuildID, "test:2", "first", "second")
 	empty := routeInteraction(discordgo.InteractionMessageComponent, menuGuildID, "test:2")
 	modal := routeInteraction(discordgo.InteractionModalSubmit, menuGuildID, "test:2")
@@ -185,12 +185,12 @@ func TestSelectedValueAndPageArgumentOnlyReadComponents(t *testing.T) {
 	}
 }
 
-func TestUpdateComponentMessageClearsMissingComponents(t *testing.T) {
+func TestUpdatePanelClearsMissing(t *testing.T) {
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 	ic := discordtest.WithToken(routeInteraction(discordgo.InteractionMessageComponent, menuGuildID, "test_route:1"))
 
-	if err := discord.UpdateComponentMessage(session, ic, &discordgo.MessageEmbed{Title: "page"}, nil); err != nil {
-		t.Fatalf("UpdateComponentMessage returned %v", err)
+	if err := discord.UpdatePanel(session, ic, &discordgo.MessageEmbed{Title: "page"}, nil); err != nil {
+		t.Fatalf("UpdatePanel returned %v", err)
 	}
 
 	sent := requests()

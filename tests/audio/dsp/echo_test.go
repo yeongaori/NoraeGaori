@@ -33,7 +33,7 @@ func repeatPeaks(output []float64, delaySamples, count int) []float64 {
 	return peaks
 }
 
-func TestEchoRepeatsOnTheBeatAndFadesByTheMeasuredFeedback(t *testing.T) {
+func TestEchoRepeatsOnBeat(t *testing.T) {
 	output := renderImpulse(dsp.PrepareEcho(0.1, dsp.EchoFeedback), 50)
 
 	if early := audiotest.BufferPeak(output[:4800*dsp.Channels]); early != 0 {
@@ -60,7 +60,7 @@ func TestDelayRepeatsOnce(t *testing.T) {
 	}
 }
 
-func TestEchoThinsTheLows(t *testing.T) {
+func TestEchoThinsLows(t *testing.T) {
 	low := audiotest.ToneResponse(echoWet(), 50)
 	mid := audiotest.ToneResponse(echoWet(), 2000)
 
@@ -69,7 +69,7 @@ func TestEchoThinsTheLows(t *testing.T) {
 	}
 }
 
-func TestEchoKeepsTheInputStereo(t *testing.T) {
+func TestEchoKeepsStereo(t *testing.T) {
 	echo := dsp.PrepareEcho(0.01, dsp.EchoFeedback)
 	input := make([]float64, dsp.FrameSize*dsp.Channels)
 	wet := make([]float64, len(input))
@@ -88,7 +88,7 @@ func TestEchoKeepsTheInputStereo(t *testing.T) {
 	}
 }
 
-func TestShortenedDelayRepeatsAtTheNewTime(t *testing.T) {
+func TestEchoShortenedDelay(t *testing.T) {
 	echo := dsp.PrepareEcho(0.1, 0)
 	echo.SetDelay(0.05)
 	output := renderImpulse(echo, 20)
@@ -101,7 +101,7 @@ func TestShortenedDelayRepeatsAtTheNewTime(t *testing.T) {
 	}
 }
 
-func TestDelayCannotGrowPastItsBuffer(t *testing.T) {
+func TestEchoDelayCappedByBuffer(t *testing.T) {
 	echo := dsp.PrepareEcho(0.05, 0)
 	echo.SetDelay(1)
 	output := renderImpulse(echo, 10)
@@ -111,7 +111,7 @@ func TestDelayCannotGrowPastItsBuffer(t *testing.T) {
 	}
 }
 
-func TestGlidingDelayStaysSmooth(t *testing.T) {
+func TestEchoGlidingDelaySmooth(t *testing.T) {
 	echo := dsp.PrepareEcho(0.1, 0)
 	wet := make([]float64, dsp.FrameSize*dsp.Channels)
 	phase := 0.0

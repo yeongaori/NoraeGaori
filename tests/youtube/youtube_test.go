@@ -46,7 +46,7 @@ func readCanaryRing(t *testing.T) []string {
 	return state.CanaryRing
 }
 
-func TestSaveVersionResultStoresBareVideoIDs(t *testing.T) {
+func TestSaveVersionResultBareIDs(t *testing.T) {
 	useVersionManager(t)
 
 	youtube.HookSaveVersionResult("https://music.youtube.com/watch?v=SGmfjVIGUcY", nil)
@@ -60,7 +60,7 @@ func TestSaveVersionResultStoresBareVideoIDs(t *testing.T) {
 	}
 }
 
-func TestSaveVersionResultIgnoresURLsWithNoVideoID(t *testing.T) {
+func TestSaveVersionResultNoVideoID(t *testing.T) {
 	useVersionManager(t)
 
 	youtube.HookSaveVersionResult("https://www.youtube.com/playlist?list=PLabc", nil)
@@ -70,7 +70,7 @@ func TestSaveVersionResultIgnoresURLsWithNoVideoID(t *testing.T) {
 	}
 }
 
-func TestGetVideoInfoRejectsLinksWithNoVideoID(t *testing.T) {
+func TestGetVideoInfoNoVideoID(t *testing.T) {
 	cases := []struct {
 		name string
 		url  string
@@ -90,7 +90,7 @@ func TestGetVideoInfoRejectsLinksWithNoVideoID(t *testing.T) {
 			testutil.Swap(t, youtube.HookInnertubeOnce, &sync.Once{})
 			testutil.Swap(t, youtube.HookInnertubeInit, func() {
 				atomic.AddInt64(&initialized, 1)
-				*youtube.HookInnertubeClient = youtube.HookBuildInnertubeClient(&youtube.HookInnertubeClientFields{ClientName: "TEST"})
+				*youtube.HookInnertubeClient = youtube.HookCreateInnertubeClient(&youtube.HookInnertubeClientFields{ClientName: "TEST"})
 			})
 
 			song, err := youtube.GetVideoInfo("guild", tc.url, "requester", "requesterID")

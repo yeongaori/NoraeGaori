@@ -32,7 +32,7 @@ func RespondErrorEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, tex
 	RespondEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, text))
 }
 
-func RespondEphemeralEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, components ...discordgo.MessageComponent) error {
+func RespondEphemeral(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, components ...discordgo.MessageComponent) error {
 	return s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
@@ -43,7 +43,7 @@ func RespondEphemeralEmbed(s *discordgo.Session, i *discordgo.InteractionCreate,
 	})
 }
 
-func UpdateComponentMessage(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, components []discordgo.MessageComponent) error {
+func UpdatePanel(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, components []discordgo.MessageComponent) error {
 	if components == nil {
 		components = []discordgo.MessageComponent{}
 	}
@@ -56,10 +56,10 @@ func UpdateComponentMessage(s *discordgo.Session, i *discordgo.InteractionCreate
 	})
 }
 
-func SendEmbedWithComponents(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, components []discordgo.MessageComponent) (*discordgo.Message, error) {
+func SendPanel(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, components []discordgo.MessageComponent) (*discordgo.Message, error) {
 	if IsMessageCommand(i) {
 		if mr, ok := messageResponders.Load(i.Token); ok {
-			return mr.(*MessageResponse).SendEmbedWithComponents(embed, components)
+			return mr.(*MessageResponse).SendPanel(embed, components)
 		}
 		return nil, fmt.Errorf("message responder not found")
 	}
@@ -142,7 +142,7 @@ func UpdateErrorEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, text
 	_ = UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Titles.Error, text))
 }
 
-func UpdateResponseEmbedWithComponents(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, components []discordgo.MessageComponent) error {
+func UpdateResponsePanel(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, components []discordgo.MessageComponent) error {
 	if IsMessageCommand(i) {
 
 		if mr, ok := messageResponders.Load(i.Token); ok {
@@ -160,7 +160,7 @@ func UpdateResponseEmbedWithComponents(s *discordgo.Session, i *discordgo.Intera
 				}
 				return err
 			}
-			_, err := responder.SendEmbedWithComponents(embed, components)
+			_, err := responder.SendPanel(embed, components)
 			return err
 		}
 		logger.Errorf("Message responder not found for token: %s", i.Token)
@@ -200,7 +200,7 @@ func ResolvePanelMessage(s *discordgo.Session, i *discordgo.InteractionCreate, p
 	return msg
 }
 
-func CloseComponentMessage(s *discordgo.Session, i *discordgo.InteractionCreate, panelMsg *discordgo.Message, embed *discordgo.MessageEmbed) error {
+func ClosePanel(s *discordgo.Session, i *discordgo.InteractionCreate, panelMsg *discordgo.Message, embed *discordgo.MessageEmbed) error {
 	panelMsg = ResolvePanelMessage(s, i, panelMsg)
 	if panelMsg == nil {
 		return fmt.Errorf("panel message not found")

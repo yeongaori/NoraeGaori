@@ -106,7 +106,7 @@ func snapTransitionToBar(target, tailStartFrame int, a *analysis.TrackAnalysis) 
 	return int(math.Round(firstBeatFrame + beat*periodFrames))
 }
 
-func nextCrossfadeCandidate(guildID string) (*queue.Song, *queue.Song, string) {
+func findNextCrossfade(guildID string) (*queue.Song, *queue.Song, string) {
 	q, err := queue.GetQueue(guildID, true)
 	if err != nil || q == nil || len(q.Songs) < 2 {
 		return nil, nil, ""
@@ -199,7 +199,7 @@ func placeAutoMix(pair *transition.Pair, originSec float64, effectiveEnd int) (t
 }
 
 func songSeconds(song *queue.Song) float64 {
-	return float64(youtube.ParseDurationToSeconds(song.Duration))
+	return float64(youtube.ParseDuration(song.Duration))
 }
 
 type crossfadePlan struct {
@@ -224,7 +224,7 @@ type crossfadePlan struct {
 	description     string
 }
 
-func (cs *crossfadeState) buildPlan(player *GuildPlayer, es *ffmpeg.EndState, sentFrames int, originSec float64, fade *fadeSettings, normalization bool, bitrate int) *crossfadePlan {
+func (cs *crossfadeState) createPlan(player *GuildPlayer, es *ffmpeg.EndState, sentFrames int, originSec float64, fade *fadeSettings, normalization bool, bitrate int) *crossfadePlan {
 	guildID := player.GuildID
 	current, next, nextURL, scope, ok := cs.pickCrossfadeTarget(guildID, fade)
 	if !ok {
@@ -236,7 +236,7 @@ func (cs *crossfadeState) buildPlan(player *GuildPlayer, es *ffmpeg.EndState, se
 	var placement transitionPlacement
 	if fade.autoMix {
 		aAnal = es.Analysis
-		placement, bAnal, ok = cs.placeAutoMixTransition(scope, guildID, es, current, next, sentFrames, originSec, fade, effectiveEnd)
+		placement, bAnal, ok = cs.placeTransition(scope, guildID, es, current, next, sentFrames, originSec, fade, effectiveEnd)
 	} else {
 		placement, ok = placeCrossfade(fade, effectiveEnd, sentFrames, songSeconds(next))
 	}
@@ -282,7 +282,7 @@ func (cs *crossfadeState) buildPlan(player *GuildPlayer, es *ffmpeg.EndState, se
 			Bars:      placement.bars,
 		},
 		description: fmt.Sprintf("%s recipe %s (%s) [%s]", placement.summary, &resolved.Recipe,
-			describeTransitionInputs(aAnal, bAnal), describeStyleSources(resolved.Sources)),
+			describeInputs(aAnal, bAnal), describeStyleSources(resolved.Sources)),
 	}
 }
 
@@ -294,7 +294,7 @@ func (cs *crossfadeState) pickCrossfadeTarget(guildID string, fade *fadeSettings
 		return nil, nil, "", nil, false
 	}
 
-	current, next, nextURL := nextCrossfadeCandidate(guildID)
+	current, next, nextURL := findNextCrossfade(guildID)
 	if next == nil {
 		return nil, nil, "", nil, false
 	}
@@ -317,7 +317,7 @@ func crossfadeScope(autoMix bool) *logger.Scoped {
 	return logger.Scope("Crossfade")
 }
 
-func (cs *crossfadeState) placeAutoMixTransition(scope *logger.Scoped, guildID string, es *ffmpeg.EndState, current, next *queue.Song, sentFrames int, originSec float64, fade *fadeSettings, effectiveEnd int) (transitionPlacement, *analysis.TrackAnalysis, bool) {
+func (cs *crossfadeState) placeTransition(scope *logger.Scoped, guildID string, es *ffmpeg.EndState, current, next *queue.Song, sentFrames int, originSec float64, fade *fadeSettings, effectiveEnd int) (transitionPlacement, *analysis.TrackAnalysis, bool) {
 	bAnal := LookupAnalysis(guildID, next, analysis.SegmentHead)
 	pair := &transition.Pair{
 		From: transition.Track{
@@ -365,7 +365,7 @@ func (cs *crossfadeState) commit(p *crossfadePlan) {
 }
 
 func (cs *crossfadeState) plan(player *GuildPlayer, es *ffmpeg.EndState, sentFrames int, originSec float64, fade *fadeSettings, normalization bool, bitrate int) bool {
-	p := cs.buildPlan(player, es, sentFrames, originSec, fade, normalization, bitrate)
+	p := cs.createPlan(player, es, sentFrames, originSec, fade, normalization, bitrate)
 	if p == nil {
 		return false
 	}
@@ -392,9 +392,9 @@ func describeStyleSources(source map[transition.Category]string) string {
 	return strings.Join(parts, " ")
 }
 
-func describeTransitionInputs(a, b *analysis.TrackAnalysis) string {
+func describeInputs(a, b *analysis.TrackAnalysis) string {
 	if a == nil || b == nil {
-		return fmt.Sprintf("analysis unavailable (outgoing tail %s, next head %s)", describeAnalysisPresence(a), describeAnalysisPresence(b))
+		return fmt.Sprintf("analysis unavailable (outgoing tail %s, next head %s)", describeAnalysis(a), describeAnalysis(b))
 	}
 	raw := math.Abs(b.BPM-a.BPM) / a.BPM
 	folded, factor := analysis.TempoDeltaFactor(a.BPM, b.BPM)
@@ -427,7 +427,7 @@ func (cs *crossfadeState) holdForAnalysis(scope *logger.Scoped, pair *transition
 	return false
 }
 
-func describeAnalysisPresence(a *analysis.TrackAnalysis) string {
+func describeAnalysis(a *analysis.TrackAnalysis) string {
 	if a == nil {
 		return "missing"
 	}

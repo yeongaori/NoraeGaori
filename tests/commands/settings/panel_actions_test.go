@@ -120,7 +120,7 @@ func storedValue(t *testing.T, key string) string {
 	return value
 }
 
-func TestSwitchingCategoryRedrawsThePanelOnTheChosenCategory(t *testing.T) {
+func TestSwitchCategoryRedraws(t *testing.T) {
 	dbtest.Setup(t)
 	session, requests := panelActionSession(t, http.StatusOK)
 
@@ -136,7 +136,7 @@ func TestSwitchingCategoryRedrawsThePanelOnTheChosenCategory(t *testing.T) {
 	}
 }
 
-func TestPickingSettingsOpensTheRightControl(t *testing.T) {
+func TestPickSettingOpensControl(t *testing.T) {
 	dbtest.Setup(t)
 	session, requests := panelActionSession(t, http.StatusOK)
 	pick := pickID(settings.HookCategoryPlayback)
@@ -174,7 +174,7 @@ func TestPickingSettingsOpensTheRightControl(t *testing.T) {
 	wantReplyText(t, &sent[4], settings.HookPanelStrings(checkGuildID).NotAdmin)
 }
 
-func TestChoosingFromASelectModal(t *testing.T) {
+func TestSelectModalPick(t *testing.T) {
 	dbtest.Setup(t)
 	session, requests := panelActionSession(t, http.StatusOK)
 	t.Cleanup(func() { guild.InvalidateCaches(checkGuildID) })
@@ -213,7 +213,7 @@ func TestChoosingFromASelectModal(t *testing.T) {
 	wantReplyText(t, &sent[3], settings.HookValidationMessage(checkGuildID, specFor(t, "language"), *settings.HookErrUnknownValue))
 }
 
-func TestTogglingAnUnreadableSettingReportsIt(t *testing.T) {
+func TestToggleUnreadableSetting(t *testing.T) {
 	dbtest.Setup(t)
 	session, requests := panelActionSession(t, http.StatusOK)
 	dbtest.CloseUntilCleanup(t)
@@ -225,7 +225,7 @@ func TestTogglingAnUnreadableSettingReportsIt(t *testing.T) {
 	wantReplyText(t, &sent[0], settings.HookPanelStrings(checkGuildID).ReadFailed)
 }
 
-func TestARejectedFormFallsBackToAnErrorReply(t *testing.T) {
+func TestPanelFormRejectedReply(t *testing.T) {
 	dbtest.Setup(t)
 	session, requests := panelActionSession(t, http.StatusBadRequest)
 
@@ -265,7 +265,7 @@ func TestModalSubmissions(t *testing.T) {
 	}
 }
 
-func TestPanelRepliesSurviveDiscordRejectingThem(t *testing.T) {
+func TestPanelRepliesSurviveRejection(t *testing.T) {
 	dbtest.Setup(t)
 	session, requests := panelActionSession(t, http.StatusBadRequest)
 

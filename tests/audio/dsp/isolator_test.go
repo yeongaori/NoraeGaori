@@ -21,7 +21,7 @@ func TestIsolatorAtUnityIsFlat(t *testing.T) {
 	}
 }
 
-func TestIsolatorKillsTheMidBandLikeTheMeasuredMixer(t *testing.T) {
+func TestIsolatorKillsMidBand(t *testing.T) {
 	levels := [3]float64{0.5, 0, 0.5}
 
 	if gain := isolatorResponse(&levels, 1000); gain > -30 {
@@ -37,7 +37,7 @@ func TestIsolatorKillsTheMidBandLikeTheMeasuredMixer(t *testing.T) {
 	}
 }
 
-func TestIsolatorKillsTheLowBand(t *testing.T) {
+func TestIsolatorKillsLowBand(t *testing.T) {
 	levels := [3]float64{0, 0.5, 0.5}
 
 	if gain := isolatorResponse(&levels, 50); gain > -30 {
@@ -48,7 +48,7 @@ func TestIsolatorKillsTheLowBand(t *testing.T) {
 	}
 }
 
-func TestIsolatorKeepsASilentChannelSilent(t *testing.T) {
+func TestIsolatorKeepsSilence(t *testing.T) {
 	var isolator dsp.Isolator
 	block := make([]float64, dsp.FrameSize*dsp.Channels)
 	for frame := 0; frame < 5; frame++ {
@@ -65,7 +65,7 @@ func TestIsolatorKeepsASilentChannelSilent(t *testing.T) {
 	}
 }
 
-func TestIsolatorRampsTheGainsAcrossTheWholeBuffer(t *testing.T) {
+func TestIsolatorRampsGains(t *testing.T) {
 	var isolator dsp.Isolator
 	phase := 0.0
 	isolator.Process(audiotest.SineFloatFrame(1000, 9000, &phase), &[3]float64{0.5, 0.5, 0.5})
@@ -83,13 +83,13 @@ func TestIsolatorRampsTheGainsAcrossTheWholeBuffer(t *testing.T) {
 	}
 }
 
-func TestIsolatorHighBandSitsAboveBothCrossovers(t *testing.T) {
+func TestIsolatorHighBandPlacement(t *testing.T) {
 	if gain := isolatorResponse(&[3]float64{0, 0, 0.5}, 100); gain > -150 {
 		t.Errorf("100Hz through the high band alone = %+.1f dB, want below -150 dB from both crossover slopes", gain)
 	}
 }
 
-func TestEQTaperMatchesTheMeasuredKnobs(t *testing.T) {
+func TestEQGainMatchesKnobs(t *testing.T) {
 	cases := []struct{ level, decibels float64 }{
 		{0.05, -26.4}, {0.2, -11.7}, {0.35, -3.8}, {0.5, 0}, {0.75, 2.0}, {1, 6.2}, {0.4, -2.775},
 	}

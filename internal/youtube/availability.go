@@ -31,7 +31,7 @@ var runYtDlpAvailability = func(ctx context.Context, url string) (*ytdlp.Result,
 	return cmd.Run(ctx, url)
 }
 
-func handleYtDlpAvailabilityError(url, cacheKey string, startTime time.Time, err error) (*AvailabilityResult, error) {
+func handleYtDlpError(url, cacheKey string, startTime time.Time, err error) (*AvailabilityResult, error) {
 	ytCircuitBreaker.recordFailure(err)
 	saveVersionResult(url, err)
 	checkTime := time.Since(startTime)
@@ -61,7 +61,7 @@ func isBlockedVideoError(err error) bool {
 		strings.Contains(errorMsg, "geo")
 }
 
-func collectUnavailableReasons(guildID string, info *ytdlp.ExtractedInfo, unavailableReasons []string) []string {
+func collectReasons(guildID string, info *ytdlp.ExtractedInfo, unavailableReasons []string) []string {
 	if info.Availability != nil {
 		availability := strings.ToLower(string(*info.Availability))
 		logger.Debugf("availability: %s", availability)
@@ -84,7 +84,7 @@ func collectUnavailableReasons(guildID string, info *ytdlp.ExtractedInfo, unavai
 	return unavailableReasons
 }
 
-func checkAvailabilityWithYtDlp(guildID, url, cacheKey string, startTime time.Time) (*AvailabilityResult, bool, error) {
+func checkWithYtDlp(guildID, url, cacheKey string, startTime time.Time) (*AvailabilityResult, bool, error) {
 	var availResult *AvailabilityResult
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -92,7 +92,7 @@ func checkAvailabilityWithYtDlp(guildID, url, cacheKey string, startTime time.Ti
 
 	result, err := runYtDlpAvailability(ctx, url)
 	if err != nil {
-		blocked, wrapped := handleYtDlpAvailabilityError(url, cacheKey, startTime, err)
+		blocked, wrapped := handleYtDlpError(url, cacheKey, startTime, err)
 		return blocked, true, wrapped
 	}
 
@@ -124,7 +124,7 @@ func checkAvailabilityWithYtDlp(guildID, url, cacheKey string, startTime time.Ti
 		logger.Debugf("\"%s\" is a LIVE stream", getStringValue(info.Title))
 	}
 
-	unavailableReasons = collectUnavailableReasons(guildID, info, unavailableReasons)
+	unavailableReasons = collectReasons(guildID, info, unavailableReasons)
 
 	if len(unavailableReasons) > 0 {
 		errorMsg := strings.Join(unavailableReasons, ", ")
@@ -167,7 +167,7 @@ func CheckVideoAvailability(guildID, url string) (*AvailabilityResult, error) {
 
 		logger.Warnf("Innertube failed, falling back to yt-dlp: %v", innertubeErr)
 
-		fallbackResult, done, fallbackErr := checkAvailabilityWithYtDlp(guildID, url, cacheKey, startTime)
+		fallbackResult, done, fallbackErr := checkWithYtDlp(guildID, url, cacheKey, startTime)
 		if done {
 			return fallbackResult, fallbackErr
 		}
@@ -239,7 +239,7 @@ func CheckIfLive(url string) (bool, error) {
 	return IsLiveStreamActive(url)
 }
 
-func CheckIfLiveStreamEnded(url string) (bool, error) {
+func HasLiveStreamEnded(url string) (bool, error) {
 	logger.Debugf("Checking if live stream has ended: %s", url)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -272,7 +272,7 @@ func CheckIfLiveStreamEnded(url string) (bool, error) {
 
 		info = infos[0]
 		return nil
-	}, "CheckIfLiveStreamEnded")
+	}, "HasLiveStreamEnded")
 
 	if retryErr != nil {
 		return false, retryErr
@@ -290,7 +290,7 @@ func CheckIfLiveStreamEnded(url string) (bool, error) {
 	return false, nil
 }
 
-func checkAvailabilityFallback(url string, startTime time.Time) (bool, bool, error) {
+func checkFallback(url string, startTime time.Time) (bool, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -348,7 +348,7 @@ func CheckAvailability(url string) (available bool, isLive bool, err error) {
 
 		logger.Warnf("Innertube failed, falling back to yt-dlp: %v", err)
 
-		available, isLive, err = checkAvailabilityFallback(url, startTime)
+		available, isLive, err = checkFallback(url, startTime)
 		if err != nil {
 			return false, false, err
 		}

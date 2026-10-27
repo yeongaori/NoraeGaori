@@ -30,7 +30,7 @@ func missingSongID(*queue.Queue) string {
 	return "999"
 }
 
-func TestTransitionRoutesIgnoreMalformedInteractions(t *testing.T) {
+func TestPanelRoutesIgnoreMalformed(t *testing.T) {
 	fixture := panelFixture(t, 3)
 	songID := firstSongID(fixture.Queue)
 	component := fixture.Component(automix.HookTransitionPickRoute)
@@ -48,11 +48,11 @@ func TestTransitionRoutesIgnoreMalformedInteractions(t *testing.T) {
 	automix.HookTurnTransitionPage(fixture.Session, modal, []string{"2"})
 	automix.HookPickTransition(fixture.Session, component, []string{"1"})
 	automix.HookPickTransition(fixture.Session, picked, []string{"1"})
-	automix.HookChooseTransitionStyle(fixture.Session, component, []string{volumeOut, songID, "123", "1"})
-	automix.HookChooseTransitionStyle(fixture.Session, styled, []string{volumeOut, songID, "123"})
-	automix.HookChooseTransitionStyle(fixture.Session, styled, []string{volumeOut, "not-a-song", "123", "1"})
-	automix.HookChooseTransitionStyle(fixture.Session, styled, []string{"volume", songID, "123", "1"})
-	automix.HookChooseTransitionStyle(fixture.Session, styled, []string{"bogus", songID, "123", "1"})
+	automix.HookChooseStyle(fixture.Session, component, []string{volumeOut, songID, "123", "1"})
+	automix.HookChooseStyle(fixture.Session, styled, []string{volumeOut, songID, "123"})
+	automix.HookChooseStyle(fixture.Session, styled, []string{volumeOut, "not-a-song", "123", "1"})
+	automix.HookChooseStyle(fixture.Session, styled, []string{"volume", songID, "123", "1"})
+	automix.HookChooseStyle(fixture.Session, styled, []string{"bogus", songID, "123", "1"})
 	automix.HookTurnEditorTab(fixture.Session, component, []string{"bogus", songID, "123", "1"})
 	automix.HookTurnEditorTab(fixture.Session, component, []string{"incoming", "not-a-song", "123", "1"})
 	automix.HookTurnEditorTab(fixture.Session, component, []string{"incoming", songID, "123"})
@@ -60,7 +60,7 @@ func TestTransitionRoutesIgnoreMalformedInteractions(t *testing.T) {
 	fixture.WantNoRequests(t)
 }
 
-func TestTurningAnEditorTabRedrawsItsDropdowns(t *testing.T) {
+func TestTurnEditorTabRedraws(t *testing.T) {
 	fixture := panelFixture(t, 3)
 	songID := firstSongID(fixture.Queue)
 
@@ -74,7 +74,7 @@ func TestTurningAnEditorTabRedrawsItsDropdowns(t *testing.T) {
 	}
 }
 
-func TestTheMixingSettingsButtonOpensTheMixingSettings(t *testing.T) {
+func TestPanelRoutesMixingSettings(t *testing.T) {
 	automix.HookRegisterPanelRoutes()
 	fixture := panelFixture(t, 3)
 
@@ -90,7 +90,7 @@ func TestTheMixingSettingsButtonOpensTheMixingSettings(t *testing.T) {
 	commandtest.WantReplyText(t, sent, messages.T(commandtest.GuildID).SettingsPanel.Categories["mixing"])
 }
 
-func TestTheAutoMixPanelCommand(t *testing.T) {
+func TestAutoMixPanelCommand(t *testing.T) {
 	commandtest.Run(t, "automixpanel", automix.HandleAutoMixPanel, []commandtest.Case{
 		{
 			Name:     "an empty queue",
@@ -105,7 +105,7 @@ func TestTheAutoMixPanelCommand(t *testing.T) {
 	})
 }
 
-func TestTurningATransitionPage(t *testing.T) {
+func TestTurnTransitionPage(t *testing.T) {
 	fixture := panelFixture(t, 12)
 
 	automix.HookTurnTransitionPage(fixture.Session, fixture.Component(automix.HookTransitionPageRoute), []string{"2"})
@@ -115,7 +115,7 @@ func TestTurningATransitionPage(t *testing.T) {
 	commandtest.WantReplyText(t, sent, "2/3")
 }
 
-func TestPickingATransitionOpensItsEditor(t *testing.T) {
+func TestPickTransitionOpensEditor(t *testing.T) {
 	panelEditPath := "/channels/" + discordtest.ChannelID + "/messages/" + discordtest.PanelMessageID
 
 	checks := []struct {
@@ -168,14 +168,14 @@ type transitionStyleCheck struct {
 	wantSaved    bool
 }
 
-func checkTransitionStyleChoice(t *testing.T, check *transitionStyleCheck) {
+func checkStylePick(t *testing.T, check *transitionStyleCheck) {
 	t.Helper()
 
 	fixture := panelFixture(t, 3)
 	guildID := cmp.Or(check.guildID, commandtest.GuildID)
 	ic := discordtest.ComponentInteraction(guildID, automix.HookTransitionStyleRoute, discordtest.Member(guildID, commandtest.CallerID), check.style)
 
-	automix.HookChooseTransitionStyle(fixture.Session, ic, []string{string(transition.CategoryVolumeOut), check.songValue(fixture.Queue), discordtest.PanelMessageID, "1"})
+	automix.HookChooseStyle(fixture.Session, ic, []string{string(transition.CategoryVolumeOut), check.songValue(fixture.Queue), discordtest.PanelMessageID, "1"})
 
 	sent := fixture.Requests()
 	if len(sent) != check.wantRequests {
@@ -199,7 +199,7 @@ func checkTransitionStyleChoice(t *testing.T, check *transitionStyleCheck) {
 	}
 }
 
-func TestChoosingATransitionStyle(t *testing.T) {
+func TestChooseStyle(t *testing.T) {
 	volumeStyle := firstStyle(transition.CategoryVolumeOut)
 
 	checks := []transitionStyleCheck{
@@ -241,12 +241,12 @@ func TestChoosingATransitionStyle(t *testing.T) {
 	for i := range checks {
 		check := &checks[i]
 		t.Run(check.name, func(t *testing.T) {
-			checkTransitionStyleChoice(t, check)
+			checkStylePick(t, check)
 		})
 	}
 }
 
-func TestVoiceChannelBitrateOnlyAsksDiscordForAKnownChannel(t *testing.T) {
+func TestVoiceChannelBitrateKnownOnly(t *testing.T) {
 	queuetest.Seed(t, commandtest.GuildID, queuetest.SongsBy(commandtest.CallerID, 1)...)
 	session, requests := discordtest.StubAPIResponder(t, func(*http.Request) (int, string) {
 		return http.StatusOK, `{"id":"voice-1","type":2,"bitrate":64000}`
@@ -269,7 +269,7 @@ func TestVoiceChannelBitrateOnlyAsksDiscordForAKnownChannel(t *testing.T) {
 	}
 }
 
-func TestTheAutoMixMenuButtonOpensThePanel(t *testing.T) {
+func TestPanelOpenButtons(t *testing.T) {
 	automix.HookRegisterPanelRoutes()
 	buttons := automix.HookPanelOpenButtons(commandtest.GuildID)
 	if len(buttons) != 1 {

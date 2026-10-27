@@ -25,11 +25,11 @@ func HandleJoin(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	}
 
 	voice := &messages.T(i.GuildID).Voice
-	respondChannelSuccess(s, i, voiceChannelID, voice.JoinSuccessTitle, voice.JoinSuccessDesc, voice.JoinSuccessChannel)
+	respondChannel(s, i, voiceChannelID, voice.JoinSuccessTitle, voice.JoinSuccessDesc, voice.JoinSuccessChannel)
 	return nil
 }
 
-func respondChannelSuccess(s *discordgo.Session, i *discordgo.InteractionCreate, channelID, title, fallbackText, channelFormat string) {
+func respondChannel(s *discordgo.Session, i *discordgo.InteractionCreate, channelID, title, fallbackText, channelFormat string) {
 	channel, err := s.Channel(channelID)
 	if err != nil {
 		_ = discord.UpdateResponseEmbed(s, i, messages.CreateSuccessEmbed(title, fallbackText))

@@ -23,7 +23,7 @@ func toggleCommandStrings(name string) messages.CommandStrings {
 func registeredToggle(t *testing.T, name string) *command.Command {
 	t.Helper()
 
-	settings.RegisterToggleCommand(toggleCommandStrings, name)
+	settings.RegisterToggle(toggleCommandStrings, name)
 	registered, found := command.Snapshot()[name]
 	if !found {
 		t.Fatalf("%s was not registered", name)
@@ -45,7 +45,7 @@ func wantToggleOption(t *testing.T, name string, option *discordgo.ApplicationCo
 	}
 }
 
-func TestPlainTogglesGetOnlyTheSettingOption(t *testing.T) {
+func TestRegisterTogglePlain(t *testing.T) {
 	for _, name := range []string{"sponsorblock", "fadeonstop", "trimsilence"} {
 		registered := registeredToggle(t, name)
 
@@ -59,7 +59,7 @@ func TestPlainTogglesGetOnlyTheSettingOption(t *testing.T) {
 	}
 }
 
-func TestTogglesWithANumberSettingGetItsLimits(t *testing.T) {
+func TestRegisterToggleNumberLimits(t *testing.T) {
 	cases := []struct {
 		name   string
 		option string
@@ -102,7 +102,7 @@ func isToggleOption(option *discordgo.ApplicationCommandOption) bool {
 		option.Choices[0].Value == settings.HookValueOn && option.Choices[1].Value == settings.HookValueOff
 }
 
-func TestToggleCommandsExistOnlyForToggleSettings(t *testing.T) {
+func TestRegisterToggleOnlyToggles(t *testing.T) {
 	settings.Register(toggleCommandStrings)
 
 	for name, registered := range command.Snapshot() {
@@ -115,7 +115,7 @@ func TestToggleCommandsExistOnlyForToggleSettings(t *testing.T) {
 	}
 }
 
-func TestToggleNumberLimitsAreIndependentCopies(t *testing.T) {
+func TestRegisterToggleCopiesLimits(t *testing.T) {
 	fadeIn := registeredToggle(t, "fadein").Options[1]
 	*fadeIn.MinValue = 99
 

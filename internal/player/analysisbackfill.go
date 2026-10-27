@@ -92,7 +92,7 @@ func playerActive(guildID string) bool {
 	return exists
 }
 
-func StartAnalysisBackfill(guildID string, bitrate int) {
+func StartBackfill(guildID string, bitrate int) {
 	if automix, err := queue.GetAutoMix(guildID); err != nil || !automix {
 		return
 	}
@@ -138,7 +138,7 @@ func StopAnalysisBackfill(guildID string) {
 func runAnalysisBackfill(ctx context.Context, guildID string, bitrate int) {
 	total := 0
 	for {
-		analyzed, err := runAnalysisBackfillPass(ctx, guildID, bitrate)
+		analyzed, err := runBackfillPass(ctx, guildID, bitrate)
 		if err != nil {
 			break
 		}
@@ -159,7 +159,7 @@ func runAnalysisBackfill(ctx context.Context, guildID string, bitrate int) {
 	}
 }
 
-func runAnalysisBackfillPass(ctx context.Context, guildID string, bitrate int) (int, error) {
+func runBackfillPass(ctx context.Context, guildID string, bitrate int) (int, error) {
 	q, err := queue.GetQueue(guildID, false)
 	if err != nil {
 		return 0, err

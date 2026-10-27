@@ -76,7 +76,7 @@ func seedBackfillQueue(t *testing.T, guildID string, durations ...string) []*que
 
 func registerIdlePlayer(t *testing.T, guildID string) *player.GuildPlayer {
 	t.Helper()
-	guildPlayer := player.HookBuildGuildPlayer(&player.HookGuildPlayerFields{GuildID: guildID, Volume: 1})
+	guildPlayer := player.HookCreateGuildPlayer(&player.HookGuildPlayerFields{GuildID: guildID, Volume: 1})
 	player.HookPlayersMu.Lock()
 	(*player.HookPlayers)[guildID] = guildPlayer
 	player.HookPlayersMu.Unlock()
@@ -90,14 +90,14 @@ func registerIdlePlayer(t *testing.T, guildID string) *player.GuildPlayer {
 
 func runBackfillPass(t *testing.T, guildID string) int {
 	t.Helper()
-	analyzed, err := player.HookRunAnalysisBackfillPass(context.Background(), guildID, 128000)
+	analyzed, err := player.HookRunBackfillPass(context.Background(), guildID, 128000)
 	if err != nil {
 		t.Fatalf("the pass returned %v", err)
 	}
 	return analyzed
 }
 
-func TestBackfillAnalyzesThePlayingSongsEndingFirst(t *testing.T) {
+func TestRunBackfillPassEndingFirst(t *testing.T) {
 	const guildID = "backfill-tail-first"
 	songs := seedBackfillQueue(t, guildID, "3:00", "1:00", "4:00")
 	registerIdlePlayer(t, guildID)
@@ -131,7 +131,7 @@ func TestBackfillAnalyzesThePlayingSongsEndingFirst(t *testing.T) {
 	}
 }
 
-func TestBackfillReadsAShortPlayingSongFromTheStart(t *testing.T) {
+func TestPlanBackfillWorkShortSong(t *testing.T) {
 	const guildID = "backfill-short-tail"
 	songs := seedBackfillQueue(t, guildID, "1:00")
 	items := player.HookPlanBackfillWork(guildID, songs, true)
@@ -143,7 +143,7 @@ func TestBackfillReadsAShortPlayingSongFromTheStart(t *testing.T) {
 	}
 }
 
-func TestBackfillPlansNoEndingItCannotUseOrAlreadyHas(t *testing.T) {
+func TestPlanBackfillWorkSkipsEnding(t *testing.T) {
 	const guildID = "backfill-tail-skips"
 	songs := seedBackfillQueue(t, guildID, "3:00", "")
 	if err := analysis.SaveTrackAnalysis(songs[0].URL, analysis.SegmentTail, &analysis.TrackAnalysis{BPM: 120, Duration: 90}); err != nil {
@@ -169,7 +169,7 @@ func TestBackfillPlansNoEndingItCannotUseOrAlreadyHas(t *testing.T) {
 	}
 }
 
-func TestFailedEndingLeavesTheStartToAnalyze(t *testing.T) {
+func TestMarkAnalysisFailedEnding(t *testing.T) {
 	const guildID = "backfill-failed-tail"
 	songs := seedBackfillQueue(t, guildID, "3:00")
 	player.HookMarkAnalysisFailed(songs[0].URL, analysis.SegmentTail)
@@ -186,7 +186,7 @@ func TestFailedEndingLeavesTheStartToAnalyze(t *testing.T) {
 	}
 }
 
-func TestBackfillFailureMarksOnlyThatSegment(t *testing.T) {
+func TestAnalysisFailedMarksSegment(t *testing.T) {
 	const guildID = "backfill-failure-mark"
 	songs := seedBackfillQueue(t, guildID, "3:00")
 	registerIdlePlayer(t, guildID)
@@ -206,7 +206,7 @@ func TestBackfillFailureMarksOnlyThatSegment(t *testing.T) {
 	}
 }
 
-func TestBackfillKeepsAnEndingStoredMeanwhile(t *testing.T) {
+func TestRunBackfillPassKeepsStored(t *testing.T) {
 	const guildID = "backfill-tail-race"
 	songs := seedBackfillQueue(t, guildID, "3:00")
 	registerIdlePlayer(t, guildID)
@@ -228,7 +228,7 @@ func TestBackfillKeepsAnEndingStoredMeanwhile(t *testing.T) {
 	}
 }
 
-func TestBackfillPlansNothingPastTheLimit(t *testing.T) {
+func TestPlanBackfillWorkLimit(t *testing.T) {
 	songs := make([]*queue.Song, 0, player.HookAnalysisBackfillLimit+3)
 	for index := 0; index < cap(songs); index++ {
 		songs = append(songs, &queue.Song{ID: index + 1, URL: fmt.Sprintf("https://youtube.com/watch?v=limit%d", index), Duration: "3:00"})
@@ -252,7 +252,7 @@ func enableAutoMix(t *testing.T, guildID string) {
 	}
 }
 
-func TestPreCacheMarksItsSongWhileAnalyzing(t *testing.T) {
+func TestPreCacheSongMarksPending(t *testing.T) {
 	const guildID = "precache-pending"
 	songs := seedBackfillQueue(t, guildID, "3:00", "3:00")
 	enableAutoMix(t, guildID)
@@ -287,7 +287,7 @@ func TestPreCacheMarksItsSongWhileAnalyzing(t *testing.T) {
 	}
 }
 
-func TestPreCacheSkippingTheNextSongStillAnalyzesThePlayingEnding(t *testing.T) {
+func TestPreCacheNextAnalyzesEnding(t *testing.T) {
 	cases := []struct {
 		name string
 		next *queue.Song
@@ -334,7 +334,7 @@ func TestPreCacheSkippingTheNextSongStillAnalyzesThePlayingEnding(t *testing.T) 
 	}
 }
 
-func TestInvalidatePreCachesCancelsTheRunningAnalysis(t *testing.T) {
+func TestClearPreCacheCancelsAnalysis(t *testing.T) {
 	const guildID = "precache-cancel"
 	songs := seedBackfillQueue(t, guildID, "3:00", "3:00")
 	enableAutoMix(t, guildID)
@@ -360,7 +360,7 @@ func TestInvalidatePreCachesCancelsTheRunningAnalysis(t *testing.T) {
 	}
 }
 
-func TestCachedPreCacheFieldsAreReadUnderTheLock(t *testing.T) {
+func TestPreCacheNextReadsUnderLock(t *testing.T) {
 	const guildID = "precache-read"
 	songs := seedBackfillQueue(t, guildID, "3:00", "3:00")
 	enableAutoMix(t, guildID)
@@ -414,7 +414,7 @@ func TestCachedPreCacheFieldsAreReadUnderTheLock(t *testing.T) {
 	}
 }
 
-func TestSettleKeepsAndSavesAFullLiveEnding(t *testing.T) {
+func TestSettleTailAnalysisSavesLive(t *testing.T) {
 	songs := seedBackfillQueue(t, "settle-live", "3:00")
 	if err := analysis.SaveTrackAnalysis(songs[0].URL, analysis.SegmentTail, &analysis.TrackAnalysis{BPM: 120, Duration: 90}); err != nil {
 		t.Fatalf("saving the early tail: %v", err)
@@ -434,7 +434,7 @@ func TestSettleKeepsAndSavesAFullLiveEnding(t *testing.T) {
 	}
 }
 
-func TestSettleUsesTheEarlyEndingAfterALateSeek(t *testing.T) {
+func TestSettleTailAnalysisLateSeek(t *testing.T) {
 	songs := seedBackfillQueue(t, "settle-stored", "3:00")
 	early := &analysis.TrackAnalysis{BPM: 120, Duration: 90, Offset: 90}
 	if err := analysis.SaveTrackAnalysis(songs[0].URL, analysis.SegmentTail, early); err != nil {
@@ -461,7 +461,7 @@ func TestSettleUsesTheEarlyEndingAfterALateSeek(t *testing.T) {
 	}
 }
 
-func TestSettleLeavesAnEndWithoutAnyAnalysis(t *testing.T) {
+func TestSettleTailAnalysisNone(t *testing.T) {
 	songs := seedBackfillQueue(t, "settle-none", "3:00")
 	es := &ffmpeg.EndState{TotalFrames: 100}
 	if settled := player.HookSettleTailAnalysis(songs[0], es, 0); settled != es || settled.Analysis != nil {
@@ -469,7 +469,7 @@ func TestSettleLeavesAnEndWithoutAnyAnalysis(t *testing.T) {
 	}
 }
 
-func TestChooseTailPrefersTheLiveEndingUnlessTheStoredOneCoversMore(t *testing.T) {
+func TestChooseTailAnalysisLive(t *testing.T) {
 	live := &analysis.TrackAnalysis{Duration: 60}
 	cases := []struct {
 		name       string

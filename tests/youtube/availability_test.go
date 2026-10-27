@@ -10,7 +10,7 @@ import (
 	"noraegaori/internal/youtube"
 )
 
-func resetAvailabilityState(t *testing.T) {
+func resetAvailability(t *testing.T) {
 	t.Helper()
 
 	previousInnertube := *youtube.HookCheckAvailabilityViaInnertube
@@ -21,7 +21,7 @@ func resetAvailabilityState(t *testing.T) {
 		*youtube.HookRunYtDlpAvailability = previousYtDlp
 	})
 
-	youtube.HookResetAvailabilityCache()
+	youtube.HookResetCache()
 
 	*youtube.HookYtCircuitBreaker = &youtube.HookCircuitBreaker{}
 }
@@ -46,8 +46,8 @@ func ytdlpResultFor(t *testing.T, payload map[string]any) *ytdlp.Result {
 	}
 }
 
-func TestCheckVideoAvailabilityUsesInnertubeWhenItSucceeds(t *testing.T) {
-	resetAvailabilityState(t)
+func TestCheckVideoAvailabilityFirst(t *testing.T) {
+	resetAvailability(t)
 
 	want := &youtube.AvailabilityResult{Available: true}
 	*youtube.HookCheckAvailabilityViaInnertube = func(guildID, url string) (*youtube.AvailabilityResult, error) {
@@ -70,7 +70,7 @@ func TestCheckVideoAvailabilityUsesInnertubeWhenItSucceeds(t *testing.T) {
 func countInnertubeChecks(t *testing.T) *int {
 	t.Helper()
 
-	resetAvailabilityState(t)
+	resetAvailability(t)
 
 	calls := 0
 	*youtube.HookCheckAvailabilityViaInnertube = func(guildID, url string) (*youtube.AvailabilityResult, error) {
@@ -80,7 +80,7 @@ func countInnertubeChecks(t *testing.T) *int {
 	return &calls
 }
 
-func TestCheckVideoAvailabilityServesFromCache(t *testing.T) {
+func TestCheckVideoAvailabilityCache(t *testing.T) {
 	calls := countInnertubeChecks(t)
 
 	const url = "https://example.invalid/cached"
@@ -96,7 +96,7 @@ func TestCheckVideoAvailabilityServesFromCache(t *testing.T) {
 	}
 }
 
-func TestCheckVideoAvailabilityCachesPerGuild(t *testing.T) {
+func TestCheckVideoAvailabilityGuild(t *testing.T) {
 	calls := countInnertubeChecks(t)
 
 	const url = "https://example.invalid/shared"
@@ -112,8 +112,8 @@ func TestCheckVideoAvailabilityCachesPerGuild(t *testing.T) {
 	}
 }
 
-func TestCheckVideoAvailabilityFallsBackToYtDlp(t *testing.T) {
-	resetAvailabilityState(t)
+func TestCheckVideoAvailabilityYtDlp(t *testing.T) {
+	resetAvailability(t)
 	stubInnertubeFailure()
 
 	*youtube.HookRunYtDlpAvailability = func(ctx context.Context, url string) (*ytdlp.Result, error) {
@@ -129,8 +129,8 @@ func TestCheckVideoAvailabilityFallsBackToYtDlp(t *testing.T) {
 	}
 }
 
-func TestCheckVideoAvailabilityTreatsBlockedErrorsAsUnavailable(t *testing.T) {
-	resetAvailabilityState(t)
+func TestCheckVideoAvailabilityDenied(t *testing.T) {
+	resetAvailability(t)
 	stubInnertubeFailure()
 
 	for _, message := range []string{
@@ -140,7 +140,7 @@ func TestCheckVideoAvailabilityTreatsBlockedErrorsAsUnavailable(t *testing.T) {
 		"ERROR: age-restricted content",
 		"ERROR: not available in your country",
 	} {
-		resetAvailabilityState(t)
+		resetAvailability(t)
 		stubInnertubeFailure()
 
 		*youtube.HookRunYtDlpAvailability = func(ctx context.Context, url string) (*ytdlp.Result, error) {
@@ -158,8 +158,8 @@ func TestCheckVideoAvailabilityTreatsBlockedErrorsAsUnavailable(t *testing.T) {
 	}
 }
 
-func TestCheckVideoAvailabilitySurfacesUnknownErrors(t *testing.T) {
-	resetAvailabilityState(t)
+func TestCheckVideoAvailabilityErrors(t *testing.T) {
+	resetAvailability(t)
 	stubInnertubeFailure()
 
 	*youtube.HookRunYtDlpAvailability = func(ctx context.Context, url string) (*ytdlp.Result, error) {
@@ -172,8 +172,8 @@ func TestCheckVideoAvailabilitySurfacesUnknownErrors(t *testing.T) {
 	}
 }
 
-func TestCheckVideoAvailabilityReportsEmptyInfo(t *testing.T) {
-	resetAvailabilityState(t)
+func TestCheckVideoAvailabilityEmpty(t *testing.T) {
+	resetAvailability(t)
 	stubInnertubeFailure()
 
 	*youtube.HookRunYtDlpAvailability = func(ctx context.Context, url string) (*ytdlp.Result, error) {

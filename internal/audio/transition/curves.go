@@ -71,7 +71,7 @@ func lastBar(bars int) float64 {
 	return 1 - 1/float64(max(bars, minimumBars))
 }
 
-func buildDeckCurves(side *Side, isOutgoing bool, bars int) deckCurves {
+func createDeckCurves(side *Side, isOutgoing bool, bars int) deckCurves {
 	return deckCurves{
 		volume: volumeCurve(side.Volume, isOutgoing, bars),
 		eq:     eqCurves(side.EQ, isOutgoing, bars),

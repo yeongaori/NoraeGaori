@@ -22,7 +22,7 @@ func announceGuild(t *testing.T, guildID string) string {
 	return guildID
 }
 
-func TestFirstAnnouncementForASongIsAllowed(t *testing.T) {
+func TestMarkAnnouncedFirst(t *testing.T) {
 	guildID := announceGuild(t, "check-announce-first")
 
 	if !player.HookMarkAnnounced(guildID, 101) {
@@ -30,7 +30,7 @@ func TestFirstAnnouncementForASongIsAllowed(t *testing.T) {
 	}
 }
 
-func TestRepeatAnnouncementForTheSameSongIsSuppressed(t *testing.T) {
+func TestMarkAnnouncedRepeat(t *testing.T) {
 	guildID := announceGuild(t, "check-announce-repeat")
 
 	player.HookMarkAnnounced(guildID, 101)
@@ -39,7 +39,7 @@ func TestRepeatAnnouncementForTheSameSongIsSuppressed(t *testing.T) {
 	}
 }
 
-func TestADifferentSongIsAnnounced(t *testing.T) {
+func TestMarkAnnouncedNewSong(t *testing.T) {
 	guildID := announceGuild(t, "check-announce-different")
 
 	player.HookMarkAnnounced(guildID, 101)
@@ -48,7 +48,7 @@ func TestADifferentSongIsAnnounced(t *testing.T) {
 	}
 }
 
-func TestReturningToAnEarlierSongAnnouncesAgain(t *testing.T) {
+func TestMarkAnnouncedEarlierSong(t *testing.T) {
 	guildID := announceGuild(t, "check-announce-return")
 
 	player.HookMarkAnnounced(guildID, 101)
@@ -58,7 +58,7 @@ func TestReturningToAnEarlierSongAnnouncesAgain(t *testing.T) {
 	}
 }
 
-func TestClearingReArmsTheSameSongForRepeatPlayback(t *testing.T) {
+func TestClearAnnouncedReArms(t *testing.T) {
 	guildID := announceGuild(t, "check-announce-clear")
 
 	player.HookMarkAnnounced(guildID, 101)
@@ -68,7 +68,7 @@ func TestClearingReArmsTheSameSongForRepeatPlayback(t *testing.T) {
 	}
 }
 
-func TestAnnouncementStateIsPerGuild(t *testing.T) {
+func TestMarkAnnouncedPerGuild(t *testing.T) {
 	guildID := announceGuild(t, "check-announce-guild")
 	other := announceGuild(t, "check-announce-guild-other")
 
@@ -78,7 +78,7 @@ func TestAnnouncementStateIsPerGuild(t *testing.T) {
 	}
 }
 
-func TestCrossfadeThenRetryThenSeekAnnouncesExactlyOnce(t *testing.T) {
+func TestMarkAnnouncedOncePerSong(t *testing.T) {
 	guildID := announceGuild(t, "check-announce-once")
 
 	total := 0
@@ -97,7 +97,7 @@ func TestCrossfadeThenRetryThenSeekAnnouncesExactlyOnce(t *testing.T) {
 	}
 }
 
-func TestARemovedSongLeavesNoAnnouncementState(t *testing.T) {
+func TestClearAnnouncedRemovedSong(t *testing.T) {
 	guildID := announceGuild(t, "check-announce-removed")
 
 	if !player.HookMarkAnnounced(guildID, 300) {
@@ -110,10 +110,10 @@ func TestARemovedSongLeavesNoAnnouncementState(t *testing.T) {
 	}
 }
 
-func TestAPopulatedStreamURLIsReusedOnRestart(t *testing.T) {
+func TestResolveRestartURLReuses(t *testing.T) {
 	song := &queue.Song{ID: 1, URL: "https://example.invalid/watch?v=check"}
 
-	got, err := player.HookResolveRestartStreamURL("check-restart-guild", song, false, 96000, "https://cdn.invalid/existing")
+	got, err := player.HookResolveRestartURL("check-restart-guild", song, false, 96000, "https://cdn.invalid/existing")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -122,10 +122,10 @@ func TestAPopulatedStreamURLIsReusedOnRestart(t *testing.T) {
 	}
 }
 
-func TestALiveSongRestartsWithoutAStreamURL(t *testing.T) {
+func TestResolveRestartURLLive(t *testing.T) {
 	song := &queue.Song{ID: 2, URL: "https://example.invalid/watch?v=live", IsLive: true}
 
-	got, err := player.HookResolveRestartStreamURL("check-restart-guild", song, false, 96000, "")
+	got, err := player.HookResolveRestartURL("check-restart-guild", song, false, 96000, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

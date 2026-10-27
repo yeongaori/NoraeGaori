@@ -38,7 +38,7 @@ func analyzedTailEndState() *ffmpeg.EndState {
 }
 
 func autoMixFade(beats int) *player.HookFadeSettings {
-	return player.HookBuildFadeSettings(&player.HookFadeSettingsFields{
+	return player.HookCreateFadeSettings(&player.HookFadeSettingsFields{
 		AutoMix: true, Crossfade: true, TrimSilence: true, AutoMixBeats: beats, RepeatMode: queue.RepeatOff,
 	})
 }
@@ -65,7 +65,7 @@ func planAutoMixWith(t *testing.T, guildID string, incoming *analysis.TrackAnaly
 
 	q := seedCrossfadeQueue(t, guildID)
 	if songOverrides != nil {
-		if err := queue.SetSongAutoMixOverrides(guildID, q.Songs[0].ID, songOverrides); err != nil {
+		if err := queue.SetSongOverrides(guildID, q.Songs[0].ID, songOverrides); err != nil {
 			t.Fatalf("failed to set the song overrides: %v", err)
 		}
 	}
@@ -98,7 +98,7 @@ func argumentAfter(args []string, flag string) string {
 	return ""
 }
 
-func TestBeatmatchedPlanStartsOnTheLastFullBarWindow(t *testing.T) {
+func TestPlaceTransitionLastBar(t *testing.T) {
 	cs, args := planAutoMix(t, "placebeat", steadyBeat(125))
 
 	if *cs.HookTransitionFrame() != 8166 {
@@ -121,7 +121,7 @@ func TestBeatmatchedPlanStartsOnTheLastFullBarWindow(t *testing.T) {
 	}
 }
 
-func TestSessionOriginCountsTheSeekAndTheHandedOffFrames(t *testing.T) {
+func TestSessionOriginSecCounts(t *testing.T) {
 	cases := []struct {
 		baseOffsetMs, frameOffset int
 		want                      float64
@@ -138,7 +138,7 @@ func TestSessionOriginCountsTheSeekAndTheHandedOffFrames(t *testing.T) {
 	}
 }
 
-func TestUnmatchablePlanFadesOverTheLastFiveSeconds(t *testing.T) {
+func TestPlaceTransitionUnmatchable(t *testing.T) {
 	weak := steadyBeat(125)
 	weak.BeatStrength = 0.1
 	cs, args := planAutoMix(t, "placefade", weak)
@@ -157,7 +157,7 @@ func TestUnmatchablePlanFadesOverTheLastFiveSeconds(t *testing.T) {
 	}
 }
 
-func TestSongBeatmatchOffForcesTheFade(t *testing.T) {
+func TestPlaceTransitionBeatmatchOff(t *testing.T) {
 	cs, args := planAutoMixWith(t, "placeforcedfade", steadyBeat(125), map[string]string{"beatmatch": "off"})
 
 	if *cs.HookTransitionFrame() != 8750 || *cs.HookCrossfadeFrames() != 250 {
@@ -168,7 +168,7 @@ func TestSongBeatmatchOffForcesTheFade(t *testing.T) {
 	}
 }
 
-func TestSongLengthPicksTheBarCount(t *testing.T) {
+func TestPlaceTransitionBarCount(t *testing.T) {
 	cs, _ := planAutoMixWith(t, "placeforcedlength", steadyBeat(125), map[string]string{"length": "four_bars"})
 
 	if *cs.HookCrossfadeFrames() != 375 {
@@ -176,7 +176,7 @@ func TestSongLengthPicksTheBarCount(t *testing.T) {
 	}
 }
 
-func TestIncomingRollIsArmedOnTheIncomingSong(t *testing.T) {
+func TestPlaceTransitionIncomingRoll(t *testing.T) {
 	cs, _ := planAutoMixWith(t, "placeroll", steadyBeat(125), map[string]string{"fx_in": "roll"})
 	if *cs.HookIncomingLoop() == nil {
 		t.Fatal("an incoming roll armed no loop on the incoming song")
@@ -191,7 +191,7 @@ func TestIncomingRollIsArmedOnTheIncomingSong(t *testing.T) {
 	}
 }
 
-func TestPlanNamesTheSideWithoutAnalysis(t *testing.T) {
+func TestCrossfadePlanNamesSide(t *testing.T) {
 	readLog := logtest.Capture(t)
 	planAutoMix(t, "placemissing", nil)
 
@@ -201,12 +201,12 @@ func TestPlanNamesTheSideWithoutAnalysis(t *testing.T) {
 	}
 }
 
-func TestPlanLogsAMissingStreamURLOnce(t *testing.T) {
+func TestCrossfadePlanLogsMissingURL(t *testing.T) {
 	const guildID = "placeurlwait"
 	readLog := logtest.Capture(t)
 	q := seedCrossfadeQueue(t, guildID)
 	endState := &ffmpeg.EndState{TotalFrames: 9000}
-	fade := player.HookBuildFadeSettings(&player.HookFadeSettingsFields{AutoMix: true, Crossfade: true, AutoMixBeats: 64})
+	fade := player.HookCreateFadeSettings(&player.HookFadeSettingsFields{AutoMix: true, Crossfade: true, AutoMixBeats: 64})
 
 	cs := player.HookNewCrossfadeState()
 	t.Cleanup(cs.HookAbort)
@@ -247,7 +247,7 @@ func setupPendingHeadPlan(t *testing.T, guildID string, pendingIndex, beats int)
 	return cs, endState, fade, next
 }
 
-func testPlanAfterAnalysisArrives(t *testing.T) {
+func checkPlanOnAnalysis(t *testing.T) {
 	const guildID = "placewaitarrives"
 	readLog := logtest.Capture(t)
 	cs, endState, fade, next := setupPendingHeadPlan(t, guildID, 1, 64)
@@ -293,7 +293,7 @@ func testPlanLogsWaitOnce(t *testing.T) {
 	}
 }
 
-func TestPlanWaitsForAPendingHeadAnalysis(t *testing.T) {
+func TestCrossfadePlanWaitsForHead(t *testing.T) {
 	t.Run("plenty of time", func(t *testing.T) {
 		const guildID = "placewait"
 		cs, endState, fade, _ := setupPendingHeadPlan(t, guildID, 1, 64)
@@ -316,7 +316,7 @@ func TestPlanWaitsForAPendingHeadAnalysis(t *testing.T) {
 		}
 	})
 
-	t.Run("analysis arrives", testPlanAfterAnalysisArrives)
+	t.Run("analysis arrives", checkPlanOnAnalysis)
 
 	t.Run("another song pending", func(t *testing.T) {
 		const guildID = "placewaitother"

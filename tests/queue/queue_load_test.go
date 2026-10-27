@@ -25,7 +25,7 @@ func wantFields(t *testing.T, checks []fieldCheck) {
 	}
 }
 
-func TestLoadQueueFromDBAppliesEveryDefault(t *testing.T) {
+func TestLoadQueueFromDBDefaults(t *testing.T) {
 	setupTestDB(t)
 
 	q, err := queue.HookLoadQueueFromDB("guild1")
@@ -88,7 +88,7 @@ func TestLoadQueueFromDBAppliesEveryDefault(t *testing.T) {
 	}
 }
 
-func TestLoadQueueFromDBMapsEveryColumnToItsOwnField(t *testing.T) {
+func TestLoadQueueFromDBColumns(t *testing.T) {
 	setupTestDB(t)
 
 	_, err := database.DB.Exec(`INSERT INTO guild_settings (
@@ -138,7 +138,7 @@ func TestLoadQueueFromDBMapsEveryColumnToItsOwnField(t *testing.T) {
 	}
 }
 
-func TestLoadQueueFromDBReturnsNilForAnUnknownGuild(t *testing.T) {
+func TestLoadQueueFromDBUnknown(t *testing.T) {
 	setupTestDB(t)
 
 	q, err := queue.HookLoadQueueFromDB("no-such-guild")
@@ -150,7 +150,7 @@ func TestLoadQueueFromDBReturnsNilForAnUnknownGuild(t *testing.T) {
 	}
 }
 
-func TestLoadQueueFromDBOrdersSongsByPosition(t *testing.T) {
+func TestLoadQueueFromDBOrder(t *testing.T) {
 	setupTestDB(t)
 
 	for i := 0; i < 4; i++ {

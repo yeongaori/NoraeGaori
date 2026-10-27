@@ -366,7 +366,7 @@ func SkipToPosition(guildID string, targetIndex int) error {
 		return fmt.Errorf("failed to delete songs: %w", err)
 	}
 
-	if err = reorderSongsAfterRemovalTx(tx, guildID); err != nil {
+	if err = reorderAfterRemoveTx(tx, guildID); err != nil {
 		return fmt.Errorf("failed to reorder songs: %w", err)
 	}
 
@@ -412,7 +412,7 @@ func RemoveSongsByIDs(guildID string, songIDs []int) error {
 
 	rowsAffected, _ := result.RowsAffected()
 
-	if err = reorderSongsAfterRemovalTx(tx, guildID); err != nil {
+	if err = reorderAfterRemoveTx(tx, guildID); err != nil {
 		return fmt.Errorf("failed to reorder songs: %w", err)
 	}
 
@@ -425,7 +425,7 @@ func RemoveSongsByIDs(guildID string, songIDs []int) error {
 	return nil
 }
 
-func reorderSongsAfterRemovalTx(tx *sql.Tx, guildID string) error {
+func reorderAfterRemoveTx(tx *sql.Tx, guildID string) error {
 
 	rows, err := tx.Query(
 		`SELECT id FROM songs WHERE guild_id = ? ORDER BY queue_position ASC`,

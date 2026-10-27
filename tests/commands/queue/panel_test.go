@@ -33,7 +33,7 @@ func queueButtons(t *testing.T, page, totalPages int) []discordgo.Button {
 	return buttons
 }
 
-func TestQueueButtonsPageAndOpenTheMixPanel(t *testing.T) {
+func TestQueueButtons(t *testing.T) {
 	buttons := queueButtons(t, 2, 3)
 
 	want := []string{queuecommand.HookQueuePageRoute + ":1", queuecommand.HookQueuePageRoute + ":3", queuecommand.HookQueueMixRoute}
@@ -51,7 +51,7 @@ func TestQueueButtonsPageAndOpenTheMixPanel(t *testing.T) {
 	}
 }
 
-func TestQueueButtonsStopAtTheFirstAndLastPage(t *testing.T) {
+func TestQueueButtonsStopAtEnds(t *testing.T) {
 	for name, check := range map[string]struct {
 		page, totalPages         int
 		isPreviousOff, isNextOff bool
@@ -72,7 +72,7 @@ func TestQueueButtonsStopAtTheFirstAndLastPage(t *testing.T) {
 	}
 }
 
-func TestQueuePagesListTheirOwnSongsWithQueuePositions(t *testing.T) {
+func TestRenderQueuePagePositions(t *testing.T) {
 	songs := queuetest.SongsBy(commandtest.CallerID, 25)
 
 	first, _ := queuecommand.HookRenderQueuePage("guild", songs, 1)
@@ -96,7 +96,7 @@ func TestQueuePagesListTheirOwnSongsWithQueuePositions(t *testing.T) {
 	}
 }
 
-func TestQueueRoutesIgnoreMalformedArguments(t *testing.T) {
+func TestTurnQueuePageMalformed(t *testing.T) {
 	fixture := commandtest.NewFixture(t, nil, queuetest.SongsBy(commandtest.CallerID, 25)...)
 	component := fixture.Component(queuecommand.HookQueuePageRoute)
 	modal := &discordgo.InteractionCreate{Interaction: &discordgo.Interaction{Type: discordgo.InteractionModalSubmit, GuildID: commandtest.GuildID}}

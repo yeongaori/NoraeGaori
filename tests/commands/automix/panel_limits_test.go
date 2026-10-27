@@ -29,7 +29,7 @@ func checkSongs(count int, title string) []*queue.Song {
 }
 
 func checkPanelState(songs []*queue.Song, guildOverrides map[string]string, autoSelect bool) *automix.HookPanelState {
-	return automix.HookBuildPanelState(&automix.HookPanelStateFields{
+	return automix.HookCreatePanelState(&automix.HookPanelStateFields{
 		Pairs:          automix.HookTransitionPairs(songs),
 		GuildOverrides: guildOverrides,
 		AutoSelect:     autoSelect,
@@ -54,7 +54,7 @@ func checkRowsFor(songs []*queue.Song) []*automix.HookTransitionRow {
 
 func checkRowsWithGuild(songs []*queue.Song, guildOverrides map[string]string) []*automix.HookTransitionRow {
 	state := checkPanelState(songs, guildOverrides, true)
-	return automix.HookHydrateTransitionRows("check-guild", state, *state.HookPairs())
+	return automix.HookHydrateRows("check-guild", state, *state.HookPairs())
 }
 
 func editorTab(key string) *automix.HookEditorTab {
@@ -126,7 +126,7 @@ func checkSelectMenu(context string, menu *discordgo.SelectMenu) []string {
 
 func checkEditor(t *testing.T, row *automix.HookTransitionRow, tab *automix.HookEditorTab) {
 	t.Helper()
-	components := automix.HookCreateTransitionEditorComponents("check-guild", row, tab, checkLocation)
+	components := automix.HookCreateEditorControls("check-guild", row, tab, checkLocation)
 	rowCount, selects, buttons := inspectComponents(components)
 
 	if rowCount > 5 {
@@ -148,7 +148,7 @@ func checkEditor(t *testing.T, row *automix.HookTransitionRow, tab *automix.Hook
 		}
 	}
 
-	embed := automix.HookCreateTransitionEditorEmbed("check-guild", row, tab, "")
+	embed := automix.HookCreateEditorEmbed("check-guild", row, tab, "")
 	if size := len([]rune(embed.Title)); size > 256 {
 		t.Errorf("editor title is %d chars, want at most 256", size)
 	}
@@ -168,8 +168,8 @@ func checkEditor(t *testing.T, row *automix.HookTransitionRow, tab *automix.Hook
 func checkPanelPage(t *testing.T, state *automix.HookPanelState, page, totalPages int) {
 	t.Helper()
 
-	pageRows := automix.HookHydrateTransitionRows("check-guild", state, automix.HookTransitionPageSlice(*state.HookPairs(), page))
-	components := automix.HookCreateTransitionPanelComponents("check-guild", pageRows, page, totalPages)
+	pageRows := automix.HookHydrateRows("check-guild", state, automix.HookTransitionPageSlice(*state.HookPairs(), page))
+	components := automix.HookCreatePanelControls("check-guild", pageRows, page, totalPages)
 	rowCount, selects, buttons := inspectComponents(components)
 
 	if rowCount > 5 {
@@ -188,7 +188,7 @@ func checkPanelPage(t *testing.T, state *automix.HookPanelState, page, totalPage
 		}
 	}
 
-	embed := automix.HookCreateTransitionPanelEmbed("check-guild", state, pageRows, page, totalPages)
+	embed := automix.HookCreatePanelEmbed("check-guild", state, pageRows, page, totalPages)
 	if size := len([]rune(embed.Description)); size > 4096 {
 		t.Errorf("page %d description is %d chars, want at most 4096", page, size)
 	}
@@ -197,7 +197,7 @@ func checkPanelPage(t *testing.T, state *automix.HookPanelState, page, totalPage
 	}
 }
 
-func TestPanelAndEditorStayInsideDiscordLimits(t *testing.T) {
+func TestHydrateRowsDiscordLimits(t *testing.T) {
 	longTitle := strings.Repeat("W", 100)
 	cjkTitle := strings.Repeat("가나다라마", 24)
 
@@ -217,7 +217,7 @@ func TestPanelAndEditorStayInsideDiscordLimits(t *testing.T) {
 		testCase := &cases[i]
 		t.Run(testCase.name, func(t *testing.T) {
 			state := checkPanelState(testCase.songs, nil, true)
-			rows := automix.HookHydrateTransitionRows("check-guild", state, *state.HookPairs())
+			rows := automix.HookHydrateRows("check-guild", state, *state.HookPairs())
 			totalPages := automix.HookTransitionPageCount(*state.HookPairs())
 
 			for page := 1; page <= totalPages; page++ {
@@ -243,11 +243,11 @@ func fourSongPanel(t *testing.T) []*automix.HookTransitionRow {
 	return rows
 }
 
-var checkLocation = automix.HookBuildPanelLocation(&automix.HookPanelLocationFields{MessageID: "123456789012345678", Page: 2})
+var checkLocation = automix.HookCreatePanelLocation(&automix.HookPanelLocationFields{MessageID: "123456789012345678", Page: 2})
 
-func TestPanelCustomIDsRouteToTheirPages(t *testing.T) {
+func TestCreatePanelControlsPages(t *testing.T) {
 	rows := fourSongPanel(t)
-	_, selects, buttons := inspectComponents(automix.HookCreateTransitionPanelComponents("check-guild", rows, 2, 3))
+	_, selects, buttons := inspectComponents(automix.HookCreatePanelControls("check-guild", rows, 2, 3))
 
 	if len(selects) != 1 || selects[0].CustomID != automix.HookTransitionPickRoute+":2" {
 		t.Errorf("selects = %+v, want one picker routed to page 2", selects)
@@ -267,7 +267,7 @@ func TestPanelCustomIDsRouteToTheirPages(t *testing.T) {
 	}
 }
 
-func TestEditorCustomIDsRoundTripToTheirCategory(t *testing.T) {
+func TestCreateEditorControlsIDs(t *testing.T) {
 	rows := fourSongPanel(t)
 	songArgument := strconv.Itoa((*rows[0].HookFromSong()).ID)
 	pageArgument := strconv.Itoa(*checkLocation.HookPage())
@@ -275,7 +275,7 @@ func TestEditorCustomIDsRoundTripToTheirCategory(t *testing.T) {
 	categoriesSeen := map[transition.Category]bool{}
 	for index := range *automix.HookEditorTabs {
 		tab := &(*automix.HookEditorTabs)[index]
-		_, selects, _ := inspectComponents(automix.HookCreateTransitionEditorComponents("check-guild", rows[0], tab, checkLocation))
+		_, selects, _ := inspectComponents(automix.HookCreateEditorControls("check-guild", rows[0], tab, checkLocation))
 		for i := range selects {
 			menu := &selects[i]
 			parts := strings.Split(menu.CustomID, ":")
@@ -297,10 +297,10 @@ func TestEditorCustomIDsRoundTripToTheirCategory(t *testing.T) {
 	}
 }
 
-func TestTabButtonsRouteToEachTab(t *testing.T) {
+func TestCreateEditorControlsTabs(t *testing.T) {
 	rows := fourSongPanel(t)
 	songArgument := strconv.Itoa((*rows[0].HookFromSong()).ID)
-	_, _, buttons := inspectComponents(automix.HookCreateTransitionEditorComponents("check-guild", rows[0], editorTab("incoming"), checkLocation))
+	_, _, buttons := inspectComponents(automix.HookCreateEditorControls("check-guild", rows[0], editorTab("incoming"), checkLocation))
 
 	for i := range buttons {
 		button := &buttons[i]
@@ -315,13 +315,13 @@ func TestTabButtonsRouteToEachTab(t *testing.T) {
 	}
 }
 
-func TestOutroEditorHidesTheIncomingSide(t *testing.T) {
+func TestCreateEditorControlsOutro(t *testing.T) {
 	rows := checkRowsFor(checkSongs(1, "Solo"))
 	if len(rows) != 1 || !rows[0].HookIsOutro() {
 		t.Fatalf("a single song gave %d rows, want one outro row", len(rows))
 	}
 
-	_, _, buttons := inspectComponents(automix.HookCreateTransitionEditorComponents("check-guild", rows[0], editorTab("outgoing"), checkLocation))
+	_, _, buttons := inspectComponents(automix.HookCreateEditorControls("check-guild", rows[0], editorTab("outgoing"), checkLocation))
 	for i := range buttons {
 		button := &buttons[i]
 		if key := (*automix.HookEditorTabs)[i].HookKey(); key == "incoming" && !button.Disabled {
@@ -329,7 +329,7 @@ func TestOutroEditorHidesTheIncomingSide(t *testing.T) {
 		}
 	}
 
-	_, selects, _ := inspectComponents(automix.HookCreateTransitionEditorComponents("check-guild", rows[0], editorTab("settings"), checkLocation))
+	_, selects, _ := inspectComponents(automix.HookCreateEditorControls("check-guild", rows[0], editorTab("settings"), checkLocation))
 	if len(selects) != 1 || !strings.Contains(selects[0].CustomID, ":"+string(transition.CategoryLoop)+":") {
 		t.Errorf("outro settings tab has %d dropdowns, want only the loop", len(selects))
 	}

@@ -32,20 +32,20 @@ type HookVersionManagerFields struct {
 	State persistedState
 }
 
-var HookActiveVersionIsHealthy = activeVersionIsHealthy
+var HookIsActiveHealthy = isActiveHealthy
 var HookConfiguredChannelFn = &configuredChannelFn
 var HookEnsureVersionBinary = ensureVersionBinary
 var HookFixedCanaryIDs = &fixedCanaryIDs
 var HookGetLatestReleaseFn = &getLatestReleaseFn
 var HookGetReleasesFn = &getReleasesFn
-var HookInstallFallbackVersion = installFallbackVersion
+var HookInstallFallback = installFallback
 var HookInstallVersionBinary = installVersionBinary
 var HookLatestReleaseRepo = latestReleaseRepo
 var HookLookPath = &lookPath
 var HookPickAsset = pickAsset
 var HookProbeStreamReachable = probeStreamReachable
 var HookReleasesURL = releasesURL
-var HookResolveCurrentVersion = resolveCurrentVersion
+var HookResolveCurrent = resolveCurrent
 var HookRunCanary = &runCanary
 var HookRunCanaryAndActivate = runCanaryAndActivate
 var HookSigningKeyArmor = &signingKeyArmor
@@ -54,11 +54,11 @@ var HookUpdateFromChannel = updateFromChannel
 var HookVersionMgr = &versionMgr
 var HookYtdlpSigningKey = &ytdlpSigningKey
 
-func HookBuildChannelOutcome(fields *HookChannelOutcomeFields) *channelOutcome {
+func HookCreateChannelOutcome(fields *HookChannelOutcomeFields) *channelOutcome {
 	return &channelOutcome{updated: fields.Updated, canaryFailed: fields.CanaryFailed}
 }
 
-func HookBuildVersionManager(fields *HookVersionManagerFields) *VersionManager {
+func HookCreateVersionManager(fields *HookVersionManagerFields) *VersionManager {
 	return &VersionManager{state: fields.State}
 }
 

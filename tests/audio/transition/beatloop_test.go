@@ -38,7 +38,7 @@ func runBeatLoop(loop *transition.BeatLoop, frames int, source func(int) []int16
 	return output
 }
 
-func TestBeatLoopPassesLiveAudioUntilTheLoopLength(t *testing.T) {
+func TestBeatLoopPassesLiveAudio(t *testing.T) {
 	loop := transition.CaptureBeatLoop(1000)
 	output := runBeatLoop(loop, 2, countingFrame)
 
@@ -49,7 +49,7 @@ func TestBeatLoopPassesLiveAudioUntilTheLoopLength(t *testing.T) {
 	}
 }
 
-func TestBeatLoopRepeatsOnTheExactSampleLength(t *testing.T) {
+func TestBeatLoopExactLength(t *testing.T) {
 	loop := transition.CaptureBeatLoop(1000)
 	output := runBeatLoop(loop, 5, countingFrame)
 
@@ -79,7 +79,7 @@ func TestBeatLoopSeamIsCrossfaded(t *testing.T) {
 	}
 }
 
-func TestBeatLoopSeamBlendsTheContinuationIntoTheLoopStart(t *testing.T) {
+func TestBeatLoopSeamBlends(t *testing.T) {
 	loop := transition.CaptureBeatLoop(1000)
 	output := runBeatLoop(loop, 2, countingFrame)
 
@@ -88,7 +88,7 @@ func TestBeatLoopSeamBlendsTheContinuationIntoTheLoopStart(t *testing.T) {
 	}
 }
 
-func TestBeatLoopKeepsLeftAndRightApart(t *testing.T) {
+func TestBeatLoopKeepsChannels(t *testing.T) {
 	loop := transition.CaptureBeatLoop(1000)
 	var frame []int16
 	for i := 0; i < 3; i++ {
@@ -128,7 +128,7 @@ func TestBeatLoopSeamClampsLoudAudio(t *testing.T) {
 	}
 }
 
-func TestBeatLoopReturnsNilWithoutLiveAudioBeforeItIsReady(t *testing.T) {
+func TestBeatLoopNilWhileFilling(t *testing.T) {
 	loop := transition.CaptureBeatLoop(1000)
 
 	if loop.IsReady() {
@@ -139,7 +139,7 @@ func TestBeatLoopReturnsNilWithoutLiveAudioBeforeItIsReady(t *testing.T) {
 	}
 }
 
-func TestBeatLoopBecomesReadyOnceTheSeamIsCaptured(t *testing.T) {
+func TestBeatLoopReadyOnSeam(t *testing.T) {
 	loop := transition.CaptureBeatLoop(1000)
 	runBeatLoop(loop, 1, countingFrame)
 	if loop.IsReady() {
@@ -155,7 +155,7 @@ func TestBeatLoopBecomesReadyOnceTheSeamIsCaptured(t *testing.T) {
 	}
 }
 
-func TestBeatLoopCopiesTheSourceFrame(t *testing.T) {
+func TestBeatLoopCopiesFrame(t *testing.T) {
 	loop := transition.CaptureBeatLoop(1000)
 	source := countingFrame(0)
 	loop.Next(source)
@@ -172,7 +172,7 @@ func TestBeatLoopCopiesTheSourceFrame(t *testing.T) {
 	}
 }
 
-func TestRollPlaysLiveUntilTheMiddle(t *testing.T) {
+func TestPrepareBeatLoopRollLive(t *testing.T) {
 	output := runBeatLoop(transition.PrepareBeatLoop(transition.LoopRoll, 0.1, 40), 20, countingFrame)
 
 	for index, value := range output {
@@ -182,7 +182,7 @@ func TestRollPlaysLiveUntilTheMiddle(t *testing.T) {
 	}
 }
 
-func TestRollHalvesTheLoopFromTheSameStart(t *testing.T) {
+func TestPrepareBeatLoopRollHalves(t *testing.T) {
 	output := runBeatLoop(transition.PrepareBeatLoop(transition.LoopRoll, 0.1, 40), 40, countingFrame)
 	start := 20 * dsp.FrameSize
 
@@ -221,7 +221,7 @@ func checkLoopProbes(t *testing.T, output []int16, probes []loopProbe) {
 	}
 }
 
-func TestSlipRollReturnsToTheLivePosition(t *testing.T) {
+func TestPrepareBeatLoopSlipReturns(t *testing.T) {
 	output := runBeatLoop(transition.PrepareBeatLoop(transition.LoopSlipRoll, 0.1, 80), 80, countingFrame)
 	start := 40 * dsp.FrameSize
 
@@ -234,7 +234,7 @@ func TestSlipRollReturnsToTheLivePosition(t *testing.T) {
 	})
 }
 
-func TestRollAtEndStartsInTheLastQuarter(t *testing.T) {
+func TestPrepareBeatLoopRollAtEnd(t *testing.T) {
 	output := runBeatLoop(transition.PrepareBeatLoop(transition.LoopRollAtEnd, 0.1, 80), 80, countingFrame)
 	for index := 0; index < 60*dsp.FrameSize; index++ {
 		if int(output[index]) != counted(index) {
@@ -244,7 +244,7 @@ func TestRollAtEndStartsInTheLastQuarter(t *testing.T) {
 	checkLoopProbes(t, output, []loopProbe{{75, 500, 60*dsp.FrameSize + (15*dsp.FrameSize+500)%1200}})
 }
 
-func TestIncomingRollGrowsFromTheFirstBeatAndReleases(t *testing.T) {
+func TestPrepareIncomingLoopGrows(t *testing.T) {
 	output := runBeatLoop(transition.PrepareIncomingLoop(transition.FXRoll, 0.1, 40), 40, countingFrame)
 
 	checkLoopProbes(t, output, []loopProbe{
@@ -256,7 +256,7 @@ func TestIncomingRollGrowsFromTheFirstBeatAndReleases(t *testing.T) {
 	})
 }
 
-func TestIncomingSlipRollReleasesAtAQuarter(t *testing.T) {
+func TestPrepareIncomingLoopSlip(t *testing.T) {
 	output := runBeatLoop(transition.PrepareIncomingLoop(transition.FXSlipRoll, 0.1, 40), 40, countingFrame)
 	checkLoopProbes(t, output, []loopProbe{
 		{5, 500, (5*dsp.FrameSize + 500) % 1200},
@@ -264,7 +264,7 @@ func TestIncomingSlipRollReleasesAtAQuarter(t *testing.T) {
 	})
 }
 
-func TestOnlyRollsBuildAnIncomingLoop(t *testing.T) {
+func TestPrepareIncomingLoopRolls(t *testing.T) {
 	for _, fx := range []transition.FXStyle{transition.FXNone, transition.FXPhaser, transition.FXDelayOneBar} {
 		if loop := transition.PrepareIncomingLoop(fx, 0.5, 400); loop != nil {
 			t.Errorf("incoming effect %d built a loop", fx)
@@ -275,7 +275,7 @@ func TestOnlyRollsBuildAnIncomingLoop(t *testing.T) {
 	}
 }
 
-func TestPrepareBeatLoopBuildsTheChosenLength(t *testing.T) {
+func TestPrepareBeatLoopLength(t *testing.T) {
 	if loop := transition.PrepareBeatLoop(transition.LoopNone, 0.5, 400); loop != nil {
 		t.Error("no loop style still built a loop")
 	}

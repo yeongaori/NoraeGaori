@@ -37,7 +37,7 @@ func HandleForceRemove(s *discordgo.Session, i *discordgo.InteractionCreate) err
 			return forceRemoveByUser(s, i, q, target)
 		}
 		position, _ := strconv.Atoi(target)
-		return forceRemoveByPosition(s, i, q, position)
+		return forceRemoveAt(s, i, q, position)
 	}
 
 	matches := userMentionRegex.FindStringSubmatch(target)
@@ -126,7 +126,7 @@ func respondRemovedSongs(s *discordgo.Session, i *discordgo.InteractionCreate, u
 	}
 }
 
-func forceRemoveByPosition(s *discordgo.Session, i *discordgo.InteractionCreate, q *queue.Queue, position int) error {
+func forceRemoveAt(s *discordgo.Session, i *discordgo.InteractionCreate, q *queue.Queue, position int) error {
 	if position < 1 || position > len(q.Songs) {
 		discord.RespondErrorEmbed(s, i, fmt.Sprintf(messages.T(i.GuildID).Admin.EnterValidRange, len(q.Songs)))
 		return nil

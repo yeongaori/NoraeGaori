@@ -35,7 +35,7 @@ func servePayload(t *testing.T, status int, payload []byte) string {
 	return server.URL
 }
 
-func TestSaveFileReturnsTheContentDigest(t *testing.T) {
+func TestSaveFileReturnsDigest(t *testing.T) {
 	payload := []byte("yt-dlp binary contents")
 	destination := filepath.Join(t.TempDir(), "downloaded")
 
@@ -56,7 +56,7 @@ func TestSaveFileReturnsTheContentDigest(t *testing.T) {
 	}
 }
 
-func TestSaveFileRejectsAFailedResponse(t *testing.T) {
+func TestSaveFileFailedResponse(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "downloaded")
 
 	if _, err := download.SaveFile(servePayload(t, http.StatusInternalServerError, nil), destination); err == nil {
@@ -67,7 +67,7 @@ func TestSaveFileRejectsAFailedResponse(t *testing.T) {
 	}
 }
 
-func TestSaveFileRejectsAnUnwritableDestination(t *testing.T) {
+func TestSaveFileUnwritable(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "missing", "downloaded")
 
 	if _, err := download.SaveFile(servePayload(t, http.StatusOK, []byte("payload")), destination); err == nil {
@@ -111,7 +111,7 @@ func stubDownloadProgress(t *testing.T) (*[]int, *int) {
 	return &percentages, &ended
 }
 
-func TestSaveFileReportsProgressUpToOneHundred(t *testing.T) {
+func TestSaveFileFullProgress(t *testing.T) {
 	percentages, ended := stubDownloadProgress(t)
 	payload := []byte(strings.Repeat("x", 100*1024))
 
@@ -132,7 +132,7 @@ func TestSaveFileReportsProgressUpToOneHundred(t *testing.T) {
 	}
 }
 
-func TestSaveFileEndsTheProgressLineWhenItStalls(t *testing.T) {
+func TestSaveFileEndsLineOnStall(t *testing.T) {
 	testutil.Swap(t, download.HookDownloadStallTimeout, 150*time.Millisecond)
 	_, ended := stubDownloadProgress(t)
 
@@ -144,7 +144,7 @@ func TestSaveFileEndsTheProgressLineWhenItStalls(t *testing.T) {
 	}
 }
 
-func TestSaveFileReportsNoPercentagesForAnUnknownSize(t *testing.T) {
+func TestSaveFileUnknownSize(t *testing.T) {
 	percentages, _ := stubDownloadProgress(t)
 
 	if _, err := download.SaveFile(serveInChunks(t, 4, 0, false), filepath.Join(t.TempDir(), "downloaded")); err != nil {
@@ -155,13 +155,13 @@ func TestSaveFileReportsNoPercentagesForAnUnknownSize(t *testing.T) {
 	}
 }
 
-func TestDownloadsWaitTwoMinutesForAStalledMirror(t *testing.T) {
+func TestSaveFileStallTimeout(t *testing.T) {
 	if *download.HookDownloadStallTimeout != 2*time.Minute {
 		t.Errorf("got a stall window of %v, want 2m so a slow mirror is not abandoned after a short pause", *download.HookDownloadStallTimeout)
 	}
 }
 
-func TestSaveFileGivesUpOnAStalledDownload(t *testing.T) {
+func TestSaveFileStalled(t *testing.T) {
 	testutil.Swap(t, download.HookDownloadStallTimeout, 150*time.Millisecond)
 	destination := filepath.Join(t.TempDir(), "downloaded")
 
@@ -175,7 +175,7 @@ func TestSaveFileGivesUpOnAStalledDownload(t *testing.T) {
 	}
 }
 
-func TestSaveFileKeepsASlowButSteadyDownload(t *testing.T) {
+func TestSaveFileSlowSteady(t *testing.T) {
 	testutil.Swap(t, download.HookDownloadStallTimeout, 150*time.Millisecond)
 	destination := filepath.Join(t.TempDir(), "downloaded")
 
@@ -188,7 +188,7 @@ func TestSaveFileKeepsASlowButSteadyDownload(t *testing.T) {
 	}
 }
 
-func TestSaveFileGivesUpWhenNoResponseArrives(t *testing.T) {
+func TestSaveFileNoResponse(t *testing.T) {
 	testutil.Swap(t, download.HookDownloadStallTimeout, 150*time.Millisecond)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		select {
@@ -203,18 +203,18 @@ func TestSaveFileGivesUpWhenNoResponseArrives(t *testing.T) {
 	}
 }
 
-func TestRateLimitDefaultsToTenMbps(t *testing.T) {
+func TestReadRateLimitDefault(t *testing.T) {
 	configtest.Setup(t)
 
-	if got := download.HookRateLimitBytesPerSecond(); got != 1250000 {
+	if got := download.HookReadRateLimit(); got != 1250000 {
 		t.Errorf("got %v bytes/sec, want 1250000 for the default 10 Mbps", got)
 	}
 }
 
-func TestRateLimitFollowsTheConfiguredSpeed(t *testing.T) {
+func TestReadRateLimitConfigured(t *testing.T) {
 	configtest.SetupWith(t, `{"prefix":"!","language":"en","max_download_speed_mbps":24}`)
 
-	if got := download.HookRateLimitBytesPerSecond(); got != 3000000 {
+	if got := download.HookReadRateLimit(); got != 3000000 {
 		t.Errorf("got %v bytes/sec, want 3000000 for 24 Mbps", got)
 	}
 }

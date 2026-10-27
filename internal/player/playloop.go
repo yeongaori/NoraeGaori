@@ -19,7 +19,7 @@ const (
 	playStop
 )
 
-func prepareVoiceConnection(session *discordgo.Session, player *GuildPlayer, guildID, voiceChannelID string) error {
+func prepareVoice(session *discordgo.Session, player *GuildPlayer, guildID, voiceChannelID string) error {
 	conn := player.currentVoice()
 	if conn != nil {
 		select {
@@ -32,11 +32,11 @@ func prepareVoiceConnection(session *discordgo.Session, player *GuildPlayer, gui
 		}
 	}
 
-	if conn != nil && !player.isInOtherVoiceChannel(voiceChannelID) {
+	if conn != nil && !player.isInOtherChannel(voiceChannelID) {
 		return nil
 	}
 
-	vc, err := joinVoiceWithGatewayRetry(session, player, voiceChannelID)
+	vc, err := joinVoiceWithRetry(session, player, voiceChannelID)
 	if err != nil {
 		return err
 	}
@@ -51,7 +51,7 @@ func prepareVoiceConnection(session *discordgo.Session, player *GuildPlayer, gui
 	return nil
 }
 
-func (player *GuildPlayer) isInOtherVoiceChannel(channelID string) bool {
+func (player *GuildPlayer) isInOtherChannel(channelID string) bool {
 	player.mu.Lock()
 	defer player.mu.Unlock()
 	return channelID != "" && player.VoiceChannelID != "" && player.VoiceChannelID != channelID
@@ -74,7 +74,7 @@ func (player *GuildPlayer) adoptVoice(conn voiceConnection, channelID string) bo
 	return true
 }
 
-func joinVoiceWithGatewayRetry(session *discordgo.Session, player *GuildPlayer, channelID string) (voiceConnection, error) {
+func joinVoiceWithRetry(session *discordgo.Session, player *GuildPlayer, channelID string) (voiceConnection, error) {
 	guildID := player.GuildID
 	var conn voiceConnection
 	var err error
@@ -111,7 +111,7 @@ func markPlayerLoading(player *GuildPlayer, guildID string) bool {
 	player.Paused = false
 	player.AutoMixAdvanced = false
 	player.mu.Unlock()
-	forgetAwaitingDiscord(guildID)
+	forgetAwaiting(guildID)
 
 	if err := queue.SetPaused(guildID, false); err != nil {
 		logger.Errorf("Failed to clear paused state: %v", err)
@@ -191,7 +191,7 @@ func repeatCopyOf(song *queue.Song) *queue.Song {
 	}
 }
 
-func advanceQueueAfterSong(guildID string, song *queue.Song) {
+func advanceAfterSong(guildID string, song *queue.Song) {
 	finalQueue, err := queue.GetQueue(guildID, false)
 	if err != nil {
 		logger.Errorf("Failed to reload queue for repeat check: %v", err)
@@ -247,7 +247,7 @@ func reloadVolumeAndFade(player *GuildPlayer, guildID string, fade *fadeSettings
 	player.mu.Lock()
 	player.Volume = q.Volume / 100.0
 	player.mu.Unlock()
-	*fade = fadeSettingsFromQueue(q)
+	*fade = readFadeSettings(q)
 }
 
 func endPlayback(session *discordgo.Session, guildID, reason string) error {
@@ -354,7 +354,7 @@ func (p *songPlayback) claimPlayer() bool {
 }
 
 func (p *songPlayback) joinVoiceForSong() bool {
-	if err := prepareVoiceConnection(p.session, p.player, p.guildID, p.queue.VoiceChannelID); err != nil {
+	if err := prepareVoice(p.session, p.player, p.guildID, p.queue.VoiceChannelID); err != nil {
 		if errors.Is(err, errSessionHalted) {
 			return false
 		}
@@ -418,7 +418,7 @@ func (p *songPlayback) isStillCurrentSong() (bool, playResult) {
 func (p *songPlayback) playUntilDone(firstFrameCh chan struct{}) (playResult, bool) {
 	p.seekTime = p.song.SeekTime
 	p.normalization = p.queue.Normalization
-	p.fade = fadeSettingsFromQueue(p.queue)
+	p.fade = readFadeSettings(p.queue)
 	session, guildID := p.session, p.guildID
 	announceNext := func(next *queue.Song) {
 		nq, err := queue.GetQueue(guildID, false)
@@ -456,7 +456,7 @@ func (p *songPlayback) playUntilDone(firstFrameCh chan struct{}) (playResult, bo
 		}
 
 		p.saveCrashPosition()
-		return p.handlePlaybackFailure(err), false
+		return p.handleFailure(err), false
 	}
 }
 
@@ -500,7 +500,7 @@ func (p *songPlayback) takeRestartRequest() (string, bool) {
 }
 
 func (p *songPlayback) restart(restartReason string) bool {
-	restartURL, restartErr := resolveRestartStreamURL(p.guildID, p.song, p.queue.SponsorBlock, p.bitrate, p.streamURL)
+	restartURL, restartErr := resolveRestartURL(p.guildID, p.song, p.queue.SponsorBlock, p.bitrate, p.streamURL)
 	if restartErr != nil {
 		logger.Warnf("Failed to resolve stream URL for %s: %v", restartReason, restartErr)
 		return false
@@ -525,13 +525,13 @@ func (p *songPlayback) saveCrashPosition() {
 	}
 }
 
-func (p *songPlayback) handlePlaybackFailure(err error) playResult {
+func (p *songPlayback) handleFailure(err error) playResult {
 	isStreamStall := strings.Contains(err.Error(), "stream stalled")
 	if isStreamStall {
 		announceReconnect(p.session, p.guildID, p.song)
 	}
 
-	isVoiceError := isVoiceConnectionError(err.Error())
+	isVoiceError := isVoiceError(err.Error())
 	if isVoiceError {
 		logger.Warnf("Voice connection error detected, clearing dead connection for guild: %s", p.guildID)
 		if conn := p.player.currentVoice(); conn != nil {
@@ -552,7 +552,7 @@ func (p *songPlayback) handlePlaybackFailure(err error) playResult {
 			logger.Infof("Waiting 3 seconds before reconnecting voice for guild: %s", p.guildID)
 			delay = 3 * time.Second
 		} else {
-			invalidatePreCacheSong(p.guildID, p.song.ID)
+			invalidatePreCache(p.guildID, p.song.ID)
 		}
 		isRetrying := waitBeforeRetry(p.player, err, delay)
 		p.abort()
@@ -591,7 +591,7 @@ func (p *songPlayback) finishSong() playResult {
 		logger.Errorf("Failed to clear playing state after song finish: %v", err)
 	}
 
-	advanceQueueAfterSong(p.guildID, p.song)
+	advanceAfterSong(p.guildID, p.song)
 
 	go preCacheNext(p.guildID, p.bitrate)
 

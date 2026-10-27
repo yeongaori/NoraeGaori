@@ -52,9 +52,9 @@ func readLog(t *testing.T, path string) string {
 	return string(data)
 }
 
-func TestProgressRewritesTheTerminalLine(t *testing.T) {
+func TestProgressRewritesLine(t *testing.T) {
 	terminal := useConsole(t, true)
-	tag := "TestProgressRewritesTheTerminalLine"
+	tag := "TestProgressRewritesLine"
 
 	logger.Progress(1, "deno.zip: 1%")
 	logger.Progress(2, "deno.zip: 2%")
@@ -66,9 +66,9 @@ func TestProgressRewritesTheTerminalLine(t *testing.T) {
 	}
 }
 
-func TestProgressPrintsEveryTenPercentWhenNotATerminal(t *testing.T) {
+func TestProgressTenPercentSteps(t *testing.T) {
 	pipe := useConsole(t, false)
-	tag := "TestProgressPrintsEveryTenPercentWhenNotATerminal"
+	tag := "TestProgressTenPercentSteps"
 
 	for percent := 1; percent <= 35; percent++ {
 		logger.Progress(percent, "ffmpeg.zip")
@@ -84,11 +84,11 @@ func TestProgressPrintsEveryTenPercentWhenNotATerminal(t *testing.T) {
 	}
 }
 
-func TestProgressKeepsOneLineInTheLogFile(t *testing.T) {
+func TestProgressOneLogLine(t *testing.T) {
 	useConsole(t, false)
 	resetLogFileState(t)
 	path := filepath.Join(t.TempDir(), "latest.log")
-	tag := "TestProgressKeepsOneLineInTheLogFile"
+	tag := "TestProgressOneLogLine"
 	logger.SetLogFile(path)
 
 	logger.Info("start")
@@ -111,11 +111,11 @@ func TestProgressKeepsOneLineInTheLogFile(t *testing.T) {
 	}
 }
 
-func TestProgressStaysLastWhenAnotherLineIsLogged(t *testing.T) {
+func TestProgressStaysLast(t *testing.T) {
 	terminal := useConsole(t, true)
 	resetLogFileState(t)
 	path := filepath.Join(t.TempDir(), "latest.log")
-	tag := "TestProgressStaysLastWhenAnotherLineIsLogged"
+	tag := "TestProgressStaysLast"
 	logger.SetLogFile(path)
 
 	logger.Info("start")
@@ -138,11 +138,11 @@ func TestProgressStaysLastWhenAnotherLineIsLogged(t *testing.T) {
 	}
 }
 
-func TestStandardLogOutputKeepsTheProgressLineLast(t *testing.T) {
+func TestStandardLogKeepsProgressLast(t *testing.T) {
 	useConsole(t, false)
 	resetLogFileState(t)
 	path := filepath.Join(t.TempDir(), "latest.log")
-	tag := "TestStandardLogOutputKeepsTheProgressLineLast"
+	tag := "TestStandardLogKeepsProgressLast"
 	logger.SetLogFile(path)
 
 	logger.Progress(12, "ffmpeg.zip: 12%")
@@ -156,7 +156,7 @@ func TestStandardLogOutputKeepsTheProgressLineLast(t *testing.T) {
 	}
 }
 
-func TestEndProgressWithoutProgressWritesNothing(t *testing.T) {
+func TestEndProgressNoProgress(t *testing.T) {
 	terminal := useConsole(t, true)
 
 	logger.EndProgress()
@@ -166,7 +166,7 @@ func TestEndProgressWithoutProgressWritesNothing(t *testing.T) {
 	}
 }
 
-func TestIsTerminalRejectsARegularFile(t *testing.T) {
+func TestIsTerminalRegularFile(t *testing.T) {
 	file, err := os.CreateTemp(t.TempDir(), "stdout")
 	if err != nil {
 		t.Fatalf("failed to create the file: %v", err)

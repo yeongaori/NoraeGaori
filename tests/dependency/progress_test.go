@@ -54,8 +54,8 @@ func writeArchive(t *testing.T, payload []byte) string {
 	return archive
 }
 
-func TestZipProgressCountsOnlyTheExtractedMembers(t *testing.T) {
-	archive := writeArchive(t, buildZip(t, map[string]string{
+func TestExtractMembersZipProgress(t *testing.T) {
+	archive := writeArchive(t, createZip(t, map[string]string{
 		"a-deno":   strings.Repeat("a", 300),
 		"b-deno":   strings.Repeat("b", 700),
 		"c-denort": strings.Repeat("c", 9000),
@@ -72,8 +72,8 @@ func TestZipProgressCountsOnlyTheExtractedMembers(t *testing.T) {
 	}
 }
 
-func TestTarXzProgressReachesFullOnlyAfterTheLastMember(t *testing.T) {
-	archive := writeArchive(t, buildTarXz(t, map[string]string{
+func TestExtractMembersTarXzFull(t *testing.T) {
+	archive := writeArchive(t, createTarXz(t, map[string]string{
 		"bundle/bin/a-ffmpeg":  strings.Repeat("\x00", 4<<20),
 		"bundle/bin/b-ffprobe": incompressible(5 << 19),
 	}))
@@ -98,9 +98,9 @@ func TestTarXzProgressReachesFullOnlyAfterTheLastMember(t *testing.T) {
 	}
 }
 
-func TestTarXzProgressReachesFullWhenTheTarballEndsBeforeTheFile(t *testing.T) {
-	tarball := buildTarXz(t, map[string]string{"bundle/bin/ffmpeg": "binary"})
-	trailer := buildTarXz(t, map[string]string{"bundle/bin/extra": incompressible(3 << 20)})
+func TestExtractMembersTarXzShort(t *testing.T) {
+	tarball := createTarXz(t, map[string]string{"bundle/bin/ffmpeg": "binary"})
+	trailer := createTarXz(t, map[string]string{"bundle/bin/extra": incompressible(3 << 20)})
 	archive := writeArchive(t, append(tarball, trailer...))
 	report, reports := recordProgress()
 
@@ -131,11 +131,11 @@ func readSyscalls(t *testing.T) int {
 	return 0
 }
 
-func TestTarXzExtractionReadsTheArchiveInLargeChunks(t *testing.T) {
+func TestExtractMembersTarXzChunks(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("read syscalls are counted through /proc/self/io")
 	}
-	archive := writeArchive(t, buildTarXz(t, map[string]string{"bundle/bin/ffmpeg": incompressible(2 << 20)}))
+	archive := writeArchive(t, createTarXz(t, map[string]string{"bundle/bin/ffmpeg": incompressible(2 << 20)}))
 	destination := t.TempDir()
 
 	before := readSyscalls(t)
@@ -149,8 +149,8 @@ func TestTarXzExtractionReadsTheArchiveInLargeChunks(t *testing.T) {
 	}
 }
 
-func TestZipWithoutTheMembersReportsNothing(t *testing.T) {
-	archive := writeArchive(t, buildZip(t, map[string]string{"denort": "binary"}))
+func TestExtractMembersZipEmpty(t *testing.T) {
+	archive := writeArchive(t, createZip(t, map[string]string{"denort": "binary"}))
 	report, reports := recordProgress()
 
 	if err := dependency.HookExtractMembers(archive, mirror.ZipArchive, []string{"deno"}, t.TempDir(), report); err == nil {
@@ -161,7 +161,7 @@ func TestZipWithoutTheMembersReportsNothing(t *testing.T) {
 	}
 }
 
-func stubExtractionProgress(t *testing.T) (*[]string, *int) {
+func stubExtractProgress(t *testing.T) (*[]string, *int) {
 	t.Helper()
 
 	messages := []string{}
@@ -171,11 +171,11 @@ func stubExtractionProgress(t *testing.T) (*[]string, *int) {
 	return &messages, &ended
 }
 
-func TestExtractWithProgressAnnouncesEachStep(t *testing.T) {
+func TestExtractWithProgressSteps(t *testing.T) {
 	useWorkingDirectory(t)
 	read := logtest.Capture(t)
-	messages, ended := stubExtractionProgress(t)
-	archive := writeArchive(t, buildZip(t, map[string]string{"deno": strings.Repeat("d", 2000)}))
+	messages, ended := stubExtractProgress(t)
+	archive := writeArchive(t, createZip(t, map[string]string{"deno": strings.Repeat("d", 2000)}))
 	found := &mirror.Candidate{Archive: mirror.ZipArchive, Members: []string{"deno"}}
 
 	if err := dependency.HookExtractWithProgress("deno-x86_64-unknown-linux-gnu.zip", archive, found, t.TempDir()); err != nil {
@@ -194,11 +194,11 @@ func TestExtractWithProgressAnnouncesEachStep(t *testing.T) {
 	}
 }
 
-func TestExtractWithProgressEndsTheLineOnFailure(t *testing.T) {
+func TestExtractWithProgressFailure(t *testing.T) {
 	useWorkingDirectory(t)
 	read := logtest.Capture(t)
-	_, ended := stubExtractionProgress(t)
-	archive := writeArchive(t, buildZip(t, map[string]string{"denort": "binary"}))
+	_, ended := stubExtractProgress(t)
+	archive := writeArchive(t, createZip(t, map[string]string{"denort": "binary"}))
 	found := &mirror.Candidate{Archive: mirror.ZipArchive, Members: []string{"deno"}}
 
 	if err := dependency.HookExtractWithProgress("deno.zip", archive, found, t.TempDir()); err == nil {

@@ -55,7 +55,7 @@ func findJsRuntime(name string) (*tool, int) {
 	return nil, len(jsRuntimes)
 }
 
-func newestInstalledJsRuntime(target *mirror.Platform) (*Binary, bool) {
+func findNewestJsRuntime(target *mirror.Platform) (*Binary, bool) {
 	for _, t := range jsRuntimes {
 		if binary, ok := newestInstalled(t, target); ok {
 			return binary, true
@@ -67,19 +67,19 @@ func newestInstalledJsRuntime(target *mirror.Platform) (*Binary, bool) {
 func prepareJsRuntime(target *mirror.Platform) {
 	if binary, ok := findSystemJsRuntime(); ok {
 		jsRuntimeSlot.replace(binary)
-		announceSystemJsRuntime(binary)
+		announceSystemJs(binary)
 		return
 	}
 
 	binary, results := discover(jsRuntimes, target, installFunc(target))
 	if binary == nil {
-		binary, _ = newestInstalledJsRuntime(target)
+		binary, _ = findNewestJsRuntime(target)
 	}
 	jsRuntimeSlot.replace(binary)
-	announceDownloadedJsRuntime(binary, results, target)
+	announceDownloadedJs(binary, results, target)
 }
 
-func announceSystemJsRuntime(binary *Binary) {
+func announceSystemJs(binary *Binary) {
 	t, _ := findJsRuntime(binary.Tool)
 	if binary.Tool == jsRuntimes[0].name {
 		logger.Infof("Using the system %s %s for yt-dlp", t.displayName, binary.Version)
@@ -88,7 +88,7 @@ func announceSystemJsRuntime(binary *Binary) {
 	logger.Warnf("Using the system %s %s for yt-dlp; install Deno for the best YouTube support", t.displayName, binary.Version)
 }
 
-func announceDownloadedJsRuntime(binary *Binary, results []probeResult, target *mirror.Platform) {
+func announceDownloadedJs(binary *Binary, results []probeResult, target *mirror.Platform) {
 	if binary == nil {
 		logger.Warnf("No JavaScript runtime is available for %s; install Deno with the system package manager or from https://deno.com, since YouTube playback may fail or miss formats without one", target)
 		return

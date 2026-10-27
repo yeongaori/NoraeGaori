@@ -34,11 +34,11 @@ var (
 
 var (
 	presetCategories = [...]Category{ShortcutVolume, ShortcutEQ, ShortcutFilter}
-	presetRecipes    = buildPresetRecipes()
+	presetRecipes    = createPresetRecipes()
 	defaultRecipe    = DefaultRecipe()
 )
 
-func buildPresetRecipes() map[int]*Recipe {
+func createPresetRecipes() map[int]*Recipe {
 	recipes := make(map[int]*Recipe, len(presetStyles))
 	for preset, styles := range presetStyles {
 		recipe := DefaultRecipe()

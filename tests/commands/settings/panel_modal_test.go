@@ -10,7 +10,7 @@ import (
 	"noraegaori/tests/testutil/dbtest"
 )
 
-func TestModalValuesAreFoundInEverySubmittedShape(t *testing.T) {
+func TestFindModalValueShapes(t *testing.T) {
 	for name, check := range map[string]struct {
 		component discordgo.MessageComponent
 		want      string
@@ -28,7 +28,7 @@ func TestModalValuesAreFoundInEverySubmittedShape(t *testing.T) {
 	}
 }
 
-func TestModalValuesIgnoreForeignFieldsAndEmptySelects(t *testing.T) {
+func TestFindModalValueIgnores(t *testing.T) {
 	for name, component := range map[string]discordgo.MessageComponent{
 		"another input":   &discordgo.TextInput{CustomID: "other", Value: "75"},
 		"an empty select": &discordgo.Label{Component: &discordgo.SelectMenu{CustomID: settings.HookModalValueID}},
@@ -41,11 +41,11 @@ func TestModalValuesIgnoreForeignFieldsAndEmptySelects(t *testing.T) {
 	}
 }
 
-func TestModalCarriesTheCurrentValueAndItsRoute(t *testing.T) {
+func TestCreateSettingModalRoute(t *testing.T) {
 	dbtest.Setup(t)
 	seedSetting(t, "volume", "120")
 
-	response := settings.HookBuildSettingModal(checkGuildID, settings.HookBuildPanelTarget(settings.HookPanelTargetFields{IsAdmin: true, Category: settings.HookCategoryPlayback}), specFor(t, "volume"))
+	response := settings.HookCreateSettingModal(checkGuildID, settings.HookCreatePanelTarget(settings.HookPanelTargetFields{IsAdmin: true, Category: settings.HookCategoryPlayback}), specFor(t, "volume"))
 
 	if response.Type != discordgo.InteractionResponseModal {
 		t.Errorf("got response type %v, want a modal", response.Type)
@@ -58,7 +58,7 @@ func TestModalCarriesTheCurrentValueAndItsRoute(t *testing.T) {
 	}
 }
 
-func TestTextModalAllowsAnEmptySubmissionButNumbersDoNot(t *testing.T) {
+func TestCreateSettingModalEmpty(t *testing.T) {
 	dbtest.Setup(t)
 
 	checks := []struct {
@@ -71,7 +71,7 @@ func TestTextModalAllowsAnEmptySubmissionButNumbersDoNot(t *testing.T) {
 	for i := range checks {
 		check := &checks[i]
 		spec := specFor(t, check.key)
-		response := settings.HookBuildSettingModal(checkGuildID, settings.HookBuildPanelTarget(settings.HookPanelTargetFields{IsAdmin: true, Category: *spec.HookCategory()}), spec)
+		response := settings.HookCreateSettingModal(checkGuildID, settings.HookCreatePanelTarget(settings.HookPanelTargetFields{IsAdmin: true, Category: *spec.HookCategory()}), spec)
 
 		row, ok := response.Data.Components[0].(discordgo.ActionsRow)
 		if !ok {
@@ -91,7 +91,7 @@ func choiceModalMenu(t *testing.T, key string) discordgo.SelectMenu {
 	t.Helper()
 
 	spec := specFor(t, key)
-	response := settings.HookBuildSettingModal(checkGuildID, settings.HookBuildPanelTarget(settings.HookPanelTargetFields{IsAdmin: true, Category: *spec.HookCategory()}), spec)
+	response := settings.HookCreateSettingModal(checkGuildID, settings.HookCreatePanelTarget(settings.HookPanelTargetFields{IsAdmin: true, Category: *spec.HookCategory()}), spec)
 
 	label, ok := response.Data.Components[0].(discordgo.Label)
 	if !ok {
@@ -110,7 +110,7 @@ func choiceModalMenu(t *testing.T, key string) discordgo.SelectMenu {
 	return menu
 }
 
-func TestChoiceModalsOfferASelectWithTheCurrentValue(t *testing.T) {
+func TestSelectModalCurrentValue(t *testing.T) {
 	dbtest.Setup(t)
 	seedSetting(t, "repeat", settings.HookValueRepeatSingle)
 

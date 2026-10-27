@@ -94,7 +94,7 @@ func liveVote(t *testing.T, guildID string, kind vote.Kind) *vote.Session {
 	return session
 }
 
-func TestAwaitVoteOutcomeRendersACancellation(t *testing.T) {
+func TestAwaitVoteOutcomeCancelled(t *testing.T) {
 	stubs := stubVoteEffects(t)
 	session := liveVote(t, "lifecycle-cancel", vote.KindSkip)
 
@@ -129,7 +129,7 @@ func TestAwaitVoteOutcomeRendersACancellation(t *testing.T) {
 	}
 }
 
-func TestAwaitVoteOutcomeStaysQuietWhenTheVotePassed(t *testing.T) {
+func TestAwaitVoteOutcomePassed(t *testing.T) {
 	stubs := stubVoteEffects(t)
 	session := liveVote(t, "lifecycle-passed", vote.KindSkip)
 
@@ -185,7 +185,7 @@ func TestAwaitVoteOutcomeExpires(t *testing.T) {
 	}
 }
 
-func TestAwaitVoteOutcomeSeedsItsOwnReaction(t *testing.T) {
+func TestAwaitVoteOutcomeSeeds(t *testing.T) {
 	stubs := stubVoteEffects(t)
 	stubs.shortenExpiry(t, 10*time.Millisecond)
 
@@ -200,7 +200,7 @@ func TestAwaitVoteOutcomeSeedsItsOwnReaction(t *testing.T) {
 	}
 }
 
-func TestExpiredTimerDoesNotOverwriteAResolvedVote(t *testing.T) {
+func TestAwaitVoteOutcomeResolved(t *testing.T) {
 	stubs := stubVoteEffects(t)
 	stubs.shortenExpiry(t, 10*time.Millisecond)
 
@@ -216,7 +216,7 @@ func TestExpiredTimerDoesNotOverwriteAResolvedVote(t *testing.T) {
 	}
 }
 
-func TestEndedBeforeAttachPrefersTheRecordedReason(t *testing.T) {
+func TestEndedBeforeAttachReason(t *testing.T) {
 	session := vote.HookNewVoteSession("g1", vote.KindSkip, "Vote", "⏭", "voice1", 2)
 
 	if reason := vote.HookEndedBeforeAttach(session); reason != vote.HookVoteEndCancelled {

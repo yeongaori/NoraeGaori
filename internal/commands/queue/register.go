@@ -22,8 +22,8 @@ func Register(cmd func(string) messages.CommandStrings) {
 		},
 		Handler: HandleQueue,
 	})
-	discord.RegisterComponentRoute(queuePageRoute, turnQueuePage)
-	discord.RegisterComponentRoute(queueMixRoute, openMixPanel)
+	discord.RegisterRoute(queuePageRoute, turnQueuePage)
+	discord.RegisterRoute(queueMixRoute, openMixPanel)
 	command.RegisterLocalized(cmd, &command.Command{
 		Name: "remove",
 		Options: []*discordgo.ApplicationCommandOption{

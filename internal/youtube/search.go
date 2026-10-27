@@ -38,7 +38,7 @@ func Search(guildID, query string, requesterName, requesterID string) (*Song, er
 	return GetVideoInfo(guildID, videoURL, requesterName, requesterID)
 }
 
-func SearchMultipleContext(ctx context.Context, query string, limit int) ([]SearchResult, error) {
+func SearchManyContext(ctx context.Context, query string, limit int) ([]SearchResult, error) {
 	if searchClient == nil {
 		return nil, fmt.Errorf("search client not initialized")
 	}
@@ -65,5 +65,5 @@ func SearchMultiple(query string, limit int) ([]SearchResult, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	return SearchMultipleContext(ctx, query, limit)
+	return SearchManyContext(ctx, query, limit)
 }

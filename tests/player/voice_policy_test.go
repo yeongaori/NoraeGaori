@@ -52,7 +52,7 @@ func hasStoredQueue(t *testing.T, guildID string) bool {
 	return q != nil
 }
 
-func TestVoicePolicyStaysOnWhenTheSettingCannotBeRead(t *testing.T) {
+func TestVoicePolicyUnreadable(t *testing.T) {
 	setupPlayerDB(t, "policy-seeded", 0)
 	dbtest.CloseUntilCleanup(t)
 
@@ -61,7 +61,7 @@ func TestVoicePolicyStaysOnWhenTheSettingCannotBeRead(t *testing.T) {
 	}
 }
 
-func TestStartingPlaybackForgetsTheAutoPause(t *testing.T) {
+func TestStartPlaybackSessionForgets(t *testing.T) {
 	guildID := "autoresume-forget-on-start"
 	autoPausedPlayer(t, guildID, "voice")
 	testutil.Swap(t, player.HookPlayCurrentSong, func(*discordgo.Session, string) player.HookPlayResult { return player.HookPlayStop })
@@ -122,7 +122,7 @@ func TestStopFollowsAutoLeave(t *testing.T) {
 	}
 }
 
-func TestTheStopCommandFollowsAutoLeave(t *testing.T) {
+func TestStopCommandFollowsAutoLeave(t *testing.T) {
 	guildID := "stop-command-autoleave-off"
 	guildPlayer := preparedPlayer(t, guildID, 1)
 	conn := guildPlayer.HookCurrentVoice().(*mockVoiceConn)
@@ -140,7 +140,7 @@ func TestTheStopCommandFollowsAutoLeave(t *testing.T) {
 	}
 }
 
-func TestLeaveDisconnectsEvenWithAutoLeaveOff(t *testing.T) {
+func TestLeaveIgnoresAutoLeave(t *testing.T) {
 	guildID := "leave-autoleave-off"
 	guildPlayer := preparedPlayer(t, guildID, 1)
 	conn := guildPlayer.HookCurrentVoice().(*mockVoiceConn)
@@ -161,7 +161,7 @@ func TestLeaveDisconnectsEvenWithAutoLeaveOff(t *testing.T) {
 	}
 }
 
-func TestTeardownLeavesEvenWithAutoLeaveOff(t *testing.T) {
+func TestTeardownIgnoresAutoLeave(t *testing.T) {
 	guildID := "teardown-autoleave-off"
 	guildPlayer := preparedPlayer(t, guildID, 1)
 	conn := guildPlayer.HookCurrentVoice().(*mockVoiceConn)
@@ -179,7 +179,7 @@ func TestTeardownLeavesEvenWithAutoLeaveOff(t *testing.T) {
 	}
 }
 
-func TestAnEmptyQueueEndFollowsAutoLeave(t *testing.T) {
+func TestPlaySingleSongEndAutoLeave(t *testing.T) {
 	for _, isLeaving := range []bool{true, false} {
 		t.Run(fmt.Sprintf("autoleave=%t", isLeaving), func(t *testing.T) {
 			guildID := fmt.Sprintf("queue-end-autoleave-%t", isLeaving)
@@ -241,9 +241,9 @@ func endSessionOnStop(guildPlayer *player.GuildPlayer, sessionDone chan struct{}
 	}()
 }
 
-func TestPauseForEmptyChannelDoesNothingWithAutoPauseOff(t *testing.T) {
+func TestPauseForEmptyChannelOff(t *testing.T) {
 	guildID := "autopause-off"
-	guildPlayer, conn, _ := playingPlayerWithVoice(t, guildID)
+	guildPlayer, conn, _ := createVoicePlayer(t, guildID)
 	setAutoPause(t, guildID, false)
 	t.Cleanup(func() { player.HookForgetAutoPause(guildID) })
 
@@ -263,9 +263,9 @@ func TestPauseForEmptyChannelDoesNothingWithAutoPauseOff(t *testing.T) {
 	}
 }
 
-func TestPauseForEmptyChannelStaysInVoiceWithAutoLeaveOff(t *testing.T) {
+func TestPauseForEmptyChannelStays(t *testing.T) {
 	guildID := "autopause-stay"
-	guildPlayer, conn, sessionDone := playingPlayerWithVoice(t, guildID)
+	guildPlayer, conn, sessionDone := createVoicePlayer(t, guildID)
 	setAutoLeave(t, guildID, false)
 	t.Cleanup(func() { player.HookForgetAutoPause(guildID) })
 	endSessionOnStop(guildPlayer, sessionDone)
@@ -289,12 +289,12 @@ func TestPauseForEmptyChannelStaysInVoiceWithAutoLeaveOff(t *testing.T) {
 	}
 }
 
-func TestTheQueueEndNoticeIsSentBeforeTheQueueIsCleared(t *testing.T) {
+func TestPlaySingleSongNoticeFirst(t *testing.T) {
 	guildID := "queue-end-notice"
 	preparedPlayer(t, guildID, 0)
 	setAutoLeave(t, guildID, false)
 	session, requests := discordtest.StubAPIResponder(t, respondAsDiscord)
-	testutil.Swap(t, player.HookAnnouncePlaybackEnd, player.HookSendPlaybackEndMessage)
+	testutil.Swap(t, player.HookAnnouncePlaybackEnd, player.HookSendEndMessage)
 
 	if got := player.HookPlaySingleSong(session, guildID); got != player.HookPlayStop {
 		t.Fatalf("got %v, want playStop for an empty queue", got)
@@ -314,7 +314,7 @@ func TestTheQueueEndNoticeIsSentBeforeTheQueueIsCleared(t *testing.T) {
 	}
 }
 
-func TestPrepareVoiceConnectionRejoinsOnlyForAnotherChannel(t *testing.T) {
+func TestPrepareVoiceRejoins(t *testing.T) {
 	cases := []struct {
 		name      string
 		current   string
@@ -337,8 +337,8 @@ func TestPrepareVoiceConnectionRejoinsOnlyForAnotherChannel(t *testing.T) {
 			guildPlayer.HookMu().Unlock()
 			joins := countVoiceJoins(t, newMockVoiceConn())
 
-			if err := player.HookPrepareVoiceConnection(nil, guildPlayer, guildID, testCase.target); err != nil {
-				t.Fatalf("prepareVoiceConnection returned %v, want nil", err)
+			if err := player.HookPrepareVoice(nil, guildPlayer, guildID, testCase.target); err != nil {
+				t.Fatalf("prepareVoice returned %v, want nil", err)
 			}
 
 			if got := joins.Load(); got != testCase.wantJoins {
@@ -354,7 +354,7 @@ func TestPrepareVoiceConnectionRejoinsOnlyForAnotherChannel(t *testing.T) {
 	}
 }
 
-func TestPlaybackEndEmbedOnlyMentionsLeavingWhenLeaving(t *testing.T) {
+func TestPlaybackEndEmbedLeaving(t *testing.T) {
 	playerStrings := &messages.T("g1").Player
 
 	cases := []struct {

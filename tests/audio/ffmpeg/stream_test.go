@@ -59,7 +59,7 @@ func drain(t *testing.T, stream *ffmpeg.Stream) int {
 	}
 }
 
-func TestStartRunsTheGivenBinary(t *testing.T) {
+func TestStartRunsBinary(t *testing.T) {
 	binary := fakeFFmpeg(t, "head -c "+frameBytes(2)+" /dev/zero")
 	counter := &exitCounter{}
 
@@ -79,7 +79,7 @@ func TestStartRunsTheGivenBinary(t *testing.T) {
 	}
 }
 
-func TestStopReportsTheExitOnce(t *testing.T) {
+func TestStopReportsExitOnce(t *testing.T) {
 	binary := fakeFFmpeg(t, "exec sleep 30")
 	counter := &exitCounter{}
 
@@ -96,7 +96,7 @@ func TestStopReportsTheExitOnce(t *testing.T) {
 	}
 }
 
-func TestStopReportsTheExitOnlyAfterTheProcessIsGone(t *testing.T) {
+func TestStopWaitsForProcess(t *testing.T) {
 	pidFile := filepath.Join(t.TempDir(), "pid")
 	binary := fakeFFmpeg(t, "echo $$ > "+pidFile+"; exec sleep 30")
 	var stillRunning atomic.Bool
@@ -134,7 +134,7 @@ func TestStopReportsTheExitOnlyAfterTheProcessIsGone(t *testing.T) {
 	}
 }
 
-func TestAFailedRunStillReportsItsExit(t *testing.T) {
+func TestStartFailureReportsExit(t *testing.T) {
 	binary := fakeFFmpeg(t, "echo 'no such input' >&2; exit 1")
 	counter := &exitCounter{}
 
@@ -157,7 +157,7 @@ func TestAFailedRunStillReportsItsExit(t *testing.T) {
 	}
 }
 
-func TestStartPipeFeedsStdinAndClosesIt(t *testing.T) {
+func TestStartPipeFeedsStdin(t *testing.T) {
 	binary := fakeFFmpeg(t, "cat")
 	counter := &exitCounter{}
 	reader, writer := io.Pipe()
@@ -189,7 +189,7 @@ func (recorder *closeRecorder) Close() error {
 	return nil
 }
 
-func TestStartPipeClosesStdinWhenTheBinaryIsMissing(t *testing.T) {
+func TestStartPipeMissingBinary(t *testing.T) {
 	stdin := &closeRecorder{Reader: strings.NewReader("")}
 	counter := &exitCounter{}
 

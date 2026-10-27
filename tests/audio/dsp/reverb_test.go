@@ -8,7 +8,7 @@ import (
 	"noraegaori/internal/audio/dsp"
 )
 
-func TestReverbStaysSilentThroughThePredelay(t *testing.T) {
+func TestReverbSilentInPredelay(t *testing.T) {
 	output := renderImpulse(dsp.PrepareReverb(), 5)
 	predelay := int(0.045 * dsp.SampleRate)
 
@@ -20,7 +20,7 @@ func TestReverbStaysSilentThroughThePredelay(t *testing.T) {
 	}
 }
 
-func TestReverbBuildsUpAndPeaksAfterThePredelay(t *testing.T) {
+func TestReverbPeaksPastPredelay(t *testing.T) {
 	output := renderImpulse(dsp.PrepareReverb(), 25)
 	window := int(0.005 * dsp.SampleRate)
 
@@ -36,7 +36,7 @@ func TestReverbBuildsUpAndPeaksAfterThePredelay(t *testing.T) {
 	}
 }
 
-func TestReverbDecaysAtTheMeasuredRate(t *testing.T) {
+func TestReverbDecayRate(t *testing.T) {
 	output := renderImpulse(dsp.PrepareReverb(), 200)
 	level := func(second float64) float64 {
 		start := int(second*dsp.SampleRate) * dsp.Channels
@@ -49,7 +49,7 @@ func TestReverbDecaysAtTheMeasuredRate(t *testing.T) {
 	}
 }
 
-func TestReverbChannelsAreDecorrelated(t *testing.T) {
+func TestReverbDecorrelated(t *testing.T) {
 	output := renderImpulse(dsp.PrepareReverb(), 100)
 
 	var leftRight, leftLeft, rightRight float64
@@ -63,7 +63,7 @@ func TestReverbChannelsAreDecorrelated(t *testing.T) {
 	}
 }
 
-func TestReverbWetSitsThirteenDecibelsUnderPinkNoise(t *testing.T) {
+func TestReverbWetLevel(t *testing.T) {
 	reverb := dsp.PrepareReverb()
 	noise := &audiotest.PinkNoise{}
 	input := make([]float64, dsp.FrameSize*dsp.Channels)
@@ -83,7 +83,7 @@ func TestReverbWetSitsThirteenDecibelsUnderPinkNoise(t *testing.T) {
 	}
 }
 
-func TestReverbIgnoresHowTheInputIsSplit(t *testing.T) {
+func TestReverbIgnoresSplit(t *testing.T) {
 	input := make([]float64, 40*dsp.FrameSize*dsp.Channels)
 	(&audiotest.PinkNoise{}).Fill(input, 8000)
 	whole := make([]float64, len(input))
@@ -104,7 +104,7 @@ func TestReverbIgnoresHowTheInputIsSplit(t *testing.T) {
 	}
 }
 
-func TestReverbSendsTheAverageOfBothChannels(t *testing.T) {
+func TestReverbSendsChannelAverage(t *testing.T) {
 	leftOnly := make([]float64, 10*dsp.FrameSize*dsp.Channels)
 	(&audiotest.PinkNoise{}).Fill(leftOnly, 8000)
 	centred := make([]float64, len(leftOnly))
@@ -124,7 +124,7 @@ func TestReverbSendsTheAverageOfBothChannels(t *testing.T) {
 	}
 }
 
-func TestReverbCutsTheLows(t *testing.T) {
+func TestReverbCutsLows(t *testing.T) {
 	low := audiotest.ToneResponse(reverbWet(), 50)
 	mid := audiotest.ToneResponse(reverbWet(), 1000)
 

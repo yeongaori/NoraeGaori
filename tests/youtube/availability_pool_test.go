@@ -30,7 +30,7 @@ func alwaysAvailable(string) (bool, bool, error) {
 	return true, false, nil
 }
 
-func TestCheckBatchOrdersResultsByIndex(t *testing.T) {
+func TestCheckBatchOrdersByIndex(t *testing.T) {
 	urls := []string{"a", "b", "c", "d", "e"}
 
 	pool := newTestPool(4, func(url string) (bool, bool, error) {
@@ -56,7 +56,7 @@ func TestCheckBatchOrdersResultsByIndex(t *testing.T) {
 	}
 }
 
-func TestCheckBatchEmptyReturnsImmediately(t *testing.T) {
+func TestCheckBatchEmpty(t *testing.T) {
 	pool := newTestPool(2, alwaysAvailable)
 	defer pool.Close()
 
@@ -99,7 +99,7 @@ func TestRetryRecoversFromRateLimit(t *testing.T) {
 	}
 }
 
-func TestRetryExhaustedReturnsError(t *testing.T) {
+func TestRetryExhausted(t *testing.T) {
 	var mu sync.Mutex
 	calls := 0
 
@@ -135,7 +135,7 @@ func TestRetryExhaustedReturnsError(t *testing.T) {
 	}
 }
 
-func TestBackoffDelayIsExponentialAndCapped(t *testing.T) {
+func TestRetryDelayExponential(t *testing.T) {
 	pool := youtube.HookNewAvailabilityPool(1)
 	*pool.HookRetryDelay() = 1 * time.Second
 	*pool.HookMaxRetryDelay() = 10 * time.Second
@@ -149,7 +149,7 @@ func TestBackoffDelayIsExponentialAndCapped(t *testing.T) {
 	}
 }
 
-func TestCloseWithRetriesInFlight(t *testing.T) {
+func TestCloseRetriesInFlight(t *testing.T) {
 	pool := youtube.HookNewAvailabilityPool(4)
 	*pool.HookCheckFn() = func(string) (bool, bool, error) {
 		return false, false, fmt.Errorf("HTTP Error 429: Too Many Requests")
@@ -182,7 +182,7 @@ func TestCloseIsIdempotent(t *testing.T) {
 	pool.Close()
 }
 
-func TestCheckBatchReturnsWhenPoolCloses(t *testing.T) {
+func TestCheckBatchPoolCloses(t *testing.T) {
 	blocked := make(chan struct{})
 
 	pool := newTestPool(1, func(string) (bool, bool, error) {
@@ -210,7 +210,7 @@ func TestCheckBatchReturnsWhenPoolCloses(t *testing.T) {
 	close(blocked)
 }
 
-func TestCheckBatchImmediateInvokesCallbackOncePerJob(t *testing.T) {
+func TestCheckBatchImmediateOnce(t *testing.T) {
 	pool := newTestPool(3, alwaysAvailable)
 	defer pool.Close()
 

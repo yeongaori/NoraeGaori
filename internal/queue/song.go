@@ -75,7 +75,7 @@ func (s *Song) ResetRetry() {
 	s.RetryCount = 0
 }
 
-func (s *Song) UpdatePlaybackPosition() int {
+func (s *Song) UpdatePosition() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if !s.PlaybackStarted.IsZero() {

@@ -39,7 +39,7 @@ type Processor struct {
 
 func prepareDeck(side *Side, isOutgoing bool, window *Window) deckState {
 	return deckState{
-		curves: buildDeckCurves(side, isOutgoing, window.Bars),
+		curves: createDeckCurves(side, isOutgoing, window.Bars),
 		effect: prepareEffect(side.FX, isOutgoing, window),
 		buffer: make([]float64, dsp.FrameSize*dsp.Channels),
 	}

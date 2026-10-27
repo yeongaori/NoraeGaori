@@ -40,7 +40,7 @@ func cachePromptChannel(t *testing.T, session *discordgo.Session, permissions in
 	}
 }
 
-func TestClearPromptReactionsSkipsTheClearWithoutManageMessages(t *testing.T) {
+func TestClearPromptReactionsSkips(t *testing.T) {
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusNoContent))
 	cachePromptChannel(t, session, discordgo.PermissionAddReactions|discordgo.PermissionSendMessages)
 
@@ -53,7 +53,7 @@ func TestClearPromptReactionsSkipsTheClearWithoutManageMessages(t *testing.T) {
 	}
 }
 
-func TestClearPromptReactionsClearsEverythingWithManageMessages(t *testing.T) {
+func TestClearPromptReactionsAll(t *testing.T) {
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusNoContent))
 	cachePromptChannel(t, session, discordgo.PermissionAddReactions|discordgo.PermissionManageMessages)
 
@@ -66,7 +66,7 @@ func TestClearPromptReactionsClearsEverythingWithManageMessages(t *testing.T) {
 	}
 }
 
-func TestClearPromptReactionsTriesWhenTheChannelIsUncached(t *testing.T) {
+func TestClearPromptReactionsUncached(t *testing.T) {
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusNoContent))
 	session.State.User = &discordgo.User{ID: "bot"}
 
@@ -79,7 +79,7 @@ func TestClearPromptReactionsTriesWhenTheChannelIsUncached(t *testing.T) {
 	}
 }
 
-func TestRemoveUserReactionKeepsABystandersReactionWithoutManageMessages(t *testing.T) {
+func TestRemoveUserReactionKeeps(t *testing.T) {
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusNoContent))
 	cachePromptChannel(t, session, discordgo.PermissionAddReactions|discordgo.PermissionSendMessages)
 
@@ -90,7 +90,7 @@ func TestRemoveUserReactionKeepsABystandersReactionWithoutManageMessages(t *test
 	}
 }
 
-func TestRemoveUserReactionRemovesABystandersReactionWithManageMessages(t *testing.T) {
+func TestRemoveUserReactionRemoves(t *testing.T) {
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusNoContent))
 	cachePromptChannel(t, session, discordgo.PermissionAddReactions|discordgo.PermissionManageMessages)
 
@@ -103,7 +103,7 @@ func TestRemoveUserReactionRemovesABystandersReactionWithManageMessages(t *testi
 	}
 }
 
-func TestClearPromptReactionsFallsBackToTheBotsOwnReaction(t *testing.T) {
+func TestClearPromptReactionsOwn(t *testing.T) {
 	session, requests := discordtest.StubAPI(t, func(r *http.Request) int {
 		if r.URL.Path == reactionsPath {
 			return http.StatusForbidden
@@ -120,7 +120,7 @@ func TestClearPromptReactionsFallsBackToTheBotsOwnReaction(t *testing.T) {
 	}
 }
 
-func TestClearPromptReactionsLeavesTheBotsReactionAloneWhenAllAreCleared(t *testing.T) {
+func TestClearPromptReactionsKeepsBot(t *testing.T) {
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusNoContent))
 
 	discord.ClearPromptReactions(session, "chan1", "msg1", "⬇️")

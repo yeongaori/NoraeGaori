@@ -16,7 +16,7 @@ func constantFrame(value float64) []float64 {
 	return frame
 }
 
-func TestLimiterLeavesQuietAudioUntouched(t *testing.T) {
+func TestLimiterLeavesQuietAudio(t *testing.T) {
 	var limiter dsp.Limiter
 	phase := 0.0
 	frame := audiotest.SineFloatFrame(440, 20000, &phase)
@@ -31,7 +31,7 @@ func TestLimiterLeavesQuietAudioUntouched(t *testing.T) {
 	}
 }
 
-func TestLimiterKeepsDoubleFullScaleUnderTheCeiling(t *testing.T) {
+func TestLimiterCapsDoubleFullScale(t *testing.T) {
 	var limiter dsp.Limiter
 	phase := 0.0
 
@@ -55,7 +55,7 @@ func TestLimiterKeepsDoubleFullScaleUnderTheCeiling(t *testing.T) {
 	}
 }
 
-func TestLimiterRampsDownBeforeASpike(t *testing.T) {
+func TestLimiterRampsDownForSpike(t *testing.T) {
 	var limiter dsp.Limiter
 	frame := constantFrame(10000)
 	spike := 500
@@ -86,7 +86,7 @@ func TestLimiterRampsDownBeforeASpike(t *testing.T) {
 	}
 }
 
-func TestLimiterReleasesAfterTheLoudPart(t *testing.T) {
+func TestLimiterReleases(t *testing.T) {
 	var limiter dsp.Limiter
 	limiter.ProcessStereo(constantFrame(2*dsp.FullScale), dsp.FullScale)
 
@@ -110,7 +110,7 @@ func TestLimiterReleasesAfterTheLoudPart(t *testing.T) {
 	}
 }
 
-func TestLimiterDoesNotStepTheGainAtAFrameBoundary(t *testing.T) {
+func TestLimiterSmoothAtFrameEdge(t *testing.T) {
 	var limiter dsp.Limiter
 	limiter.ProcessStereo(constantFrame(20000), dsp.FullScale)
 	frame := constantFrame(20000)
@@ -133,7 +133,7 @@ func TestLimiterDoesNotStepTheGainAtAFrameBoundary(t *testing.T) {
 	}
 }
 
-func TestLimiterSoftClipsWhatTheRampCannotCatch(t *testing.T) {
+func TestLimiterSoftClipsOvershoot(t *testing.T) {
 	for _, sign := range []float64{1, -1} {
 		var limiter dsp.Limiter
 		limiter.ProcessStereo(constantFrame(sign*20000), dsp.FullScale)
@@ -158,7 +158,7 @@ func TestLimiterSoftClipsWhatTheRampCannotCatch(t *testing.T) {
 	}
 }
 
-func TestLimiterBecomesIdleAfterRelease(t *testing.T) {
+func TestLimiterIdlesOnRelease(t *testing.T) {
 	var limiter dsp.Limiter
 	if !limiter.IsIdle() {
 		t.Fatal("a fresh limiter is not idle")
@@ -184,7 +184,7 @@ func TestLimiterBecomesIdleAfterRelease(t *testing.T) {
 	}
 }
 
-func TestLimiterReleasesWithoutAGainStep(t *testing.T) {
+func TestLimiterReleasesSmoothly(t *testing.T) {
 	var limiter dsp.Limiter
 	limiter.ProcessStereo(constantFrame(2*dsp.FullScale), dsp.FullScale)
 

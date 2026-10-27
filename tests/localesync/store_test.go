@@ -7,7 +7,7 @@ import (
 	"noraegaori/tests/testutil/dbtest"
 )
 
-func TestDatabaseStoreSavesAndReplacesBaselines(t *testing.T) {
+func TestDatabaseStoreReplaces(t *testing.T) {
 	dbtest.Setup(t)
 	store := localesync.DatabaseStore{}
 
@@ -30,7 +30,7 @@ func TestDatabaseStoreSavesAndReplacesBaselines(t *testing.T) {
 	}
 }
 
-func TestDatabaseStoreReportsDatabaseFailures(t *testing.T) {
+func TestDatabaseStoreFailures(t *testing.T) {
 	dbtest.Setup(t)
 	dbtest.CloseUntilCleanup(t)
 	store := localesync.DatabaseStore{}

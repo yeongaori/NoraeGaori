@@ -47,7 +47,7 @@ func (gh *fakeGitHub) rateLimit(repo string) {
 	gh.publishWebRelease(repo)
 }
 
-func TestLatestReleaseUsesTheAPIWhenItAnswers(t *testing.T) {
+func TestLatestReleaseUsesAPI(t *testing.T) {
 	gh := serveGitHub(t)
 	gh.api.PublishRelease(t, "/repos/owner/answers/releases/latest", download.Release{TagName: "from-api"})
 	gh.publishWebRelease("owner/answers")
@@ -58,7 +58,7 @@ func TestLatestReleaseUsesTheAPIWhenItAnswers(t *testing.T) {
 	}
 }
 
-func TestLatestReleaseFallsBackWhenTheAPIIsRateLimited(t *testing.T) {
+func TestLatestReleaseRateLimited(t *testing.T) {
 	read := logtest.Capture(t)
 	gh := serveGitHub(t)
 	name := fmt.Sprintf("owner/limited-%d", time.Now().UnixNano())
@@ -93,7 +93,7 @@ func TestLatestReleaseFallsBackWhenTheAPIIsRateLimited(t *testing.T) {
 	}
 }
 
-func TestA429FallsBackToGitHubWeb(t *testing.T) {
+func TestLatestRelease429Fallback(t *testing.T) {
 	gh := serveGitHub(t)
 	gh.api.Status["/repos/owner/toomany/releases/latest"] = http.StatusTooManyRequests
 	gh.publishWebRelease("owner/toomany")
@@ -104,7 +104,7 @@ func TestA429FallsBackToGitHubWeb(t *testing.T) {
 	}
 }
 
-func TestAForbiddenReplyThatIsNotARateLimitDoesNotFallBack(t *testing.T) {
+func TestLatestReleasePlain403(t *testing.T) {
 	gh := serveGitHub(t)
 	gh.api.Status["/repos/owner/forbidden/releases/latest"] = http.StatusForbidden
 	gh.publishWebRelease("owner/forbidden")
@@ -116,7 +116,7 @@ func TestAForbiddenReplyThatIsNotARateLimitDoesNotFallBack(t *testing.T) {
 	}
 }
 
-func TestFallbackErrorNamesTheRateLimit(t *testing.T) {
+func TestLatestReleaseNamesLimit(t *testing.T) {
 	gh := serveGitHub(t)
 	gh.api.RateLimit("/repos/owner/nowhere/releases/latest")
 	gh.web.Files["/owner/nowhere/releases/latest"] = "<html>no redirect</html>"
@@ -130,7 +130,7 @@ func TestFallbackErrorNamesTheRateLimit(t *testing.T) {
 	}
 }
 
-func TestFallbackKeepsTheReleaseWithoutAFeed(t *testing.T) {
+func TestLatestReleaseNoFeed(t *testing.T) {
 	gh := serveGitHub(t)
 	gh.rateLimit("owner/nofeed")
 	delete(gh.web.Files, "/owner/nofeed/releases.atom")
@@ -144,7 +144,7 @@ func TestFallbackKeepsTheReleaseWithoutAFeed(t *testing.T) {
 	}
 }
 
-func TestFallbackLeavesThePublishTimeEmptyWithoutTheTagsFeedEntry(t *testing.T) {
+func TestLatestReleaseNoPublishTime(t *testing.T) {
 	gh := serveGitHub(t)
 	gh.rateLimit("owner/otherfeed")
 	gh.web.PublishFeed("owner/otherfeed", releasetest.FeedEntry{Tag: "autobuild-2026-09-24", Updated: "2026-09-24T01:02:03Z"})
@@ -163,7 +163,7 @@ func TestFallbackLeavesThePublishTimeEmptyWithoutTheTagsFeedEntry(t *testing.T) 
 	}
 }
 
-func TestFallbackRejectsAChecksumFileItCannotRead(t *testing.T) {
+func TestLatestReleaseBadChecksums(t *testing.T) {
 	gh := serveGitHub(t)
 	gh.rateLimit("owner/badsums")
 	gh.web.Files["/owner/badsums/releases/download/latest/checksums.sha256"] = "not a checksum file\n"
@@ -173,7 +173,7 @@ func TestFallbackRejectsAChecksumFileItCannotRead(t *testing.T) {
 	}
 }
 
-func TestRateLimitedStatusNamesTheLimit(t *testing.T) {
+func TestRateLimitedStatusNamesLimit(t *testing.T) {
 	limited := &download.StatusError{URL: "https://api.example/x", Code: http.StatusForbidden, RateLimited: true}
 	plain := &download.StatusError{URL: "https://api.example/x", Code: http.StatusForbidden}
 

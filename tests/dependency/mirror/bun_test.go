@@ -31,7 +31,7 @@ func bunRelease(fake *releasetest.Server, version string, withLinux bool) downlo
 	return release
 }
 
-func TestBunGitHubPicksTheNewestSupportedRelease(t *testing.T) {
+func TestBunGitHubPicksNewest(t *testing.T) {
 	fake := releasetest.Serve(t)
 	fake.PublishRelease(t, bunReleasesPath+"1", []download.Release{
 		bunRelease(fake, "1.4.2", true),
@@ -51,7 +51,7 @@ func TestBunGitHubPicksTheNewestSupportedRelease(t *testing.T) {
 	}
 }
 
-func TestBunGitHubSkipsReleasesWithoutThePlatform(t *testing.T) {
+func TestBunGitHubSkipsOtherPlatforms(t *testing.T) {
 	fake := releasetest.Serve(t)
 	fake.PublishRelease(t, bunReleasesPath+"1", []download.Release{
 		bunRelease(fake, "1.3.14", false),
@@ -94,7 +94,7 @@ func TestBunGitHubReportsNoBuild(t *testing.T) {
 	releasetest.RequireErrorIs(t, err, mirror.ErrNoBuild)
 }
 
-func TestBunGitHubStopsAfterTheLastPage(t *testing.T) {
+func TestBunGitHubStopsAtLastPage(t *testing.T) {
 	fake := releasetest.Serve(t)
 	for page := 1; page <= mirror.HookBunMaximumPages; page++ {
 		fake.PublishRelease(t, bunReleasesPath+string(rune('0'+page)), []download.Release{bunRelease(fake, "1.4.2", true)})
@@ -105,7 +105,7 @@ func TestBunGitHubStopsAfterTheLastPage(t *testing.T) {
 	releasetest.RequireErrorIs(t, err, mirror.ErrNoBuild)
 }
 
-func TestBunGitHubFailsWhenItCannotBeChecked(t *testing.T) {
+func TestBunGitHubUncheckable(t *testing.T) {
 	fake := releasetest.Serve(t)
 	release := bunRelease(fake, "1.3.14", true)
 	release.Assets[0].Digest = "sha256:" + releasetest.SumB

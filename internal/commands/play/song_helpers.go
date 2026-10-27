@@ -93,7 +93,7 @@ func addVideoFromPlaylist(s *discordgo.Session, i *discordgo.InteractionCreate, 
 		isDuplicate = true
 	}
 
-	return videoWithPlaylistEmbed(i.GuildID, song, isDuplicate), isDuplicate, nil
+	return createPlaylistVideoEmbed(i.GuildID, song, isDuplicate), isDuplicate, nil
 }
 
 func ensureQueueForVoice(s *discordgo.Session, i *discordgo.InteractionCreate, q *queue.Queue, voiceChannelID string) error {

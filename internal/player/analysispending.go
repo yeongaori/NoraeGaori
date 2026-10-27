@@ -7,7 +7,7 @@ var (
 	pendingAnalysesMu sync.Mutex
 )
 
-func changeAnalysisPending(guildID string, step int, songIDs []int) {
+func changePending(guildID string, step int, songIDs []int) {
 	if len(songIDs) == 0 {
 		return
 	}
@@ -34,11 +34,11 @@ func changeAnalysisPending(guildID string, step int, songIDs []int) {
 }
 
 func markAnalysisPending(guildID string, songIDs ...int) {
-	changeAnalysisPending(guildID, 1, songIDs)
+	changePending(guildID, 1, songIDs)
 }
 
 func clearAnalysisPending(guildID string, songIDs ...int) {
-	changeAnalysisPending(guildID, -1, songIDs)
+	changePending(guildID, -1, songIDs)
 }
 
 func PendingAnalyses(guildID string) map[int]int {

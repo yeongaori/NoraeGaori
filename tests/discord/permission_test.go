@@ -23,7 +23,7 @@ func TestCallerVoiceChannelEmpty(t *testing.T) {
 	}
 }
 
-func TestEveryoneRoleCanGrantAdministrator(t *testing.T) {
+func TestIsGuildAdminEveryoneRole(t *testing.T) {
 	const guildID = "everyone-admin-guild"
 	session := &discordgo.Session{State: discordgo.NewState()}
 	err := session.State.GuildAdd(&discordgo.Guild{
@@ -46,7 +46,7 @@ func TestEveryoneRoleCanGrantAdministrator(t *testing.T) {
 	}
 }
 
-func TestGuildAdminFallsBackToDiscordForAnUncachedGuild(t *testing.T) {
+func TestIsGuildAdminUncached(t *testing.T) {
 	const guildID = "uncached-guild"
 	adminBits := strconv.FormatInt(discordgo.PermissionAdministrator, 10)
 	session, requests := discordtest.StubAPIResponder(t, func(*http.Request) (int, string) {
@@ -71,7 +71,7 @@ func TestGuildAdminFallsBackToDiscordForAnUncachedGuild(t *testing.T) {
 	}
 }
 
-func TestGuildAdminRefusesWhenTheGuildCannotBeFound(t *testing.T) {
+func TestIsGuildAdminMissingGuild(t *testing.T) {
 	session, _ := discordtest.StubAPI(t, discordtest.Status(http.StatusNotFound))
 
 	if discord.IsGuildAdmin(session, "missing-guild", memberOf("owner")) {

@@ -33,7 +33,7 @@ func defaultCategory(isAdmin bool) string {
 	return categoryPlayback
 }
 
-func buildSettingsComponents(view *panelView) []discordgo.MessageComponent {
+func createPanelControls(view *panelView) []discordgo.MessageComponent {
 	components := make([]discordgo.MessageComponent, 0, 2)
 	components = append(components, categoryRow(view))
 	if len(view.specs) > 0 {

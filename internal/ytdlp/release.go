@@ -86,7 +86,7 @@ func GetDownloadAsset(release *GitHubRelease) (string, string, error) {
 	return asset.Name, asset.BrowserDownloadURL, nil
 }
 
-func VerifyChecksumSignature(checksums, signature []byte) error {
+func VerifySignature(checksums, signature []byte) error {
 	keyring, err := openpgp.ReadArmoredKeyRing(bytes.NewReader(signingKeyArmor))
 	if err != nil {
 		return fmt.Errorf("failed to read the bundled signing key: %w", err)
@@ -120,7 +120,7 @@ func fetchChecksums(release *GitHubRelease) (map[string]string, error) {
 		return nil, fmt.Errorf("failed to fetch %s: %w", checksumSigAssetName, err)
 	}
 
-	if err := VerifyChecksumSignature(checksums, signature); err != nil {
+	if err := VerifySignature(checksums, signature); err != nil {
 		return nil, fmt.Errorf("%s for release %s: %w", checksumAssetName, release.TagName, err)
 	}
 

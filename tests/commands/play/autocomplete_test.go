@@ -13,7 +13,7 @@ import (
 	"noraegaori/internal/commands/play"
 )
 
-func resetAutocompleteState() {
+func resetAutocomplete() {
 	play.HookAutocompleteCacheMutex.Lock()
 	*play.HookAutocompleteCacheEntries = make(map[string]*play.HookAutocompleteCacheEntry)
 	*play.HookAutocompleteCacheOrder = list.New()
@@ -36,23 +36,23 @@ type videoChoiceCase struct {
 	check    func(t *testing.T, got string)
 }
 
-func TestBuildVideoChoiceName(t *testing.T) {
+func TestCreateVideoChoiceName(t *testing.T) {
 	longTitle := strings.Repeat("a", 200)
 
 	testCases := slices.Concat(
-		videoChoiceTitleCases(longTitle),
-		videoChoiceSuffixCases(longTitle),
+		videoTitleCases(longTitle),
+		videoSuffixCases(longTitle),
 	)
 
 	for i := range testCases {
 		testCase := &testCases[i]
 		t.Run(testCase.name, func(t *testing.T) {
-			testCase.check(t, play.HookBuildVideoChoiceName(testCase.title, testCase.channel, testCase.duration))
+			testCase.check(t, play.HookCreateVideoChoiceName(testCase.title, testCase.channel, testCase.duration))
 		})
 	}
 }
 
-func videoChoiceTitleCases(longTitle string) []videoChoiceCase {
+func videoTitleCases(longTitle string) []videoChoiceCase {
 	longKoreanTitle := strings.Repeat("가", 200)
 
 	return []videoChoiceCase{
@@ -101,7 +101,7 @@ func videoChoiceTitleCases(longTitle string) []videoChoiceCase {
 	}
 }
 
-func videoChoiceSuffixCases(longTitle string) []videoChoiceCase {
+func videoSuffixCases(longTitle string) []videoChoiceCase {
 	return []videoChoiceCase{
 		{
 			name:     "Empty duration omits the parenthetical",
@@ -151,7 +151,7 @@ func videoChoiceSuffixCases(longTitle string) []videoChoiceCase {
 	}
 }
 
-func TestNormalizeAutocompleteQuery(t *testing.T) {
+func TestNormalizeQuery(t *testing.T) {
 	testCases := []struct {
 		name  string
 		query string
@@ -168,30 +168,30 @@ func TestNormalizeAutocompleteQuery(t *testing.T) {
 	for i := range testCases {
 		testCase := &testCases[i]
 		t.Run(testCase.name, func(t *testing.T) {
-			if got := play.HookNormalizeAutocompleteQuery(testCase.query); got != testCase.want {
+			if got := play.HookNormalizeQuery(testCase.query); got != testCase.want {
 				t.Errorf("got %q, want %q", got, testCase.want)
 			}
 		})
 	}
 }
 
-func TestAutocompleteCacheEviction(t *testing.T) {
-	resetAutocompleteState()
+func TestSaveChoicesEviction(t *testing.T) {
+	resetAutocomplete()
 
 	for index := 0; index < play.HookAutocompleteCacheCapacity; index++ {
 		key := "suggest|en|q" + strconv.Itoa(index)
-		play.HookSaveAutocompleteChoices(key, testChoices(key))
+		play.HookSaveChoices(key, testChoices(key))
 	}
 
 	if (*play.HookAutocompleteCacheOrder).Len() != play.HookAutocompleteCacheCapacity {
 		t.Fatalf("list length = %d, want %d", (*play.HookAutocompleteCacheOrder).Len(), play.HookAutocompleteCacheCapacity)
 	}
 
-	if _, found := play.HookLoadAutocompleteChoices("suggest|en|q0"); !found {
+	if _, found := play.HookLoadChoices("suggest|en|q0"); !found {
 		t.Fatal("q0 should still be cached")
 	}
 
-	play.HookSaveAutocompleteChoices("suggest|en|overflow", testChoices("overflow"))
+	play.HookSaveChoices("suggest|en|overflow", testChoices("overflow"))
 
 	if (*play.HookAutocompleteCacheOrder).Len() != play.HookAutocompleteCacheCapacity {
 		t.Errorf("list length = %d, want %d", (*play.HookAutocompleteCacheOrder).Len(), play.HookAutocompleteCacheCapacity)
@@ -199,25 +199,25 @@ func TestAutocompleteCacheEviction(t *testing.T) {
 	if len(*play.HookAutocompleteCacheEntries) != play.HookAutocompleteCacheCapacity {
 		t.Errorf("map length = %d, want %d", len(*play.HookAutocompleteCacheEntries), play.HookAutocompleteCacheCapacity)
 	}
-	if _, found := play.HookLoadAutocompleteChoices("suggest|en|q0"); !found {
+	if _, found := play.HookLoadChoices("suggest|en|q0"); !found {
 		t.Error("q0 was recently used and should have survived eviction")
 	}
-	if _, found := play.HookLoadAutocompleteChoices("suggest|en|q1"); found {
+	if _, found := play.HookLoadChoices("suggest|en|q1"); found {
 		t.Error("q1 was least recently used and should have been evicted")
 	}
 }
 
-func TestAutocompleteCacheExpiry(t *testing.T) {
-	resetAutocompleteState()
+func TestLoadChoicesExpiry(t *testing.T) {
+	resetAutocomplete()
 
 	key := "suggest|en|never"
-	play.HookSaveAutocompleteChoices(key, testChoices("never gonna give you up"))
+	play.HookSaveChoices(key, testChoices("never gonna give you up"))
 
 	play.HookAutocompleteCacheMutex.Lock()
 	*(*play.HookAutocompleteCacheEntries)[key].HookTimestamp() = time.Now().Add(-play.HookAutocompleteCacheTTL - time.Second)
 	play.HookAutocompleteCacheMutex.Unlock()
 
-	if _, found := play.HookLoadAutocompleteChoices(key); found {
+	if _, found := play.HookLoadChoices(key); found {
 		t.Fatal("expired entry should report a miss")
 	}
 	if len(*play.HookAutocompleteCacheEntries) != 0 {
@@ -228,19 +228,19 @@ func TestAutocompleteCacheExpiry(t *testing.T) {
 	}
 }
 
-func TestLoadAutocompleteChoicesReturnsCopy(t *testing.T) {
-	resetAutocompleteState()
+func TestLoadChoicesReturnsCopy(t *testing.T) {
+	resetAutocomplete()
 
 	key := "video|en|ditto"
-	play.HookSaveAutocompleteChoices(key, testChoices("original"))
+	play.HookSaveChoices(key, testChoices("original"))
 
-	first, found := play.HookLoadAutocompleteChoices(key)
+	first, found := play.HookLoadChoices(key)
 	if !found {
 		t.Fatal("entry should be cached")
 	}
 	first[0] = &discordgo.ApplicationCommandOptionChoice{Name: "mutated", Value: "mutated"}
 
-	second, found := play.HookLoadAutocompleteChoices(key)
+	second, found := play.HookLoadChoices(key)
 	if !found {
 		t.Fatal("entry should still be cached")
 	}
@@ -249,11 +249,11 @@ func TestLoadAutocompleteChoicesReturnsCopy(t *testing.T) {
 	}
 }
 
-func TestLoadNearestAutocompleteChoices(t *testing.T) {
-	resetAutocompleteState()
+func TestLoadNearestChoices(t *testing.T) {
+	resetAutocomplete()
 
-	play.HookSaveAutocompleteChoices(play.HookAutocompleteCacheKey("suggest", "en", "ne"), testChoices("ne"))
-	play.HookSaveAutocompleteChoices(play.HookAutocompleteCacheKey("suggest", "en", "never"), testChoices("never"))
+	play.HookSaveChoices(play.HookAutocompleteCacheKey("suggest", "en", "ne"), testChoices("ne"))
+	play.HookSaveChoices(play.HookAutocompleteCacheKey("suggest", "en", "never"), testChoices("never"))
 
 	testCases := []struct {
 		name  string
@@ -271,7 +271,7 @@ func TestLoadNearestAutocompleteChoices(t *testing.T) {
 	for i := range testCases {
 		testCase := &testCases[i]
 		t.Run(testCase.name, func(t *testing.T) {
-			got := play.HookLoadNearestAutocompleteChoices(testCase.kind, "en", testCase.query)
+			got := play.HookLoadNearestChoices(testCase.kind, "en", testCase.query)
 			if testCase.want == "" {
 				if got != nil {
 					t.Errorf("expected nil, got %v", got)
@@ -285,35 +285,35 @@ func TestLoadNearestAutocompleteChoices(t *testing.T) {
 	}
 }
 
-func TestAutocompleteDebounceSupersedes(t *testing.T) {
-	resetAutocompleteState()
+func TestBeginAutocompleteSupersedes(t *testing.T) {
+	resetAutocomplete()
 
-	first := play.HookBeginAutocompleteFetch("user1", "guild1", "play")
-	second := play.HookBeginAutocompleteFetch("user1", "guild1", "play")
+	first := play.HookBeginAutocomplete("user1", "guild1", "play")
+	second := play.HookBeginAutocomplete("user1", "guild1", "play")
 
 	if first == second {
 		t.Fatalf("generations should differ, both were %d", first)
 	}
-	if play.HookIsLatestAutocompleteFetch("user1", "guild1", "play", first) {
+	if play.HookIsLatestAutocomplete("user1", "guild1", "play", first) {
 		t.Error("the superseded generation should not be latest")
 	}
-	if !play.HookIsLatestAutocompleteFetch("user1", "guild1", "play", second) {
+	if !play.HookIsLatestAutocomplete("user1", "guild1", "play", second) {
 		t.Error("the newest generation should be latest")
 	}
 }
 
-func TestAutocompleteDebounceIsolation(t *testing.T) {
-	resetAutocompleteState()
+func TestBeginAutocompleteIsolation(t *testing.T) {
+	resetAutocomplete()
 
-	guildOne := play.HookBeginAutocompleteFetch("user1", "guild1", "play")
-	play.HookBeginAutocompleteFetch("user1", "guild2", "play")
-	play.HookBeginAutocompleteFetch("user1", "guild1", "search")
-	play.HookBeginAutocompleteFetch("user2", "guild1", "play")
+	guildOne := play.HookBeginAutocomplete("user1", "guild1", "play")
+	play.HookBeginAutocomplete("user1", "guild2", "play")
+	play.HookBeginAutocomplete("user1", "guild1", "search")
+	play.HookBeginAutocomplete("user2", "guild1", "play")
 
-	if !play.HookIsLatestAutocompleteFetch("user1", "guild1", "play", guildOne) {
+	if !play.HookIsLatestAutocomplete("user1", "guild1", "play", guildOne) {
 		t.Error("another guild, command, or user should not supersede this fetch")
 	}
-	if play.HookIsLatestAutocompleteFetch("user3", "guild9", "play", 1) {
+	if play.HookIsLatestAutocomplete("user3", "guild9", "play", 1) {
 		t.Error("an unknown key should never report as latest")
 	}
 }

@@ -55,7 +55,7 @@ func trackFields(guildID string, panel *messages.AutoMixPanelMessages, row *tran
 	return outgoing, incoming
 }
 
-func createTransitionEditorEmbed(guildID string, row *transitionRow, tab *editorTab, errorMessage string) *discordgo.MessageEmbed {
+func createEditorEmbed(guildID string, row *transitionRow, tab *editorTab, errorMessage string) *discordgo.MessageEmbed {
 	panel := &messages.T(guildID).AutoMixPanel
 	categories := row.tabCategories(tab)
 
@@ -96,7 +96,7 @@ func createTransitionEditorEmbed(guildID string, row *transitionRow, tab *editor
 	}
 }
 
-func createTransitionEditorComponents(guildID string, row *transitionRow, tab *editorTab, location *panelLocation) []discordgo.MessageComponent {
+func createEditorControls(guildID string, row *transitionRow, tab *editorTab, location *panelLocation) []discordgo.MessageComponent {
 	panel := &messages.T(guildID).AutoMixPanel
 	songArgument := strconv.Itoa(row.fromSong.ID)
 	pageArgument := strconv.Itoa(location.page)

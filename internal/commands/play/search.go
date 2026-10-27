@@ -60,7 +60,7 @@ func HandleSearch(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 	selection, cancelSelection := startSearchSelection(s, i, results, customID, voiceChannelID, searchMessageID)
 
-	if err = discord.UpdateResponseEmbedWithComponents(s, i, embed, components); err != nil {
+	if err = discord.UpdateResponsePanel(s, i, embed, components); err != nil {
 		cancelSelection()
 		logger.Errorf("Failed to update message with results: %v", err)
 		return err
@@ -72,7 +72,7 @@ func HandleSearch(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	}
 	selection.panelMsg = searchMsg
 
-	go expireSearchSelection(s, selection, cancelSelection)
+	go expireSearch(s, selection, cancelSelection)
 
 	return nil
 }
@@ -156,7 +156,7 @@ func (c *searchSelection) handle(s *discordgo.Session, i *discordgo.InteractionC
 
 	if i.Member.User.ID != c.original.Member.User.ID {
 		embed := messages.CreateWarningEmbed(messages.T(i.GuildID).Titles.NoPermission, messages.T(i.GuildID).Queue.OnlyRequester)
-		_ = discord.RespondEphemeralEmbed(s, i, embed)
+		_ = discord.RespondEphemeral(s, i, embed)
 		return
 	}
 
@@ -225,7 +225,7 @@ func (c *searchSelection) claimSearchSelection(s *discordgo.Session, i *discordg
 		searchSelectionsMu.Unlock()
 		logger.Debugf("Duplicate selection attempt ignored for search message: '%s'", c.searchMessageID)
 		embed := messages.CreateWarningEmbed(messages.T(i.GuildID).Queue.AlreadySelectedTitle, messages.T(i.GuildID).Queue.AlreadySelectedDesc)
-		_ = discord.RespondEphemeralEmbed(s, i, embed)
+		_ = discord.RespondEphemeral(s, i, embed)
 		return false
 	}
 	logger.Debugf("Marking search as selected: c.searchMessageID='%s'", c.searchMessageID)
@@ -293,7 +293,7 @@ func (c *searchSelection) addChoice(s *discordgo.Session, i *discordgo.Interacti
 }
 
 func editSearchPanel(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, state string) {
-	if err := discord.UpdateResponseEmbedWithComponents(s, i, embed, []discordgo.MessageComponent{}); err != nil {
+	if err := discord.UpdateResponsePanel(s, i, embed, []discordgo.MessageComponent{}); err != nil {
 		logger.Errorf("Failed to edit message to %s state: %v", state, err)
 	}
 }
@@ -322,7 +322,7 @@ func startSearchSelection(s *discordgo.Session, originalInteraction *discordgo.I
 	return selection, cleanup
 }
 
-func expireSearchSelection(s *discordgo.Session, selection *searchSelection, cleanup func()) {
+func expireSearch(s *discordgo.Session, selection *searchSelection, cleanup func()) {
 	defer cleanup()
 
 	select {
@@ -334,7 +334,7 @@ func expireSearchSelection(s *discordgo.Session, selection *searchSelection, cle
 	originalInteraction := selection.original
 	timeoutEmbed := messages.CreateWarningEmbed(messages.T(originalInteraction.GuildID).Queue.SearchTimeoutTitle, messages.T(originalInteraction.GuildID).Queue.SearchTimeoutDesc)
 
-	if err := discord.CloseComponentMessage(s, originalInteraction, selection.panelMsg, timeoutEmbed); err != nil {
+	if err := discord.ClosePanel(s, originalInteraction, selection.panelMsg, timeoutEmbed); err != nil {
 		logger.Errorf("Failed to close the search panel: %v", err)
 	}
 }

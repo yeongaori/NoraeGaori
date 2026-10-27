@@ -33,7 +33,7 @@ func TestSongIDsAndOwnership(t *testing.T) {
 	}
 }
 
-func TestRemovableFromDropsVanishedAndPlayingSongs(t *testing.T) {
+func TestRemovableFromDrops(t *testing.T) {
 	q := queuetest.QueueOf("a", "b", "c")
 	q.Playing = true
 
@@ -77,7 +77,7 @@ func seededRemoveVote(t *testing.T) (int, func() []int) {
 	}
 }
 
-func TestApplyingARemoveVote(t *testing.T) {
+func TestApplyRemoveVote(t *testing.T) {
 	t.Run("removes the target", func(t *testing.T) {
 		_, apply := seededRemoveVote(t)
 		if results := apply(); !slices.Equal(results, []int{1}) {

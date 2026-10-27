@@ -36,18 +36,18 @@ var HookLastThumbnail = lastThumbnail
 var HookLoadAvailability = loadAvailability
 var HookNewAvailabilityPool = newAvailabilityPool
 var HookParseYouTubeURL = parseYouTubeURL
-var HookResetAvailabilityCache = resetAvailabilityCache
+var HookResetCache = resetCache
 var HookRunYtDlpAvailability = &runYtDlpAvailability
 var HookSaveAvailability = saveAvailability
 var HookSaveVersionResult = saveVersionResult
 var HookStreamPipeArgs = streamPipeArgs
 var HookYtCircuitBreaker = &ytCircuitBreaker
 
-func HookBuildCircuitBreaker(fields *HookCircuitBreakerFields) *circuitBreaker {
+func HookCreateCircuitBreaker(fields *HookCircuitBreakerFields) *circuitBreaker {
 	return &circuitBreaker{state: fields.State, lastFailureTime: fields.LastFailureTime}
 }
 
-func HookBuildInnertubeClient(fields *HookInnertubeClientFields) *InnertubeClient {
+func HookCreateInnertubeClient(fields *HookInnertubeClientFields) *InnertubeClient {
 	return &InnertubeClient{clientName: fields.ClientName}
 }
 

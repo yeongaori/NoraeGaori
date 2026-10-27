@@ -234,7 +234,7 @@ func (versionmanager *VersionManager) HasUsableBinary() bool {
 	return false
 }
 
-func (versionmanager *VersionManager) ProvisionallyActivate(version, path string) {
+func (versionmanager *VersionManager) ActivateProvisional(version, path string) {
 	versionmanager.mu.Lock()
 	defer versionmanager.mu.Unlock()
 
@@ -301,7 +301,7 @@ func (versionmanager *VersionManager) SaveSuccess(version, videoID string) {
 
 func (versionmanager *VersionManager) SaveError(version, videoID string, errMsg string) {
 
-	if IsDefinitiveUnavailableError(errMsg) || IsNetworkError(errMsg) || IsRateLimitError(errMsg) {
+	if IsDefinitiveUnavailable(errMsg) || IsNetworkError(errMsg) || IsRateLimitError(errMsg) {
 		return
 	}
 
@@ -341,7 +341,7 @@ func (versionmanager *VersionManager) SaveError(version, videoID string, errMsg 
 	versionmanager.persist()
 }
 
-func (versionmanager *VersionManager) ActiveVersionIsFailing() bool {
+func (versionmanager *VersionManager) IsActiveFailing() bool {
 	versionmanager.mu.RLock()
 	defer versionmanager.mu.RUnlock()
 
@@ -372,13 +372,13 @@ func ChannelOf(version string) string {
 	return config.YtDlpChannelStable
 }
 
-var configuredChannelFn = resolveConfiguredChannel
+var configuredChannelFn = resolveChannel
 
 func ConfiguredChannel() string {
 	return configuredChannelFn()
 }
 
-func resolveConfiguredChannel() string {
+func resolveChannel() string {
 	cfg := config.GetConfig()
 	if cfg == nil || cfg.YtDlpChannel == "" {
 		return config.YtDlpChannelAuto

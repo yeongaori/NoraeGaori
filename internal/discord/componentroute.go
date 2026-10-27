@@ -19,7 +19,7 @@ type ComponentRoute func(s *discordgo.Session, ic *discordgo.InteractionCreate, 
 
 var componentRoutes sync.Map
 
-func RegisterComponentRoute(prefix string, route ComponentRoute) {
+func RegisterRoute(prefix string, route ComponentRoute) {
 	componentRoutes.Store(prefix, route)
 }
 

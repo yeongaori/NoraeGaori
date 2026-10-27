@@ -28,7 +28,7 @@ func endReasonOf(t *testing.T, session *vote.Session) (vote.HookVoteEndReason, b
 	}
 }
 
-func TestStopVotePassingSupersedesTheSkipVote(t *testing.T) {
+func TestCancelSupersededStopVote(t *testing.T) {
 	skip := seedVote(t, "rules-stop", vote.KindSkip)
 
 	vote.CancelSuperseded("rules-stop", vote.KindStop, false)
@@ -39,7 +39,7 @@ func TestStopVotePassingSupersedesTheSkipVote(t *testing.T) {
 	}
 }
 
-func TestSkipVotePassingEndsTheStopVoteOnlyWhenTheQueueEmpties(t *testing.T) {
+func TestCancelSupersededSkipVote(t *testing.T) {
 	stop := seedVote(t, "rules-skip-alive", vote.KindStop)
 
 	vote.CancelSuperseded("rules-skip-alive", vote.KindSkip, false)
@@ -58,7 +58,7 @@ func TestSkipVotePassingEndsTheStopVoteOnlyWhenTheQueueEmpties(t *testing.T) {
 	}
 }
 
-func TestCancelSkipVotesLeavesTheStopVoteAlone(t *testing.T) {
+func TestCancelSkipVotesKeepsStop(t *testing.T) {
 	skip := seedVote(t, "rules-new-song", vote.KindSkip)
 	stop := seedVote(t, "rules-new-song", vote.KindStop)
 
@@ -73,11 +73,11 @@ func TestCancelSkipVotesLeavesTheStopVoteAlone(t *testing.T) {
 	}
 }
 
-func TestCancelVotesForEndedPlaybackEndsEveryKind(t *testing.T) {
+func TestCancelOnPlaybackEnd(t *testing.T) {
 	skip := seedVote(t, "rules-playback", vote.KindSkip)
 	stop := seedVote(t, "rules-playback", vote.KindStop)
 
-	vote.CancelForEndedPlayback("rules-playback")
+	vote.CancelOnPlaybackEnd("rules-playback")
 
 	for _, session := range []*vote.Session{skip, stop} {
 		reason, ended := endReasonOf(t, session)
@@ -87,7 +87,7 @@ func TestCancelVotesForEndedPlaybackEndsEveryKind(t *testing.T) {
 	}
 }
 
-func TestVoteEndDescriptionCoversEveryReason(t *testing.T) {
+func TestVoteEndDescriptionReasons(t *testing.T) {
 	cases := []struct {
 		reason vote.HookVoteEndReason
 		want   string

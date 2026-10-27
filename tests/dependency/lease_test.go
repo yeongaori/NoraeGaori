@@ -22,7 +22,7 @@ func exists(path string) bool {
 	return err == nil
 }
 
-func TestReplacingFFmpegKeepsAHeldBuildUntilItIsReleased(t *testing.T) {
+func TestAcquireFFmpegHoldsBuild(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
 	old := installedFFmpeg(t, "2026.09.18.1200")
@@ -52,7 +52,7 @@ func TestReplacingFFmpegKeepsAHeldBuildUntilItIsReleased(t *testing.T) {
 	}
 }
 
-func TestRemoveRetiredRetriesAFailedRemoval(t *testing.T) {
+func TestRemoveRetiredRetries(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
 	old := installedFFmpeg(t, "2026.09.18.1200")
@@ -72,10 +72,10 @@ func TestRemoveRetiredRetriesAFailedRemoval(t *testing.T) {
 	}
 }
 
-func TestReplaceNeverRetiresSystemBinariesOrTheSamePath(t *testing.T) {
+func TestReplaceKeepsSystemBinaries(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
-	system := dependency.HookBuildBinary(&dependency.HookBinaryFields{Tool: "ffmpeg", Path: "/usr/bin/ffmpeg", IsSystem: true})
+	system := dependency.HookCreateBinary(&dependency.HookBinaryFields{Tool: "ffmpeg", Path: "/usr/bin/ffmpeg", IsSystem: true})
 	dependency.HookFfmpegSlot.HookReplace(system)
 	dependency.HookFfmpegSlot.HookReplace(installedFFmpeg(t, "2026.09.25.1845"))
 
@@ -87,7 +87,7 @@ func TestReplaceNeverRetiresSystemBinariesOrTheSamePath(t *testing.T) {
 	}
 }
 
-func TestRemoveRetiredKeepsABuildThatBecameActiveAgain(t *testing.T) {
+func TestRemoveRetiredKeepsActive(t *testing.T) {
 	useWorkingDirectory(t)
 	resetState(t)
 	testutil.Swap(t, dependency.HookRemoveDirectory, func(string) error { return errors.New("the file is in use") })
@@ -110,7 +110,7 @@ func TestRemoveRetiredKeepsABuildThatBecameActiveAgain(t *testing.T) {
 	}
 }
 
-func TestAcquireFFmpegFallsBackToThePath(t *testing.T) {
+func TestAcquireFFmpegPathFallback(t *testing.T) {
 	resetState(t)
 
 	binary := dependency.AcquireFFmpeg()
@@ -120,7 +120,7 @@ func TestAcquireFFmpegFallsBackToThePath(t *testing.T) {
 	}
 }
 
-func TestFFmpegLocationArgsPointAtTheDownloadedBuild(t *testing.T) {
+func TestFFmpegLocationArgs(t *testing.T) {
 	downloaded := &dependency.Binary{Tool: "ffmpeg", Path: filepath.Join("/app", "lib", "ffmpeg-2026.09.25.1845", "ffmpeg")}
 
 	args := dependency.FFmpegLocationArgs(downloaded)

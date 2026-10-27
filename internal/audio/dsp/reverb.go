@@ -53,7 +53,7 @@ type reverbChannel struct {
 	allpasses [reverbAllpassCount]delayRing
 }
 
-func buildReverbChannel(combLengths *[reverbCombCount]int, allpassLengths *[reverbAllpassCount]int) reverbChannel {
+func createReverbChannel(combLengths *[reverbCombCount]int, allpassLengths *[reverbAllpassCount]int) reverbChannel {
 	var channel reverbChannel
 	for i, length := range combLengths {
 		channel.combs[i] = combFilter{
@@ -105,7 +105,7 @@ type Reverb struct {
 func PrepareReverb() *Reverb {
 	reverb := &Reverb{predelay: delayRing{buffer: make([]float64, int(reverbPredelaySeconds*SampleRate))}}
 	for channel := range reverb.channels {
-		reverb.channels[channel] = buildReverbChannel(&reverbCombLengths[channel], &reverbAllpassLengths[channel])
+		reverb.channels[channel] = createReverbChannel(&reverbCombLengths[channel], &reverbAllpassLengths[channel])
 	}
 	reverb.lowCut.SetHighpass(reverbLowCutoff, butterworthQ)
 	reverb.highCut.SetLowpass(reverbHighCutoff, reverbHighQ)

@@ -56,7 +56,7 @@ func waitUntil(t *testing.T, condition func() bool, failure string) {
 	}
 }
 
-func TestLeaveDuringLoadingStopsWithoutRejoining(t *testing.T) {
+func TestLeaveDuringLoading(t *testing.T) {
 	guildID := "leave-loading"
 	guildPlayer := preparedPlayer(t, guildID, 1)
 	resumeFrom := seedResumePoint(t, guildID, 30000)
@@ -117,7 +117,7 @@ func storedSeekTime(t *testing.T, guildID string) int {
 	return q.Songs[0].SeekTime
 }
 
-func TestLeaveWhilePlayingSavesThePositionAndEndsTheSession(t *testing.T) {
+func TestLeaveWhilePlaying(t *testing.T) {
 	guildID := "leave-playing"
 	guildPlayer := preparedPlayer(t, guildID, 1)
 	conn := guildPlayer.HookCurrentVoice().(*mockVoiceConn)
@@ -138,7 +138,7 @@ func TestLeaveWhilePlayingSavesThePositionAndEndsTheSession(t *testing.T) {
 	if err := player.Leave(guildID); err != nil {
 		t.Fatalf("Leave returned %v, want nil", err)
 	}
-	waitForPlayLockRelease(t, guildID)
+	waitForPlayLock(t, guildID)
 
 	if got := conn.disconnectCount(); got != 1 {
 		t.Errorf("got %d disconnects, want 1", got)
@@ -159,7 +159,7 @@ func TestLeaveWhilePlayingSavesThePositionAndEndsTheSession(t *testing.T) {
 	}
 }
 
-func TestLeaveRacingAVoiceJoinDropsTheNewConnection(t *testing.T) {
+func TestLeaveRacingVoiceJoin(t *testing.T) {
 	cases := []struct {
 		name string
 		join func(t *testing.T, guildPlayer *player.GuildPlayer, fresh *mockVoiceConn)
@@ -212,7 +212,7 @@ func TestLeaveRacingAVoiceJoinDropsTheNewConnection(t *testing.T) {
 	}
 }
 
-func TestLeaveDuringGatewayRetriesStopsRetrying(t *testing.T) {
+func TestLeaveStopsGatewayRetries(t *testing.T) {
 	guildID := "leave-gateway"
 	guildPlayer := preparedPlayer(t, guildID, 1)
 	guildPlayer.HookMu().Lock()
@@ -254,7 +254,7 @@ func (conn *haltingVoiceConn) DeadChan() <-chan struct{} {
 	return conn.mockVoiceConn.DeadChan()
 }
 
-func TestLeaveWhileCheckingTheConnectionSkipsLoading(t *testing.T) {
+func TestLeaveWhileCheckingVoice(t *testing.T) {
 	guildID := "leave-checking"
 	guildPlayer := preparedPlayer(t, guildID, 1)
 	guildPlayer.HookMu().Lock()
@@ -273,7 +273,7 @@ func TestLeaveWhileCheckingTheConnectionSkipsLoading(t *testing.T) {
 	}
 }
 
-func TestSeekRacingALeaveDoesNotRestartPlayback(t *testing.T) {
+func TestSeekRacingLeave(t *testing.T) {
 	guildID := "leave-seeking"
 	guildPlayer := preparedPlayer(t, guildID, 1)
 	stubStreamURL(t, "fake://url", nil)
@@ -298,13 +298,13 @@ func TestSeekRacingALeaveDoesNotRestartPlayback(t *testing.T) {
 	guildPlayer.HookHaltLocked()
 	guildPlayer.HookMu().Unlock()
 
-	waitForPlayLockRelease(t, guildID)
+	waitForPlayLock(t, guildID)
 	if got := opened.Load(); got != 1 {
 		t.Errorf("opened %d streams, want the halted session not to restart for the seek", got)
 	}
 }
 
-func TestLeaveWhileIdleDisconnectsWithoutPausing(t *testing.T) {
+func TestLeaveWhileIdle(t *testing.T) {
 	guildID := "leave-idle"
 	guildPlayer := preparedPlayer(t, guildID, 1)
 	conn := guildPlayer.HookCurrentVoice().(*mockVoiceConn)
@@ -344,7 +344,7 @@ func TestPauseDuringLoadingSucceeds(t *testing.T) {
 	}
 }
 
-func TestPauseWhileIdleReportsNotPlaying(t *testing.T) {
+func TestPauseWhileIdle(t *testing.T) {
 	guildID := "pause-idle"
 	preparedPlayer(t, guildID, 1)
 
@@ -353,7 +353,7 @@ func TestPauseWhileIdleReportsNotPlaying(t *testing.T) {
 	}
 }
 
-func TestSeekWhileIdleReportsNotPlaying(t *testing.T) {
+func TestSeekWhileIdle(t *testing.T) {
 	guildID := "seek-idle"
 	preparedPlayer(t, guildID, 1)
 
@@ -362,7 +362,7 @@ func TestSeekWhileIdleReportsNotPlaying(t *testing.T) {
 	}
 }
 
-func TestOutroFlushStopsAtADeadConnection(t *testing.T) {
+func TestOutroFlushDeadConnection(t *testing.T) {
 	encoder, err := opus.NewEncoder(player.HookFrameRate, player.HookChannels)
 	if err != nil {
 		t.Fatalf("opus encoder: %v", err)
@@ -391,7 +391,7 @@ func TestOutroFlushStopsAtADeadConnection(t *testing.T) {
 	}
 }
 
-func TestSendFrameNeverSendsOnAClosedConnection(t *testing.T) {
+func TestSendFrameClosedConnection(t *testing.T) {
 	for attempt := 0; attempt < 200; attempt++ {
 		conn := newMockVoiceConn()
 		close(conn.dead)

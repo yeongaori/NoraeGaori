@@ -10,7 +10,7 @@ import (
 	"noraegaori/locales"
 )
 
-func TestFilesEmbedEveryShippedLocale(t *testing.T) {
+func TestFilesEmbedEveryLocale(t *testing.T) {
 	onDisk, err := filepath.Glob(filepath.Join("..", "..", "locales", "*.json"))
 	if err != nil || len(onDisk) < 2 {
 		t.Fatalf("found shipped locales %v (err %v), want at least en.json and ko.json", onDisk, err)

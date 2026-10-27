@@ -42,7 +42,7 @@ func watchSettingsChanges(t *testing.T, guildID string) func() int {
 	}
 }
 
-func TestSaveSettingCreatesTheRowWithTheConfiguredDefaultVolume(t *testing.T) {
+func TestSaveSettingDefaultVolume(t *testing.T) {
 	dbtest.Setup(t)
 	configtest.Setup(t)
 
@@ -58,7 +58,7 @@ func TestSaveSettingCreatesTheRowWithTheConfiguredDefaultVolume(t *testing.T) {
 	}
 }
 
-func TestSaveSettingKeepsAnExistingVolume(t *testing.T) {
+func TestSaveSettingKeepsVolume(t *testing.T) {
 	dbtest.Setup(t)
 
 	if err := guild.SaveSetting("volume-guild", "volume", 70); err != nil {
@@ -73,7 +73,7 @@ func TestSaveSettingKeepsAnExistingVolume(t *testing.T) {
 	}
 }
 
-func TestSaveSettingReportsFailuresWithoutNotifying(t *testing.T) {
+func TestSaveSettingFailureSilent(t *testing.T) {
 	dbtest.Setup(t)
 	changes := watchSettingsChanges(t, "failing-guild")
 
@@ -98,7 +98,7 @@ func TestSaveSettingReportsFailuresWithoutNotifying(t *testing.T) {
 	}
 }
 
-func TestClearingThePrefixAndLanguageStoresNothing(t *testing.T) {
+func TestSetPrefixClearStoresNothing(t *testing.T) {
 	dbtest.Setup(t)
 	t.Cleanup(func() { guild.InvalidateCaches("clearing-guild") })
 
@@ -121,7 +121,7 @@ func TestClearingThePrefixAndLanguageStoresNothing(t *testing.T) {
 	}
 }
 
-func TestPrefixAndLanguageReportSaveFailures(t *testing.T) {
+func TestSetPrefixSaveFailure(t *testing.T) {
 	dbtest.Setup(t)
 
 	if err := database.Close(); err != nil {
@@ -141,7 +141,7 @@ func TestPrefixAndLanguageReportSaveFailures(t *testing.T) {
 	}
 }
 
-func TestPrefixAndLanguageWritesNotifySettingsChanges(t *testing.T) {
+func TestSetPrefixNotifies(t *testing.T) {
 	dbtest.Setup(t)
 	changes := watchSettingsChanges(t, "notify-guild")
 

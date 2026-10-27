@@ -71,7 +71,7 @@ func preparedPlayer(t *testing.T, guildID string, songs int) *player.GuildPlayer
 	return guildPlayer
 }
 
-func TestPlaySingleSongStopsOnAnEmptyQueue(t *testing.T) {
+func TestPlaySingleSongEmptyQueue(t *testing.T) {
 	guildID := "singleempty"
 	preparedPlayer(t, guildID, 0)
 
@@ -80,7 +80,7 @@ func TestPlaySingleSongStopsOnAnEmptyQueue(t *testing.T) {
 	}
 }
 
-func TestPlaySingleSongStopsWhenTheVoiceJoinFails(t *testing.T) {
+func TestPlaySingleSongJoinFails(t *testing.T) {
 	guildID := "singlejoin"
 	guildPlayer := preparedPlayer(t, guildID, 1)
 
@@ -95,7 +95,7 @@ func TestPlaySingleSongStopsWhenTheVoiceJoinFails(t *testing.T) {
 	}
 }
 
-func TestPlaySingleSongRetriesTheVoiceJoinWhileTheGatewayReconnects(t *testing.T) {
+func TestPlaySingleSongRetriesJoin(t *testing.T) {
 	guildID := "singlegatewayback"
 	guildPlayer := preparedPlayer(t, guildID, 1)
 
@@ -113,7 +113,7 @@ func TestPlaySingleSongRetriesTheVoiceJoinWhileTheGatewayReconnects(t *testing.T
 	}
 }
 
-func TestPlaySingleSongStopsWhenTheGatewayNeverReturns(t *testing.T) {
+func TestPlaySingleSongGatewayGone(t *testing.T) {
 	guildID := "singlegatewaygone"
 	guildPlayer := preparedPlayer(t, guildID, 1)
 
@@ -129,7 +129,7 @@ func TestPlaySingleSongStopsWhenTheGatewayNeverReturns(t *testing.T) {
 	}
 }
 
-func TestPlaySingleSongRetriesBeforeGivingUpOnAStreamURL(t *testing.T) {
+func TestPlaySingleSongRetriesURL(t *testing.T) {
 	guildID := "singlenourl"
 	preparedPlayer(t, guildID, 1)
 	stubStreamURL(t, "", errNoStreamURL)
@@ -147,7 +147,7 @@ func TestPlaySingleSongRetriesBeforeGivingUpOnAStreamURL(t *testing.T) {
 	}
 }
 
-func TestPlaySingleSongRemovesASongThatExhaustsItsRetries(t *testing.T) {
+func TestPlaySingleSongExhausted(t *testing.T) {
 	guildID := "singleexhaust"
 	preparedPlayer(t, guildID, 1)
 	stubStreamURL(t, "", errNoStreamURL)
@@ -167,7 +167,7 @@ func TestPlaySingleSongRemovesASongThatExhaustsItsRetries(t *testing.T) {
 	}
 }
 
-func TestPlaySingleSongUsesTheCachedStreamURL(t *testing.T) {
+func TestPlaySingleSongCachedURL(t *testing.T) {
 	guildID := "singlecached"
 	preparedPlayer(t, guildID, 1)
 
@@ -208,7 +208,7 @@ func playRepeatedSong(t *testing.T, guildID string, mode int, modeName string) *
 	return q
 }
 
-func TestPlaySingleSongRepeatsTheSongToTheFrontOnRepeatSingle(t *testing.T) {
+func TestPlaySingleSongRepeatSingle(t *testing.T) {
 	q := playRepeatedSong(t, "singlerepeat", queue.RepeatSingle, "single")
 	if len(q.Songs) != 2 {
 		t.Fatalf("got %d songs, want the song re-added once", len(q.Songs))
@@ -221,7 +221,7 @@ func TestPlaySingleSongRepeatsTheSongToTheFrontOnRepeatSingle(t *testing.T) {
 	}
 }
 
-func TestPlaySingleSongRepeatsToTheEndOnRepeatAll(t *testing.T) {
+func TestPlaySingleSongRepeatAll(t *testing.T) {
 	q := playRepeatedSong(t, "singlerepeatall", queue.RepeatAll, "all")
 	if len(q.Songs) != 2 {
 		t.Fatalf("got %d songs, want the played song moved to the end", len(q.Songs))
@@ -234,7 +234,7 @@ func TestPlaySingleSongRepeatsToTheEndOnRepeatAll(t *testing.T) {
 	}
 }
 
-func TestPlaySingleSongDropsTheSongWhenRepeatIsOff(t *testing.T) {
+func TestPlaySingleSongRepeatOff(t *testing.T) {
 	guildID := "singlenorepeat"
 	preparedPlayer(t, guildID, 2)
 
@@ -273,7 +273,7 @@ func TestAbortPlaybackIsIdempotent(t *testing.T) {
 	}
 }
 
-func TestAnnounceGoroutineStopsWhenAborted(t *testing.T) {
+func TestAnnounceStopsOnAbort(t *testing.T) {
 	abortCh := make(chan struct{})
 	var abortOnce sync.Once
 	abortPlayback := func() { abortOnce.Do(func() { close(abortCh) }) }

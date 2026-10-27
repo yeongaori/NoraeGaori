@@ -84,7 +84,7 @@ func (stub *replyStub) lastPatch(t *testing.T) *discordtest.Request {
 	return nil
 }
 
-func TestUpdateResponseEmbedEditsTheReplyWhoseResponseWasLost(t *testing.T) {
+func TestUpdateResponseEmbedLostReply(t *testing.T) {
 	stub := stubReplies(t, []int{http.StatusInternalServerError}, recentReplies)
 
 	stub.responder.SendEmbed(&discordgo.MessageEmbed{Title: "Loading"})
@@ -108,7 +108,7 @@ func TestUpdateResponseEmbedEditsTheReplyWhoseResponseWasLost(t *testing.T) {
 	}
 }
 
-func TestUpdateResponseEmbedPostsANewReplyWhenTheLostOneIsMissing(t *testing.T) {
+func TestUpdateResponseEmbedMissing(t *testing.T) {
 	stub := stubReplies(t, []int{http.StatusInternalServerError, http.StatusOK}, `[]`)
 
 	stub.responder.SendEmbed(&discordgo.MessageEmbed{Title: "Loading"})
@@ -125,7 +125,7 @@ func TestUpdateResponseEmbedPostsANewReplyWhenTheLostOneIsMissing(t *testing.T) 
 	}
 }
 
-func TestUpdateResponseEmbedPostsANewReplyWhenTheLookupFails(t *testing.T) {
+func TestUpdateResponseEmbedBadLookup(t *testing.T) {
 	stub := stubReplies(t, []int{http.StatusInternalServerError, http.StatusOK}, lookupFails)
 
 	stub.responder.SendEmbed(&discordgo.MessageEmbed{Title: "Loading"})
@@ -137,7 +137,7 @@ func TestUpdateResponseEmbedPostsANewReplyWhenTheLookupFails(t *testing.T) {
 	}
 }
 
-func TestUpdateResponseEmbedFailsWhenNoReplyCanBeSent(t *testing.T) {
+func TestUpdateResponseEmbedNoReply(t *testing.T) {
 	stub := stubReplies(t, []int{http.StatusInternalServerError, http.StatusInternalServerError}, `[]`)
 
 	stub.responder.SendEmbed(&discordgo.MessageEmbed{Title: "Loading"})
@@ -146,7 +146,7 @@ func TestUpdateResponseEmbedFailsWhenNoReplyCanBeSent(t *testing.T) {
 	}
 }
 
-func TestGetResponseMessageUsesTheKnownReplyWithoutAsking(t *testing.T) {
+func TestGetResponseMessageKnown(t *testing.T) {
 	stub := stubReplies(t, nil, recentReplies)
 	stub.responder.Message = &discordgo.Message{ID: "777", ChannelID: "c"}
 
@@ -159,15 +159,15 @@ func TestGetResponseMessageUsesTheKnownReplyWithoutAsking(t *testing.T) {
 	}
 }
 
-func TestUpdateResponseEmbedWithComponentsRecoversTheLostReply(t *testing.T) {
+func TestUpdateResponsePanelLostReply(t *testing.T) {
 	stub := stubReplies(t, []int{http.StatusInternalServerError}, recentReplies)
 	components := []discordgo.MessageComponent{discordgo.ActionsRow{Components: []discordgo.MessageComponent{
 		discordgo.Button{Label: "Next", CustomID: "next", Style: discordgo.PrimaryButton},
 	}}}
 
 	stub.responder.SendEmbed(&discordgo.MessageEmbed{Title: "Loading"})
-	if err := discord.UpdateResponseEmbedWithComponents(stub.session, stub.interaction, &discordgo.MessageEmbed{Title: "Queue"}, components); err != nil {
-		t.Fatalf("UpdateResponseEmbedWithComponents returned %v, want nil", err)
+	if err := discord.UpdateResponsePanel(stub.session, stub.interaction, &discordgo.MessageEmbed{Title: "Queue"}, components); err != nil {
+		t.Fatalf("UpdateResponsePanel returned %v, want nil", err)
 	}
 
 	patch := stub.lastPatch(t)
@@ -182,12 +182,12 @@ func TestUpdateResponseEmbedWithComponentsRecoversTheLostReply(t *testing.T) {
 	}
 }
 
-func TestUpdateResponseEmbedWithComponentsPostsANewReplyWhenTheLostOneIsMissing(t *testing.T) {
+func TestUpdateResponsePanelMissing(t *testing.T) {
 	stub := stubReplies(t, []int{http.StatusInternalServerError, http.StatusOK}, `[]`)
 
 	stub.responder.SendEmbed(&discordgo.MessageEmbed{Title: "Loading"})
-	if err := discord.UpdateResponseEmbedWithComponents(stub.session, stub.interaction, &discordgo.MessageEmbed{Title: "Queue"}, nil); err != nil {
-		t.Fatalf("UpdateResponseEmbedWithComponents returned %v, want nil", err)
+	if err := discord.UpdateResponsePanel(stub.session, stub.interaction, &discordgo.MessageEmbed{Title: "Queue"}, nil); err != nil {
+		t.Fatalf("UpdateResponsePanel returned %v, want nil", err)
 	}
 	if posts := stub.count(http.MethodPost, ""); posts != 2 {
 		t.Errorf("sent %d messages, want the lost one and a fresh reply", posts)

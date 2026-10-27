@@ -15,12 +15,12 @@ func outroEndState() *ffmpeg.EndState {
 }
 
 func outroFade(overrides map[string]string) *player.HookFadeSettings {
-	return player.HookBuildFadeSettings(&player.HookFadeSettingsFields{
+	return player.HookCreateFadeSettings(&player.HookFadeSettingsFields{
 		AutoMix: true, Crossfade: true, AutoMixBeats: 64, RepeatMode: queue.RepeatOff, StyleOverrides: overrides,
 	})
 }
 
-func TestLastSongEndsNaturallyWithoutOverrides(t *testing.T) {
+func TestOutroPlanNaturalEnd(t *testing.T) {
 	guildID := "outronatural"
 	setupPlayerDB(t, guildID, 1)
 
@@ -33,7 +33,7 @@ func TestLastSongEndsNaturallyWithoutOverrides(t *testing.T) {
 	}
 }
 
-func TestIncomingChoicesLeaveTheLastSongAlone(t *testing.T) {
+func TestOutroPlanIgnoresIncoming(t *testing.T) {
 	guildID := "outroincoming"
 	setupPlayerDB(t, guildID, 1)
 
@@ -44,7 +44,7 @@ func TestIncomingChoicesLeaveTheLastSongAlone(t *testing.T) {
 	}
 }
 
-func TestOutroOverrideShapesTheLastSong(t *testing.T) {
+func TestOutroPlanOverride(t *testing.T) {
 	guildID := "outrooverride"
 	setupPlayerDB(t, guildID, 1)
 
@@ -65,7 +65,7 @@ func TestOutroOverrideShapesTheLastSong(t *testing.T) {
 	}
 }
 
-func TestOutroIsLeftToTheCrossfadeWhenAnotherSongFollows(t *testing.T) {
+func TestOutroPlanDefersToCrossfade(t *testing.T) {
 	guildID := "outronext"
 	setupPlayerDB(t, guildID, 2)
 

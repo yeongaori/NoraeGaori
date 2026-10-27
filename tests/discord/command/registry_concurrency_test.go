@@ -29,7 +29,7 @@ func seedTestCommands(t *testing.T, count int) {
 	}
 }
 
-func TestReloadAliasesRacesWithLookups(t *testing.T) {
+func TestReloadAliasesRace(t *testing.T) {
 	seedTestCommands(t, 40)
 
 	if err := messages.LoadLocale("en"); err != nil {
@@ -65,7 +65,7 @@ func TestReloadAliasesRacesWithLookups(t *testing.T) {
 	wg.Wait()
 }
 
-func TestReloadAliasesAppliesTheLocaleWithoutMutatingHeldCommands(t *testing.T) {
+func TestReloadAliasesKeepsHeld(t *testing.T) {
 	seedTestCommands(t, 0)
 	command.RegisterCommand(&command.Command{Name: "play", Description: "original"})
 
@@ -94,7 +94,7 @@ func TestReloadAliasesAppliesTheLocaleWithoutMutatingHeldCommands(t *testing.T) 
 	}
 }
 
-func TestRegisterCommandIsVisibleThroughLookup(t *testing.T) {
+func TestRegisterCommandLookup(t *testing.T) {
 	seedTestCommands(t, 0)
 
 	command.RegisterCommand(&command.Command{Name: "solo", Description: "d"})
