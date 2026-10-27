@@ -9,6 +9,11 @@ import (
 	"noraegaori/internal/logger"
 )
 
+const (
+	exitTokenInvalid = 3
+	exitTokenMissing = 4
+)
+
 func main() {
 	debug.SetGCPercent(300)
 
@@ -22,10 +27,14 @@ func main() {
 	token := os.Getenv("DISCORD_BOT_TOKEN")
 	if token == "" {
 		logger.Error("DISCORD_BOT_TOKEN is not set in environment variables")
-		os.Exit(1)
+		os.Exit(exitTokenMissing)
 	}
 
 	if err := app.Run(token); err != nil {
+		if app.IsTokenInvalid(err) {
+			logger.Error("DISCORD_BOT_TOKEN is invalid")
+			os.Exit(exitTokenInvalid)
+		}
 		logger.Errorf("%v", err)
 		os.Exit(1)
 	}

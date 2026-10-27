@@ -207,28 +207,28 @@ No clone needed:
 
 ```bash
 mkdir noraegaori && cd noraegaori
-curl -fsSLO https://raw.githubusercontent.com/yeongaori/NoraeGaori/master/docker-compose.yml
-curl -fsSL https://raw.githubusercontent.com/yeongaori/NoraeGaori/master/.env.example -o .env
-# Set DISCORD_BOT_TOKEN in .env
-docker compose up -d
+docker pull ghcr.io/yeongaori/noraegaori:latest
+docker create --name noraegaori-bot --restart unless-stopped \
+  -e DISCORD_BOT_TOKEN=<token> \
+  -v "$PWD/config:/app/config" -v "$PWD/data:/app/data" \
+  -v "$PWD/lib:/app/lib" -v "$PWD/locales:/app/locales" \
+  ghcr.io/yeongaori/noraegaori:latest
+docker start noraegaori-bot
 ```
 
 The bot creates the files in `config/` on its first start. Edit them there.
+If the token is missing or invalid, the container stays up and waits; fix it and
+restart the container.
 
-To upgrade:
-
-```bash
-docker compose pull
-docker compose up -d
-```
+To upgrade, pull the image, remove the container with
+`docker rm -f noraegaori-bot`, and run the `docker create` and `docker start`
+commands again.
 
 `config/`, `data/` (the database) and `lib/` (yt-dlp, Deno and other downloads)
 persist across upgrades. The image includes FFmpeg and libopus, and the bot
 downloads Deno on its first start.
 
-The image runs as `linux/amd64` by default. On ARM or 32-bit hosts, set
-`NORAEGAORI_PLATFORM` in `.env` to `linux/arm64` or `linux/386`. To stay on one
-version, set `NORAEGAORI_TAG` (for example `v1.6.0`).
+To stay on one version, replace `latest` with a tag (for example `v1.6.0`).
 
 To build the image from a checkout instead:
 

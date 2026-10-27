@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/gorilla/websocket"
 	"noraegaori/internal/commands"
 	"noraegaori/internal/discord/command"
 	"noraegaori/internal/logger"
@@ -29,6 +31,8 @@ var (
 	resumeWaitingPlayers = player.ResumeAfterReconnect
 	reconnectResumeDelay = 2 * time.Second
 )
+
+const closeAuthenticationFailed = 4004
 
 func Start(token string) error {
 	var err error
@@ -70,6 +74,11 @@ func Start(token string) error {
 	waitForShutdown()
 
 	return nil
+}
+
+func IsTokenInvalid(err error) bool {
+	var closeErr *websocket.CloseError
+	return errors.As(err, &closeErr) && closeErr.Code == closeAuthenticationFailed
 }
 
 func redactToken(token string) func(msgL, caller int, format string, a ...interface{}) {

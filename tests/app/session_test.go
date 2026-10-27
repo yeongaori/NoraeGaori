@@ -2,6 +2,8 @@ package app_test
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"log"
 	"strings"
 	"sync/atomic"
@@ -9,6 +11,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/gorilla/websocket"
 
 	"noraegaori/tests/testutil"
 	"noraegaori/tests/testutil/logtest"
@@ -177,5 +180,26 @@ func TestDiscordDebugLogsKeepMessagesWithoutTheToken(t *testing.T) {
 
 	if logged := output.String(); !strings.HasPrefix(logged, "[DG2] ") || !strings.HasSuffix(logged, "() sending gateway websocket heartbeat seq 11\n") {
 		t.Errorf("got %q, want the message logged unchanged after the prefix", logged)
+	}
+}
+
+func TestIsTokenInvalid(t *testing.T) {
+	wrap := func(err error) error {
+		return fmt.Errorf("failed to start bot: %w", fmt.Errorf("failed to open Discord connection: %w", err))
+	}
+	cases := []struct {
+		err  error
+		want bool
+	}{
+		{wrap(&websocket.CloseError{Code: 4004}), true},
+		{&websocket.CloseError{Code: 4004}, true},
+		{wrap(&websocket.CloseError{Code: 4000}), false},
+		{wrap(errors.New("dial tcp: connection refused")), false},
+		{nil, false},
+	}
+	for _, c := range cases {
+		if got := app.IsTokenInvalid(c.err); got != c.want {
+			t.Errorf("IsTokenInvalid(%v) = %v, want %v", c.err, got, c.want)
+		}
 	}
 }
