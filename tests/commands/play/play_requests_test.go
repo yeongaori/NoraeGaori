@@ -38,3 +38,12 @@ func TestPlayRejectsBadRequests(t *testing.T) {
 func TestPlayNextRejectsBadRequests(t *testing.T) {
 	commandtest.Run(t, "playnext", play.HandlePlayNext, badPlayRequestCases())
 }
+
+func TestPlayRequestMarkdown(t *testing.T) {
+	fixture := commandtest.NewFixture(t, []string{commandtest.CallerID})
+	ic := discordtest.SlashInteraction(commandtest.GuildID, "play", discordtest.Member(commandtest.GuildID, commandtest.CallerID), discordtest.StringOption("query", "**a song**"))
+
+	if query, _, ok := play.HookReadPlayRequest(fixture.Session, ic); !ok || query != "a song" {
+		t.Errorf("readPlayRequest = (%q, %v), want (%q, true)", query, ok, "a song")
+	}
+}

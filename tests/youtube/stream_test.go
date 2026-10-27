@@ -10,9 +10,9 @@ import (
 )
 
 func argValue(args []string, flag string) (string, bool) {
-	for idx, arg := range args {
-		if arg == flag && idx+1 < len(args) {
-			return args[idx+1], true
+	for i, arg := range args {
+		if arg == flag && i+1 < len(args) {
+			return args[i+1], true
 		}
 	}
 	return "", false

@@ -157,19 +157,52 @@ func TestPickingATransitionOpensItsEditor(t *testing.T) {
 	}
 }
 
+type transitionStyleCheck struct {
+	name         string
+	guildID      string
+	songValue    func(*queue.Queue) string
+	style        string
+	wantRequests int
+	wantText     func(locale *messages.Locale) string
+	wantClosed   bool
+	wantSaved    bool
+}
+
+func checkTransitionStyleChoice(t *testing.T, check *transitionStyleCheck) {
+	t.Helper()
+
+	fixture := panelFixture(t, 3)
+	guildID := cmp.Or(check.guildID, commandtest.GuildID)
+	ic := discordtest.ComponentInteraction(guildID, automix.HookTransitionStyleRoute, discordtest.Member(guildID, commandtest.CallerID), check.style)
+
+	automix.HookChooseTransitionStyle(fixture.Session, ic, []string{string(transition.CategoryVolumeOut), check.songValue(fixture.Queue), discordtest.PanelMessageID, "1"})
+
+	sent := fixture.Requests()
+	if len(sent) != check.wantRequests {
+		t.Fatalf("sent %d requests, want %d", len(sent), check.wantRequests)
+	}
+	if got := discordtest.ResponseType(&sent[0]); got != discordgo.InteractionResponseUpdateMessage {
+		t.Errorf("the editor response type = %d, want an in-place update", got)
+	}
+	commandtest.WantReplyText(t, sent[:1], check.wantText(messages.T(guildID)))
+	if components, _ := discordtest.JSONAt(t, sent[0].Body, "data", "components").([]any); (len(components) == 0) != check.wantClosed {
+		t.Errorf("the editor kept %d component rows, want closed=%v", len(components), check.wantClosed)
+	}
+	if !check.wantSaved {
+		return
+	}
+	if refresh := &sent[1]; refresh.Method != http.MethodPatch || refresh.Path != "/channels/"+discordtest.ChannelID+"/messages/"+discordtest.PanelMessageID {
+		t.Errorf("the panel refresh went to %s %s", refresh.Method, refresh.Path)
+	}
+	if saved, err := queue.GetQueue(commandtest.GuildID, true); err != nil || saved.Songs[0].AutoMixOverrides[string(transition.CategoryVolumeOut)] != check.style {
+		t.Errorf("the saved song style is wrong (err %v)", err)
+	}
+}
+
 func TestChoosingATransitionStyle(t *testing.T) {
 	volumeStyle := firstStyle(transition.CategoryVolumeOut)
 
-	checks := []struct {
-		name         string
-		guildID      string
-		songValue    func(*queue.Queue) string
-		style        string
-		wantRequests int
-		wantText     func(locale *messages.Locale) string
-		wantClosed   bool
-		wantSaved    bool
-	}{
+	checks := []transitionStyleCheck{
 		{
 			name:         "an unknown style",
 			songValue:    firstSongID,
@@ -208,32 +241,7 @@ func TestChoosingATransitionStyle(t *testing.T) {
 	for i := range checks {
 		check := &checks[i]
 		t.Run(check.name, func(t *testing.T) {
-			fixture := panelFixture(t, 3)
-			guildID := cmp.Or(check.guildID, commandtest.GuildID)
-			ic := discordtest.ComponentInteraction(guildID, automix.HookTransitionStyleRoute, discordtest.Member(guildID, commandtest.CallerID), check.style)
-
-			automix.HookChooseTransitionStyle(fixture.Session, ic, []string{string(transition.CategoryVolumeOut), check.songValue(fixture.Queue), discordtest.PanelMessageID, "1"})
-
-			sent := fixture.Requests()
-			if len(sent) != check.wantRequests {
-				t.Fatalf("sent %d requests, want %d", len(sent), check.wantRequests)
-			}
-			if got := discordtest.ResponseType(&sent[0]); got != discordgo.InteractionResponseUpdateMessage {
-				t.Errorf("the editor response type = %d, want an in-place update", got)
-			}
-			commandtest.WantReplyText(t, sent[:1], check.wantText(messages.T(guildID)))
-			if components, _ := discordtest.JSONAt(t, sent[0].Body, "data", "components").([]any); (len(components) == 0) != check.wantClosed {
-				t.Errorf("the editor kept %d component rows, want closed=%v", len(components), check.wantClosed)
-			}
-			if !check.wantSaved {
-				return
-			}
-			if refresh := &sent[1]; refresh.Method != http.MethodPatch || refresh.Path != "/channels/"+discordtest.ChannelID+"/messages/"+discordtest.PanelMessageID {
-				t.Errorf("the panel refresh went to %s %s", refresh.Method, refresh.Path)
-			}
-			if saved, err := queue.GetQueue(commandtest.GuildID, true); err != nil || saved.Songs[0].AutoMixOverrides[string(transition.CategoryVolumeOut)] != check.style {
-				t.Errorf("the saved song style is wrong (err %v)", err)
-			}
+			checkTransitionStyleChoice(t, check)
 		})
 	}
 }

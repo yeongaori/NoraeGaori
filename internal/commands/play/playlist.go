@@ -142,7 +142,7 @@ func handleVideoWithPlaylist(s *discordgo.Session, i *discordgo.InteractionCreat
 	}
 
 	if q == nil {
-		if err := queue.CreateQueue(i.GuildID, i.ChannelID, voiceChannelID); err != nil {
+		if err = queue.CreateQueue(i.GuildID, i.ChannelID, voiceChannelID); err != nil {
 			discord.UpdateErrorEmbed(s, i, messages.T(i.GuildID).Music.QueueCreateFailed)
 			return err
 		}
@@ -540,10 +540,10 @@ func addPlaylistSong(guildID string, song *youtube.Song, failureFormat string) b
 
 func checkSongsAvailability(songs []*youtube.Song) []youtube.BatchResult {
 	jobs := make([]youtube.BatchJob, 0, len(songs))
-	for idx, song := range songs {
+	for i, song := range songs {
 		jobs = append(jobs, youtube.BatchJob{
 			URL:   song.URL,
-			Index: idx,
+			Index: i,
 		})
 	}
 	return youtube.GetAvailabilityPool().CheckBatch(jobs)

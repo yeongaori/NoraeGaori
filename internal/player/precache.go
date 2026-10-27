@@ -287,7 +287,7 @@ func analyzeStreamSegment(ctx context.Context, streamURL string, startSec float6
 	if err != nil {
 		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
-	if err := ffmpeg.Start(); err != nil {
+	if err = ffmpeg.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start ffmpeg: %w", err)
 	}
 
@@ -301,7 +301,7 @@ func analyzeStreamSegment(ctx context.Context, streamURL string, startSec float6
 	}
 
 	_, _ = io.Copy(io.Discard, stdout)
-	if err := ffmpeg.Wait(); err != nil {
+	if err = ffmpeg.Wait(); err != nil {
 		return nil, fmt.Errorf("ffmpeg failed: %w", err)
 	}
 

@@ -128,7 +128,7 @@ func buildLocale(lang string) (*Locale, error) {
 		enData = locales.EnglishLocale
 	}
 	var base Locale
-	if err := json.Unmarshal(enData, &base); err != nil {
+	if err = json.Unmarshal(enData, &base); err != nil {
 		return nil, fmt.Errorf("failed to parse English fallback locale: %w", err)
 	}
 	if lang == "en" {

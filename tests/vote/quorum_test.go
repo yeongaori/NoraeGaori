@@ -1,6 +1,8 @@
 package vote_test
 
 import (
+	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
@@ -19,13 +21,41 @@ func sessionWithGuild(t *testing.T, states []*discordgo.VoiceState, members []*d
 	return discordtest.SessionWithGuild(t, "self", "g", states, members)
 }
 
+func TestResolveRequiredVotesError(t *testing.T) {
+	session, _ := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
+	ic := discordtest.SlashInteraction("missing-guild", "skip", discordtest.Member("missing-guild", "u1"))
+
+	if got, err := vote.ResolveRequiredVotes(session, ic, "voice"); err == nil {
+		t.Errorf("ResolveRequiredVotes = (%d, nil), want an error for a guild missing from the state", got)
+	}
+}
+
+type requiredVotesCase struct {
+	name    string
+	members []*discordgo.Member
+	states  []*discordgo.VoiceState
+	want    int
+}
+
 func TestRequiredVotesInChannelIgnoresBotsAndOtherChannels(t *testing.T) {
-	cases := []struct {
-		name    string
-		members []*discordgo.Member
-		states  []*discordgo.VoiceState
-		want    int
-	}{
+	cases := slices.Concat(requiredVotesCountCases(), requiredVotesFilterCases())
+
+	for i := range cases {
+		testCase := &cases[i]
+		session := sessionWithGuild(t, testCase.states, testCase.members)
+
+		got, err := vote.RequiredInChannel(session, "g", "voice", vote.ResolveWithFetch)
+		if err != nil {
+			t.Fatalf("%s: RequiredInChannel returned %v, want nil", testCase.name, err)
+		}
+		if got != testCase.want {
+			t.Errorf("%s: got %d required votes, want %d", testCase.name, got, testCase.want)
+		}
+	}
+}
+
+func requiredVotesCountCases() []requiredVotesCase {
+	return []requiredVotesCase{
 		{
 			name:    "an empty channel still needs one vote",
 			members: nil,
@@ -68,6 +98,11 @@ func TestRequiredVotesInChannelIgnoresBotsAndOtherChannels(t *testing.T) {
 			},
 			want: 2,
 		},
+	}
+}
+
+func requiredVotesFilterCases() []requiredVotesCase {
+	return []requiredVotesCase{
 		{
 			name: "bots and other channels do not count",
 			members: []*discordgo.Member{
@@ -86,19 +121,6 @@ func TestRequiredVotesInChannelIgnoresBotsAndOtherChannels(t *testing.T) {
 			},
 			want: 1,
 		},
-	}
-
-	for i := range cases {
-		testCase := &cases[i]
-		session := sessionWithGuild(t, testCase.states, testCase.members)
-
-		got, err := vote.RequiredInChannel(session, "g", "voice", vote.ResolveWithFetch)
-		if err != nil {
-			t.Fatalf("%s: RequiredInChannel returned %v, want nil", testCase.name, err)
-		}
-		if got != testCase.want {
-			t.Errorf("%s: got %d required votes, want %d", testCase.name, got, testCase.want)
-		}
 	}
 }
 

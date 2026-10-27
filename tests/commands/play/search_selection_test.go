@@ -1,10 +1,28 @@
 package play_test
 
 import (
+	"fmt"
 	"testing"
 
+	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/commands/play"
+	"noraegaori/internal/youtube"
 )
+
+func TestSearchResultsPanelNumbering(t *testing.T) {
+	results := []youtube.SearchResult{{Title: "First", Duration: "1:00"}, {Title: "Second", Duration: "2:00"}}
+	embed, components, _ := play.HookSearchResultsPanel("guild", "query", results, "msg123")
+
+	options := components[0].(discordgo.ActionsRow).Components[0].(discordgo.SelectMenu).Options
+	for i := range results {
+		if want := fmt.Sprintf("msg123:%d", i); options[i].Value != want {
+			t.Errorf("option %d value = %q, want %q", i, options[i].Value, want)
+		}
+		if want := fmt.Sprintf("%d. %s", i+1, results[i].Title); embed.Fields[i].Name != want {
+			t.Errorf("field %d name = %q, want %q", i, embed.Fields[i].Name, want)
+		}
+	}
+}
 
 func TestParseSearchSelectionAcceptsValidValues(t *testing.T) {
 	cases := map[string]struct {

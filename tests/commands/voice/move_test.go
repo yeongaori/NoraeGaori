@@ -2,6 +2,7 @@ package voice_test
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -14,24 +15,31 @@ import (
 	"noraegaori/tests/testutil/queuetest"
 )
 
-func TestSwitchVCWhilePlayingSuspendsJoinsAndResumes(t *testing.T) {
+func checkMovedWhilePlaying(t *testing.T, name string, handle commandtest.Handler, wantTitle func(locale *messages.Locale) string) {
+	t.Helper()
+
 	probe := stubPlayer(t, true, nil, nil)
 	fixture := voiceFixture(t, otherChannelID, queuetest.SongsBy(commandtest.CallerID, 1)...)
 
-	reply := invoke(t, fixture, "switchvc", voice.HandleSwitchVC)
+	reply := invoke(t, fixture, name, handle)
 	waitForResume(t, probe)
 
-	wantText(t, reply, messages.T(commandtest.GuildID).Voice.SwitchSuccessTitle)
+	wantText(t, reply, wantTitle(messages.T(commandtest.GuildID)))
 	wantCalls(t, probe, "suspend", "join "+commandtest.VoiceChannelID, "resume")
+}
+
+func TestSwitchVCWhilePlayingSuspendsJoinsAndResumes(t *testing.T) {
+	checkMovedWhilePlaying(t, "switchvc", voice.HandleSwitchVC, func(locale *messages.Locale) string { return locale.Voice.SwitchSuccessTitle })
 }
 
 func TestSwitchVCWhileIdleDoesNotStartPlayback(t *testing.T) {
 	probe := stubPlayer(t, false, nil, nil)
 	fixture := voiceFixture(t, otherChannelID, queuetest.SongsBy(commandtest.CallerID, 1)...)
 
-	invoke(t, fixture, "switchvc", voice.HandleSwitchVC)
+	reply := invoke(t, fixture, "switchvc", voice.HandleSwitchVC)
 	time.Sleep(20 * time.Millisecond)
 
+	wantText(t, reply, fmt.Sprintf(messages.T(commandtest.GuildID).Voice.SwitchSuccessChannel, ""))
 	wantCalls(t, probe, "suspend", "join "+commandtest.VoiceChannelID)
 }
 
@@ -60,14 +68,7 @@ func TestSwitchVCReportsAFailedQueueUpdate(t *testing.T) {
 }
 
 func TestJoinMovesAPlayingBotFromAnotherChannel(t *testing.T) {
-	probe := stubPlayer(t, true, nil, nil)
-	fixture := voiceFixture(t, otherChannelID, queuetest.SongsBy(commandtest.CallerID, 1)...)
-
-	reply := invoke(t, fixture, "join", voice.HandleJoin)
-	waitForResume(t, probe)
-
-	wantText(t, reply, messages.T(commandtest.GuildID).Voice.JoinSuccessTitle)
-	wantCalls(t, probe, "suspend", "join "+commandtest.VoiceChannelID, "resume")
+	checkMovedWhilePlaying(t, "join", voice.HandleJoin, func(locale *messages.Locale) string { return locale.Voice.JoinSuccessTitle })
 }
 
 func TestJoinWithoutAPlayingSessionOnlyJoins(t *testing.T) {

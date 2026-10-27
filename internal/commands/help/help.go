@@ -118,9 +118,9 @@ func guildPrefix(guildID string) string {
 func buildHelpEmbed(guildID string, commands []CommandInfo, page, totalPages, startIndex, totalCommands int, prefix string) *discordgo.MessageEmbed {
 	t := messages.T(guildID)
 	var description strings.Builder
-	for idx := range commands {
-		cmd := &commands[idx]
-		position := startIndex + idx + 1
+	for i := range commands {
+		cmd := &commands[i]
+		position := startIndex + i + 1
 
 		adminBadge := ""
 		if cmd.AdminOnly {

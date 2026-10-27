@@ -4,16 +4,42 @@ import (
 	"noraegaori/internal/youtube"
 )
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
+
+type urlAnalysisCase struct {
+	name       string
+	url        string
+	wantType   youtube.URLType
+	wantVideo  string
+	wantPlayer string
+}
 
 func TestAnalyzeYouTubeURL(t *testing.T) {
-	cases := []struct {
-		name       string
-		url        string
-		wantType   youtube.URLType
-		wantVideo  string
-		wantPlayer string
-	}{
+	cases := slices.Concat(playlistURLCases(), videoURLCases())
+
+	for i := range cases {
+		tc := &cases[i]
+		t.Run(tc.name, func(t *testing.T) {
+			got := youtube.AnalyzeYouTubeURL(tc.url)
+
+			if got.Type != tc.wantType {
+				t.Errorf("Type = %q, want %q", got.Type, tc.wantType)
+			}
+			if got.VideoID != tc.wantVideo {
+				t.Errorf("VideoID = %q, want %q", got.VideoID, tc.wantVideo)
+			}
+			if got.PlaylistID != tc.wantPlayer {
+				t.Errorf("PlaylistID = %q, want %q", got.PlaylistID, tc.wantPlayer)
+			}
+		})
+	}
+}
+
+func playlistURLCases() []urlAnalysisCase {
+	return []urlAnalysisCase{
 		{
 			name:       "pure playlist",
 			url:        "https://www.youtube.com/playlist?list=PL_x-9Ab_cd",
@@ -40,6 +66,11 @@ func TestAnalyzeYouTubeURL(t *testing.T) {
 			wantVideo:  "a_b-cD3fG_1",
 			wantPlayer: "PL_x-9Ab_cd",
 		},
+	}
+}
+
+func videoURLCases() []urlAnalysisCase {
+	return []urlAnalysisCase{
 		{
 			name:      "plain watch link",
 			url:       "https://www.youtube.com/watch?v=a_b-cD3fG_1",
@@ -75,22 +106,5 @@ func TestAnalyzeYouTubeURL(t *testing.T) {
 			url:      "https://example.com/video",
 			wantType: youtube.URLTypeVideoOnly,
 		},
-	}
-
-	for i := range cases {
-		tc := &cases[i]
-		t.Run(tc.name, func(t *testing.T) {
-			got := youtube.AnalyzeYouTubeURL(tc.url)
-
-			if got.Type != tc.wantType {
-				t.Errorf("Type = %q, want %q", got.Type, tc.wantType)
-			}
-			if got.VideoID != tc.wantVideo {
-				t.Errorf("VideoID = %q, want %q", got.VideoID, tc.wantVideo)
-			}
-			if got.PlaylistID != tc.wantPlayer {
-				t.Errorf("PlaylistID = %q, want %q", got.PlaylistID, tc.wantPlayer)
-			}
-		})
 	}
 }

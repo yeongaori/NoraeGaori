@@ -1,10 +1,14 @@
 package ytdlp_test
 
 import (
+	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"noraegaori/internal/config"
 	"noraegaori/internal/ytdlp"
+	"noraegaori/tests/testutil"
 )
 
 func TestExpectedChecksumAcceptsAnAgreeingDigest(t *testing.T) {
@@ -100,5 +104,37 @@ func TestPickAssetRejectsPlatformsWithoutABuild(t *testing.T) {
 		if got, err := ytdlp.HookPickAsset(c.release, c.goos, c.goarch); err == nil {
 			t.Errorf("%s: got %v, want an error", name, got)
 		}
+	}
+}
+
+func TestUpdateFromChannelPendingCanary(t *testing.T) {
+	versionmanager := useVersionManager(t)
+	stubLatestVersion(t, "2026.08.19")
+	stubCanary(t, false, true)
+
+	addVersion(versionmanager, "2026.08.19", &ytdlp.VersionEntry{Path: writeFakeBinary(t, filepath.Join("lib", "yt-dlp-2026.08.19"), "echo 2026.08.19"), State: ytdlp.StatePending})
+	addVersion(versionmanager, "2026.08.18.122307", &ytdlp.VersionEntry{Path: "lib/n/yt-dlp", State: ytdlp.StateActive, Successes: 40})
+	versionmanager.HookState().ActiveVersion = "2026.08.18.122307"
+
+	outcome, err := ytdlp.HookUpdateFromChannel(config.YtDlpChannelStable, false)
+	if err != nil {
+		t.Fatalf("updateFromChannel returned %v, want nil", err)
+	}
+	if *outcome.HookUpdated() {
+		t.Error("got updated=true, want false while the canary cannot reach YouTube")
+	}
+}
+
+func TestUpdateFromChannelFallbackError(t *testing.T) {
+	versionmanager := useVersionManager(t)
+	stubLatestVersion(t, "2026.08.19")
+
+	addVersion(versionmanager, "2026.08.19", &ytdlp.VersionEntry{Path: "lib/b/yt-dlp", State: ytdlp.StateBlacklisted})
+	testutil.Swap(t, ytdlp.HookGetReleasesFn, func(channel string, perPage int) ([]*ytdlp.GitHubRelease, error) {
+		return nil, errors.New("release list unavailable")
+	})
+
+	if _, err := ytdlp.HookUpdateFromChannel(config.YtDlpChannelStable, false); err == nil {
+		t.Error("updateFromChannel returned nil, want the fallback install failure")
 	}
 }

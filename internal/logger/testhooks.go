@@ -11,6 +11,7 @@ var HookConsoleIsTerminal = &consoleIsTerminal
 var HookDebugMode = &debugMode
 var HookDeriveTag = deriveTag
 var HookEarlyBuf = &earlyBuf
+var HookErrorLogFile = &errorLogFile
 var HookInfoBadge = &infoBadge
 var HookIsDigits = isDigits
 var HookIsGeneratedPart = isGeneratedPart

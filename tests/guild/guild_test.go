@@ -33,6 +33,24 @@ func TestPrefixRoundTrip(t *testing.T) {
 	}
 }
 
+func TestPrefixCacheColumn(t *testing.T) {
+	dbtest.Setup(t)
+
+	guildID := "guild1"
+
+	if err := guild.SetPrefix(guildID, "?"); err != nil {
+		t.Fatalf("SetPrefix: %v", err)
+	}
+	if err := guild.SetLanguage(guildID, "ko"); err != nil {
+		t.Fatalf("SetLanguage: %v", err)
+	}
+	guild.InvalidateCaches(guildID)
+
+	if p, err := guild.GetPrefix(guildID); err != nil || p != "?" {
+		t.Errorf("GetPrefix = (%q, %v), want %q from the prefix column", p, err, "?")
+	}
+}
+
 func TestInvalidateCachesForgetsBothValues(t *testing.T) {
 	dbtest.Setup(t)
 

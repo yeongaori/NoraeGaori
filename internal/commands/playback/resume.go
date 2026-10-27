@@ -30,12 +30,12 @@ func HandleResume(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return nil
 	}
 
-	if err := queue.SetPaused(i.GuildID, false); err != nil {
+	if err = queue.SetPaused(i.GuildID, false); err != nil {
 		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Music.PlaybackStartError)
 		return err
 	}
 
-	if err := queue.UpdateVoiceChannel(i.GuildID, voiceChannelID); err != nil {
+	if err = queue.UpdateVoiceChannel(i.GuildID, voiceChannelID); err != nil {
 		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Music.PlaybackStartError)
 		return err
 	}

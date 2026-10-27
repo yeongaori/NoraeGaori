@@ -103,17 +103,17 @@ func installVersionBinary(release *GitHubRelease, version string) (string, strin
 
 	binaryPath := VersionedBinaryPath(version)
 	versionDir := filepath.Dir(binaryPath)
-	if err := os.MkdirAll(versionDir, 0750); err != nil {
+	if err = os.MkdirAll(versionDir, 0750); err != nil {
 		return "", "", fmt.Errorf("failed to create version directory for %s: %w", version, err)
 	}
 
-	if err := DownloadVerified(release, assetName, downloadURL, binaryPath); err != nil {
+	if err = DownloadVerified(release, assetName, downloadURL, binaryPath); err != nil {
 		_ = os.RemoveAll(versionDir)
 		return "", "", err
 	}
 
 	if runtime.GOOS != "windows" {
-		if err := os.Chmod(binaryPath, 0755); err != nil { // #nosec G302
+		if err = os.Chmod(binaryPath, 0755); err != nil { // #nosec G302
 			logger.Warnf("Failed to set permissions: %v", err)
 		}
 	}
@@ -296,7 +296,9 @@ func updateFromChannel(channel string, force bool) (channelOutcome, error) {
 	}
 
 	if versionmanager != nil {
-		if outcome, isHandled, err := resolveKnownVersion(versionmanager, channel, latestVersion, release); isHandled {
+		var outcome channelOutcome
+		var isHandled bool
+		if outcome, isHandled, err = resolveKnownVersion(versionmanager, channel, latestVersion, release); isHandled {
 			return outcome, err
 		}
 	}

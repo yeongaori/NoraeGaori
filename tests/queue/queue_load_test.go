@@ -8,6 +8,23 @@ import (
 	"noraegaori/internal/queue"
 )
 
+type fieldCheck struct {
+	field string
+	got   any
+	want  any
+}
+
+func wantFields(t *testing.T, checks []fieldCheck) {
+	t.Helper()
+
+	for i := range checks {
+		check := &checks[i]
+		if check.got != check.want {
+			t.Errorf("%s = %v, want %v", check.field, check.got, check.want)
+		}
+	}
+}
+
 func TestLoadQueueFromDBAppliesEveryDefault(t *testing.T) {
 	setupTestDB(t)
 
@@ -32,18 +49,13 @@ func TestLoadQueueFromDBAppliesEveryDefault(t *testing.T) {
 	if q.Volume != config.DefaultVolume() {
 		t.Errorf("Volume = %g, want the configured default %g", q.Volume, config.DefaultVolume())
 	}
-	if q.AutoMixBeats != 64 {
-		t.Errorf("AutoMixBeats = %d, want 64", q.AutoMixBeats)
-	}
-	if q.FadeInDuration != 3 {
-		t.Errorf("FadeInDuration = %g, want 3", q.FadeInDuration)
-	}
-	if q.FadeOutDuration != 3 {
-		t.Errorf("FadeOutDuration = %g, want 3", q.FadeOutDuration)
-	}
-	if q.CrossfadeDuration != 8 {
-		t.Errorf("CrossfadeDuration = %g, want 8", q.CrossfadeDuration)
-	}
+	wantFields(t, []fieldCheck{
+		{"AutoMixBeats", q.AutoMixBeats, 64},
+		{"FadeInDuration", q.FadeInDuration, 3.0},
+		{"FadeOutDuration", q.FadeOutDuration, 3.0},
+		{"CrossfadeDuration", q.CrossfadeDuration, 8.0},
+		{"RepeatMode", q.RepeatMode, 0},
+	})
 
 	if len(q.AutoMixOverrides) != 0 {
 		t.Errorf("AutoMixOverrides = %v, want none so every style stays auto", q.AutoMixOverrides)
@@ -71,9 +83,6 @@ func TestLoadQueueFromDBAppliesEveryDefault(t *testing.T) {
 	if !q.ShowStartedTrack {
 		t.Error("ShowStartedTrack = false, want true by default")
 	}
-	if q.RepeatMode != 0 {
-		t.Errorf("RepeatMode = %d, want 0", q.RepeatMode)
-	}
 	if len(q.Songs) != 0 {
 		t.Errorf("Songs has %d entries, want 0", len(q.Songs))
 	}
@@ -92,7 +101,7 @@ func TestLoadQueueFromDBMapsEveryColumnToItsOwnField(t *testing.T) {
 		t.Fatalf("failed to seed distinct settings: %v", err)
 	}
 
-	if _, err := database.DB.Exec(`UPDATE queues SET paused = 1, playing = 1, loading = 1 WHERE guild_id = ?`, "guild1"); err != nil {
+	if _, err = database.DB.Exec(`UPDATE queues SET paused = 1, playing = 1, loading = 1 WHERE guild_id = ?`, "guild1"); err != nil {
 		t.Fatalf("failed to seed queue state: %v", err)
 	}
 
@@ -103,51 +112,23 @@ func TestLoadQueueFromDBMapsEveryColumnToItsOwnField(t *testing.T) {
 		t.Fatalf("loadQueueFromDB returned %v, want nil", err)
 	}
 
-	if q.Volume != 42 {
-		t.Errorf("Volume = %g, want 42", q.Volume)
-	}
-	if q.RepeatMode != 2 {
-		t.Errorf("RepeatMode = %d, want 2", q.RepeatMode)
-	}
-	if !q.SponsorBlock {
-		t.Error("SponsorBlock = false, want true")
-	}
-	if q.ShowStartedTrack {
-		t.Error("ShowStartedTrack = true, want false")
-	}
-	if !q.Normalization {
-		t.Error("Normalization = false, want true")
-	}
-	if !q.FadeIn {
-		t.Error("FadeIn = false, want true")
-	}
-	if q.FadeOut {
-		t.Error("FadeOut = true, want false")
-	}
-	if !q.AutoMix {
-		t.Error("AutoMix = false, want true")
-	}
-	if !q.FadeOnStop {
-		t.Error("FadeOnStop = false, want true")
-	}
-	if q.FadeInDuration != 1.5 {
-		t.Errorf("FadeInDuration = %g, want 1.5", q.FadeInDuration)
-	}
-	if q.FadeOutDuration != 2.5 {
-		t.Errorf("FadeOutDuration = %g, want 2.5", q.FadeOutDuration)
-	}
-	if q.AutoMixBeats != 32 {
-		t.Errorf("AutoMixBeats = %d, want 32", q.AutoMixBeats)
-	}
-	if !q.Crossfade {
-		t.Error("Crossfade = false, want true")
-	}
-	if q.CrossfadeDuration != 9.5 {
-		t.Errorf("CrossfadeDuration = %g, want 9.5", q.CrossfadeDuration)
-	}
-	if !q.TrimSilence {
-		t.Error("TrimSilence = false, want true")
-	}
+	wantFields(t, []fieldCheck{
+		{"Volume", q.Volume, 42.0},
+		{"RepeatMode", q.RepeatMode, 2},
+		{"SponsorBlock", q.SponsorBlock, true},
+		{"ShowStartedTrack", q.ShowStartedTrack, false},
+		{"Normalization", q.Normalization, true},
+		{"FadeIn", q.FadeIn, true},
+		{"FadeOut", q.FadeOut, false},
+		{"AutoMix", q.AutoMix, true},
+		{"FadeOnStop", q.FadeOnStop, true},
+		{"FadeInDuration", q.FadeInDuration, 1.5},
+		{"FadeOutDuration", q.FadeOutDuration, 2.5},
+		{"AutoMixBeats", q.AutoMixBeats, 32},
+		{"Crossfade", q.Crossfade, true},
+		{"CrossfadeDuration", q.CrossfadeDuration, 9.5},
+		{"TrimSilence", q.TrimSilence, true},
+	})
 	if !q.Paused || !q.Playing || !q.Loading {
 		t.Errorf("Paused/Playing/Loading = %v/%v/%v, want all true", q.Paused, q.Playing, q.Loading)
 	}

@@ -100,7 +100,7 @@ func MoveSong(guildID string, fromPos, toPos int) error {
 		return fmt.Errorf("failed to move song to temp: %w", err)
 	}
 
-	if err := shiftSongs(tx, guildID, fromPos, toPos); err != nil {
+	if err = shiftSongs(tx, guildID, fromPos, toPos); err != nil {
 		return err
 	}
 

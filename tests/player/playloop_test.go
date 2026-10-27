@@ -185,12 +185,13 @@ func TestPlaySingleSongUsesTheCachedStreamURL(t *testing.T) {
 	}
 }
 
-func TestPlaySingleSongRepeatsTheSongToTheFrontOnRepeatSingle(t *testing.T) {
-	guildID := "singlerepeat"
+func playRepeatedSong(t *testing.T, guildID string, mode int, modeName string) *queue.Queue {
+	t.Helper()
+
 	preparedPlayer(t, guildID, 2)
 
-	if err := queue.SetRepeatMode(guildID, queue.RepeatSingle); err != nil {
-		t.Fatalf("failed to set repeat single: %v", err)
+	if err := queue.SetRepeatMode(guildID, mode); err != nil {
+		t.Fatalf("failed to set repeat %s: %v", modeName, err)
 	}
 
 	stubStreamURL(t, "https://example.invalid/stream", nil)
@@ -204,6 +205,11 @@ func TestPlaySingleSongRepeatsTheSongToTheFrontOnRepeatSingle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to reload the queue: %v", err)
 	}
+	return q
+}
+
+func TestPlaySingleSongRepeatsTheSongToTheFrontOnRepeatSingle(t *testing.T) {
+	q := playRepeatedSong(t, "singlerepeat", queue.RepeatSingle, "single")
 	if len(q.Songs) != 2 {
 		t.Fatalf("got %d songs, want the song re-added once", len(q.Songs))
 	}
@@ -216,24 +222,7 @@ func TestPlaySingleSongRepeatsTheSongToTheFrontOnRepeatSingle(t *testing.T) {
 }
 
 func TestPlaySingleSongRepeatsToTheEndOnRepeatAll(t *testing.T) {
-	guildID := "singlerepeatall"
-	preparedPlayer(t, guildID, 2)
-
-	if err := queue.SetRepeatMode(guildID, queue.RepeatAll); err != nil {
-		t.Fatalf("failed to set repeat all: %v", err)
-	}
-
-	stubStreamURL(t, "https://example.invalid/stream", nil)
-	stubPlayAudioResult(t, nil)
-
-	if got := player.HookPlaySingleSong(nil, guildID); got != player.HookPlayContinue {
-		t.Fatalf("got %v, want playContinue", got)
-	}
-
-	q, err := queue.GetQueue(guildID, true)
-	if err != nil {
-		t.Fatalf("failed to reload the queue: %v", err)
-	}
+	q := playRepeatedSong(t, "singlerepeatall", queue.RepeatAll, "all")
 	if len(q.Songs) != 2 {
 		t.Fatalf("got %d songs, want the played song moved to the end", len(q.Songs))
 	}

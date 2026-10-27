@@ -377,7 +377,7 @@ func removeSkippedSong(guildID string, logEmpty func(format string, args ...inte
 		logger.Debugf("Removing song: %s", q.Songs[0].Title)
 	}
 
-	if err := queue.RemoveFirstSong(guildID); err != nil {
+	if err = queue.RemoveFirstSong(guildID); err != nil {
 		logger.Errorf("Failed to remove song: %v", err)
 		return fmt.Errorf("failed to remove song: %w", err)
 	}

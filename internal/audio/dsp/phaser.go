@@ -84,7 +84,7 @@ func (p *Phaser) Process(block []float64, from, to float64) {
 	p.left, p.right, p.phase = left, right, phase
 }
 
-func (c phaserChannel) run(input, coefficient float64) (phaserChannel, float64) {
+func (c phaserChannel) run(input, coefficient float64) (phaserChannel, float64) { //nolint:gocritic
 	signal := input + c.feedback*phaserFeedback
 	for index := range c.stages {
 		output := coefficient*signal + c.stages[index].input - coefficient*c.stages[index].output

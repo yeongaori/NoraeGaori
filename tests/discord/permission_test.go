@@ -14,6 +14,15 @@ func memberOf(userID string, roleIDs ...string) *discordgo.Member {
 	return &discordgo.Member{User: &discordgo.User{ID: userID}, Roles: roleIDs}
 }
 
+func TestCallerVoiceChannelEmpty(t *testing.T) {
+	session := discordtest.SessionWithGuild(t, "bot", "g", []*discordgo.VoiceState{discordtest.VoiceState("g", "caller", "", false)}, nil)
+	ic := discordtest.SlashInteraction("g", "play", discordtest.Member("g", "caller"))
+
+	if channelID, ok := discord.CallerVoiceChannel(session, ic); ok || channelID != "" {
+		t.Errorf("CallerVoiceChannel = (%q, %v), want (\"\", false) for a voice state without a channel", channelID, ok)
+	}
+}
+
 func TestEveryoneRoleCanGrantAdministrator(t *testing.T) {
 	const guildID = "everyone-admin-guild"
 	session := &discordgo.Session{State: discordgo.NewState()}

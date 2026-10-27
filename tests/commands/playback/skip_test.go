@@ -19,6 +19,16 @@ import (
 	"noraegaori/tests/testutil/queuetest"
 )
 
+func TestSkipEmptyQueue(t *testing.T) {
+	fixture := commandtest.NewFixture(t, []string{commandtest.CallerID})
+	ic := discordtest.SlashInteraction(commandtest.GuildID, "skip", discordtest.Member(commandtest.GuildID, commandtest.CallerID))
+
+	if err := playback.HandleSkip(fixture.Session, ic); err != nil {
+		t.Fatalf("HandleSkip returned %v, want nil", err)
+	}
+	commandtest.WantReplyText(t, fixture.Requests(), messages.T(commandtest.GuildID).Errors.EmptyQueue)
+}
+
 func TestSkipResultEmbedSwitchesOnAnEmptiedQueue(t *testing.T) {
 	song := &queue.Song{Title: "Song", URL: "https://example.com/song", Thumbnail: "https://example.com/thumb.jpg"}
 

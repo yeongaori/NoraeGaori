@@ -2,6 +2,7 @@ package queue_test
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 
 	queuecommand "noraegaori/internal/commands/queue"
@@ -11,25 +12,28 @@ import (
 	"noraegaori/tests/testutil/queuetest"
 )
 
+func songRemoved(locale *messages.Locale) string {
+	return fmt.Sprintf(locale.Queue.SongRemoved, "Song 2")
+}
+
 func TestRemove(t *testing.T) {
-	caller, other := commandtest.CallerID, commandtest.OtherID
-	inVoice := []string{caller}
-	invalidRange := func(locale *messages.Locale) string { return locale.Queue.InvalidRange }
-	songRemoved := func(locale *messages.Locale) string { return fmt.Sprintf(locale.Queue.SongRemoved, "Song 2") }
-	rangeRemoved := func(locale *messages.Locale) string { return fmt.Sprintf(locale.Queue.RangeRemoved, 2, 2, 3) }
 	nextCache := precachetest.Track(commandtest.GuildID)
 	laterCache := precachetest.Track(commandtest.GuildID)
 
-	commandtest.Run(t, "remove", queuecommand.HandleRemove, []commandtest.Case{
-		{
-			Name:     "a missing position",
-			WantText: func(locale *messages.Locale) string { return locale.Queue.EnterPosition },
-		},
-		{
-			Name:     "an empty queue",
-			Options:  removeOption("1"),
-			WantText: emptyQueueText,
-		},
+	commandtest.Run(t, "remove", queuecommand.HandleRemove, slices.Concat(
+		removeAllCases(),
+		removeRangeInputCases(),
+		removeRangeQueueCases(),
+		removePositionInputCases(),
+		removePositionQueueCases(),
+		removePreCacheCases(nextCache, laterCache),
+	))
+}
+
+func removeAllCases() []commandtest.Case {
+	caller, other := commandtest.CallerID, commandtest.OtherID
+
+	return []commandtest.Case{
 		{
 			Name:     "all with none of the caller's songs",
 			Songs:    queuetest.Songs(other, other),
@@ -59,6 +63,22 @@ func TestRemove(t *testing.T) {
 			WantText: func(*messages.Locale) string { return "1 songs by caller have been removed." },
 			Check:    commandtest.WantTitles("Song 1", "Song 2"),
 		},
+		{
+			Name:     "all of the caller's songs while one loads",
+			Songs:    queuetest.Songs(caller, other, caller),
+			Options:  removeOption("all"),
+			Prepare:  commandtest.Loading,
+			WantText: func(*messages.Locale) string { return "1 songs by caller have been removed." },
+			Check:    commandtest.WantTitles("Song 1", "Song 2"),
+		},
+	}
+}
+
+func removeRangeInputCases() []commandtest.Case {
+	caller := commandtest.CallerID
+	invalidRange := func(locale *messages.Locale) string { return locale.Queue.InvalidRange }
+
+	return []commandtest.Case{
 		{
 			Name:     "a range with too many parts",
 			Songs:    queuetest.SongsBy(caller, 3),
@@ -91,6 +111,15 @@ func TestRemove(t *testing.T) {
 			WantText: invalidRange,
 			Check:    commandtest.WantTitles("Song 1", "Song 2", "Song 3"),
 		},
+	}
+}
+
+func removeRangeQueueCases() []commandtest.Case {
+	caller, other := commandtest.CallerID, commandtest.OtherID
+	inVoice := []string{caller}
+	rangeRemoved := func(locale *messages.Locale) string { return fmt.Sprintf(locale.Queue.RangeRemoved, 2, 2, 3) }
+
+	return []commandtest.Case{
 		{
 			Name:     "a spaced range from the idle head",
 			Songs:    queuetest.SongsBy(caller, 3),
@@ -107,6 +136,13 @@ func TestRemove(t *testing.T) {
 			Check:    commandtest.WantTitles("Song 1", "Song 2", "Song 3"),
 		},
 		{
+			Name:     "a range of only the last song",
+			Songs:    queuetest.SongsBy(caller, 3),
+			Options:  removeOption("3-3"),
+			WantText: func(locale *messages.Locale) string { return fmt.Sprintf(locale.Queue.RangeRemoved, 1, 3, 3) },
+			Check:    commandtest.WantTitles("Song 1", "Song 2"),
+		},
+		{
 			Name:     "an owned range past the end",
 			Songs:    queuetest.SongsBy(caller, 3),
 			Options:  removeOption("2-9"),
@@ -120,6 +156,22 @@ func TestRemove(t *testing.T) {
 			Options:    removeOption("2-3"),
 			WantText:   rangeRemoved,
 			Check:      commandtest.WantTitles("Song 1"),
+		},
+	}
+}
+
+func removePositionInputCases() []commandtest.Case {
+	caller := commandtest.CallerID
+
+	return []commandtest.Case{
+		{
+			Name:     "a missing position",
+			WantText: func(locale *messages.Locale) string { return locale.Queue.EnterPosition },
+		},
+		{
+			Name:     "an empty queue",
+			Options:  removeOption("1"),
+			WantText: emptyQueueText,
 		},
 		{
 			Name:     "a position that is not a number",
@@ -141,6 +193,14 @@ func TestRemove(t *testing.T) {
 			WantText: func(locale *messages.Locale) string { return fmt.Sprintf(locale.Queue.EnterValidRange, 2) },
 			Check:    commandtest.WantTitles("Song 1", "Song 2"),
 		},
+	}
+}
+
+func removePositionQueueCases() []commandtest.Case {
+	caller, other := commandtest.CallerID, commandtest.OtherID
+	inVoice := []string{caller}
+
+	return []commandtest.Case{
 		{
 			Name:     "the last song",
 			Songs:    queuetest.SongsBy(caller, 3),
@@ -178,6 +238,13 @@ func TestRemove(t *testing.T) {
 			WantText:   songRemoved,
 			Check:      commandtest.WantTitles("Song 1"),
 		},
+	}
+}
+
+func removePreCacheCases(nextCache, laterCache *precachetest.Tracker) []commandtest.Case {
+	caller := commandtest.CallerID
+
+	return []commandtest.Case{
 		{
 			Name:    "the next song's pre-cache",
 			Songs:   queuetest.SongsBy(caller, 3),
@@ -200,5 +267,5 @@ func TestRemove(t *testing.T) {
 			WantText: func(locale *messages.Locale) string { return fmt.Sprintf(locale.Queue.SongRemoved, "Song 3") },
 			Check:    laterCache.WantCached("Song 2"),
 		},
-	})
+	}
 }

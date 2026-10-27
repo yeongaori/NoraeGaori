@@ -5,6 +5,7 @@ import (
 
 	"noraegaori/internal/queue"
 	"noraegaori/tests/testutil/dbtest"
+	"noraegaori/tests/testutil/queuetest"
 )
 
 func setupTestDB(t *testing.T) {
@@ -16,16 +17,45 @@ func setupTestDB(t *testing.T) {
 	}
 }
 
+type addSongCase struct {
+	name      string
+	guildID   string
+	song      *queue.Song
+	position  int
+	expectErr bool
+}
+
 func TestAddSong(t *testing.T) {
 	setupTestDB(t)
 
-	testCases := []struct {
-		name      string
-		guildID   string
-		song      *queue.Song
-		position  int
-		expectErr bool
-	}{
+	testCases := addSongCases()
+
+	for i := range testCases {
+		tc := &testCases[i]
+		t.Run(tc.name, func(t *testing.T) {
+			err := queue.AddSong(tc.guildID, tc.song, tc.position)
+			if tc.expectErr && err == nil {
+				t.Error("Expected error but got none")
+			}
+			if !tc.expectErr && err != nil {
+				t.Errorf("Unexpected error: %v", err)
+			}
+		})
+	}
+
+	t.Run("Verify queue order", func(t *testing.T) {
+		q, err := queue.GetQueue("guild1", false)
+		if err != nil {
+			t.Fatalf("Failed to get queue: %v", err)
+		}
+		if len(q.Songs) != 3 {
+			t.Errorf("Expected 3 songs, got %d", len(q.Songs))
+		}
+	})
+}
+
+func addSongCases() []addSongCase {
+	return []addSongCase{
 		{
 			name:    "Add song to end",
 			guildID: "guild1",
@@ -75,47 +105,11 @@ func TestAddSong(t *testing.T) {
 			expectErr: false,
 		},
 	}
-
-	for i := range testCases {
-		tc := &testCases[i]
-		t.Run(tc.name, func(t *testing.T) {
-			err := queue.AddSong(tc.guildID, tc.song, tc.position)
-			if tc.expectErr && err == nil {
-				t.Error("Expected error but got none")
-			}
-			if !tc.expectErr && err != nil {
-				t.Errorf("Unexpected error: %v", err)
-			}
-		})
-	}
-
-	t.Run("Verify queue order", func(t *testing.T) {
-		q, err := queue.GetQueue("guild1", false)
-		if err != nil {
-			t.Fatalf("Failed to get queue: %v", err)
-		}
-		if len(q.Songs) != 3 {
-			t.Errorf("Expected 3 songs, got %d", len(q.Songs))
-		}
-	})
 }
 
 func TestRemoveSong(t *testing.T) {
-	setupTestDB(t)
-
 	guildID := "guild1"
-	for i := 0; i < 5; i++ {
-		song := &queue.Song{
-			URL:            "https://youtube.com/watch?v=test" + string(rune('1'+i)),
-			Title:          "Test Song " + string(rune('1'+i)),
-			Duration:       "3:00",
-			RequestedByID:  "user1",
-			RequestedByTag: "User#1234",
-		}
-		if err := queue.AddSong(guildID, song, -1); err != nil {
-			t.Fatalf("Failed to add song: %v", err)
-		}
-	}
+	queuetest.Seed(t, guildID, queuetest.SongsBy("user1", 5)...)
 
 	testCases := []struct {
 		name      string
@@ -186,21 +180,8 @@ func TestSwapSongs(t *testing.T) {
 }
 
 func TestMoveSong(t *testing.T) {
-	setupTestDB(t)
-
 	guildID := "guild1"
-	for i := 0; i < 5; i++ {
-		song := &queue.Song{
-			URL:            "https://youtube.com/watch?v=move" + string(rune('A'+i)),
-			Title:          "Song " + string(rune('A'+i)),
-			Duration:       "3:00",
-			RequestedByID:  "user1",
-			RequestedByTag: "User#1234",
-		}
-		if err := queue.AddSong(guildID, song, -1); err != nil {
-			t.Fatalf("Failed to add song: %v", err)
-		}
-	}
+	queuetest.Seed(t, guildID, queuetest.SongsBy("user1", 5)...)
 
 	testCases := []struct {
 		name      string
@@ -296,76 +277,42 @@ func TestSetRepeatMode(t *testing.T) {
 	}
 }
 
-func TestSetSponsorBlock(t *testing.T) {
+func checkToggle(t *testing.T, name string, set func(guildID string, enabled bool) error, get func(q *queue.Queue) bool) {
+	t.Helper()
+
 	setupTestDB(t)
 
 	guildID := "guild1"
 
-	if err := queue.SetSponsorBlock(guildID, true); err != nil {
-		t.Errorf("Failed to enable SponsorBlock: %v", err)
+	if err := set(guildID, true); err != nil {
+		t.Errorf("Failed to enable %s: %v", name, err)
 	}
 
 	q, _ := queue.GetQueue(guildID, false)
-	if !q.SponsorBlock {
-		t.Error("SponsorBlock should be enabled")
+	if !get(q) {
+		t.Errorf("%s should be enabled", name)
 	}
 
-	if err := queue.SetSponsorBlock(guildID, false); err != nil {
-		t.Errorf("Failed to disable SponsorBlock: %v", err)
+	if err := set(guildID, false); err != nil {
+		t.Errorf("Failed to disable %s: %v", name, err)
 	}
 
 	q, _ = queue.GetQueue(guildID, false)
-	if q.SponsorBlock {
-		t.Error("SponsorBlock should be disabled")
+	if get(q) {
+		t.Errorf("%s should be disabled", name)
 	}
+}
+
+func TestSetSponsorBlock(t *testing.T) {
+	checkToggle(t, "SponsorBlock", queue.SetSponsorBlock, func(q *queue.Queue) bool { return q.SponsorBlock })
 }
 
 func TestSetShowStartedTrack(t *testing.T) {
-	setupTestDB(t)
-
-	guildID := "guild1"
-
-	if err := queue.SetShowStartedTrack(guildID, true); err != nil {
-		t.Errorf("Failed to enable ShowStartedTrack: %v", err)
-	}
-
-	q, _ := queue.GetQueue(guildID, false)
-	if !q.ShowStartedTrack {
-		t.Error("ShowStartedTrack should be enabled")
-	}
-
-	if err := queue.SetShowStartedTrack(guildID, false); err != nil {
-		t.Errorf("Failed to disable ShowStartedTrack: %v", err)
-	}
-
-	q, _ = queue.GetQueue(guildID, false)
-	if q.ShowStartedTrack {
-		t.Error("ShowStartedTrack should be disabled")
-	}
+	checkToggle(t, "ShowStartedTrack", queue.SetShowStartedTrack, func(q *queue.Queue) bool { return q.ShowStartedTrack })
 }
 
 func TestSetNormalization(t *testing.T) {
-	setupTestDB(t)
-
-	guildID := "guild1"
-
-	if err := queue.SetNormalization(guildID, true); err != nil {
-		t.Errorf("Failed to enable Normalization: %v", err)
-	}
-
-	q, _ := queue.GetQueue(guildID, false)
-	if !q.Normalization {
-		t.Error("Normalization should be enabled")
-	}
-
-	if err := queue.SetNormalization(guildID, false); err != nil {
-		t.Errorf("Failed to disable Normalization: %v", err)
-	}
-
-	q, _ = queue.GetQueue(guildID, false)
-	if q.Normalization {
-		t.Error("Normalization should be disabled")
-	}
+	checkToggle(t, "Normalization", queue.SetNormalization, func(q *queue.Queue) bool { return q.Normalization })
 }
 
 func TestCacheInvalidation(t *testing.T) {

@@ -2,6 +2,7 @@ package queue_test
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 
 	queuecommand "noraegaori/internal/commands/queue"
@@ -11,12 +12,18 @@ import (
 )
 
 func TestMoveTrack(t *testing.T) {
+	commandtest.Run(t, "movetrack", queuecommand.HandleMoveTrack, slices.Concat(
+		moveTrackInputCases(),
+		moveTrackQueueCases(),
+	))
+}
+
+func moveTrackInputCases() []commandtest.Case {
 	caller := commandtest.CallerID
 	outOfRange := func(locale *messages.Locale) string { return fmt.Sprintf(locale.Admin.EnterValidRange, 3) }
-	cannotMovePlaying := func(locale *messages.Locale) string { return locale.Admin.CannotMovePlaying }
 	unchanged := commandtest.WantTitles("Song 1", "Song 2", "Song 3")
 
-	commandtest.Run(t, "movetrack", queuecommand.HandleMoveTrack, []commandtest.Case{
+	return []commandtest.Case{
 		{
 			Name:     "missing positions",
 			WantText: func(locale *messages.Locale) string { return locale.Admin.EnterPositions },
@@ -47,6 +54,15 @@ func TestMoveTrack(t *testing.T) {
 			WantText: func(locale *messages.Locale) string { return locale.Admin.SamePosition },
 			Check:    unchanged,
 		},
+	}
+}
+
+func moveTrackQueueCases() []commandtest.Case {
+	caller := commandtest.CallerID
+	cannotMovePlaying := func(locale *messages.Locale) string { return locale.Admin.CannotMovePlaying }
+	unchanged := commandtest.WantTitles("Song 1", "Song 2", "Song 3")
+
+	return []commandtest.Case{
 		{
 			Name:     "the playing song moved away",
 			Songs:    queuetest.SongsBy(caller, 3),
@@ -82,5 +98,5 @@ func TestMoveTrack(t *testing.T) {
 			},
 			Check: commandtest.WantTitles("Song 3", "Song 1", "Song 2"),
 		},
-	})
+	}
 }

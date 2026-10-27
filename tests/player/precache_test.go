@@ -347,6 +347,23 @@ func TestPreCacheDropsAResultCancelledDuringTheFetch(t *testing.T) {
 	}
 }
 
+func runPreCacheAndWait(t *testing.T, guildID string, next *queue.Song, finished <-chan struct{}) {
+	t.Helper()
+
+	player.PreCacheNext(guildID, 128000)
+	select {
+	case <-finished:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("the pre-cache of %s did not finish", next.Title)
+	}
+}
+
+func backdatePreCacheFailure(guildID string, songID int, age time.Duration) {
+	player.HookPreCacheStoreMu.Lock()
+	(*player.HookPreCacheStore)[fmt.Sprintf("%s_%d", guildID, songID)].FailedAt = time.Now().Add(-age)
+	player.HookPreCacheStoreMu.Unlock()
+}
+
 func TestFailedPreCacheRetriesAfterTheDelay(t *testing.T) {
 	const guildID = "precacheretry"
 	setupPlayerDB(t, guildID, 2)
@@ -369,21 +386,8 @@ func TestFailedPreCacheRetriesAfterTheDelay(t *testing.T) {
 	testutil.Swap(t, player.HookStartAnalysisBackfill, func(string, int) {
 		finished <- struct{}{}
 	})
-	runPreCache := func() {
-		player.PreCacheNext(guildID, 128000)
-		select {
-		case <-finished:
-		case <-time.After(5 * time.Second):
-			t.Fatalf("the pre-cache of %s did not finish", next.Title)
-		}
-	}
-	backdateFailure := func(age time.Duration) {
-		player.HookPreCacheStoreMu.Lock()
-		(*player.HookPreCacheStore)[fmt.Sprintf("%s_%d", guildID, next.ID)].FailedAt = time.Now().Add(-age)
-		player.HookPreCacheStoreMu.Unlock()
-	}
 
-	runPreCache()
+	runPreCacheAndWait(t, guildID, next, finished)
 	if got := player.GetCachedStreamURL(guildID, next.ID); got != "" {
 		t.Errorf("got stream URL %q after a failed fetch, want none", got)
 	}
@@ -401,14 +405,14 @@ func TestFailedPreCacheRetriesAfterTheDelay(t *testing.T) {
 		t.Error("got a retry right after the failure, want none before 30s")
 	}
 
-	backdateFailure(29 * time.Second)
+	backdatePreCacheFailure(guildID, next.ID, 29*time.Second)
 	player.PreCacheNext(guildID, 128000)
 	if player.GetPreCache(guildID, next.ID) != failed {
 		t.Error("got a retry 29s after the failure, want none before 30s")
 	}
 
-	backdateFailure(31 * time.Second)
-	runPreCache()
+	backdatePreCacheFailure(guildID, next.ID, 31*time.Second)
+	runPreCacheAndWait(t, guildID, next, finished)
 	if got := player.GetCachedStreamURL(guildID, next.ID); got != next.URL {
 		t.Errorf("got stream URL %q 31s after the failure, want %q", got, next.URL)
 	}

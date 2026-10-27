@@ -2,6 +2,7 @@ package automix_test
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -83,26 +84,29 @@ func joinedCommandCategories() string {
 	return strings.Join(names, ", ")
 }
 
+func saveStyles(t *testing.T) {
+	t.Helper()
+
+	if err := queue.SetAutoMixOverrides(commandtest.GuildID, map[string]string{"fx_out": "phaser", "volume_out": "slow"}); err != nil {
+		t.Fatalf("failed to seed styles: %v", err)
+	}
+}
+
 func TestAutoMixStyleCommand(t *testing.T) {
+	commandtest.Run(t, "automixstyle", automix.HandleAutoMixStyle, slices.Concat(
+		autoMixStyleShowCases(),
+		autoMixStyleSetCases(),
+	))
+}
+
+func autoMixStyleShowCases() []commandtest.Case {
 	everyAuto := map[string]string{}
 	for _, category := range transition.StyleCategories() {
 		everyAuto[string(category)] = transition.StyleAuto
 	}
 	styleTitle := func(locale *messages.Locale) string { return locale.Settings.AutoMixStyleTitle }
-	saveStyles := func(t *testing.T) {
-		t.Helper()
 
-		if err := queue.SetAutoMixOverrides(commandtest.GuildID, map[string]string{"fx_out": "phaser", "volume_out": "slow"}); err != nil {
-			t.Fatalf("failed to seed styles: %v", err)
-		}
-	}
-	changedTo := func(category, style string) func(locale *messages.Locale) string {
-		return func(locale *messages.Locale) string {
-			return fmt.Sprintf(locale.Settings.AutoMixStyleChanged, category, style)
-		}
-	}
-
-	commandtest.Run(t, "automixstyle", automix.HandleAutoMixStyle, []commandtest.Case{
+	return []commandtest.Case{
 		{
 			Name:     "every category",
 			WantText: styleTitle,
@@ -142,6 +146,17 @@ func TestAutoMixStyleCommand(t *testing.T) {
 			WantText: styleTitle,
 			Check:    wantStyleFields(map[string]string{"volume": "slow / auto"}),
 		},
+	}
+}
+
+func autoMixStyleSetCases() []commandtest.Case {
+	changedTo := func(category, style string) func(locale *messages.Locale) string {
+		return func(locale *messages.Locale) string {
+			return fmt.Sprintf(locale.Settings.AutoMixStyleChanged, category, style)
+		}
+	}
+
+	return []commandtest.Case{
 		{
 			Name:    "an unknown style",
 			Options: styleOptions("fx_out", "bogus"),
@@ -189,5 +204,5 @@ func TestAutoMixStyleCommand(t *testing.T) {
 				return commandtest.FormatPrefix(locale.Settings.AutoMixStyleError)
 			},
 		},
-	})
+	}
 }

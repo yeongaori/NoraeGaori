@@ -97,6 +97,23 @@ func TestDeliverNowPlayingStaysQuietWhenFallbackDisabled(t *testing.T) {
 	}
 }
 
+func TestSongNoticeRequester(t *testing.T) {
+	guildID := "noticerequester"
+	song, q := nowPlayingFixture(guildID, true)
+	song.RequestedByID = "123456789"
+
+	sender := &fakeEmbedSender{}
+	player.HookDeliverNowPlaying(sender, guildID, song, q)
+
+	if len(sender.sends) != 1 {
+		t.Fatalf("want one now playing message, got %d", len(sender.sends))
+	}
+	fields := sender.sends[0].embed.Fields
+	if got := fields[len(fields)-1].Value; got != song.RequestedByTag {
+		t.Errorf("requester field = %q, want %q", got, song.RequestedByTag)
+	}
+}
+
 func TestDeliverNowPlayingPostsWithoutLoadingMessage(t *testing.T) {
 	guildID := "deliverpost"
 	song, q := nowPlayingFixture(guildID, true)

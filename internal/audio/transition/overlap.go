@@ -338,7 +338,7 @@ func rankCandidates(candidates []candidate) (candidate, bool) {
 
 	kept := make([]candidate, 0, len(candidates))
 	perBars := map[int]int{}
-	for _, entry := range candidates {
+	for _, entry := range candidates { //nolint:gocritic
 		if perBars[entry.bars] < keepPerBarCount {
 			perBars[entry.bars]++
 			kept = append(kept, entry)

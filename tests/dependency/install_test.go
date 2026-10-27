@@ -119,7 +119,7 @@ func TestInstallUnpacksAndVerifiesAZip(t *testing.T) {
 	if len(entries) != 1 {
 		t.Errorf("got %d files in the install directory, want only the binary", len(entries))
 	}
-	if _, err := os.Stat(filepath.Join(dependency.HookLibDirectory, "deno-2.9.7"+dependency.HookPartialSuffix)); !os.IsNotExist(err) {
+	if _, err = os.Stat(filepath.Join(dependency.HookLibDirectory, "deno-2.9.7"+dependency.HookPartialSuffix)); !os.IsNotExist(err) {
 		t.Error("the partial directory was left behind")
 	}
 

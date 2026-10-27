@@ -1,6 +1,7 @@
 package discord_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
@@ -12,15 +13,48 @@ type fakeCommand struct {
 	Options []*discordgo.ApplicationCommandOption
 }
 
+type optionParseCase struct {
+	name          string
+	cmd           *fakeCommand
+	args          []string
+	expectedCount int
+	expectedName  string
+	expectedValue interface{}
+}
+
 func TestParseCommandOptions(t *testing.T) {
-	testCases := []struct {
-		name          string
-		cmd           *fakeCommand
-		args          []string
-		expectedCount int
-		expectedName  string
-		expectedValue interface{}
-	}{
+	testCases := slices.Concat(
+		stringOptionCases(),
+		integerOptionCases(),
+		booleanOptionCases(),
+		channelOptionCases(),
+		mixedOptionCases(),
+	)
+
+	for i := range testCases {
+		tc := &testCases[i]
+		t.Run(tc.name, func(t *testing.T) {
+			options := discord.HookParseCommandOptions(tc.cmd.Options, tc.args)
+
+			if len(options) != tc.expectedCount {
+				t.Errorf("Expected %d options, got %d", tc.expectedCount, len(options))
+			}
+
+			if tc.expectedCount > 0 && tc.expectedName != "" {
+				if options[0].Name != tc.expectedName {
+					t.Errorf("Expected option name %s, got %s", tc.expectedName, options[0].Name)
+				}
+
+				if tc.expectedValue != nil && options[0].Value != tc.expectedValue {
+					t.Errorf("Expected value %v, got %v", tc.expectedValue, options[0].Value)
+				}
+			}
+		})
+	}
+}
+
+func stringOptionCases() []optionParseCase {
+	return []optionParseCase{
 		{
 			name: "String option - single word",
 			cmd: &fakeCommand{
@@ -54,6 +88,27 @@ func TestParseCommandOptions(t *testing.T) {
 			expectedValue: "hello world test",
 		},
 		{
+			name: "String option - last option takes the rest",
+			cmd: &fakeCommand{
+				Name: "test",
+				Options: []*discordgo.ApplicationCommandOption{
+					{
+						Name: "text",
+						Type: discordgo.ApplicationCommandOptionString,
+					},
+				},
+			},
+			args:          []string{"hello", "world"},
+			expectedCount: 1,
+			expectedName:  "text",
+			expectedValue: "hello world",
+		},
+	}
+}
+
+func integerOptionCases() []optionParseCase {
+	return []optionParseCase{
+		{
 			name: "Integer option - valid",
 			cmd: &fakeCommand{
 				Name: "test",
@@ -83,6 +138,11 @@ func TestParseCommandOptions(t *testing.T) {
 			args:          []string{"not_a_number"},
 			expectedCount: 0,
 		},
+	}
+}
+
+func booleanOptionCases() []optionParseCase {
+	return []optionParseCase{
 		{
 			name: "Boolean option - true variants",
 			cmd: &fakeCommand{
@@ -131,6 +191,11 @@ func TestParseCommandOptions(t *testing.T) {
 			expectedName:  "enabled",
 			expectedValue: false,
 		},
+	}
+}
+
+func channelOptionCases() []optionParseCase {
+	return []optionParseCase{
 		{
 			name: "Channel option - with mention",
 			cmd: &fakeCommand{
@@ -163,6 +228,11 @@ func TestParseCommandOptions(t *testing.T) {
 			expectedName:  "channel",
 			expectedValue: "123456789",
 		},
+	}
+}
+
+func mixedOptionCases() []optionParseCase {
+	return []optionParseCase{
 		{
 			name: "Multiple options",
 			cmd: &fakeCommand{
@@ -211,27 +281,6 @@ func TestParseCommandOptions(t *testing.T) {
 			args:          []string{},
 			expectedCount: 0,
 		},
-	}
-
-	for i := range testCases {
-		tc := &testCases[i]
-		t.Run(tc.name, func(t *testing.T) {
-			options := discord.HookParseCommandOptions(tc.cmd.Options, tc.args)
-
-			if len(options) != tc.expectedCount {
-				t.Errorf("Expected %d options, got %d", tc.expectedCount, len(options))
-			}
-
-			if tc.expectedCount > 0 && tc.expectedName != "" {
-				if options[0].Name != tc.expectedName {
-					t.Errorf("Expected option name %s, got %s", tc.expectedName, options[0].Name)
-				}
-
-				if tc.expectedValue != nil && options[0].Value != tc.expectedValue {
-					t.Errorf("Expected value %v, got %v", tc.expectedValue, options[0].Value)
-				}
-			}
-		})
 	}
 }
 

@@ -2,6 +2,7 @@ package play_test
 
 import (
 	"container/list"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -27,17 +28,34 @@ func testChoices(name string) []*discordgo.ApplicationCommandOptionChoice {
 	return []*discordgo.ApplicationCommandOptionChoice{{Name: name, Value: name}}
 }
 
+type videoChoiceCase struct {
+	name     string
+	title    string
+	channel  string
+	duration string
+	check    func(t *testing.T, got string)
+}
+
 func TestBuildVideoChoiceName(t *testing.T) {
 	longTitle := strings.Repeat("a", 200)
+
+	testCases := slices.Concat(
+		videoChoiceTitleCases(longTitle),
+		videoChoiceSuffixCases(longTitle),
+	)
+
+	for i := range testCases {
+		testCase := &testCases[i]
+		t.Run(testCase.name, func(t *testing.T) {
+			testCase.check(t, play.HookBuildVideoChoiceName(testCase.title, testCase.channel, testCase.duration))
+		})
+	}
+}
+
+func videoChoiceTitleCases(longTitle string) []videoChoiceCase {
 	longKoreanTitle := strings.Repeat("가", 200)
 
-	testCases := []struct {
-		name     string
-		title    string
-		channel  string
-		duration string
-		check    func(t *testing.T, got string)
-	}{
+	return []videoChoiceCase{
 		{
 			name:     "Short title is untouched",
 			title:    "Never Gonna Give You Up",
@@ -80,6 +98,11 @@ func TestBuildVideoChoiceName(t *testing.T) {
 				}
 			},
 		},
+	}
+}
+
+func videoChoiceSuffixCases(longTitle string) []videoChoiceCase {
+	return []videoChoiceCase{
 		{
 			name:     "Empty duration omits the parenthetical",
 			title:    "Ditto",
@@ -125,13 +148,6 @@ func TestBuildVideoChoiceName(t *testing.T) {
 				}
 			},
 		},
-	}
-
-	for i := range testCases {
-		testCase := &testCases[i]
-		t.Run(testCase.name, func(t *testing.T) {
-			testCase.check(t, play.HookBuildVideoChoiceName(testCase.title, testCase.channel, testCase.duration))
-		})
 	}
 }
 

@@ -60,7 +60,7 @@ func HandleSearch(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 	selection, cancelSelection := startSearchSelection(s, i, results, customID, voiceChannelID, searchMessageID)
 
-	if err := discord.UpdateResponseEmbedWithComponents(s, i, embed, components); err != nil {
+	if err = discord.UpdateResponseEmbedWithComponents(s, i, embed, components); err != nil {
 		cancelSelection()
 		logger.Errorf("Failed to update message with results: %v", err)
 		return err
@@ -93,14 +93,15 @@ func parseSearchSelection(value string) (string, int, error) {
 
 func searchResultsPanel(guildID, query string, results []youtube.SearchResult, searchMessageID string) (*discordgo.MessageEmbed, []discordgo.MessageComponent, string) {
 	selectOptions := make([]discordgo.SelectMenuOption, 0, len(results))
-	for idx, result := range results {
-		titleWithNumber := fmt.Sprintf("%d. %s", idx+1, result.Title)
+	for i := range results {
+		result := &results[i]
+		titleWithNumber := fmt.Sprintf("%d. %s", i+1, result.Title)
 		label := discord.TruncateRunes(titleWithNumber, 100)
 
 		selectOptions = append(selectOptions, discordgo.SelectMenuOption{
 			Label:       label,
 			Description: result.Duration,
-			Value:       fmt.Sprintf("%s:%d", searchMessageID, idx),
+			Value:       fmt.Sprintf("%s:%d", searchMessageID, i),
 		})
 	}
 
@@ -111,9 +112,10 @@ func searchResultsPanel(guildID, query string, results []youtube.SearchResult, s
 		Fields:      make([]*discordgo.MessageEmbedField, 0, len(results)),
 	}
 
-	for idx, result := range results {
+	for i := range results {
+		result := &results[i]
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:   fmt.Sprintf("%d. %s", idx+1, result.Title),
+			Name:   fmt.Sprintf("%d. %s", i+1, result.Title),
 			Value:  result.Duration,
 			Inline: false,
 		})

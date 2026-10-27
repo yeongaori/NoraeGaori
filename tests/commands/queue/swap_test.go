@@ -2,6 +2,7 @@ package queue_test
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 
 	queuecommand "noraegaori/internal/commands/queue"
@@ -11,11 +12,17 @@ import (
 )
 
 func TestSwap(t *testing.T) {
-	caller, other := commandtest.CallerID, commandtest.OtherID
-	outOfRange := func(locale *messages.Locale) string { return fmt.Sprintf(locale.Queue.EnterValidRange, 2) }
-	unchanged := commandtest.WantTitles("Song 1", "Song 2", "Song 3")
+	commandtest.Run(t, "swap", queuecommand.HandleSwap, slices.Concat(
+		swapInputCases(),
+		swapQueueCases(),
+	))
+}
 
-	commandtest.Run(t, "swap", queuecommand.HandleSwap, []commandtest.Case{
+func swapInputCases() []commandtest.Case {
+	caller := commandtest.CallerID
+	outOfRange := func(locale *messages.Locale) string { return fmt.Sprintf(locale.Queue.EnterValidRange, 2) }
+
+	return []commandtest.Case{
 		{
 			Name:     "missing positions",
 			WantText: func(locale *messages.Locale) string { return locale.Queue.SwapEnterPositions },
@@ -39,6 +46,14 @@ func TestSwap(t *testing.T) {
 			WantText: outOfRange,
 			Check:    commandtest.WantTitles("Song 1", "Song 2"),
 		},
+	}
+}
+
+func swapQueueCases() []commandtest.Case {
+	caller, other := commandtest.CallerID, commandtest.OtherID
+	unchanged := commandtest.WantTitles("Song 1", "Song 2", "Song 3")
+
+	return []commandtest.Case{
 		{
 			Name:     "the loading song",
 			Songs:    queuetest.SongsBy(caller, 3),
@@ -88,5 +103,5 @@ func TestSwap(t *testing.T) {
 			},
 			Check: commandtest.WantTitles("Song 3", "Song 2", "Song 1"),
 		},
-	})
+	}
 }

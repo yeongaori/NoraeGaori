@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"noraegaori/internal/commands/settings"
+	"noraegaori/internal/discord"
 	"noraegaori/tests/testutil/dbtest"
 )
 
@@ -48,33 +49,57 @@ func TestSettingMenusShowTheStoredValueAndAcceptRepeatedPicks(t *testing.T) {
 		}
 
 		for _, picked := range append(append([]string{}, values...), values[0]) {
-			if embed, err := menu.Apply(picked); err != nil || embed != nil {
-				t.Fatalf("%s pick %q = (%v, %v), want a clean apply", key, picked, embed, err)
-			}
+			checkRepeatedPick(t, key, spec, &menu, picked)
+		}
+	}
+}
 
-			stored, ok := settings.HookCurrentValue(checkGuildID, spec)
-			if !ok || stored != picked {
-				t.Errorf("%s pick %q stored %q", key, picked, stored)
-			}
+func checkRepeatedPick(t *testing.T, key string, spec *settings.HookSettingSpec, menu *discord.DropdownMenu, picked string) {
+	t.Helper()
 
-			refreshed := settings.HookBuildSettingMenu(checkGuildID, spec)
-			if refreshed.Current != settings.HookFormatSettingValue(checkGuildID, spec, picked) {
-				t.Errorf("%s after picking %q shows %q", key, picked, refreshed.Current)
-			}
-			defaults := 0
-			for i := range refreshed.Options {
-				option := &refreshed.Options[i]
-				if option.Default {
-					defaults++
-					if option.Value != picked {
-						t.Errorf("%s after picking %q preselects %q", key, picked, option.Value)
-					}
-				}
-			}
-			if defaults != 1 {
-				t.Errorf("%s after picking %q preselects %d options, want 1", key, picked, defaults)
+	if embed, err := menu.Apply(picked); err != nil || embed != nil {
+		t.Fatalf("%s pick %q = (%v, %v), want a clean apply", key, picked, embed, err)
+	}
+
+	stored, ok := settings.HookCurrentValue(checkGuildID, spec)
+	if !ok || stored != picked {
+		t.Errorf("%s pick %q stored %q", key, picked, stored)
+	}
+
+	refreshed := settings.HookBuildSettingMenu(checkGuildID, spec)
+	if refreshed.Current != settings.HookFormatSettingValue(checkGuildID, spec, picked) {
+		t.Errorf("%s after picking %q shows %q", key, picked, refreshed.Current)
+	}
+	defaults := 0
+	for i := range refreshed.Options {
+		option := &refreshed.Options[i]
+		if option.Default {
+			defaults++
+			if option.Value != picked {
+				t.Errorf("%s after picking %q preselects %q", key, picked, option.Value)
 			}
 		}
+	}
+	if defaults != 1 {
+		t.Errorf("%s after picking %q preselects %d options, want 1", key, picked, defaults)
+	}
+}
+
+func TestPanelLabelFallback(t *testing.T) {
+	const key = "sponsorblock"
+	labels := settings.HookPanelStrings(checkGuildID).Labels
+	original, hasLabel := labels[key]
+	labels[key] = ""
+	t.Cleanup(func() {
+		if hasLabel {
+			labels[key] = original
+		} else {
+			delete(labels, key)
+		}
+	})
+
+	if got := settings.HookSettingLabel(checkGuildID, key); got != key {
+		t.Errorf("label = %q, want the key %q for an empty label", got, key)
 	}
 }
 

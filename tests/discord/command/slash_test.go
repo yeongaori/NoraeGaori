@@ -1,10 +1,12 @@
 package command_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/discord/command"
+	"noraegaori/internal/messages"
 )
 
 func guildOnlyCommand(name string) *discordgo.ApplicationCommand {
@@ -108,5 +110,28 @@ func TestDiffCommandSetsIgnoresCommandsAlreadyGuildOnly(t *testing.T) {
 
 	if len(added) != 0 || len(updated) != 0 || len(removed) != 0 {
 		t.Fatalf("got added %v, updated %v, removed %v, want no changes", added, updated, removed)
+	}
+}
+
+func TestOptionBuilders(t *testing.T) {
+	if position := command.PositionOption("position", "d"); position.MinValue == nil || *position.MinValue != 1 {
+		t.Errorf("PositionOption min = %v, want 1", position.MinValue)
+	}
+	if !command.QueryOption("d").Autocomplete {
+		t.Error("QueryOption autocomplete = false, want true")
+	}
+	if types := command.VoiceChannelOption("d").ChannelTypes; !slices.Equal(types, []discordgo.ChannelType{discordgo.ChannelTypeGuildVoice}) {
+		t.Errorf("VoiceChannelOption channel types = %v, want only voice channels", types)
+	}
+}
+
+func TestRegisterLocalizedUsage(t *testing.T) {
+	registered := &command.Command{Name: "usagecheck"}
+	command.RegisterLocalized(func(string) messages.CommandStrings {
+		return messages.CommandStrings{Usage: "usagecheck <query>", Example: "usagecheck song"}
+	}, registered)
+
+	if registered.Usage != "usagecheck <query>" {
+		t.Errorf("Usage = %q, want %q", registered.Usage, "usagecheck <query>")
 	}
 }

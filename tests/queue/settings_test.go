@@ -2,9 +2,11 @@ package queue_test
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 
 	"noraegaori/internal/queue"
+	"noraegaori/tests/testutil/queuetest"
 )
 
 func TestBoolSettingsRoundTrip(t *testing.T) {
@@ -260,6 +262,28 @@ func TestAddSongsBatch(t *testing.T) {
 	}
 }
 
+func TestAddSongsBatchShift(t *testing.T) {
+	guildID := "guild1"
+	queuetest.Seed(t, guildID, queuetest.SongsBy("user1", 2)...)
+
+	batch := []*queue.Song{queuetest.Song("Batch 1", "user1"), queuetest.Song("Batch 2", "user1")}
+	if err := queue.AddSongsBatch(guildID, batch, 1); err != nil {
+		t.Fatalf("AddSongsBatch returned %v, want nil", err)
+	}
+
+	q, err := queue.GetQueue(guildID, true)
+	if err != nil {
+		t.Fatalf("failed to read the queue: %v", err)
+	}
+	got := make([]string, 0, len(q.Songs))
+	for _, song := range q.Songs {
+		got = append(got, song.Title)
+	}
+	if want := []string{"Song 1", "Batch 1", "Batch 2", "Song 2"}; !slices.Equal(got, want) {
+		t.Errorf("queue = %v, want %v", got, want)
+	}
+}
+
 func TestAddSongsBatchNoQueue(t *testing.T) {
 	setupTestDB(t)
 
@@ -283,7 +307,7 @@ func TestRemoveSongsByIDs(t *testing.T) {
 		t.Fatalf("GetQueue: %v", err)
 	}
 	remove := []int{q.Songs[1].ID, q.Songs[3].ID}
-	if err := queue.RemoveSongsByIDs(guildID, remove); err != nil {
+	if err = queue.RemoveSongsByIDs(guildID, remove); err != nil {
 		t.Fatalf("RemoveSongsByIDs: %v", err)
 	}
 

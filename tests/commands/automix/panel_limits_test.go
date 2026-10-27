@@ -165,6 +165,38 @@ func checkEditor(t *testing.T, row *automix.HookTransitionRow, tab *automix.Hook
 	}
 }
 
+func checkPanelPage(t *testing.T, state *automix.HookPanelState, page, totalPages int) {
+	t.Helper()
+
+	pageRows := automix.HookHydrateTransitionRows("check-guild", state, automix.HookTransitionPageSlice(*state.HookPairs(), page))
+	components := automix.HookCreateTransitionPanelComponents("check-guild", pageRows, page, totalPages)
+	rowCount, selects, buttons := inspectComponents(components)
+
+	if rowCount > 5 {
+		t.Errorf("page %d has %d action rows, want at most 5", page, rowCount)
+	}
+	for i := range selects {
+		menu := &selects[i]
+		for _, violation := range checkSelectMenu(fmt.Sprintf("page %d list", page), menu) {
+			t.Error(violation)
+		}
+	}
+	for i := range buttons {
+		button := &buttons[i]
+		if size := len([]rune(button.CustomID)); size > automix.HookDiscordLabelLimit {
+			t.Errorf("page %d button custom id is %d chars, want at most %d", page, size, automix.HookDiscordLabelLimit)
+		}
+	}
+
+	embed := automix.HookCreateTransitionPanelEmbed("check-guild", state, pageRows, page, totalPages)
+	if size := len([]rune(embed.Description)); size > 4096 {
+		t.Errorf("page %d description is %d chars, want at most 4096", page, size)
+	}
+	if size := len([]rune(embed.Title)); size > 256 {
+		t.Errorf("page %d title is %d chars, want at most 256", page, size)
+	}
+}
+
 func TestPanelAndEditorStayInsideDiscordLimits(t *testing.T) {
 	longTitle := strings.Repeat("W", 100)
 	cjkTitle := strings.Repeat("가나다라마", 24)
@@ -189,33 +221,7 @@ func TestPanelAndEditorStayInsideDiscordLimits(t *testing.T) {
 			totalPages := automix.HookTransitionPageCount(*state.HookPairs())
 
 			for page := 1; page <= totalPages; page++ {
-				pageRows := automix.HookHydrateTransitionRows("check-guild", state, automix.HookTransitionPageSlice(*state.HookPairs(), page))
-				components := automix.HookCreateTransitionPanelComponents("check-guild", pageRows, page, totalPages)
-				rowCount, selects, buttons := inspectComponents(components)
-
-				if rowCount > 5 {
-					t.Errorf("page %d has %d action rows, want at most 5", page, rowCount)
-				}
-				for i := range selects {
-					menu := &selects[i]
-					for _, violation := range checkSelectMenu(fmt.Sprintf("page %d list", page), menu) {
-						t.Error(violation)
-					}
-				}
-				for i := range buttons {
-					button := &buttons[i]
-					if size := len([]rune(button.CustomID)); size > automix.HookDiscordLabelLimit {
-						t.Errorf("page %d button custom id is %d chars, want at most %d", page, size, automix.HookDiscordLabelLimit)
-					}
-				}
-
-				embed := automix.HookCreateTransitionPanelEmbed("check-guild", state, pageRows, page, totalPages)
-				if size := len([]rune(embed.Description)); size > 4096 {
-					t.Errorf("page %d description is %d chars, want at most 4096", page, size)
-				}
-				if size := len([]rune(embed.Title)); size > 256 {
-					t.Errorf("page %d title is %d chars, want at most 256", page, size)
-				}
+				checkPanelPage(t, state, page, totalPages)
 			}
 
 			for _, row := range rows {

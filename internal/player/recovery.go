@@ -79,7 +79,7 @@ func retryAfterPanic(session *discordgo.Session, guildID string, reason any) {
 		return
 	}
 
-	if err := queue.RemoveFirstSong(guildID); err != nil {
+	if err = queue.RemoveFirstSong(guildID); err != nil {
 		logger.Errorf("Failed to remove the song that crashed playback: %v", err)
 	}
 	clearAnnounced(guildID)

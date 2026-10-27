@@ -22,23 +22,81 @@ func silentAudioStream(frames int) player.HookAudioStream {
 	return s
 }
 
+func loudFrame() []int16 {
+	frame := make([]int16, player.HookFrameSize*player.HookChannels)
+	for i := range frame {
+		frame[i] = 8000
+	}
+	return frame
+}
+
 func loudAudioStream(frames int) player.HookAudioStream {
 	s := newFakeStream(ffmpeg.BufSize)
 	go func() {
 		defer close(s.pcm)
 		for i := 0; i < frames; i++ {
-			frame := make([]int16, player.HookFrameSize*player.HookChannels)
-			for j := range frame {
-				frame[j] = 8000
-			}
 			select {
 			case <-s.stopChan:
 				return
-			case s.pcm <- frame:
+			case s.pcm <- loudFrame():
 			}
 		}
 	}()
 	return s
+}
+
+func endlessLoudStream(t *testing.T) player.HookAudioStream {
+	s := newFakeStream(ffmpeg.BufSize)
+	go func() {
+		for {
+			select {
+			case <-s.stopChan:
+				return
+			case s.pcm <- loudFrame():
+			}
+		}
+	}()
+	t.Cleanup(s.Stop)
+	return s
+}
+
+func stubQueuedSongPreCache(t *testing.T, guildID string) {
+	t.Helper()
+
+	t.Cleanup(func() { player.ClearPreCache(guildID) })
+	t.Cleanup(func() { player.StopAnalysisBackfill(guildID) })
+
+	testutil.Swap(t, player.HookPreCacheNext, player.PreCacheNext)
+	testutil.Swap(t, player.HookAnalysisBackfillGap, 0)
+	testutil.Swap(t, player.HookFetchStreamURL, func(url string, _ bool, _ int) (string, error) {
+		time.Sleep(20 * time.Millisecond)
+		return url, nil
+	})
+	testutil.Swap(t, player.HookFetchBackfillStreamURL, func(_ context.Context, url string, _ bool, _ int) (string, error) {
+		return url, nil
+	})
+	testutil.Swap(t, player.HookAnalyzeSegment, func(_ context.Context, _ string, startSec float64, _ int) (*analysis.TrackAnalysis, error) {
+		time.Sleep(50 * time.Millisecond)
+		head := steadyBeat(125)
+		head.Offset = startSec
+		return head, nil
+	})
+}
+
+func drainOpusFrames(t *testing.T, mock *mockVoiceConn) {
+	t.Helper()
+
+	stopDrain := make(chan struct{})
+	t.Cleanup(func() { close(stopDrain) })
+	go func() {
+		for {
+			select {
+			case <-stopDrain:
+				return
+			case <-mock.opusSend:
+			}
+		}
+	}()
 }
 
 func runPlayAudioWithFade(t *testing.T, guildPlayer *player.GuildPlayer, song *queue.Song, fade *player.HookFadeSettings) error {
@@ -326,13 +384,6 @@ func TestPlayAudioReadinessCountsOnlyTheAudibleRest(t *testing.T) {
 func TestSongQueuedMidSongIsReadyBeforeTheEnd(t *testing.T) {
 	const guildID = "loopqueuedmidsong"
 	readLog := logtest.Capture(t)
-	loudFrame := func() []int16 {
-		frame := make([]int16, player.HookFrameSize*player.HookChannels)
-		for i := range frame {
-			frame[i] = 8000
-		}
-		return frame
-	}
 
 	current := newFakeStream(ffmpeg.BufSize)
 	var streams atomic.Int32
@@ -340,56 +391,13 @@ func TestSongQueuedMidSongIsReadyBeforeTheEnd(t *testing.T) {
 		if streams.Add(1) == 1 {
 			return current
 		}
-		next := newFakeStream(ffmpeg.BufSize)
-		go func() {
-			for {
-				select {
-				case <-next.stopChan:
-					return
-				case next.pcm <- loudFrame():
-				}
-			}
-		}()
-		t.Cleanup(next.Stop)
-		return next
+		return endlessLoudStream(t)
 	})
 	enableAutoMix(t, guildID)
-	t.Cleanup(func() { player.ClearPreCache(guildID) })
-	t.Cleanup(func() { player.StopAnalysisBackfill(guildID) })
+	stubQueuedSongPreCache(t, guildID)
+	drainOpusFrames(t, mock)
 
-	testutil.Swap(t, player.HookPreCacheNext, player.PreCacheNext)
-	testutil.Swap(t, player.HookAnalysisBackfillGap, 0)
-	testutil.Swap(t, player.HookFetchStreamURL, func(url string, _ bool, _ int) (string, error) {
-		time.Sleep(20 * time.Millisecond)
-		return url, nil
-	})
-	testutil.Swap(t, player.HookFetchBackfillStreamURL, func(_ context.Context, url string, _ bool, _ int) (string, error) {
-		return url, nil
-	})
-	testutil.Swap(t, player.HookAnalyzeSegment, func(_ context.Context, _ string, startSec float64, _ int) (*analysis.TrackAnalysis, error) {
-		time.Sleep(50 * time.Millisecond)
-		head := steadyBeat(125)
-		head.Offset = startSec
-		return head, nil
-	})
-
-	var sent atomic.Int64
-	stopDrain := make(chan struct{})
-	t.Cleanup(func() { close(stopDrain) })
-	go func() {
-		for {
-			select {
-			case <-stopDrain:
-				return
-			case <-mock.opusSend:
-				sent.Add(1)
-			}
-		}
-	}()
-
-	fade := player.HookBuildFadeSettings(&player.HookFadeSettingsFields{
-		AutoMix: true, Crossfade: true, TrimSilence: true, AutoMixBeats: 64, RepeatMode: queue.RepeatOff,
-	})
+	fade := autoMixFade(64)
 	done := make(chan error, 1)
 	go func() {
 		done <- player.HookPlayAudio(guildPlayer, song, "fake://url", 0, false, 128000, make(chan struct{}, 1), fade, func(*queue.Song) {})
@@ -421,11 +429,7 @@ func TestSongQueuedMidSongIsReadyBeforeTheEnd(t *testing.T) {
 		t.Errorf("got %s not pre-cached when the end of %s was known, want URL and head analysis ready", next.Title, song.Title)
 	}
 
-	tail := steadyBeat(128)
-	tail.Offset = 90
-	tail.Duration = 90
-	tail.FirstBeat = 0.2
-	current.setEndState(&ffmpeg.EndState{TotalFrames: 9000, TailStartFrame: 4500, Analysis: tail})
+	current.setEndState(analyzedTailEndState())
 	push(9000, never)
 	close(current.pcm)
 

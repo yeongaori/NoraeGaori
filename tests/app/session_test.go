@@ -14,6 +14,7 @@ import (
 	"noraegaori/tests/testutil/logtest"
 
 	"noraegaori/internal/app"
+	"noraegaori/internal/logger"
 	"noraegaori/internal/player"
 	"noraegaori/internal/queue"
 	"noraegaori/tests/testutil/dbtest"
@@ -114,6 +115,18 @@ func TestLosingDiscordLogsOnceUntilReconnected(t *testing.T) {
 	}
 	if count := strings.Count(logged, reconnected); count != 1 {
 		t.Errorf("reported %d reconnects, want only the one after an outage in %q", count, logged)
+	}
+}
+
+func TestLostConnectionLogLevel(t *testing.T) {
+	read := logtest.CaptureConsole(t)
+	useConnectionState(t, false)
+	testutil.Swap(t, logger.HookDebugMode, false)
+
+	app.HookOnDisconnect(nil, &discordgo.Disconnect{})
+
+	if logged := read(); strings.Contains(logged, lostConnection) {
+		t.Errorf("logged %q with debug mode off, want the loss hidden", logged)
 	}
 }
 

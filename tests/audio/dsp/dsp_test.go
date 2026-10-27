@@ -8,28 +8,26 @@ import (
 	"noraegaori/internal/audio/dsp"
 )
 
-func TestFilterLowpassShape(t *testing.T) {
-	passband := audiotest.FilterResponse(func(f *dsp.Filter) { f.SetLowpass(500, 0.707) }, 100)
-	stopband := audiotest.FilterResponse(func(f *dsp.Filter) { f.SetLowpass(500, 0.707) }, 8000)
+func checkFilterShape(t *testing.T, setup func(*dsp.Filter), passHz, stopHz float64) {
+	t.Helper()
+
+	passband := audiotest.FilterResponse(setup, passHz)
+	stopband := audiotest.FilterResponse(setup, stopHz)
 
 	if passband <= 0.85 {
-		t.Errorf("100Hz gain = %.3f, want > 0.85", passband)
+		t.Errorf("%.0fHz gain = %.3f, want > 0.85", passHz, passband)
 	}
 	if stopband >= 0.05 {
-		t.Errorf("8000Hz gain = %.4f, want < 0.05", stopband)
+		t.Errorf("%.0fHz gain = %.4f, want < 0.05", stopHz, stopband)
 	}
 }
 
-func TestFilterHighpassShape(t *testing.T) {
-	passband := audiotest.FilterResponse(func(f *dsp.Filter) { f.SetHighpass(2000, 0.707) }, 12000)
-	stopband := audiotest.FilterResponse(func(f *dsp.Filter) { f.SetHighpass(2000, 0.707) }, 100)
+func TestFilterLowpassShape(t *testing.T) {
+	checkFilterShape(t, func(f *dsp.Filter) { f.SetLowpass(500, 0.707) }, 100, 8000)
+}
 
-	if passband <= 0.85 {
-		t.Errorf("12000Hz gain = %.3f, want > 0.85", passband)
-	}
-	if stopband >= 0.05 {
-		t.Errorf("100Hz gain = %.4f, want < 0.05", stopband)
-	}
+func TestFilterHighpassShape(t *testing.T) {
+	checkFilterShape(t, func(f *dsp.Filter) { f.SetHighpass(2000, 0.707) }, 12000, 100)
 }
 
 func TestFilterBandpassPeaksAtItsCentre(t *testing.T) {

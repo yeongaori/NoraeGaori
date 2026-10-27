@@ -6,8 +6,18 @@ import (
 
 import "testing"
 
+func checkErrorClassifier(t *testing.T, name string, classify func(message string) bool, cases map[string]bool) {
+	t.Helper()
+
+	for message, want := range cases {
+		if got := classify(message); got != want {
+			t.Errorf("%s(%q) = %v, want %v", name, message, got, want)
+		}
+	}
+}
+
 func TestIsDefinitiveUnavailableError(t *testing.T) {
-	cases := map[string]bool{
+	checkErrorClassifier(t, "IsDefinitiveUnavailableError", ytdlp.IsDefinitiveUnavailableError, map[string]bool{
 		"ERROR: Video unavailable":                    true,
 		"This is a private video":                     true,
 		"Sign in to confirm your age":                 true,
@@ -17,17 +27,11 @@ func TestIsDefinitiveUnavailableError(t *testing.T) {
 		"HTTP Error 429: Too Many Requests":           false,
 		"connection refused":                          false,
 		"":                                            false,
-	}
-
-	for message, want := range cases {
-		if got := ytdlp.IsDefinitiveUnavailableError(message); got != want {
-			t.Errorf("IsDefinitiveUnavailableError(%q) = %v, want %v", message, got, want)
-		}
-	}
+	})
 }
 
 func TestIsNetworkError(t *testing.T) {
-	cases := map[string]bool{
+	checkErrorClassifier(t, "IsNetworkError", ytdlp.IsNetworkError, map[string]bool{
 		"dial tcp: connection refused":  true,
 		"context deadline exceeded":     true,
 		"read tcp: connection reset":    true,
@@ -37,13 +41,7 @@ func TestIsNetworkError(t *testing.T) {
 		"ERROR: Video unavailable":      false,
 		"extractor returned no formats": false,
 		"":                              false,
-	}
-
-	for message, want := range cases {
-		if got := ytdlp.IsNetworkError(message); got != want {
-			t.Errorf("IsNetworkError(%q) = %v, want %v", message, got, want)
-		}
-	}
+	})
 }
 
 func TestIsRateLimitError(t *testing.T) {

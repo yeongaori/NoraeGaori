@@ -218,10 +218,10 @@ func TestSetSongAutoMixOverrides(t *testing.T) {
 	}
 	songID := q.Songs[0].ID
 
-	if err := queue.SetSongAutoMixOverrides("guild1", songID, map[string]string{"eq_out": "hi_fast", "fx_in": "phaser"}); err != nil {
+	if err = queue.SetSongAutoMixOverrides("guild1", songID, map[string]string{"eq_out": "hi_fast", "fx_in": "phaser"}); err != nil {
 		t.Errorf("setting the song's styles failed: %v", err)
 	}
-	if err := queue.SetSongAutoMixOverrides("guild1", songID, map[string]string{"fx_in": "auto", "length": "four_bars"}); err != nil {
+	if err = queue.SetSongAutoMixOverrides("guild1", songID, map[string]string{"fx_in": "auto", "length": "four_bars"}); err != nil {
 		t.Errorf("changing the song's styles failed: %v", err)
 	}
 	q, err = queue.GetQueue("guild1", true)

@@ -183,20 +183,56 @@ func TestCrossfadePlanClampsTheTransitionAheadOfTheCurrentFrame(t *testing.T) {
 	}
 }
 
+type crossfadeGuardCase struct {
+	name       string
+	fade       *player.HookFadeSettings
+	endState   *ffmpeg.EndState
+	sentFrames int
+	cacheURL   string
+	streamOK   bool
+	mutate     func(cs *player.HookCrossfadeState)
+}
+
+func checkCrossfadeGuard(t *testing.T, guildID string, nextID int, testCase *crossfadeGuardCase) {
+	t.Helper()
+
+	if testCase.cacheURL != "" {
+		cacheNextStreamURL(t, guildID, nextID, testCase.cacheURL)
+	}
+	if testCase.streamOK {
+		stubAudioStream(t)
+	} else {
+		failingAudioStream(t)
+	}
+
+	es := testCase.endState
+	if es == nil {
+		es = crossfadeEndState()
+	}
+
+	cs := player.HookNewCrossfadeState()
+	if testCase.mutate != nil {
+		testCase.mutate(cs)
+	}
+	wasArmed := *cs.HookArmed()
+
+	if planned := cs.HookPlan(player.GetPlayer(guildID), es, testCase.sentFrames, 0, testCase.fade, false, 128000); planned {
+		t.Fatal("plan returned true, want a refusal")
+	}
+	if *cs.HookArmed() != wasArmed {
+		t.Error("a refused plan changed the armed flag")
+	}
+	if *cs.HookBStream() != nil {
+		t.Error("a refused plan left a stream on the state")
+	}
+}
+
 func TestCrossfadePlanRefusesEveryGuard(t *testing.T) {
 	guildID := "planguard"
 	q := seedCrossfadeQueue(t, guildID)
 	nextID := q.Songs[1].ID
 
-	cases := []struct {
-		name       string
-		fade       *player.HookFadeSettings
-		endState   *ffmpeg.EndState
-		sentFrames int
-		cacheURL   string
-		streamOK   bool
-		mutate     func(cs *player.HookCrossfadeState)
-	}{
+	cases := []crossfadeGuardCase{
 		{
 			name:     "neither automix nor crossfade",
 			fade:     player.HookBuildFadeSettings(&player.HookFadeSettingsFields{CrossfadeSec: 6}),
@@ -240,35 +276,7 @@ func TestCrossfadePlanRefusesEveryGuard(t *testing.T) {
 	for i := range cases {
 		testCase := &cases[i]
 		t.Run(testCase.name, func(t *testing.T) {
-			if testCase.cacheURL != "" {
-				cacheNextStreamURL(t, guildID, nextID, testCase.cacheURL)
-			}
-			if testCase.streamOK {
-				stubAudioStream(t)
-			} else {
-				failingAudioStream(t)
-			}
-
-			es := testCase.endState
-			if es == nil {
-				es = crossfadeEndState()
-			}
-
-			cs := player.HookNewCrossfadeState()
-			if testCase.mutate != nil {
-				testCase.mutate(cs)
-			}
-			wasArmed := *cs.HookArmed()
-
-			if planned := cs.HookPlan(player.GetPlayer(guildID), es, testCase.sentFrames, 0, testCase.fade, false, 128000); planned {
-				t.Fatal("plan returned true, want a refusal")
-			}
-			if *cs.HookArmed() != wasArmed {
-				t.Error("a refused plan changed the armed flag")
-			}
-			if *cs.HookBStream() != nil {
-				t.Error("a refused plan left a stream on the state")
-			}
+			checkCrossfadeGuard(t, guildID, nextID, testCase)
 		})
 	}
 }

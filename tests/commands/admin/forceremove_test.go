@@ -3,6 +3,7 @@ package admin_test
 import (
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -41,16 +42,31 @@ func longTitledSongs(count int, requesterID string) []*queue.Song {
 	return songs
 }
 
-func TestForceRemove(t *testing.T) {
-	caller := commandtest.CallerID
-	mention := "<@" + targetUserID + ">"
-	validRange := func(count int) func(*messages.Locale) string {
-		return func(locale *messages.Locale) string { return fmt.Sprintf(locale.Admin.EnterValidRange, count) }
+func wantTargetSongsRemoved() func(t *testing.T, reply map[string]any) {
+	return func(t *testing.T, reply map[string]any) {
+		commandtest.ReplyContains("Song 3", "Song 4")(t, reply)
+		commandtest.WantTitles("Song 1", "Song 2")(t, reply)
 	}
+}
+
+func TestForceRemove(t *testing.T) {
 	positionCache := precachetest.Track(commandtest.GuildID)
 	userCache := precachetest.Track(commandtest.GuildID)
 
-	commandtest.Run(t, "forceremove", admin.HandleForceRemove, []commandtest.Case{
+	commandtest.Run(t, "forceremove", admin.HandleForceRemove, slices.Concat(
+		forceRemoveInputCases(),
+		forceRemoveUserCases(),
+		forceRemovePreCacheCases(positionCache, userCache),
+	))
+}
+
+func forceRemoveInputCases() []commandtest.Case {
+	caller := commandtest.CallerID
+	validRange := func(count int) func(*messages.Locale) string {
+		return func(locale *messages.Locale) string { return fmt.Sprintf(locale.Admin.EnterValidRange, count) }
+	}
+
+	return []commandtest.Case{
 		{
 			Name:     "a missing target",
 			WantText: func(locale *messages.Locale) string { return locale.Admin.MentionTarget },
@@ -95,6 +111,14 @@ func TestForceRemove(t *testing.T) {
 			WantText: func(locale *messages.Locale) string { return fmt.Sprintf(locale.Queue.SongRemoved, "Song 2") },
 			Check:    commandtest.WantTitles("Song 1", "Song 3"),
 		},
+	}
+}
+
+func forceRemoveUserCases() []commandtest.Case {
+	caller := commandtest.CallerID
+	mention := "<@" + targetUserID + ">"
+
+	return []commandtest.Case{
 		{
 			Name:     "a user with a single queued song",
 			Songs:    queuetest.Songs(targetUserID),
@@ -135,11 +159,26 @@ func TestForceRemove(t *testing.T) {
 			WantText: func(locale *messages.Locale) string {
 				return fmt.Sprintf(locale.Admin.DeleteCompleteDesc, stubUsername, 2)
 			},
-			Check: func(t *testing.T, reply map[string]any) {
-				commandtest.ReplyContains("Song 3", "Song 4")(t, reply)
-				commandtest.WantTitles("Song 1", "Song 2")(t, reply)
-			},
+			Check: wantTargetSongsRemoved(),
 		},
+		{
+			Name:    "a user's songs while one of them loads",
+			Songs:   queuetest.Songs(targetUserID, caller, targetUserID, targetUserID),
+			Options: targetOption(mention),
+			Prepare: commandtest.Loading,
+			WantText: func(locale *messages.Locale) string {
+				return fmt.Sprintf(locale.Admin.DeleteCompleteDesc, stubUsername, 2)
+			},
+			Check: wantTargetSongsRemoved(),
+		},
+	}
+}
+
+func forceRemovePreCacheCases(positionCache, userCache *precachetest.Tracker) []commandtest.Case {
+	caller := commandtest.CallerID
+	mention := "<@" + targetUserID + ">"
+
+	return []commandtest.Case{
 		{
 			Name:    "the next song's pre-cache",
 			Songs:   queuetest.SongsBy(caller, 3),
@@ -164,7 +203,7 @@ func TestForceRemove(t *testing.T) {
 			},
 			Check: userCache.WantCached("Song 3"),
 		},
-	})
+	}
 }
 
 func TestForceRemoveSplitsALongSummary(t *testing.T) {

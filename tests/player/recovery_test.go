@@ -210,12 +210,41 @@ func TestQueuedCommandsAreRememberedForRecovery(t *testing.T) {
 	}
 }
 
+type teardownPanicCase struct {
+	name        string
+	beforePanic func(guildPlayer *player.GuildPlayer)
+	wantRetry   bool
+}
+
 func TestPanicCausedByATeardownIsLeftToThatCommand(t *testing.T) {
-	cases := []struct {
-		name        string
-		beforePanic func(guildPlayer *player.GuildPlayer)
-		wantRetry   bool
-	}{
+	cases := teardownPanicCases()
+
+	for i := range cases {
+		testCase := &cases[i]
+		t.Run(testCase.name, func(t *testing.T) {
+			guildID := "recover-teardown-" + string(rune('a'+i))
+			setupPlayerDB(t, guildID, 2)
+			markStoredActive(t, guildID)
+			probe := probeRecovery(t)
+
+			runPanickingSession(t, guildID, testCase.beforePanic)
+
+			if testCase.wantRetry {
+				waitUntil(t, func() bool { return probe.snapshot().resumes == 1 }, "the unexpected panic was not retried")
+			} else {
+				time.Sleep(20 * time.Millisecond)
+				got := probe.snapshot()
+				if got.resumes != 0 || len(got.crashes) != 0 {
+					t.Errorf("resumes=%d crashes=%v, want recovery to leave the outcome to the command", got.resumes, got.crashes)
+				}
+			}
+			wantIdleState(t, guildID)
+		})
+	}
+}
+
+func teardownPanicCases() []teardownPanicCase {
+	return []teardownPanicCase{
 		{
 			name: "a halted session",
 			beforePanic: func(guildPlayer *player.GuildPlayer) {
@@ -264,28 +293,5 @@ func TestPanicCausedByATeardownIsLeftToThatCommand(t *testing.T) {
 			beforePanic: func(guildPlayer *player.GuildPlayer) { guildPlayer.HookNoteCommand("play") },
 			wantRetry:   true,
 		},
-	}
-
-	for i := range cases {
-		testCase := &cases[i]
-		t.Run(testCase.name, func(t *testing.T) {
-			guildID := "recover-teardown-" + string(rune('a'+i))
-			setupPlayerDB(t, guildID, 2)
-			markStoredActive(t, guildID)
-			probe := probeRecovery(t)
-
-			runPanickingSession(t, guildID, testCase.beforePanic)
-
-			if testCase.wantRetry {
-				waitUntil(t, func() bool { return probe.snapshot().resumes == 1 }, "the unexpected panic was not retried")
-			} else {
-				time.Sleep(20 * time.Millisecond)
-				got := probe.snapshot()
-				if got.resumes != 0 || len(got.crashes) != 0 {
-					t.Errorf("resumes=%d crashes=%v, want recovery to leave the outcome to the command", got.resumes, got.crashes)
-				}
-			}
-			wantIdleState(t, guildID)
-		})
 	}
 }

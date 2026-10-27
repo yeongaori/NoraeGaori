@@ -68,13 +68,13 @@ func advanceQueueForAutoMix(player *GuildPlayer, song *queue.Song, crossfade *cr
 		repeatSong = repeatCopyOf(song)
 	}
 
-	if err := queue.RemoveFirstSong(guildID); err != nil {
+	if err = queue.RemoveFirstSong(guildID); err != nil {
 		crossfade.scope.Errorf("Failed to remove finished song: %v", err)
 		return
 	}
 
 	if repeatSong != nil {
-		if err := queue.AddSong(guildID, repeatSong, -1); err != nil {
+		if err = queue.AddSong(guildID, repeatSong, -1); err != nil {
 			crossfade.scope.Errorf("Failed to re-add song for queue repeat: %v", err)
 		}
 	}

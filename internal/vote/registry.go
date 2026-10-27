@@ -36,7 +36,7 @@ func (r *voteRegistry) guildEntry(guildID string) *guildVotes {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if entry := r.guilds[guildID]; entry != nil {
+	if entry = r.guilds[guildID]; entry != nil {
 		return entry
 	}
 

@@ -45,7 +45,7 @@ func syncLocale(dir string, shipped fs.FS, name string, store BaselineStore) err
 	path := filepath.Join(dir, name)
 	userData, err := os.ReadFile(path) // #nosec G304
 	if errors.Is(err, fs.ErrNotExist) {
-		if err := writeFile(path, shippedData); err != nil {
+		if err = writeFile(path, shippedData); err != nil {
 			return err
 		}
 		logger.Infof("Created %s", path)

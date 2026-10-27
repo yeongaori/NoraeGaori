@@ -67,7 +67,9 @@ func TestCheckVideoAvailabilityUsesInnertubeWhenItSucceeds(t *testing.T) {
 	}
 }
 
-func TestCheckVideoAvailabilityServesFromCache(t *testing.T) {
+func countInnertubeChecks(t *testing.T) *int {
+	t.Helper()
+
 	resetAvailabilityState(t)
 
 	calls := 0
@@ -75,6 +77,11 @@ func TestCheckVideoAvailabilityServesFromCache(t *testing.T) {
 		calls++
 		return &youtube.AvailabilityResult{Available: true}, nil
 	}
+	return &calls
+}
+
+func TestCheckVideoAvailabilityServesFromCache(t *testing.T) {
+	calls := countInnertubeChecks(t)
 
 	const url = "https://example.invalid/cached"
 	if _, err := youtube.CheckVideoAvailability("guild", url); err != nil {
@@ -84,19 +91,13 @@ func TestCheckVideoAvailabilityServesFromCache(t *testing.T) {
 		t.Fatalf("second call returned %v, want nil", err)
 	}
 
-	if calls != 1 {
-		t.Errorf("the backend ran %d times, want 1 with the second call served from cache", calls)
+	if *calls != 1 {
+		t.Errorf("the backend ran %d times, want 1 with the second call served from cache", *calls)
 	}
 }
 
 func TestCheckVideoAvailabilityCachesPerGuild(t *testing.T) {
-	resetAvailabilityState(t)
-
-	calls := 0
-	*youtube.HookCheckAvailabilityViaInnertube = func(guildID, url string) (*youtube.AvailabilityResult, error) {
-		calls++
-		return &youtube.AvailabilityResult{Available: true}, nil
-	}
+	calls := countInnertubeChecks(t)
 
 	const url = "https://example.invalid/shared"
 	if _, err := youtube.CheckVideoAvailability("guildA", url); err != nil {
@@ -106,8 +107,8 @@ func TestCheckVideoAvailabilityCachesPerGuild(t *testing.T) {
 		t.Fatalf("guildB returned %v, want nil", err)
 	}
 
-	if calls != 2 {
-		t.Errorf("the backend ran %d times, want 2 because the cache key includes the guild", calls)
+	if *calls != 2 {
+		t.Errorf("the backend ran %d times, want 2 because the cache key includes the guild", *calls)
 	}
 }
 

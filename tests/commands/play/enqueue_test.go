@@ -7,8 +7,21 @@ import (
 	"noraegaori/internal/commands/play"
 	"noraegaori/internal/queue"
 	"noraegaori/internal/youtube"
+	"noraegaori/tests/testutil"
 	"noraegaori/tests/testutil/queuetest"
 )
+
+func TestCheckSongsAvailabilityIndex(t *testing.T) {
+	testutil.Swap(t, youtube.GetAvailabilityPool().HookCheckFn(), func(string) (bool, bool, error) { return true, false, nil })
+	songs := []*youtube.Song{{URL: "https://youtu.be/first"}, {URL: "https://youtu.be/second"}, {URL: "https://youtu.be/third"}}
+
+	results := play.HookCheckSongsAvailability(songs)
+	for i := range songs {
+		if results[i].URL != songs[i].URL {
+			t.Errorf("result %d = %q, want %q", i, results[i].URL, songs[i].URL)
+		}
+	}
+}
 
 func TestEnqueueAvailableSongsSkipsUnavailableAndDuplicates(t *testing.T) {
 	const guildID = "enqueue-guild"

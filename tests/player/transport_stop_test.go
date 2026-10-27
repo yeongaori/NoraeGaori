@@ -112,42 +112,34 @@ func wantQueueLength(t *testing.T, guildID string, want int) {
 	}
 }
 
-func TestSkipWhilePlayingStopsTheSessionAndDropsThePendingStream(t *testing.T) {
-	const guildID = "skip-playing"
+func checkSkipEndsPlayingSession(t *testing.T, guildID, name string, skip func() error, wantPending bool, wantLength int) {
+	t.Helper()
+
 	setupPlayerDB(t, guildID, 2)
 	session := startRunningSession(t, guildID, true, false)
 
-	if err := runWithin(t, "Skip", func() error { return player.Skip(nil, guildID) }); err != nil {
-		t.Fatalf("Skip returned %v", err)
+	if err := runWithin(t, name, skip); err != nil {
+		t.Fatalf("%s returned %v", name, err)
 	}
 
 	if got := session.isStopSent(); !got {
 		t.Errorf("stop signal: got sent=%v, want sent=%v", got, true)
 	}
 	if !session.isEnded.Load() {
-		t.Error("Skip returned before the playing session ended")
+		t.Errorf("%s returned before the playing session ended", name)
 	}
-	session.wantState(t, false)
-	wantQueueLength(t, guildID, 1)
+	session.wantState(t, wantPending)
+	wantQueueLength(t, guildID, wantLength)
+}
+
+func TestSkipWhilePlayingStopsTheSessionAndDropsThePendingStream(t *testing.T) {
+	const guildID = "skip-playing"
+	checkSkipEndsPlayingSession(t, guildID, "Skip", func() error { return player.Skip(nil, guildID) }, false, 1)
 }
 
 func TestSkipToWhilePlayingKeepsThePendingStream(t *testing.T) {
 	const guildID = "skipto-playing"
-	setupPlayerDB(t, guildID, 2)
-	session := startRunningSession(t, guildID, true, false)
-
-	if err := runWithin(t, "SkipTo", func() error { return player.SkipTo(nil, guildID) }); err != nil {
-		t.Fatalf("SkipTo returned %v", err)
-	}
-
-	if got := session.isStopSent(); !got {
-		t.Errorf("stop signal: got sent=%v, want sent=%v", got, true)
-	}
-	if !session.isEnded.Load() {
-		t.Error("SkipTo returned before the playing session ended")
-	}
-	session.wantState(t, true)
-	wantQueueLength(t, guildID, 2)
+	checkSkipEndsPlayingSession(t, guildID, "SkipTo", func() error { return player.SkipTo(nil, guildID) }, true, 2)
 }
 
 func TestInternalSkipIgnoresALoadingSession(t *testing.T) {
@@ -174,6 +166,29 @@ func TestInternalSkipIgnoresALoadingSession(t *testing.T) {
 		t.Errorf("stop signal: got sent=%v, want sent=%v", got, true)
 	}
 	wantQueueLength(t, guildID, 1)
+}
+
+func TestPlaybackEndedCallback(t *testing.T) {
+	const guildID = "ended-callback"
+	preparedPlayer(t, guildID, 1)
+
+	var ended, started atomic.Int32
+	player.SetOnPlaybackEndedCallback(func(string) { ended.Add(1) })
+	player.SetOnSongStartCallback(func(string) { started.Add(1) })
+	t.Cleanup(func() {
+		player.SetOnPlaybackEndedCallback(nil)
+		player.SetOnSongStartCallback(nil)
+	})
+
+	if err := runWithin(t, "Stop", func() error { return player.Stop(guildID) }); err != nil {
+		t.Fatalf("Stop returned %v", err)
+	}
+	if got := ended.Load(); got != 1 {
+		t.Errorf("ended callback ran %d times, want 1", got)
+	}
+	if got := started.Load(); got != 0 {
+		t.Errorf("song start callback ran %d times, want 0", got)
+	}
 }
 
 func TestStopWhilePlayingWaitsForTheSession(t *testing.T) {

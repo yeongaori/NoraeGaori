@@ -3,6 +3,7 @@ package logger_test
 import (
 	"bytes"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -208,6 +209,32 @@ func TestSetLogFileFlushesEarlyBuffer(t *testing.T) {
 	defer logger.HookOutMu.Unlock()
 	if *logger.HookEarlyBuf != nil {
 		t.Error("earlyBuf was not cleared after being flushed")
+	}
+}
+
+func TestErrorLogFileMode(t *testing.T) {
+	t.Chdir(t.TempDir())
+	testutil.Swap(t, logger.HookErrorLogFile, *logger.HookErrorLogFile)
+	testutil.Swap(t, logger.HookOutput, *logger.HookOutput)
+	testutil.Swap(t, logger.HookConsole, *logger.HookConsole)
+	testutil.Swap(t, logger.HookConsoleIsTerminal, *logger.HookConsoleIsTerminal)
+	testutil.Swap(t, logger.HookEarlyBuf, *logger.HookEarlyBuf)
+	testutil.Swap(t, logger.HookDebugMode, *logger.HookDebugMode)
+	previousWriter, previousFlags := log.Writer(), log.Flags()
+	t.Cleanup(func() {
+		log.SetOutput(previousWriter)
+		log.SetFlags(previousFlags)
+	})
+
+	logger.Initialize(false)
+	t.Cleanup(logger.Close)
+
+	info, err := os.Stat("error.log")
+	if err != nil {
+		t.Fatalf("error.log was not created: %v", err)
+	}
+	if info.Mode().Perm() != 0600 {
+		t.Errorf("error.log mode = %v, want 0600", info.Mode().Perm())
 	}
 }
 

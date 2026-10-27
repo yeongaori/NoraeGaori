@@ -334,7 +334,7 @@ func CheckAvailability(url string) (available bool, isLive bool, err error) {
 		return cached.Available, cached.IsLive, nil
 	}
 
-	if err := ytCircuitBreaker.canAttempt(); err != nil {
+	if err = ytCircuitBreaker.canAttempt(); err != nil {
 		logger.Warnf("Circuit breaker open: %v", err)
 		return false, false, err
 	}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
@@ -75,6 +76,15 @@ func TestHelpPagesClampAndKeepTheOpenersView(t *testing.T) {
 		if len(buttons) != 2 || buttons[0].CustomID != wantPrevious || !buttons[1].Disabled {
 			t.Errorf("admin=%v buttons = %+v, want previous %q and a disabled next", check.isAdmin, buttons, wantPrevious)
 		}
+	}
+}
+
+func TestHelpNumbering(t *testing.T) {
+	setupHelpCommands(t)
+
+	embed, _, _ := help.HookBuildHelpPage(helpCheckGuildID, true, 2)
+	if !strings.HasPrefix(embed.Description, "**6. ") {
+		t.Errorf("page 2 = %q, want its first command numbered 6", embed.Description)
 	}
 }
 

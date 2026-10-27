@@ -141,7 +141,7 @@ func TestRecordVoteReportsQuorum(t *testing.T) {
 		t.Errorf("first vote = %+v counted=%v, want current 1 of 2 and not passed", tally, counted)
 	}
 
-	if _, counted := registry.HookRecordVote(session, presentBallot("u1"), *vote.HookBuildVoteThreshold(vote.HookVoteThresholdFields{Quorum: 2})); counted {
+	if _, counted = registry.HookRecordVote(session, presentBallot("u1"), *vote.HookBuildVoteThreshold(vote.HookVoteThresholdFields{Quorum: 2})); counted {
 		t.Error("a repeated vote from the same user was counted")
 	}
 
@@ -179,7 +179,7 @@ func TestRetractVoteDecrements(t *testing.T) {
 		t.Errorf("retract = %+v withdrawn=%v, want current 1", tally, withdrawn)
 	}
 
-	if _, withdrawn := registry.HookRetractVote(session, *vote.HookBuildVoteBallot(vote.HookVoteBallotFields{UserID: "u3"}), *vote.HookBuildVoteThreshold(vote.HookVoteThresholdFields{Quorum: 3})); withdrawn {
+	if _, withdrawn = registry.HookRetractVote(session, *vote.HookBuildVoteBallot(vote.HookVoteBallotFields{UserID: "u3"}), *vote.HookBuildVoteThreshold(vote.HookVoteThresholdFields{Quorum: 3})); withdrawn {
 		t.Error("a withdrawal from a non-voter was counted")
 	}
 	registry.HookRecordVote(session, presentBallot("u2"), *vote.HookBuildVoteThreshold(vote.HookVoteThresholdFields{Quorum: 1}))

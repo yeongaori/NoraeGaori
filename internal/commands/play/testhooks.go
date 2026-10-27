@@ -32,6 +32,7 @@ var HookAutocompleteGates = &autocompleteGates
 var HookAutocompleteGatesMutex = &autocompleteGatesMutex
 var HookBeginAutocompleteFetch = beginAutocompleteFetch
 var HookBuildVideoChoiceName = buildVideoChoiceName
+var HookCheckSongsAvailability = checkSongsAvailability
 var HookConfirmedByRequester = confirmedByRequester
 var HookExcludeVideo = excludeVideo
 var HookExpireSearchSelection = expireSearchSelection
@@ -44,7 +45,9 @@ var HookNormalizeAutocompleteQuery = normalizeAutocompleteQuery
 var HookParseSearchSelection = parseSearchSelection
 var HookPlaylistPromptExpiry = &playlistPromptExpiry
 var HookPlaylistTimeoutEmbed = playlistTimeoutEmbed
+var HookReadPlayRequest = readPlayRequest
 var HookSaveAutocompleteChoices = saveAutocompleteChoices
+var HookSearchResultsPanel = searchResultsPanel
 var HookSearchSelectionExpiry = &searchSelectionExpiry
 
 func HookBuildSearchSelection(fields *HookSearchSelectionFields) *searchSelection {

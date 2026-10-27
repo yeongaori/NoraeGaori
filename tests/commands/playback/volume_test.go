@@ -2,6 +2,7 @@ package playback_test
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
@@ -44,17 +45,23 @@ func seedVolume(volume float64) func(t *testing.T) {
 	}
 }
 
+func integer(volume float64) []*discordgo.ApplicationCommandInteractionDataOption {
+	return levelOption(volume, discordgo.ApplicationCommandOptionInteger)
+}
+
 func TestVolume(t *testing.T) {
-	notNumber := func(locale *messages.Locale) string { return locale.Music.VolumeNotNumber }
-	outOfRange := func(locale *messages.Locale) string { return locale.Music.VolumeOutOfRange }
+	commandtest.Run(t, "volume", playback.HandleVolume, slices.Concat(
+		volumeAcceptedCases(),
+		volumeRejectedCases(),
+	))
+}
+
+func volumeAcceptedCases() []commandtest.Case {
 	volumeSetTo := func(volume float64) func(*messages.Locale) string {
 		return func(locale *messages.Locale) string { return fmt.Sprintf(locale.Music.VolumeSetDesc, volume) }
 	}
-	integer := func(volume float64) []*discordgo.ApplicationCommandInteractionDataOption {
-		return levelOption(volume, discordgo.ApplicationCommandOptionInteger)
-	}
 
-	commandtest.Run(t, "volume", playback.HandleVolume, []commandtest.Case{
+	return []commandtest.Case{
 		{
 			Name:     "the current volume",
 			Prepare:  seedVolume(70),
@@ -79,6 +86,20 @@ func TestVolume(t *testing.T) {
 			Check:    wantVolume(1000),
 		},
 		{
+			Name:     "a fraction written as text",
+			Options:  levelOption("40.5", discordgo.ApplicationCommandOptionString),
+			WantText: volumeSetTo(40.5),
+			Check:    wantVolume(40.5),
+		},
+	}
+}
+
+func volumeRejectedCases() []commandtest.Case {
+	notNumber := func(locale *messages.Locale) string { return locale.Music.VolumeNotNumber }
+	outOfRange := func(locale *messages.Locale) string { return locale.Music.VolumeOutOfRange }
+
+	return []commandtest.Case{
+		{
 			Name:     "a number past the limit",
 			Options:  integer(1001),
 			Prepare:  seedVolume(70),
@@ -100,10 +121,11 @@ func TestVolume(t *testing.T) {
 			Check:    wantVolume(70),
 		},
 		{
-			Name:     "a fraction written as text",
-			Options:  levelOption("40.5", discordgo.ApplicationCommandOptionString),
-			WantText: volumeSetTo(40.5),
-			Check:    wantVolume(40.5),
+			Name:     "NaN written as text",
+			Options:  levelOption("NaN", discordgo.ApplicationCommandOptionString),
+			Prepare:  seedVolume(70),
+			WantText: notNumber,
+			Check:    wantVolume(70),
 		},
 		{
 			Name:     "a value of another type",
@@ -125,7 +147,7 @@ func TestVolume(t *testing.T) {
 			WantErr:  true,
 			WantText: func(locale *messages.Locale) string { return commandtest.FormatPrefix(locale.Music.VolumeSetFailed) },
 		},
-	})
+	}
 }
 
 func TestRegisterAddsThePlaybackCommands(t *testing.T) {

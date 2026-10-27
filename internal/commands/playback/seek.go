@@ -25,17 +25,17 @@ func parseSeekPosition(input string) (int, error) {
 		return 0, fmt.Errorf("invalid format")
 	}
 	values := make([]float64, len(parts))
-	for idx, p := range parts {
+	for i, p := range parts {
 		p = strings.TrimSpace(p)
-		if idx < len(parts)-1 {
+		if i < len(parts)-1 {
 			n, err := strconv.Atoi(p)
 			if err != nil || n < 0 {
 				return 0, fmt.Errorf("invalid number %q", p)
 			}
-			if idx > 0 && n >= 60 {
+			if i > 0 && n >= 60 {
 				return 0, fmt.Errorf("component out of range %q", p)
 			}
-			values[idx] = float64(n)
+			values[i] = float64(n)
 		} else {
 			f, err := strconv.ParseFloat(p, 64)
 			if err != nil || f < 0 || math.IsNaN(f) || math.IsInf(f, 0) {
@@ -44,7 +44,7 @@ func parseSeekPosition(input string) (int, error) {
 			if len(parts) > 1 && f >= 60 {
 				return 0, fmt.Errorf("component out of range %q", p)
 			}
-			values[idx] = f
+			values[i] = f
 		}
 	}
 	var totalSeconds float64

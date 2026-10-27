@@ -2,9 +2,11 @@ package config_test
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"noraegaori/internal/config"
+	"noraegaori/tests/testutil"
 )
 
 func setupTestConfig(t *testing.T) {
@@ -263,50 +265,65 @@ func TestNilAdminsConfig(t *testing.T) {
 	}
 }
 
-func TestLoadConfigDefaultsTheYtDlpChannel(t *testing.T) {
-	setupTestConfig(t)
-	defer teardownTestConfig(t)
+func loadYtDlpChannel(t *testing.T, body string) string {
+	t.Helper()
 
-	if err := os.WriteFile(*config.HookConfigPath, []byte(`{"prefix":"!","language":"en","default_volume":100}`), 0644); err != nil {
+	setupTestConfig(t)
+	t.Cleanup(func() { teardownTestConfig(t) })
+
+	if err := os.WriteFile(*config.HookConfigPath, []byte(body), 0644); err != nil {
 		t.Fatalf("failed to seed the config: %v", err)
 	}
 	if err := config.HookLoadConfig(); err != nil {
 		t.Fatalf("loadConfig returned %v, want nil", err)
 	}
+	return config.GetConfig().YtDlpChannel
+}
 
-	if got := config.GetConfig().YtDlpChannel; got != config.YtDlpChannelAuto {
+func TestLoadConfigDefaultsTheYtDlpChannel(t *testing.T) {
+	if got := loadYtDlpChannel(t, `{"prefix":"!","language":"en","default_volume":100}`); got != config.YtDlpChannelAuto {
 		t.Errorf("got channel %q for a config without the key, want %q", got, config.YtDlpChannelAuto)
 	}
 }
 
 func TestLoadConfigRejectsAnUnknownYtDlpChannel(t *testing.T) {
-	setupTestConfig(t)
-	defer teardownTestConfig(t)
-
-	if err := os.WriteFile(*config.HookConfigPath, []byte(`{"prefix":"!","ytdlp_channel":"bleeding-edge"}`), 0644); err != nil {
-		t.Fatalf("failed to seed the config: %v", err)
-	}
-	if err := config.HookLoadConfig(); err != nil {
-		t.Fatalf("loadConfig returned %v, want nil", err)
-	}
-
-	if got := config.GetConfig().YtDlpChannel; got != config.YtDlpChannelAuto {
+	if got := loadYtDlpChannel(t, `{"prefix":"!","ytdlp_channel":"bleeding-edge"}`); got != config.YtDlpChannelAuto {
 		t.Errorf("got channel %q, want the fallback %q", got, config.YtDlpChannelAuto)
 	}
 }
 
 func TestLoadConfigKeepsAnExplicitStableChannel(t *testing.T) {
-	setupTestConfig(t)
-	defer teardownTestConfig(t)
-
-	if err := os.WriteFile(*config.HookConfigPath, []byte(`{"prefix":"!","ytdlp_channel":"stable"}`), 0644); err != nil {
-		t.Fatalf("failed to seed the config: %v", err)
-	}
-	if err := config.HookLoadConfig(); err != nil {
-		t.Fatalf("loadConfig returned %v, want nil", err)
-	}
-
-	if got := config.GetConfig().YtDlpChannel; got != config.YtDlpChannelStable {
+	if got := loadYtDlpChannel(t, `{"prefix":"!","ytdlp_channel":"stable"}`); got != config.YtDlpChannelStable {
 		t.Errorf("got channel %q, want %q to be honoured", got, config.YtDlpChannelStable)
+	}
+}
+
+func TestLoadConfigNightlyChannel(t *testing.T) {
+	if got := loadYtDlpChannel(t, `{"prefix":"!","ytdlp_channel":"nightly"}`); got != config.YtDlpChannelNightly {
+		t.Errorf("got channel %q, want %q to be honoured", got, config.YtDlpChannelNightly)
+	}
+}
+
+func TestConfigDirMode(t *testing.T) {
+	t.Chdir(t.TempDir())
+	testutil.Swap(t, config.HookConfigPath, filepath.Join("config", "config.json"))
+	testutil.Swap(t, config.HookAdminsPath, filepath.Join("config", "admins.json"))
+	previousConfig, previousAdmins := config.HookConfig.Load(), config.HookAdminsConf.Load()
+	t.Cleanup(func() {
+		config.HookConfig.Store(previousConfig)
+		config.HookAdminsConf.Store(previousAdmins)
+	})
+
+	if err := config.Initialize(); err != nil {
+		t.Fatalf("Initialize returned %v, want nil", err)
+	}
+	t.Cleanup(func() { _ = config.Close() })
+
+	info, err := os.Stat("config")
+	if err != nil {
+		t.Fatalf("the config directory is missing: %v", err)
+	}
+	if info.Mode().Perm()&0007 != 0 {
+		t.Errorf("config dir mode = %v, want no access for other users", info.Mode().Perm())
 	}
 }

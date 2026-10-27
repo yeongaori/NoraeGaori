@@ -95,9 +95,9 @@ func songsRequestedBy(q *queue.Queue, targetUserID string) ([]*queue.Song, int) 
 		startIdx = 0
 	}
 
-	for idx := startIdx; idx < len(q.Songs); idx++ {
-		if q.Songs[idx].RequestedByID == targetUserID {
-			userSongs = append(userSongs, q.Songs[idx])
+	for i := startIdx; i < len(q.Songs); i++ {
+		if q.Songs[i].RequestedByID == targetUserID {
+			userSongs = append(userSongs, q.Songs[i])
 		}
 	}
 	return userSongs, startIdx
