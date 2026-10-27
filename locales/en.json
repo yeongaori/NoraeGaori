@@ -243,21 +243,21 @@
       "aliases": ["normalization", "normalize"]
     },
     "fadein": {
-      "description": "Fade-in settings (gradual volume rise at song start)",
+      "description": "Fade-in settings",
       "options": { "setting": "Setting value", "duration": "Fade duration in seconds (1-30)" },
       "usage": "fadein [on|off] [seconds]",
       "example": "fadein, fadein on, fadein on 5, fadein off",
       "aliases": ["fadein", "fade-in"]
     },
     "fadeout": {
-      "description": "Fade-out settings (gradual volume fall at song end)",
+      "description": "Fade-out settings",
       "options": { "setting": "Setting value", "duration": "Fade duration in seconds (1-30)" },
       "usage": "fadeout [on|off] [seconds]",
       "example": "fadeout, fadeout on, fadeout on 5, fadeout off",
       "aliases": ["fadeout", "fade-out"]
     },
     "automix": {
-      "description": "AutoMix settings (beat-aware crossfade between songs)",
+      "description": "AutoMix settings",
       "options": { "setting": "Setting value", "beats": "Crossfade length in beats (4-64)" },
       "usage": "automix [on|off] [beats]",
       "example": "automix, automix on, automix on 16, automix off",
@@ -271,7 +271,7 @@
       "aliases": ["automixstyle", "mixstyle"]
     },
     "crossfade": {
-      "description": "Crossfade settings (simple fade between songs)",
+      "description": "Crossfade settings",
       "options": { "setting": "Setting value", "duration": "Crossfade duration in seconds (1-30)" },
       "usage": "crossfade [on|off] [seconds]",
       "example": "crossfade, crossfade on, crossfade on 8, crossfade off",

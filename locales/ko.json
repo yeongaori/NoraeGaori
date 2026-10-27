@@ -243,21 +243,21 @@
       "aliases": ["normalization", "normalize"]
     },
     "fadein": {
-      "description": "페이드인 설정 (노래 시작 시 볼륨을 서서히 올림)",
+      "description": "페이드인 설정",
       "options": { "setting": "설정 값", "duration": "페이드 길이(초, 1-30)" },
       "usage": "fadein [on|off] [초]",
       "example": "fadein, fadein on, fadein on 5, fadein off",
       "aliases": ["fadein", "fade-in"]
     },
     "fadeout": {
-      "description": "페이드아웃 설정 (노래 끝에서 볼륨을 서서히 내림)",
+      "description": "페이드아웃 설정",
       "options": { "setting": "설정 값", "duration": "페이드 길이(초, 1-30)" },
       "usage": "fadeout [on|off] [초]",
       "example": "fadeout, fadeout on, fadeout on 5, fadeout off",
       "aliases": ["fadeout", "fade-out"]
     },
     "automix": {
-      "description": "오토믹스 설정 (노래 사이 박자 인식 크로스페이드)",
+      "description": "오토믹스 설정",
       "options": { "setting": "설정 값", "beats": "크로스페이드 길이(박자, 4-64)" },
       "usage": "automix [on|off] [박자]",
       "example": "automix, automix on, automix on 16, automix off",
@@ -271,7 +271,7 @@
       "aliases": ["automixstyle", "mixstyle"]
     },
     "crossfade": {
-      "description": "크로스페이드 설정 (노래 사이 단순 페이드 전환)",
+      "description": "크로스페이드 설정",
       "options": { "setting": "설정 값", "duration": "크로스페이드 길이(초, 1-30)" },
       "usage": "crossfade [on|off] [초]",
       "example": "crossfade, crossfade on, crossfade on 8, crossfade off",
