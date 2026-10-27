@@ -117,56 +117,68 @@ func (p *AvailabilityPool) worker(id int) {
 			BatchID:     job.BatchID,
 		}
 
-		if err != nil {
-			result.Error = err.Error()
-
-			shouldRetry := false
-			if strings.Contains(err.Error(), "429") ||
-				strings.Contains(err.Error(), "Too Many Requests") ||
-				strings.Contains(err.Error(), "rate limit") {
-				shouldRetry = true
-				scope.Warnf("Rate limit detected for: %s (retry: %d/%d)",
-					job.URL, job.RetryCount, p.maxRetries)
-			} else if strings.Contains(err.Error(), "timeout") ||
-				strings.Contains(err.Error(), "connection") {
-				shouldRetry = true
-				scope.Warnf("Network error for: %s (retry: %d/%d)",
-					job.URL, job.RetryCount, p.maxRetries)
-			}
-
-			if shouldRetry && job.RetryCount < p.maxRetries {
-				result.ShouldRetry = true
-
-				delay := p.backoffDelay(job.RetryCount)
-
-				scope.Debugf("Scheduling retry for %s in %v (attempt %d/%d)",
-					job.URL, delay, job.RetryCount+1, p.maxRetries)
-
-				p.scheduleRetry(&BatchJob{
-					URL:         job.URL,
-					Index:       job.Index,
-					RetryCount:  job.RetryCount + 1,
-					Priority:    true,
-					BatchID:     job.BatchID,
-					ResultsChan: job.ResultsChan,
-				}, delay)
-
-				continue
-			} else if job.RetryCount >= p.maxRetries {
-				scope.Errorf("Max retries exceeded for: %s", job.URL)
-			}
+		if err != nil && p.retryIfNeeded(scope, &job, err, &result) {
+			continue
 		}
 
-		target := p.results
-		if job.ResultsChan != nil {
-			target = job.ResultsChan
-		}
-
-		select {
-		case target <- result:
-		case <-p.done:
+		if !p.deliver(&job, &result) {
 			return
 		}
+	}
+}
+
+func (p *AvailabilityPool) retryIfNeeded(scope *logger.Scoped, job *BatchJob, err error, result *BatchResult) bool {
+	result.Error = err.Error()
+
+	shouldRetry := false
+	if strings.Contains(err.Error(), "429") ||
+		strings.Contains(err.Error(), "Too Many Requests") ||
+		strings.Contains(err.Error(), "rate limit") {
+		shouldRetry = true
+		scope.Warnf("Rate limit detected for: %s (retry: %d/%d)",
+			job.URL, job.RetryCount, p.maxRetries)
+	} else if strings.Contains(err.Error(), "timeout") ||
+		strings.Contains(err.Error(), "connection") {
+		shouldRetry = true
+		scope.Warnf("Network error for: %s (retry: %d/%d)",
+			job.URL, job.RetryCount, p.maxRetries)
+	}
+
+	if shouldRetry && job.RetryCount < p.maxRetries {
+		result.ShouldRetry = true
+
+		delay := p.backoffDelay(job.RetryCount)
+
+		scope.Debugf("Scheduling retry for %s in %v (attempt %d/%d)",
+			job.URL, delay, job.RetryCount+1, p.maxRetries)
+
+		p.scheduleRetry(&BatchJob{
+			URL:         job.URL,
+			Index:       job.Index,
+			RetryCount:  job.RetryCount + 1,
+			Priority:    true,
+			BatchID:     job.BatchID,
+			ResultsChan: job.ResultsChan,
+		}, delay)
+
+		return true
+	} else if job.RetryCount >= p.maxRetries {
+		scope.Errorf("Max retries exceeded for: %s", job.URL)
+	}
+	return false
+}
+
+func (p *AvailabilityPool) deliver(job *BatchJob, result *BatchResult) bool {
+	target := p.results
+	if job.ResultsChan != nil {
+		target = job.ResultsChan
+	}
+
+	select {
+	case target <- *result:
+		return true
+	case <-p.done:
+		return false
 	}
 }
 

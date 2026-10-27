@@ -100,6 +100,28 @@ func MoveSong(guildID string, fromPos, toPos int) error {
 		return fmt.Errorf("failed to move song to temp: %w", err)
 	}
 
+	if err := shiftSongs(tx, guildID, fromPos, toPos); err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(
+		`UPDATE songs SET queue_position = ? WHERE id = ?`,
+		toPos, songID)
+	if err != nil {
+		return fmt.Errorf("failed to move song to final position: %w", err)
+	}
+
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	InvalidateCache(guildID)
+	logger.Debugf("Moved song from position %d to %d for guild: %s", fromPos, toPos, guildID)
+	return nil
+}
+
+func shiftSongs(tx *sql.Tx, guildID string, fromPos, toPos int) error {
+	var err error
 	if fromPos < toPos {
 
 		_, err = tx.Exec(
@@ -116,20 +138,6 @@ func MoveSong(guildID string, fromPos, toPos int) error {
 	if err != nil {
 		return fmt.Errorf("failed to shift songs: %w", err)
 	}
-
-	_, err = tx.Exec(
-		`UPDATE songs SET queue_position = ? WHERE id = ?`,
-		toPos, songID)
-	if err != nil {
-		return fmt.Errorf("failed to move song to final position: %w", err)
-	}
-
-	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	InvalidateCache(guildID)
-	logger.Debugf("Moved song from position %d to %d for guild: %s", fromPos, toPos, guildID)
 	return nil
 }
 

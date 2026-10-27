@@ -15,6 +15,108 @@ import (
 	"noraegaori/internal/queue"
 )
 
+type systemStats struct {
+	cpuModel           string
+	cpuCores           int
+	cpuUsage           float64
+	totalMemoryGB      float64
+	usedMemoryMB       float64
+	memoryUsagePercent float64
+	botHeapUsed        float64
+	botRSS             float64
+	guildMemoryUsage   float64
+	playingGuildsCount int
+}
+
+func gatherSystemStats(s *discordgo.Session, guildID string) systemStats {
+	var stats systemStats
+
+	cpuInfo, err := cpu.Info()
+	stats.cpuModel = "Unknown"
+	stats.cpuCores = runtime.NumCPU()
+	if err == nil && len(cpuInfo) > 0 {
+		stats.cpuModel = cpuInfo[0].ModelName
+	}
+	logger.Debugf("CPU info gathered: %s (%d cores)", stats.cpuModel, stats.cpuCores)
+
+	cpuPercent, err := cpu.Percent(100*time.Millisecond, false)
+	if err == nil && len(cpuPercent) > 0 {
+		stats.cpuUsage = cpuPercent[0]
+	}
+	logger.Debugf("CPU usage: %.2f%%", stats.cpuUsage)
+
+	memInfo, err := mem.VirtualMemory()
+	if err == nil {
+		stats.totalMemoryGB = float64(memInfo.Total) / 1024 / 1024 / 1024
+		stats.usedMemoryMB = float64(memInfo.Used) / 1024 / 1024
+		stats.memoryUsagePercent = memInfo.UsedPercent
+	}
+	logger.Debugf("Memory: %.2f GB total, %.0f MB used (%.2f%%)", stats.totalMemoryGB, stats.usedMemoryMB, stats.memoryUsagePercent)
+
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	stats.botHeapUsed = float64(m.HeapAlloc) / 1024 / 1024
+	stats.botRSS = float64(m.Sys) / 1024 / 1024
+	logger.Debugf("Bot memory: Heap %.2f MB, RSS %.2f MB", stats.botHeapUsed, stats.botRSS)
+
+	stats.guildMemoryUsage = getGuildMemoryUsage(guildID)
+	logger.Debugf("Guild memory: %.2f MB", stats.guildMemoryUsage)
+
+	stats.playingGuildsCount = countPlayingGuilds(s)
+	logger.Debugf("Playing guilds: %d", stats.playingGuildsCount)
+	return stats
+}
+
+func statusEmbed(guildID, requester string, stats *systemStats) *discordgo.MessageEmbed {
+	t := messages.T(guildID)
+	return &discordgo.MessageEmbed{
+		Color:       messages.ColorInfo,
+		Title:       t.Status.Title,
+		Description: t.Status.Description,
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   t.Fields.CPUInfo,
+				Value:  fmt.Sprintf(t.Status.CPUInfoValue, stats.cpuModel, stats.cpuCores),
+				Inline: false,
+			},
+			{
+				Name:   t.Fields.CPUUsage,
+				Value:  fmt.Sprintf(t.Status.CPUUsageValue, stats.cpuUsage),
+				Inline: true,
+			},
+			{
+				Name:   t.Fields.TotalMemory,
+				Value:  fmt.Sprintf(t.Status.TotalMemoryValue, stats.totalMemoryGB),
+				Inline: true,
+			},
+			{
+				Name:   t.Fields.MemoryUsage,
+				Value:  fmt.Sprintf(t.Status.MemoryUsageValue, stats.usedMemoryMB, stats.totalMemoryGB, stats.memoryUsagePercent),
+				Inline: false,
+			},
+			{
+				Name:   t.Fields.BotMemory,
+				Value:  fmt.Sprintf(t.Status.BotMemoryValue, stats.botHeapUsed, stats.botRSS),
+				Inline: true,
+			},
+			{
+				Name:   t.Fields.ServerMemory,
+				Value:  fmt.Sprintf(t.Status.ServerMemoryValue, stats.guildMemoryUsage),
+				Inline: true,
+			},
+			{
+				Name:   t.Fields.PlayingServers,
+				Value:  fmt.Sprintf(t.Status.PlayingServersValue, stats.playingGuildsCount),
+				Inline: true,
+			},
+		},
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: fmt.Sprintf(t.Footers.RequestedBy, requester),
+		},
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
+}
+
 func HandleStatus(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 	discord.DeferResponse(s, i)
@@ -24,91 +126,8 @@ func HandleStatus(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 	logger.Debugf("Starting system info gathering")
 
-	cpuInfo, err := cpu.Info()
-	cpuModel := "Unknown"
-	cpuCores := runtime.NumCPU()
-	if err == nil && len(cpuInfo) > 0 {
-		cpuModel = cpuInfo[0].ModelName
-	}
-	logger.Debugf("CPU info gathered: %s (%d cores)", cpuModel, cpuCores)
-
-	cpuPercent, err := cpu.Percent(100*time.Millisecond, false)
-	cpuUsage := 0.0
-	if err == nil && len(cpuPercent) > 0 {
-		cpuUsage = cpuPercent[0]
-	}
-	logger.Debugf("CPU usage: %.2f%%", cpuUsage)
-
-	memInfo, err := mem.VirtualMemory()
-	totalMemoryGB := 0.0
-	usedMemoryMB := 0.0
-	memoryUsagePercent := 0.0
-	if err == nil {
-		totalMemoryGB = float64(memInfo.Total) / 1024 / 1024 / 1024
-		usedMemoryMB = float64(memInfo.Used) / 1024 / 1024
-		memoryUsagePercent = memInfo.UsedPercent
-	}
-	logger.Debugf("Memory: %.2f GB total, %.0f MB used (%.2f%%)", totalMemoryGB, usedMemoryMB, memoryUsagePercent)
-
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	botHeapUsed := float64(m.HeapAlloc) / 1024 / 1024
-	botRSS := float64(m.Sys) / 1024 / 1024
-	logger.Debugf("Bot memory: Heap %.2f MB, RSS %.2f MB", botHeapUsed, botRSS)
-
-	guildMemoryUsage := getGuildMemoryUsage(i.GuildID)
-	logger.Debugf("Guild memory: %.2f MB", guildMemoryUsage)
-
-	playingGuildsCount := countPlayingGuilds(s)
-	logger.Debugf("Playing guilds: %d", playingGuildsCount)
-
-	t := messages.T(i.GuildID)
-	infoEmbed := &discordgo.MessageEmbed{
-		Color:       messages.ColorInfo,
-		Title:       t.Status.Title,
-		Description: t.Status.Description,
-		Fields: []*discordgo.MessageEmbedField{
-			{
-				Name:   t.Fields.CPUInfo,
-				Value:  fmt.Sprintf(t.Status.CPUInfoValue, cpuModel, cpuCores),
-				Inline: false,
-			},
-			{
-				Name:   t.Fields.CPUUsage,
-				Value:  fmt.Sprintf(t.Status.CPUUsageValue, cpuUsage),
-				Inline: true,
-			},
-			{
-				Name:   t.Fields.TotalMemory,
-				Value:  fmt.Sprintf(t.Status.TotalMemoryValue, totalMemoryGB),
-				Inline: true,
-			},
-			{
-				Name:   t.Fields.MemoryUsage,
-				Value:  fmt.Sprintf(t.Status.MemoryUsageValue, usedMemoryMB, totalMemoryGB, memoryUsagePercent),
-				Inline: false,
-			},
-			{
-				Name:   t.Fields.BotMemory,
-				Value:  fmt.Sprintf(t.Status.BotMemoryValue, botHeapUsed, botRSS),
-				Inline: true,
-			},
-			{
-				Name:   t.Fields.ServerMemory,
-				Value:  fmt.Sprintf(t.Status.ServerMemoryValue, guildMemoryUsage),
-				Inline: true,
-			},
-			{
-				Name:   t.Fields.PlayingServers,
-				Value:  fmt.Sprintf(t.Status.PlayingServersValue, playingGuildsCount),
-				Inline: true,
-			},
-		},
-		Footer: &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf(t.Footers.RequestedBy, i.Member.User.Username),
-		},
-		Timestamp: time.Now().Format(time.RFC3339),
-	}
+	stats := gatherSystemStats(s, i.GuildID)
+	infoEmbed := statusEmbed(i.GuildID, i.Member.User.Username, &stats)
 
 	logger.Debugf("Updating response with info embed")
 	if err := discord.UpdateResponseEmbed(s, i, infoEmbed); err != nil {

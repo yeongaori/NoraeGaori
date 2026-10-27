@@ -56,45 +56,7 @@ func HandleSearch(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	searchMessageID := fmt.Sprintf("%s_%s_%d", i.GuildID, i.Member.User.ID, time.Now().UnixNano())
 	logger.Debugf("HandleSearch called, generated searchMessageID='%s'", searchMessageID)
 
-	selectOptions := make([]discordgo.SelectMenuOption, 0, len(results))
-	for idx, result := range results {
-		titleWithNumber := fmt.Sprintf("%d. %s", idx+1, result.Title)
-		label := discord.TruncateRunes(titleWithNumber, 100)
-
-		selectOptions = append(selectOptions, discordgo.SelectMenuOption{
-			Label:       label,
-			Description: result.Duration,
-			Value:       fmt.Sprintf("%s:%d", searchMessageID, idx),
-		})
-	}
-
-	embed := &discordgo.MessageEmbed{
-		Color:       messages.ColorInfo,
-		Title:       messages.T(i.GuildID).Queue.SearchResultsTitle,
-		Description: fmt.Sprintf(messages.T(i.GuildID).Queue.SearchResultsDesc, query),
-		Fields:      make([]*discordgo.MessageEmbedField, 0, len(results)),
-	}
-
-	for idx, result := range results {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:   fmt.Sprintf("%d. %s", idx+1, result.Title),
-			Value:  result.Duration,
-			Inline: false,
-		})
-	}
-
-	customID := fmt.Sprintf("search_select_%s", searchMessageID)
-	components := []discordgo.MessageComponent{
-		discordgo.ActionsRow{
-			Components: []discordgo.MessageComponent{
-				discordgo.SelectMenu{
-					CustomID:    customID,
-					Placeholder: messages.T(i.GuildID).Queue.SelectPlaceholder,
-					Options:     selectOptions,
-				},
-			},
-		},
-	}
+	embed, components, customID := searchResultsPanel(i.GuildID, query, results, searchMessageID)
 
 	selection, cancelSelection := startSearchSelection(s, i, results, customID, voiceChannelID, searchMessageID)
 
@@ -129,6 +91,49 @@ func parseSearchSelection(value string) (string, int, error) {
 	return parts[0], index, nil
 }
 
+func searchResultsPanel(guildID, query string, results []youtube.SearchResult, searchMessageID string) (*discordgo.MessageEmbed, []discordgo.MessageComponent, string) {
+	selectOptions := make([]discordgo.SelectMenuOption, 0, len(results))
+	for idx, result := range results {
+		titleWithNumber := fmt.Sprintf("%d. %s", idx+1, result.Title)
+		label := discord.TruncateRunes(titleWithNumber, 100)
+
+		selectOptions = append(selectOptions, discordgo.SelectMenuOption{
+			Label:       label,
+			Description: result.Duration,
+			Value:       fmt.Sprintf("%s:%d", searchMessageID, idx),
+		})
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Color:       messages.ColorInfo,
+		Title:       messages.T(guildID).Queue.SearchResultsTitle,
+		Description: fmt.Sprintf(messages.T(guildID).Queue.SearchResultsDesc, query),
+		Fields:      make([]*discordgo.MessageEmbedField, 0, len(results)),
+	}
+
+	for idx, result := range results {
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:   fmt.Sprintf("%d. %s", idx+1, result.Title),
+			Value:  result.Duration,
+			Inline: false,
+		})
+	}
+
+	customID := fmt.Sprintf("search_select_%s", searchMessageID)
+	components := []discordgo.MessageComponent{
+		discordgo.ActionsRow{
+			Components: []discordgo.MessageComponent{
+				discordgo.SelectMenu{
+					CustomID:    customID,
+					Placeholder: messages.T(guildID).Queue.SelectPlaceholder,
+					Options:     selectOptions,
+				},
+			},
+		},
+	}
+	return embed, components, customID
+}
+
 type searchSelection struct {
 	results         []youtube.SearchResult
 	customID        string
@@ -143,16 +148,7 @@ type searchSelection struct {
 func (c *searchSelection) handle(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	logger.Debugf("selectionHandler triggered, captured c.searchMessageID='%s', captured c.customID='%s'", c.searchMessageID, c.customID)
 
-	if i.Type != discordgo.InteractionMessageComponent {
-		logger.Debugf("Not a message component, ignoring (type=%d)", i.Type)
-		return
-	}
-
-	data := i.MessageComponentData()
-	logger.Debugf("Message component received, data.CustomID='%s', checking against c.customID='%s'", data.CustomID, c.customID)
-
-	if data.CustomID != c.customID {
-		logger.Debugf("CustomID mismatch, ignoring (expected='%s', got='%s')", c.customID, data.CustomID)
+	if !c.isOwnComponent(i) {
 		return
 	}
 
@@ -162,31 +158,65 @@ func (c *searchSelection) handle(s *discordgo.Session, i *discordgo.InteractionC
 		return
 	}
 
-	if len(data.Values) == 0 {
-		logger.Warnf("No value in selection data")
+	selectedIndex, ok := c.parseChoice(i.MessageComponentData().Values)
+	if !ok {
 		return
 	}
 
-	logger.Debugf("Parsing value: '%s'", data.Values[0])
-
-	valueSearchID, selectedIndex, parseErr := parseSearchSelection(data.Values[0])
-	if parseErr != nil {
-		logger.Warnf("Invalid selection value %q: %v", data.Values[0], parseErr)
+	if !c.claimSearchSelection(s, i) {
 		return
+	}
+
+	defer c.finish()
+
+	c.addChoice(s, i, selectedIndex)
+}
+
+func (c *searchSelection) isOwnComponent(i *discordgo.InteractionCreate) bool {
+	if i.Type != discordgo.InteractionMessageComponent {
+		logger.Debugf("Not a message component, ignoring (type=%d)", i.Type)
+		return false
+	}
+
+	data := i.MessageComponentData()
+	logger.Debugf("Message component received, data.CustomID='%s', checking against c.customID='%s'", data.CustomID, c.customID)
+
+	if data.CustomID != c.customID {
+		logger.Debugf("CustomID mismatch, ignoring (expected='%s', got='%s')", c.customID, data.CustomID)
+		return false
+	}
+	return true
+}
+
+func (c *searchSelection) parseChoice(values []string) (int, bool) {
+	if len(values) == 0 {
+		logger.Warnf("No value in selection data")
+		return 0, false
+	}
+
+	logger.Debugf("Parsing value: '%s'", values[0])
+
+	valueSearchID, selectedIndex, parseErr := parseSearchSelection(values[0])
+	if parseErr != nil {
+		logger.Warnf("Invalid selection value %q: %v", values[0], parseErr)
+		return 0, false
 	}
 
 	logger.Debugf("Parsed value: valueSearchID='%s', selectedIndex=%d", valueSearchID, selectedIndex)
 
 	if valueSearchID != c.searchMessageID {
 		logger.Debugf("Value searchID mismatch: expected %s, got %s - ignoring", c.searchMessageID, valueSearchID)
-		return
+		return 0, false
 	}
 
 	if selectedIndex < 0 || selectedIndex >= len(c.results) {
 		logger.Warnf("Invalid index %d for search with %d c.results", selectedIndex, len(c.results))
-		return
+		return 0, false
 	}
+	return selectedIndex, true
+}
 
+func (c *searchSelection) claimSearchSelection(s *discordgo.Session, i *discordgo.InteractionCreate) bool {
 	searchSelectionsMu.Lock()
 	logger.Debugf("Checking duplicate map with c.searchMessageID='%s', already_selected=%v", c.searchMessageID, searchSelections[c.searchMessageID])
 	if searchSelections[c.searchMessageID] {
@@ -194,14 +224,15 @@ func (c *searchSelection) handle(s *discordgo.Session, i *discordgo.InteractionC
 		logger.Debugf("Duplicate selection attempt ignored for search message: '%s'", c.searchMessageID)
 		embed := messages.CreateWarningEmbed(messages.T(i.GuildID).Queue.AlreadySelectedTitle, messages.T(i.GuildID).Queue.AlreadySelectedDesc)
 		_ = discord.RespondEphemeralEmbed(s, i, embed)
-		return
+		return false
 	}
 	logger.Debugf("Marking search as selected: c.searchMessageID='%s'", c.searchMessageID)
 	searchSelections[c.searchMessageID] = true
 	searchSelectionsMu.Unlock()
+	return true
+}
 
-	defer c.finish()
-
+func (c *searchSelection) addChoice(s *discordgo.Session, i *discordgo.InteractionCreate, selectedIndex int) {
 	selectedResult := c.results[selectedIndex]
 
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{

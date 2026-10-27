@@ -46,6 +46,45 @@ func CreatePseudoInteraction(m *discordgo.MessageCreate, member *discordgo.Membe
 	return interaction
 }
 
+func parseOptionValue(opt *discordgo.ApplicationCommandOption, args []string, argIndex, optionCount int) (interface{}, int, bool) {
+	switch opt.Type {
+	case discordgo.ApplicationCommandOptionString:
+
+		if argIndex == optionCount-1 || opt.Name == "query" || opt.Name == "position" || opt.Name == "target" {
+			return strings.Join(args[argIndex:], " "), len(args) - argIndex, true
+		}
+		return args[argIndex], 1, true
+
+	case discordgo.ApplicationCommandOptionInteger:
+		intVal, err := strconv.ParseInt(args[argIndex], 10, 64)
+		if err != nil {
+
+			logger.Warnf("Invalid integer: %s", args[argIndex])
+			return nil, 0, false
+		}
+
+		return float64(intVal), 1, true
+
+	case discordgo.ApplicationCommandOptionBoolean:
+		boolVal := args[argIndex] == "true" || args[argIndex] == "on" || args[argIndex] == "1"
+		return boolVal, 1, true
+
+	case discordgo.ApplicationCommandOptionChannel:
+		return trimChannelMention(args[argIndex]), 1, true
+
+	default:
+		return args[argIndex], 1, true
+	}
+}
+
+func trimChannelMention(channelID string) string {
+	if strings.HasPrefix(channelID, "<#") && strings.HasSuffix(channelID, ">") {
+		channelID = strings.TrimPrefix(channelID, "<#")
+		channelID = strings.TrimSuffix(channelID, ">")
+	}
+	return channelID
+}
+
 func parseCommandOptions(opts []*discordgo.ApplicationCommandOption, args []string) []*discordgo.ApplicationCommandInteractionDataOption {
 	if len(opts) == 0 || len(args) == 0 {
 		return nil
@@ -64,50 +103,10 @@ func parseCommandOptions(opts []*discordgo.ApplicationCommandOption, args []stri
 			continue
 		}
 
-		var value interface{}
-		var consumed int
-
-		switch opt.Type {
-		case discordgo.ApplicationCommandOptionString:
-
-			if argIndex == len(opts)-1 || opt.Name == "query" || opt.Name == "position" || opt.Name == "target" {
-				value = strings.Join(args[argIndex:], " ")
-				consumed = len(args) - argIndex
-			} else {
-				value = args[argIndex]
-				consumed = 1
-			}
-
-		case discordgo.ApplicationCommandOptionInteger:
-			intVal, err := strconv.ParseInt(args[argIndex], 10, 64)
-			if err != nil {
-
-				logger.Warnf("Invalid integer: %s", args[argIndex])
-				argIndex++
-				continue
-			}
-
-			value = float64(intVal)
-			consumed = 1
-
-		case discordgo.ApplicationCommandOptionBoolean:
-			boolVal := args[argIndex] == "true" || args[argIndex] == "on" || args[argIndex] == "1"
-			value = boolVal
-			consumed = 1
-
-		case discordgo.ApplicationCommandOptionChannel:
-
-			channelID := args[argIndex]
-			if strings.HasPrefix(channelID, "<#") && strings.HasSuffix(channelID, ">") {
-				channelID = strings.TrimPrefix(channelID, "<#")
-				channelID = strings.TrimSuffix(channelID, ">")
-			}
-			value = channelID
-			consumed = 1
-
-		default:
-			value = args[argIndex]
-			consumed = 1
+		value, consumed, ok := parseOptionValue(opt, args, argIndex, len(opts))
+		if !ok {
+			argIndex++
+			continue
 		}
 
 		options = append(options, &discordgo.ApplicationCommandInteractionDataOption{

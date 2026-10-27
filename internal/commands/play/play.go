@@ -42,27 +42,7 @@ func HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 	var embed *discordgo.MessageEmbed
 	if isFirstSong {
-		uploaderValue := song.Uploader
-		if uploaderValue == "" {
-			uploaderValue = "-"
-		}
-		durationValue := song.Duration
-		if durationValue == "" {
-			durationValue = "-"
-		}
-		embed = &discordgo.MessageEmbed{
-			Color:       messages.ColorWarning,
-			Title:       messages.T(i.GuildID).Titles.Loading,
-			Description: fmt.Sprintf("%s\n\n%s", messages.FormatBoldMaskedLink(song.Title, song.URL), messages.T(i.GuildID).Descriptions.Loading),
-			Fields: []*discordgo.MessageEmbedField{
-				{Name: messages.T(i.GuildID).Fields.Uploader, Value: uploaderValue, Inline: true},
-				{Name: messages.T(i.GuildID).Fields.Duration, Value: durationValue, Inline: true},
-				{Name: messages.T(i.GuildID).Fields.Requester, Value: i.Member.User.Username, Inline: true},
-			},
-		}
-		if song.Thumbnail != "" {
-			embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: song.Thumbnail}
-		}
+		embed = loadingSongEmbed(i.GuildID, song, i.Member.User.Username)
 	} else {
 		embed = youtubeSongEmbed(i.GuildID, messages.ColorSuccess, messages.T(i.GuildID).Titles.Added, "", song)
 	}
@@ -79,4 +59,29 @@ func HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	player.ResumeOrStart(s, i.GuildID)
 
 	return nil
+}
+
+func loadingSongEmbed(guildID string, song *youtube.Song, requester string) *discordgo.MessageEmbed {
+	uploaderValue := song.Uploader
+	if uploaderValue == "" {
+		uploaderValue = "-"
+	}
+	durationValue := song.Duration
+	if durationValue == "" {
+		durationValue = "-"
+	}
+	embed := &discordgo.MessageEmbed{
+		Color:       messages.ColorWarning,
+		Title:       messages.T(guildID).Titles.Loading,
+		Description: fmt.Sprintf("%s\n\n%s", messages.FormatBoldMaskedLink(song.Title, song.URL), messages.T(guildID).Descriptions.Loading),
+		Fields: []*discordgo.MessageEmbedField{
+			{Name: messages.T(guildID).Fields.Uploader, Value: uploaderValue, Inline: true},
+			{Name: messages.T(guildID).Fields.Duration, Value: durationValue, Inline: true},
+			{Name: messages.T(guildID).Fields.Requester, Value: requester, Inline: true},
+		},
+	}
+	if song.Thumbnail != "" {
+		embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: song.Thumbnail}
+	}
+	return embed
 }

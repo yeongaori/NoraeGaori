@@ -29,6 +29,20 @@ func SuggestTerms(ctx context.Context, query string, language string) ([]string,
 		language = "en"
 	}
 
+	body, err := fetchSuggestBody(ctx, query, language)
+	if err != nil {
+		return nil, err
+	}
+
+	rawTerms, err := parseSuggestTerms(body)
+	if err != nil {
+		return nil, err
+	}
+
+	return uniqueTerms(rawTerms), nil
+}
+
+func fetchSuggestBody(ctx context.Context, query, language string) ([]byte, error) {
 	values := url.Values{}
 	values.Set("client", "firefox")
 	values.Set("ds", "yt")
@@ -57,7 +71,10 @@ func SuggestTerms(ctx context.Context, query string, language string) ([]string,
 	if err != nil {
 		return nil, fmt.Errorf("failed to read suggest response: %w", err)
 	}
+	return body, nil
+}
 
+func parseSuggestTerms(body []byte) ([]string, error) {
 	var payload []json.RawMessage
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, fmt.Errorf("failed to decode suggest response: %w", err)
@@ -71,7 +88,10 @@ func SuggestTerms(ctx context.Context, query string, language string) ([]string,
 	if err := json.Unmarshal(payload[1], &rawTerms); err != nil {
 		return nil, fmt.Errorf("failed to decode suggest terms: %w", err)
 	}
+	return rawTerms, nil
+}
 
+func uniqueTerms(rawTerms []string) []string {
 	seen := make(map[string]bool, len(rawTerms))
 	terms := make([]string, 0, len(rawTerms))
 	for _, term := range rawTerms {
@@ -83,5 +103,5 @@ func SuggestTerms(ctx context.Context, query string, language string) ([]string,
 		terms = append(terms, term)
 	}
 
-	return terms, nil
+	return terms
 }

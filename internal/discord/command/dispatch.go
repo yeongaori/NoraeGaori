@@ -80,37 +80,8 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	cfg := config.GetConfig()
-	prefix := cfg.Prefix
-	if m.GuildID != "" {
-		if guildPrefix, err := guild.GetPrefix(m.GuildID); err != nil {
-			logger.Debugf("failed to get guild prefix for %s: %v", m.GuildID, err)
-		} else if guildPrefix != "" {
-			prefix = guildPrefix
-		}
-	}
-
-	if !strings.HasPrefix(m.Content, prefix) {
-		return
-	}
-
-	content := strings.TrimPrefix(m.Content, prefix)
-	parts := strings.Fields(content)
-	if len(parts) == 0 {
-		return
-	}
-
-	cmdName := strings.ToLower(parts[0])
-	_ = parts[1:]
-
-	aliasTarget, ok := lookupAlias(cmdName)
+	cmd, args, ok := findTextCommand(m)
 	if !ok {
-		return
-	}
-	cmdName = aliasTarget
-
-	cmd, exists := lookupCommand(cmdName)
-	if !exists {
 		return
 	}
 
@@ -120,20 +91,59 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if !config.IsAdmin(m.Author.ID) && !discord.IsGuildAdmin(s, m.GuildID, member) {
 			embed := messages.CreateErrorEmbed(messages.T(m.GuildID).Titles.NoPermission, messages.T(m.GuildID).Errors.AdminOnly)
 
-			_, _ = discord.SendReply(s, m.ChannelID, m.ID, &discordgo.MessageSend{
-				Embeds: []*discordgo.MessageEmbed{embed},
-			})
+			replyErrorEmbed(s, m, embed)
 			return
 		}
 	}
 
 	logger.Debugf("Executing text command: %s (user: %s, guild: %s)",
-		cmdName, m.Author.Username, m.GuildID)
+		cmd.Name, m.Author.Username, m.GuildID)
 
 	runBeforeCommand(m.GuildID)
 
-	args := parts[1:]
+	runTextCommand(s, m, member, cmd, args)
+}
 
+func commandPrefix(guildID string) string {
+	cfg := config.GetConfig()
+	prefix := cfg.Prefix
+	if guildID != "" {
+		if guildPrefix, err := guild.GetPrefix(guildID); err != nil {
+			logger.Debugf("failed to get guild prefix for %s: %v", guildID, err)
+		} else if guildPrefix != "" {
+			prefix = guildPrefix
+		}
+	}
+	return prefix
+}
+
+func findTextCommand(m *discordgo.MessageCreate) (*Command, []string, bool) {
+	prefix := commandPrefix(m.GuildID)
+	if !strings.HasPrefix(m.Content, prefix) {
+		return nil, nil, false
+	}
+
+	content := strings.TrimPrefix(m.Content, prefix)
+	parts := strings.Fields(content)
+	if len(parts) == 0 {
+		return nil, nil, false
+	}
+
+	cmdName := strings.ToLower(parts[0])
+
+	aliasTarget, ok := lookupAlias(cmdName)
+	if !ok {
+		return nil, nil, false
+	}
+
+	cmd, exists := lookupCommand(aliasTarget)
+	if !exists {
+		return nil, nil, false
+	}
+	return cmd, parts[1:], true
+}
+
+func runTextCommand(s *discordgo.Session, m *discordgo.MessageCreate, member *discordgo.Member, cmd *Command, args []string) {
 	pseudoInteraction := discord.CreatePseudoInteraction(m, member, cmd.Name, cmd.Options, args)
 
 	messageResponder := &discord.MessageResponse{
@@ -146,14 +156,18 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	defer discord.RegisterResponder(pseudoInteraction.Token, messageResponder)()
 
 	if err := cmd.Handler(s, pseudoInteraction); err != nil {
-		logger.Errorf("Text command %s failed: %v", cmdName, err)
+		logger.Errorf("Text command %s failed: %v", cmd.Name, err)
 
 		if messageResponder.Message == nil {
 			embed := messages.CreateErrorEmbed(messages.T(m.GuildID).Titles.Error, fmt.Sprintf(messages.T(m.GuildID).Errors.CommandExecutionError, err))
 
-			_, _ = discord.SendReply(s, m.ChannelID, m.ID, &discordgo.MessageSend{
-				Embeds: []*discordgo.MessageEmbed{embed},
-			})
+			replyErrorEmbed(s, m, embed)
 		}
 	}
+}
+
+func replyErrorEmbed(s *discordgo.Session, m *discordgo.MessageCreate, embed *discordgo.MessageEmbed) {
+	_, _ = discord.SendReply(s, m.ChannelID, m.ID, &discordgo.MessageSend{
+		Embeds: []*discordgo.MessageEmbed{embed},
+	})
 }

@@ -155,15 +155,10 @@ func handleVideoWithPlaylist(s *discordgo.Session, i *discordgo.InteractionCreat
 		logger.Warnf("Specific video unavailable (even from playlist), offering playlist: %v", videoErr)
 		embed = videoUnavailableEmbed(i.GuildID)
 	} else {
-		if err := queue.AddSong(i.GuildID, queueSongFrom(song), -1); err != nil {
-			if !errors.Is(err, queue.ErrSongInQueue) {
-				discord.UpdateErrorEmbed(s, i, fmt.Sprintf(messages.T(i.GuildID).Music.SongAddFailed, err))
-				return err
-			}
-			isDuplicate = true
+		embed, isDuplicate, err = addVideoFromPlaylist(s, i, song)
+		if err != nil {
+			return err
 		}
-
-		embed = videoWithPlaylistEmbed(i.GuildID, song, isDuplicate)
 	}
 
 	_ = discord.UpdateResponseEmbed(s, i, embed)

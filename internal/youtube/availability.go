@@ -31,6 +31,59 @@ var runYtDlpAvailability = func(ctx context.Context, url string) (*ytdlp.Result,
 	return cmd.Run(ctx, url)
 }
 
+func handleYtDlpAvailabilityError(url, cacheKey string, startTime time.Time, err error) (*AvailabilityResult, error) {
+	ytCircuitBreaker.recordFailure(err)
+	saveVersionResult(url, err)
+	checkTime := time.Since(startTime)
+	logger.Debugf("yt-dlp error after %v: %v", checkTime, err)
+
+	if isBlockedVideoError(err) {
+		logger.Debugf("Video blocked by error: %v (%v)", err, checkTime)
+		unavailResult := &AvailabilityResult{
+			Available: false,
+			Error:     err.Error(),
+		}
+
+		saveAvailability(cacheKey, unavailResult)
+		return unavailResult, nil
+	}
+
+	return nil, fmt.Errorf("failed to check availability: %w", err)
+}
+
+func isBlockedVideoError(err error) bool {
+	errorMsg := strings.ToLower(err.Error())
+	return strings.Contains(errorMsg, "video unavailable") ||
+		strings.Contains(errorMsg, "private video") ||
+		strings.Contains(errorMsg, "deleted video") ||
+		strings.Contains(errorMsg, "age-restricted") ||
+		strings.Contains(errorMsg, "not available in your country") ||
+		strings.Contains(errorMsg, "geo")
+}
+
+func collectUnavailableReasons(guildID string, info *ytdlp.ExtractedInfo, unavailableReasons []string) []string {
+	if info.Availability != nil {
+		availability := strings.ToLower(string(*info.Availability))
+		logger.Debugf("availability: %s", availability)
+
+		if availability != "public" && availability != "unlisted" {
+			unavailableReasons = append(unavailableReasons, messages.T(guildID).YouTube.ErrorRegionRestricted)
+		}
+	}
+
+	if info.Title != nil {
+		title := strings.ToLower(*info.Title)
+		if strings.Contains(title, "[private video]") ||
+			strings.Contains(title, "[deleted video]") ||
+			strings.Contains(title, "private video") ||
+			strings.Contains(title, "deleted video") {
+			unavailableReasons = append(unavailableReasons, messages.T(guildID).YouTube.ErrorPrivateOrDeleted)
+			logger.Debugf("title_indicates_unavailable: true")
+		}
+	}
+	return unavailableReasons
+}
+
 func checkAvailabilityWithYtDlp(guildID, url, cacheKey string, startTime time.Time) (*AvailabilityResult, bool, error) {
 	var availResult *AvailabilityResult
 
@@ -39,30 +92,8 @@ func checkAvailabilityWithYtDlp(guildID, url, cacheKey string, startTime time.Ti
 
 	result, err := runYtDlpAvailability(ctx, url)
 	if err != nil {
-
-		ytCircuitBreaker.recordFailure(err)
-		saveVersionResult(url, err)
-		checkTime := time.Since(startTime)
-		logger.Debugf("yt-dlp error after %v: %v", checkTime, err)
-
-		errorMsg := strings.ToLower(err.Error())
-		if strings.Contains(errorMsg, "video unavailable") ||
-			strings.Contains(errorMsg, "private video") ||
-			strings.Contains(errorMsg, "deleted video") ||
-			strings.Contains(errorMsg, "age-restricted") ||
-			strings.Contains(errorMsg, "not available in your country") ||
-			strings.Contains(errorMsg, "geo") {
-			logger.Debugf("Video blocked by error: %v (%v)", err, checkTime)
-			unavailResult := &AvailabilityResult{
-				Available: false,
-				Error:     err.Error(),
-			}
-
-			saveAvailability(cacheKey, unavailResult)
-			return unavailResult, true, nil
-		}
-
-		return nil, true, fmt.Errorf("failed to check availability: %w", err)
+		blocked, wrapped := handleYtDlpAvailabilityError(url, cacheKey, startTime, err)
+		return blocked, true, wrapped
 	}
 
 	infos, err := result.GetExtractedInfo()
@@ -93,25 +124,7 @@ func checkAvailabilityWithYtDlp(guildID, url, cacheKey string, startTime time.Ti
 		logger.Debugf("\"%s\" is a LIVE stream", getStringValue(info.Title))
 	}
 
-	if info.Availability != nil {
-		availability := strings.ToLower(string(*info.Availability))
-		logger.Debugf("availability: %s", availability)
-
-		if availability != "public" && availability != "unlisted" {
-			unavailableReasons = append(unavailableReasons, messages.T(guildID).YouTube.ErrorRegionRestricted)
-		}
-	}
-
-	if info.Title != nil {
-		title := strings.ToLower(*info.Title)
-		if strings.Contains(title, "[private video]") ||
-			strings.Contains(title, "[deleted video]") ||
-			strings.Contains(title, "private video") ||
-			strings.Contains(title, "deleted video") {
-			unavailableReasons = append(unavailableReasons, messages.T(guildID).YouTube.ErrorPrivateOrDeleted)
-			logger.Debugf("title_indicates_unavailable: true")
-		}
-	}
+	unavailableReasons = collectUnavailableReasons(guildID, info, unavailableReasons)
 
 	if len(unavailableReasons) > 0 {
 		errorMsg := strings.Join(unavailableReasons, ", ")
@@ -277,6 +290,43 @@ func CheckIfLiveStreamEnded(url string) (bool, error) {
 	return false, nil
 }
 
+func checkAvailabilityFallback(url string, startTime time.Time) (bool, bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cmd := ytdlpCommand().
+		DumpJSON().
+		NoPlaylist()
+	cmd = applyJsRuntime(cmd).
+		SkipDownload()
+
+	result, ytdlpErr := cmd.Run(ctx, url)
+	if ytdlpErr != nil {
+		ytCircuitBreaker.recordFailure(ytdlpErr)
+		saveVersionResult(url, ytdlpErr)
+		checkTime := time.Since(startTime)
+		logger.Debugf("yt-dlp also failed after %v: %v", checkTime, ytdlpErr)
+		return false, false, ytdlpErr
+	}
+
+	infos, parseErr := result.GetExtractedInfo()
+	if parseErr != nil {
+		return false, false, parseErr
+	}
+
+	if len(infos) == 0 {
+		return false, false, fmt.Errorf("video not available")
+	}
+
+	info := infos[0]
+
+	isLive := isLiveOrUpcoming(info)
+
+	checkTime := time.Since(startTime)
+	logger.Debugf("yt-dlp fallback succeeded in %v", checkTime)
+	return true, isLive, nil
+}
+
 func CheckAvailability(url string) (available bool, isLive bool, err error) {
 
 	if cached, ok := loadAvailability(url); ok {
@@ -298,40 +348,10 @@ func CheckAvailability(url string) (available bool, isLive bool, err error) {
 
 		logger.Warnf("Innertube failed, falling back to yt-dlp: %v", err)
 
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		cmd := ytdlpCommand().
-			DumpJSON().
-			NoPlaylist()
-		cmd = applyJsRuntime(cmd).
-			SkipDownload()
-
-		result, ytdlpErr := cmd.Run(ctx, url)
-		if ytdlpErr != nil {
-			ytCircuitBreaker.recordFailure(ytdlpErr)
-			saveVersionResult(url, ytdlpErr)
-			checkTime := time.Since(startTime)
-			logger.Debugf("yt-dlp also failed after %v: %v", checkTime, ytdlpErr)
-			return false, false, ytdlpErr
+		available, isLive, err = checkAvailabilityFallback(url, startTime)
+		if err != nil {
+			return false, false, err
 		}
-
-		infos, parseErr := result.GetExtractedInfo()
-		if parseErr != nil {
-			return false, false, parseErr
-		}
-
-		if len(infos) == 0 {
-			return false, false, fmt.Errorf("video not available")
-		}
-
-		info := infos[0]
-
-		isLive = isLiveOrUpcoming(info)
-
-		available = true
-		checkTime := time.Since(startTime)
-		logger.Debugf("yt-dlp fallback succeeded in %v", checkTime)
 	}
 
 	checkTime := time.Since(startTime)

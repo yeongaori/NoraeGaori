@@ -61,17 +61,7 @@ func forceRemoveByUser(s *discordgo.Session, i *discordgo.InteractionCreate, q *
 		return nil
 	}
 
-	var userSongs []*queue.Song
-	startIdx := 1
-	if !q.Playing && !q.Loading {
-		startIdx = 0
-	}
-
-	for idx := startIdx; idx < len(q.Songs); idx++ {
-		if q.Songs[idx].RequestedByID == targetUserID {
-			userSongs = append(userSongs, q.Songs[idx])
-		}
-	}
+	userSongs, startIdx := songsRequestedBy(q, targetUserID)
 
 	if len(userSongs) == 0 {
 		description := fmt.Sprintf(messages.T(i.GuildID).Admin.UserNoSongs, messages.EscapeMarkdown(targetUser.Username))
@@ -94,6 +84,26 @@ func forceRemoveByUser(s *discordgo.Session, i *discordgo.InteractionCreate, q *
 
 	player.InvalidatePreCaches(i.GuildID, songIDs)
 
+	respondRemovedSongs(s, i, targetUser.Username, userSongs)
+	return nil
+}
+
+func songsRequestedBy(q *queue.Queue, targetUserID string) ([]*queue.Song, int) {
+	var userSongs []*queue.Song
+	startIdx := 1
+	if !q.Playing && !q.Loading {
+		startIdx = 0
+	}
+
+	for idx := startIdx; idx < len(q.Songs); idx++ {
+		if q.Songs[idx].RequestedByID == targetUserID {
+			userSongs = append(userSongs, q.Songs[idx])
+		}
+	}
+	return userSongs, startIdx
+}
+
+func respondRemovedSongs(s *discordgo.Session, i *discordgo.InteractionCreate, username string, userSongs []*queue.Song) {
 	songLines := make([]string, 0, len(userSongs))
 	for _, song := range userSongs {
 		var titlePart string
@@ -104,7 +114,7 @@ func forceRemoveByUser(s *discordgo.Session, i *discordgo.InteractionCreate, q *
 		}
 		songLines = append(songLines, "• "+titlePart)
 	}
-	summary := fmt.Sprintf(messages.T(i.GuildID).Admin.DeleteCompleteDesc, messages.EscapeMarkdown(targetUser.Username), len(userSongs))
+	summary := fmt.Sprintf(messages.T(i.GuildID).Admin.DeleteCompleteDesc, messages.EscapeMarkdown(username), len(userSongs))
 	chunks := discord.SplitLinesIntoChunks(songLines, 3900)
 	discord.RespondEmbed(s, i, messages.CreateSuccessEmbed(messages.T(i.GuildID).Admin.DeleteCompleteTitle, summary+"\n\n"+chunks[0]))
 	for _, chunk := range chunks[1:] {
@@ -114,7 +124,6 @@ func forceRemoveByUser(s *discordgo.Session, i *discordgo.InteractionCreate, q *
 			Description: chunk,
 		})
 	}
-	return nil
 }
 
 func forceRemoveByPosition(s *discordgo.Session, i *discordgo.InteractionCreate, q *queue.Queue, position int) error {

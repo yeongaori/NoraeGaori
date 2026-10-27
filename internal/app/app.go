@@ -32,17 +32,7 @@ func convertStoredStyles() error {
 	return nil
 }
 
-func Run(token string) error {
-	logger.Debug("Initializing database...")
-	if err := database.Initialize(); err != nil {
-		return fmt.Errorf("failed to initialize database: %w", err)
-	}
-	defer func() {
-		if err := database.Close(); err != nil {
-			logger.Errorf("Failed to close database: %v", err)
-		}
-	}()
-
+func syncStoredData() error {
 	if err := convertStoredStyles(); err != nil {
 		return err
 	}
@@ -59,22 +49,10 @@ func Run(token string) error {
 	if err := analysis.PruneTrackAnalysis(); err != nil {
 		logger.Warnf("Failed to prune stored track analysis: %v", err)
 	}
+	return nil
+}
 
-	logger.Debug("Loading configuration...")
-	if err := config.Initialize(); err != nil {
-		return fmt.Errorf("failed to initialize config: %w", err)
-	}
-	defer func() {
-		if err := config.Close(); err != nil {
-			logger.Errorf("Failed to close config watcher: %v", err)
-		}
-	}()
-
-	logger.SetLogFile(config.GetConfig().LogFile)
-	config.OnReload(func() {
-		logger.SetLogFile(config.GetConfig().LogFile)
-	})
-
+func loadLocales() {
 	messages.SetGuildLangResolver(guild.GetLanguage)
 
 	lang := config.GetConfig().Language
@@ -96,7 +74,9 @@ func Run(token string) error {
 		}
 		command.ReloadAliases()
 	})
+}
 
+func prepareMedia() error {
 	logger.Debug("Initializing yt-dlp version manager...")
 	if err := ytdlpUpdater.InitVersionManager(); err != nil {
 		logger.Warnf("Failed to initialize yt-dlp version manager: %v", err)
@@ -110,6 +90,44 @@ func Run(token string) error {
 	logger.Debug("Preparing ffmpeg and the JavaScript runtime...")
 	if err := dependency.Prepare(); err != nil {
 		return fmt.Errorf("failed to prepare dependencies: %w", err)
+	}
+	return nil
+}
+
+func Run(token string) error {
+	logger.Debug("Initializing database...")
+	if err := database.Initialize(); err != nil {
+		return fmt.Errorf("failed to initialize database: %w", err)
+	}
+	defer func() {
+		if err := database.Close(); err != nil {
+			logger.Errorf("Failed to close database: %v", err)
+		}
+	}()
+
+	if err := syncStoredData(); err != nil {
+		return err
+	}
+
+	logger.Debug("Loading configuration...")
+	if err := config.Initialize(); err != nil {
+		return fmt.Errorf("failed to initialize config: %w", err)
+	}
+	defer func() {
+		if err := config.Close(); err != nil {
+			logger.Errorf("Failed to close config watcher: %v", err)
+		}
+	}()
+
+	logger.SetLogFile(config.GetConfig().LogFile)
+	config.OnReload(func() {
+		logger.SetLogFile(config.GetConfig().LogFile)
+	})
+
+	loadLocales()
+
+	if err := prepareMedia(); err != nil {
+		return err
 	}
 
 	ytdlpUpdater.AutoUpdate()

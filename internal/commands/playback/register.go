@@ -9,6 +9,11 @@ import (
 )
 
 func Register(cmd func(string) messages.CommandStrings) {
+	registerPlaybackControls(cmd)
+	registerSoundSettings(cmd)
+}
+
+func registerPlaybackControls(cmd func(string) messages.CommandStrings) {
 	command.RegisterLocalized(cmd, &command.Command{
 		Name:    "pause",
 		Handler: HandlePause,
@@ -41,6 +46,9 @@ func Register(cmd func(string) messages.CommandStrings) {
 		Name:    "nowplaying",
 		Handler: HandleNowPlaying,
 	})
+}
+
+func registerSoundSettings(cmd func(string) messages.CommandStrings) {
 	command.RegisterLocalized(cmd, &command.Command{
 		Name: "volume",
 		Options: []*discordgo.ApplicationCommandOption{

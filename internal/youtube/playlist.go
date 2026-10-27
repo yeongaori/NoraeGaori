@@ -65,28 +65,9 @@ func AnalyzeYouTubeURL(urlStr string) *URLAnalysis {
 func GetPlaylistInfo(url, requesterName, requesterID string) (*PlaylistInfo, error) {
 	logger.Debugf("Fetching playlist info for: %s", url)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	cmd := ytdlpCommand().
-		ExtractorArgs("youtube:lang=" + messages.Lang()).
-		DumpJSON().
-		FlatPlaylist()
-	cmd = applyJsRuntime(cmd).
-		IgnoreErrors()
-
-	result, err := cmd.Run(ctx, url)
+	infos, err := fetchPlaylistEntries(url)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get playlist info: %w", err)
-	}
-
-	infos, err := result.GetExtractedInfo()
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse playlist info: %w", err)
-	}
-
-	if len(infos) == 0 {
-		return nil, fmt.Errorf("no playlist info returned")
+		return nil, err
 	}
 
 	info := infos[0]
@@ -95,25 +76,7 @@ func GetPlaylistInfo(url, requesterName, requesterID string) (*PlaylistInfo, err
 		return nil, fmt.Errorf("URL is not a playlist (no entries found)")
 	}
 
-	var videoInfos []*ytdlp.ExtractedInfo
-	var playlistTitle string
-
-	if info.Duration != nil {
-
-		videoInfos = infos
-		if info.PlaylistTitle != nil {
-			playlistTitle = *info.PlaylistTitle
-		} else if info.Playlist != nil {
-			playlistTitle = *info.Playlist
-		} else {
-
-			playlistTitle = getStringValue(info.Title)
-		}
-	} else {
-
-		videoInfos = infos[1:]
-		playlistTitle = getStringValue(info.Title)
-	}
+	videoInfos, playlistTitle := splitPlaylistEntries(infos)
 
 	playlistInfo := &PlaylistInfo{
 		ID:     info.ID,
@@ -140,25 +103,70 @@ func GetPlaylistInfo(url, requesterName, requesterID string) (*PlaylistInfo, err
 	}
 
 	for _, entry := range videoInfos {
-		videoURL := fmt.Sprintf("https://%s/watch?v=%s", domain, entry.ID)
-
-		duration, isLive := durationLabel(entry)
-		thumbnail := lastThumbnail(entry)
-
-		song := &Song{
-			URL:           videoURL,
-			Title:         getStringValue(entry.Title),
-			Duration:      duration,
-			Thumbnail:     thumbnail,
-			Uploader:      getStringValue(entry.Uploader),
-			IsLive:        isLive,
-			RequestedBy:   requesterName,
-			RequestedByID: requesterID,
-		}
-
-		playlistInfo.Videos = append(playlistInfo.Videos, song)
+		playlistInfo.Videos = append(playlistInfo.Videos, playlistSong(domain, entry, requesterName, requesterID))
 	}
 
 	logger.Infof("Retrieved playlist: %s (%d videos)", playlistInfo.Title, len(playlistInfo.Videos))
 	return playlistInfo, nil
+}
+
+func fetchPlaylistEntries(url string) ([]*ytdlp.ExtractedInfo, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	cmd := ytdlpCommand().
+		ExtractorArgs("youtube:lang=" + messages.Lang()).
+		DumpJSON().
+		FlatPlaylist()
+	cmd = applyJsRuntime(cmd).
+		IgnoreErrors()
+
+	result, err := cmd.Run(ctx, url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get playlist info: %w", err)
+	}
+
+	infos, err := result.GetExtractedInfo()
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse playlist info: %w", err)
+	}
+
+	if len(infos) == 0 {
+		return nil, fmt.Errorf("no playlist info returned")
+	}
+	return infos, nil
+}
+
+func splitPlaylistEntries(infos []*ytdlp.ExtractedInfo) ([]*ytdlp.ExtractedInfo, string) {
+	info := infos[0]
+	if info.Duration != nil {
+
+		if info.PlaylistTitle != nil {
+			return infos, *info.PlaylistTitle
+		} else if info.Playlist != nil {
+			return infos, *info.Playlist
+		}
+
+		return infos, getStringValue(info.Title)
+	}
+
+	return infos[1:], getStringValue(info.Title)
+}
+
+func playlistSong(domain string, entry *ytdlp.ExtractedInfo, requesterName, requesterID string) *Song {
+	videoURL := fmt.Sprintf("https://%s/watch?v=%s", domain, entry.ID)
+
+	duration, isLive := durationLabel(entry)
+	thumbnail := lastThumbnail(entry)
+
+	return &Song{
+		URL:           videoURL,
+		Title:         getStringValue(entry.Title),
+		Duration:      duration,
+		Thumbnail:     thumbnail,
+		Uploader:      getStringValue(entry.Uploader),
+		IsLive:        isLive,
+		RequestedBy:   requesterName,
+		RequestedByID: requesterID,
+	}
 }

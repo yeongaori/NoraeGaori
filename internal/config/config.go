@@ -95,8 +95,7 @@ func Initialize() error {
 	return nil
 }
 
-func loadConfig() error {
-
+func ensureConfigFile() error {
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		defaultConfig := &Config{
 			Prefix:               "!",
@@ -112,25 +111,10 @@ func loadConfig() error {
 		}
 		logger.Info("Created default config.json file")
 	}
+	return nil
+}
 
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return fmt.Errorf("failed to read config file: %w", err)
-	}
-
-	if len(data) == 0 {
-		logger.Warnf("Config file is empty, using defaults")
-		return fmt.Errorf("config file is empty")
-	}
-
-	var cfg Config
-	if err := json.Unmarshal(data, &cfg); err != nil {
-
-		logger.Errorf("Failed to parse config file (corrupted JSON): %v", err)
-		logger.Warnf("Config file may be corrupted. Please check %s", configPath)
-		return fmt.Errorf("failed to parse config file: %w", err)
-	}
-
+func normalizeConfig(cfg *Config) {
 	if cfg.MaxDownloadSpeedMbps <= 0 || math.IsNaN(cfg.MaxDownloadSpeedMbps) || math.IsInf(cfg.MaxDownloadSpeedMbps, 0) {
 		logger.Warnf("Invalid max_download_speed_mbps=%.2f, falling back to default (%.1f Mbps)", cfg.MaxDownloadSpeedMbps, DefaultMaxDownloadSpeedMbps)
 		cfg.MaxDownloadSpeedMbps = DefaultMaxDownloadSpeedMbps
@@ -152,6 +136,32 @@ func loadConfig() error {
 		logger.Warnf("Invalid ytdlp_channel=%q, falling back to %q", cfg.YtDlpChannel, YtDlpChannelAuto)
 		cfg.YtDlpChannel = YtDlpChannelAuto
 	}
+}
+
+func loadConfig() error {
+	if err := ensureConfigFile(); err != nil {
+		return err
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	if len(data) == 0 {
+		logger.Warnf("Config file is empty, using defaults")
+		return fmt.Errorf("config file is empty")
+	}
+
+	var cfg Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+
+		logger.Errorf("Failed to parse config file (corrupted JSON): %v", err)
+		logger.Warnf("Config file may be corrupted. Please check %s", configPath)
+		return fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	normalizeConfig(&cfg)
 
 	config.Store(&cfg)
 

@@ -178,6 +178,18 @@ func GetVideoInfo(guildID, url, requesterName, requesterID string) (*Song, error
 		return nil, parseYtDlpError(guildID, errMsg)
 	}
 
+	info, err := fetchInfoWithYtDlp(guildID, url)
+	if err != nil {
+		return nil, err
+	}
+
+	song = songFromInfo(url, info, requesterName, requesterID)
+
+	logger.Debugf("Retrieved video: %s (%s)", song.Title, song.Duration)
+	return song, nil
+}
+
+func fetchInfoWithYtDlp(guildID, url string) (*ytdlp.ExtractedInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -209,8 +221,10 @@ func GetVideoInfo(guildID, url, requesterName, requesterID string) (*Song, error
 		return nil, fmt.Errorf("no video info returned")
 	}
 
-	info := infos[0]
+	return infos[0], nil
+}
 
+func songFromInfo(url string, info *ytdlp.ExtractedInfo, requesterName, requesterID string) *Song {
 	duration, isLive := durationLabel(info)
 	thumbnail := lastThumbnail(info)
 
@@ -226,7 +240,7 @@ func GetVideoInfo(guildID, url, requesterName, requesterID string) (*Song, error
 		title = *info.Title
 	}
 
-	song = &Song{
+	return &Song{
 		URL:           url,
 		Title:         title,
 		Duration:      duration,
@@ -236,9 +250,6 @@ func GetVideoInfo(guildID, url, requesterName, requesterID string) (*Song, error
 		RequestedBy:   requesterName,
 		RequestedByID: requesterID,
 	}
-
-	logger.Debugf("Retrieved video: %s (%s)", song.Title, song.Duration)
-	return song, nil
 }
 
 func GetOptimalAudioFormat(bitrate int) string {

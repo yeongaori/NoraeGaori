@@ -48,9 +48,8 @@ func Initialize() error {
 	return nil
 }
 
-func createTables() error {
-
-	guildSettingsSQL := `
+var schemaStatements = []string{
+	`
 	CREATE TABLE IF NOT EXISTS guild_settings (
 		guild_id TEXT PRIMARY KEY,
 		volume REAL DEFAULT 100,
@@ -58,17 +57,15 @@ func createTables() error {
 		sponsorblock INTEGER DEFAULT 0,
 		show_started_track INTEGER DEFAULT 1,
 		normalization INTEGER DEFAULT 0
-	);`
-
-	queuesSQL := `
+	);`,
+	`
 	CREATE TABLE IF NOT EXISTS queues (
 		guild_id TEXT PRIMARY KEY,
 		text_channel_id TEXT NOT NULL,
 		voice_channel_id TEXT NOT NULL,
 		paused INTEGER DEFAULT 0
-	);`
-
-	songsSQL := `
+	);`,
+	`
 	CREATE TABLE IF NOT EXISTS songs (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		guild_id TEXT NOT NULL,
@@ -83,13 +80,11 @@ func createTables() error {
 		uploader TEXT,
 		is_live INTEGER DEFAULT 0,
 		FOREIGN KEY (guild_id) REFERENCES queues(guild_id) ON DELETE CASCADE
-	);`
-
-	indexSQL := `
+	);`,
+	`
 	CREATE INDEX IF NOT EXISTS idx_songs_guild_position
-	ON songs(guild_id, queue_position);`
-
-	trackAnalysisSQL := `
+	ON songs(guild_id, queue_position);`,
+	`
 	CREATE TABLE IF NOT EXISTS track_analysis (
 		url TEXT NOT NULL,
 		segment TEXT NOT NULL,
@@ -107,20 +102,19 @@ func createTables() error {
 		analysis_version INTEGER NOT NULL,
 		analyzed_at INTEGER NOT NULL,
 		PRIMARY KEY (url, segment)
-	);`
-
-	trackAnalysisIndexSQL := `
+	);`,
+	`
 	CREATE INDEX IF NOT EXISTS idx_track_analysis_analyzed_at
-	ON track_analysis(analyzed_at);`
-
-	localeBaselinesSQL := `
+	ON track_analysis(analyzed_at);`,
+	`
 	CREATE TABLE IF NOT EXISTS locale_baselines (
 		lang TEXT PRIMARY KEY,
 		content TEXT NOT NULL
-	);`
+	);`,
+}
 
-	statements := []string{guildSettingsSQL, queuesSQL, songsSQL, indexSQL, trackAnalysisSQL, trackAnalysisIndexSQL, localeBaselinesSQL}
-	for _, stmt := range statements {
+func createTables() error {
+	for _, stmt := range schemaStatements {
 		if _, err := DB.Exec(stmt); err != nil {
 			return fmt.Errorf("failed to execute SQL statement: %w", err)
 		}

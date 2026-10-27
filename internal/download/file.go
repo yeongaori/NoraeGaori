@@ -30,6 +30,50 @@ var (
 	endProgress  = logger.EndProgress
 )
 
+func openDownload(ctx context.Context, url string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("download failed: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("download failed: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		_ = resp.Body.Close()
+		return nil, fmt.Errorf("download returned status: %d", resp.StatusCode)
+	}
+	return resp, nil
+}
+
+func copyThrottled(ctx context.Context, body io.Reader, sink io.Writer, stall *time.Timer) error {
+	rateLimit := rateLimitBytesPerSecond()
+	buffer := make([]byte, 16*1024)
+	chunkDelay := time.Duration(float64(len(buffer)) / rateLimit * float64(time.Second))
+
+	for {
+		n, err := body.Read(buffer)
+		if n > 0 {
+			stall.Reset(downloadStallTimeout)
+			if _, writeErr := sink.Write(buffer[:n]); writeErr != nil {
+				return fmt.Errorf("failed to write to file: %w", writeErr)
+			}
+
+			time.Sleep(chunkDelay)
+		}
+		if err == io.EOF {
+			return nil
+		}
+		if ctx.Err() != nil {
+			return fmt.Errorf("the mirror sent nothing for %v, so the download was abandoned", downloadStallTimeout)
+		}
+		if err != nil {
+			return fmt.Errorf("download interrupted: %w", err)
+		}
+	}
+}
+
 func SaveFile(url, destination string) (string, error) {
 	name := path.Base(url)
 
@@ -38,19 +82,11 @@ func SaveFile(url, destination string) (string, error) {
 	stall := time.AfterFunc(downloadStallTimeout, cancel)
 	defer stall.Stop()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	resp, err := openDownload(ctx, url)
 	if err != nil {
-		return "", fmt.Errorf("download failed: %w", err)
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("download failed: %w", err)
+		return "", err
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("download returned status: %d", resp.StatusCode)
-	}
 
 	out, err := os.Create(destination) // #nosec G304
 	if err != nil {
@@ -72,29 +108,8 @@ func SaveFile(url, destination string) (string, error) {
 	}}
 	sink := io.MultiWriter(out, hasher, progress)
 
-	rateLimit := rateLimitBytesPerSecond()
-	buffer := make([]byte, 16*1024)
-	chunkDelay := time.Duration(float64(len(buffer)) / rateLimit * float64(time.Second))
-
-	for {
-		n, err := resp.Body.Read(buffer)
-		if n > 0 {
-			stall.Reset(downloadStallTimeout)
-			if _, writeErr := sink.Write(buffer[:n]); writeErr != nil {
-				return "", fmt.Errorf("failed to write to file: %w", writeErr)
-			}
-
-			time.Sleep(chunkDelay)
-		}
-		if err == io.EOF {
-			break
-		}
-		if ctx.Err() != nil {
-			return "", fmt.Errorf("the mirror sent nothing for %v, so the download was abandoned", downloadStallTimeout)
-		}
-		if err != nil {
-			return "", fmt.Errorf("download interrupted: %w", err)
-		}
+	if err := copyThrottled(ctx, resp.Body, sink, stall); err != nil {
+		return "", err
 	}
 
 	if err := out.Sync(); err != nil {

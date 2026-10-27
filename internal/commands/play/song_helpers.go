@@ -83,6 +83,19 @@ func queueSongFrom(song *youtube.Song) *queue.Song {
 	}
 }
 
+func addVideoFromPlaylist(s *discordgo.Session, i *discordgo.InteractionCreate, song *youtube.Song) (*discordgo.MessageEmbed, bool, error) {
+	isDuplicate := false
+	if err := queue.AddSong(i.GuildID, queueSongFrom(song), -1); err != nil {
+		if !errors.Is(err, queue.ErrSongInQueue) {
+			discord.UpdateErrorEmbed(s, i, fmt.Sprintf(messages.T(i.GuildID).Music.SongAddFailed, err))
+			return nil, false, err
+		}
+		isDuplicate = true
+	}
+
+	return videoWithPlaylistEmbed(i.GuildID, song, isDuplicate), isDuplicate, nil
+}
+
 func ensureQueueForVoice(s *discordgo.Session, i *discordgo.InteractionCreate, q *queue.Queue, voiceChannelID string) error {
 	if q != nil {
 		if err := queue.UpdateVoiceChannel(i.GuildID, voiceChannelID); err != nil {
