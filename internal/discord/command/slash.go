@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/logger"
@@ -54,7 +55,7 @@ func SyncSlashCommands(session *discordgo.Session) error {
 		return nil
 	}
 
-	logger.Debugf("Slash command changes detected — added: %v, updated: %v, removed: %v", added, updated, removed)
+	logger.Debugf("Slash command changes detected — %s", formatCommandChanges(added, updated, removed))
 
 	if _, err := session.ApplicationCommandBulkOverwrite(appID, "", desired); err != nil {
 		return fmt.Errorf("failed to bulk overwrite slash commands: %w", err)
@@ -130,4 +131,19 @@ func diffCommandSets(desired, existing map[string]string) (added, updated, remov
 		}
 	}
 	return added, updated, removed
+}
+
+func formatCommandChanges(added, updated, removed []string) string {
+	groups := []struct {
+		label string
+		names []string
+	}{{"added", added}, {"updated", updated}, {"removed", removed}}
+
+	parts := make([]string, 0, len(groups))
+	for _, group := range groups {
+		if len(group.names) > 0 {
+			parts = append(parts, fmt.Sprintf("%s: %v", group.label, group.names))
+		}
+	}
+	return strings.Join(parts, ", ")
 }

@@ -9,16 +9,19 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/discord/command"
+	"noraegaori/internal/logger"
+	"noraegaori/tests/testutil"
 	"noraegaori/tests/testutil/discordtest"
+	"noraegaori/tests/testutil/logtest"
 )
 
 const syncAppID = "sync-app"
 
 func syncCommands() []*command.Command {
 	return []*command.Command{
-		{Name: "alpha", Description: "Alpha", Options: []*discordgo.ApplicationCommandOption{{Type: discordgo.ApplicationCommandOptionString, Name: "text", Description: "Text"}}},
-		{Name: "beta", Description: "Beta"},
-		{Name: "gamma", Description: "Gamma", TextOnly: true},
+		{Name: "test1", Description: "Test1", Options: []*discordgo.ApplicationCommandOption{{Type: discordgo.ApplicationCommandOptionString, Name: "text", Description: "Text"}}},
+		{Name: "test2", Description: "Test2"},
+		{Name: "test3", Description: "Test3", TextOnly: true},
 	}
 }
 
@@ -87,8 +90,51 @@ func TestSyncSlashCommandsOverwrites(t *testing.T) {
 		names = append(names, overwritten[index].Name)
 	}
 	slices.Sort(names)
-	if !slices.Equal(names, []string{"alpha", "beta"}) {
-		t.Errorf("overwrote %v, want alpha and beta without the text-only gamma", names)
+	if !slices.Equal(names, []string{"test1", "test2"}) {
+		t.Errorf("overwrote %v, want test1 and test2 without the text-only test3", names)
+	}
+}
+
+func TestSyncSlashCommandsSkipsEmpty(t *testing.T) {
+	for name, check := range map[string]struct {
+		edit func([]*discordgo.ApplicationCommand) []*discordgo.ApplicationCommand
+		want string
+	}{
+		"only added": {func(existing []*discordgo.ApplicationCommand) []*discordgo.ApplicationCommand {
+			return existing[:1]
+		}, "added: [test2]"},
+		"only updated": {func(existing []*discordgo.ApplicationCommand) []*discordgo.ApplicationCommand {
+			existing[1].Description = "Changed"
+			return existing
+		}, "updated: [test2]"},
+		"only removed": {func(existing []*discordgo.ApplicationCommand) []*discordgo.ApplicationCommand {
+			return append(existing, &discordgo.ApplicationCommand{Name: "test4", Description: "Test4"})
+		}, "removed: [test4]"},
+		"added and removed": {func(existing []*discordgo.ApplicationCommand) []*discordgo.ApplicationCommand {
+			return append(existing[:1], &discordgo.ApplicationCommand{Name: "test4", Description: "Test4"})
+		}, "added: [test2], removed: [test4]"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var existing []*discordgo.ApplicationCommand
+			if err := json.Unmarshal([]byte(registeredJSON(t)), &existing); err != nil {
+				t.Fatalf("failed to decode the registered commands: %v", err)
+			}
+			raw, err := json.Marshal(check.edit(existing))
+			if err != nil {
+				t.Fatalf("failed to encode the existing commands: %v", err)
+			}
+
+			testutil.Swap(t, logger.HookDebugMode, true)
+			read := logtest.CaptureConsole(t)
+			session, _ := syncSession(t, string(raw), http.StatusOK, http.StatusOK)
+
+			if err := command.SyncSlashCommands(session); err != nil {
+				t.Fatalf("SyncSlashCommands returned %v", err)
+			}
+			if logged := read(); !strings.Contains(logged, "Slash command changes detected — "+check.want+"\n") {
+				t.Errorf("got %q, want a line ending in %q", logged, check.want)
+			}
+		})
 	}
 }
 
