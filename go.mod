@@ -10,7 +10,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/jj11hh/opus v1.0.1
 	github.com/joho/godotenv v1.5.1
-	github.com/lrstanley/go-ytdlp v1.5.5
+	github.com/lrstanley/go-ytdlp v1.5.6
 	github.com/ppalone/ytsearch v0.0.1
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/ulikunitz/xz v0.5.17
