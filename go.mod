@@ -5,7 +5,7 @@ go 1.27
 require (
 	github.com/ProtonMail/go-crypto v1.5.2
 	github.com/bwmarrin/discordgo v0.29.0
-	github.com/ebitengine/purego v0.11.2
+	github.com/ebitengine/purego v0.11.3
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/gorilla/websocket v1.5.3
 	github.com/jj11hh/opus v1.0.1
@@ -15,7 +15,7 @@ require (
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/ulikunitz/xz v0.5.17
 	golang.org/x/sys v0.49.0
-	modernc.org/sqlite v1.61.0
+	modernc.org/sqlite v1.61.1
 )
 
 require (
