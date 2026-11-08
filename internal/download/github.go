@@ -29,7 +29,7 @@ func (r *GitHubRepo) FetchLatest(checksumAsset string, extraAssets ...string) (*
 	}
 
 	if _, isWarned := rateLimitWarnings.LoadOrStore(r.Repo, struct{}{}); !isWarned {
-		logger.Warnf("GitHub API rate limit reached, reading %s from github.com instead", r.Repo)
+		logger.Debugf("GitHub API rate limit reached, reading %s from github.com instead", r.Repo)
 	}
 
 	release, webErr := r.fetchLatestFromWeb(checksumAsset, extraAssets)

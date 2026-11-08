@@ -47,7 +47,7 @@ func syncStoredData() error {
 	}
 
 	if err := analysis.PruneTrackAnalysis(); err != nil {
-		logger.Warnf("Failed to prune stored track analysis: %v", err)
+		logger.Debugf("Failed to prune stored track analysis: %v", err)
 	}
 	return nil
 }

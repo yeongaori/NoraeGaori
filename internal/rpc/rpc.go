@@ -83,7 +83,7 @@ func LoadConfig() (*Config, error) {
 	}
 
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		logger.Warn("rpcConfig.json not found. Creating default RPC config file.")
+		logger.Debug("rpcConfig.json not found. Creating default RPC config file.")
 
 		defaultCfg := DefaultConfig()
 		data, err := json.MarshalIndent(defaultCfg, "", "  ")
@@ -151,7 +151,7 @@ func UpdateRPC(session *discordgo.Session) {
 	runningMu.Lock()
 	if running {
 		runningMu.Unlock()
-		logger.Warn("RPC update loop is already running")
+		logger.Debug("RPC update loop is already running")
 		return
 	}
 	running = true
@@ -170,7 +170,7 @@ func UpdateRPC(session *discordgo.Session) {
 	}
 
 	if !cfg.RPCEnabled {
-		logger.Warn("RPC is disabled in the config.")
+		logger.Debug("RPC is disabled in the config.")
 		runningMu.Lock()
 		running = false
 		runningMu.Unlock()
@@ -282,10 +282,10 @@ func (u *updater) updateActivity() {
 
 	if u.isFailing {
 		u.isFailing = false
-		logger.Info("RPC updates resumed")
+		logger.Debug("RPC updates resumed")
 	}
 
 	if u.cfg.LogRPCChanges {
-		logger.Infof("RPC updated to: %s %s", activity.Type, name)
+		logger.Debugf("RPC updated to: %s %s", activity.Type, name)
 	}
 }

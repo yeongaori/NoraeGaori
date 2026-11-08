@@ -115,7 +115,7 @@ func fetchAPIKey() (string, error) {
 func initInnertubeClient() {
 	apiKey, err := fetchAPIKey()
 	if err != nil {
-		logger.Warnf("Failed to fetch API key, will try without: %v", err)
+		logger.Debugf("Failed to fetch API key, will try without: %v", err)
 	} else {
 		logger.Debugf("Fetched API key from YouTube")
 	}

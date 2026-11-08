@@ -144,7 +144,7 @@ func install(t *tool, target *mirror.Platform, found *mirror.Candidate) (*Binary
 		return nil, err
 	}
 	if isDownloaded {
-		logger.Infof("Reusing the downloaded %s", path.Base(found.URL))
+		logger.Debugf("Reusing the downloaded %s", path.Base(found.URL))
 	}
 
 	if err := installInto(t, target, found, partial, isDownloaded); err != nil {

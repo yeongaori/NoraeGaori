@@ -11,6 +11,7 @@ import (
 
 	"noraegaori/internal/dependency"
 	"noraegaori/internal/dependency/mirror"
+	"noraegaori/internal/logger"
 	"noraegaori/tests/testutil"
 	"noraegaori/tests/testutil/logtest"
 )
@@ -173,6 +174,7 @@ func stubExtractProgress(t *testing.T) (*[]string, *int) {
 
 func TestExtractWithProgressSteps(t *testing.T) {
 	useWorkingDirectory(t)
+	testutil.Swap(t, logger.HookDebugMode, true)
 	read := logtest.Capture(t)
 	messages, ended := stubExtractProgress(t)
 	archive := writeArchive(t, createZip(t, map[string]string{"deno": strings.Repeat("d", 2000)}))
@@ -196,6 +198,7 @@ func TestExtractWithProgressSteps(t *testing.T) {
 
 func TestExtractWithProgressFailure(t *testing.T) {
 	useWorkingDirectory(t)
+	testutil.Swap(t, logger.HookDebugMode, true)
 	read := logtest.Capture(t)
 	_, ended := stubExtractProgress(t)
 	archive := writeArchive(t, createZip(t, map[string]string{"denort": "binary"}))

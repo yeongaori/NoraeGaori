@@ -118,7 +118,7 @@ func retryWithBackoff(operation func() error, operationName string) error {
 		err := operation()
 		if err == nil {
 			if attempt > 0 {
-				logger.Infof("%s succeeded after %d attempts", operationName, attempt+1)
+				logger.Debugf("%s succeeded after %d attempts", operationName, attempt+1)
 			}
 			return nil
 		}
@@ -171,7 +171,7 @@ func GetVideoInfo(guildID, url, requesterName, requesterID string) (*Song, error
 
 	availability, err := CheckVideoAvailability(guildID, url)
 	if err != nil {
-		logger.Warnf("Failed to check video availability (continuing anyway): %v", err)
+		logger.Debugf("Failed to check video availability (continuing anyway): %v", err)
 	} else if !availability.Available {
 
 		errMsg := fmt.Errorf("video is not available: %s", availability.Error)

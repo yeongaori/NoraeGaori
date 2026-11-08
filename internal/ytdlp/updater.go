@@ -164,11 +164,11 @@ func runCanaryAndActivate(versionmanager *VersionManager, version string) canary
 	}
 
 	if networkErr {
-		logger.Warnf("Canary failed due to network, version %s stays pending", version)
+		logger.Debugf("Canary failed due to network, version %s stays pending", version)
 		return canaryPending
 	}
 
-	logger.Warnf("Canary FAILED for %s, blacklisting", version)
+	logger.Debugf("Canary FAILED for %s, blacklisting", version)
 	versionmanager.SetVersionState(version, StateBlacklisted)
 	return canaryRejected
 }
@@ -234,7 +234,7 @@ func resolveKnownVersion(versionmanager *VersionManager, channel, latestVersion 
 		return channelOutcome{}, false, nil
 	}
 	if state == StateBlacklisted {
-		logger.Infof("Version %s is blacklisted", latestVersion)
+		logger.Debugf("Version %s is blacklisted", latestVersion)
 		if versionmanager.HasUsableBinary() {
 			return channelOutcome{canaryFailed: true}, true, nil
 		}
@@ -257,7 +257,7 @@ func resolveKnownVersion(versionmanager *VersionManager, channel, latestVersion 
 
 	if isInstalled {
 		if state == StateVerified {
-			logger.Infof("Re-verifying %s before returning to it", latestVersion)
+			logger.Debugf("Re-verifying %s before returning to it", latestVersion)
 		}
 		outcome, err := activateOrFallback(versionmanager, channel, latestVersion, release)
 		return outcome, true, err
@@ -310,7 +310,7 @@ func updateFromChannel(channel string, force bool) (channelOutcome, error) {
 	if err != nil {
 		return channelOutcome{}, err
 	}
-	logger.Infof("Downloaded version: %s", actualVersion)
+	logger.Debugf("Downloaded version: %s", actualVersion)
 
 	if versionmanager == nil {
 		logger.Infof("Update complete! Version: %s", actualVersion)
@@ -331,7 +331,7 @@ func activateOrFallback(versionmanager *VersionManager, channel, latestVersion s
 	case canaryPending:
 		return channelOutcome{}, nil
 	default:
-		logger.Warnf("Trying previous releases after %s failed canary", latestVersion)
+		logger.Debugf("Trying previous releases after %s failed canary", latestVersion)
 		return installFallback(versionmanager, channel, latestVersion, release)
 	}
 }
@@ -359,7 +359,7 @@ func installFallback(versionmanager *VersionManager, channel, latestVersion stri
 	}
 
 	if versionmanager.HasUsableBinary() {
-		logger.Warnf("All fallback attempts failed canary; keeping the installed version")
+		logger.Debugf("All fallback attempts failed canary; keeping the installed version")
 		return channelOutcome{canaryFailed: true}, nil
 	}
 
@@ -381,11 +381,11 @@ func tryFallbackRelease(versionmanager *VersionManager, rel *GitHubRelease, cons
 		}
 	}
 
-	logger.Infof("Fallback candidate %d/%d: trying version %s", considered, maxFallbackAttempts, ver)
+	logger.Debugf("Fallback candidate %d/%d: trying version %s", considered, maxFallbackAttempts, ver)
 
 	binaryPath, _, installErr := installVersionBinary(rel, ver)
 	if installErr != nil {
-		logger.Warnf("Fallback candidate %s could not be installed: %v", ver, installErr)
+		logger.Debugf("Fallback candidate %s could not be installed: %v", ver, installErr)
 		return channelOutcome{}, false
 	}
 
@@ -395,7 +395,7 @@ func tryFallbackRelease(versionmanager *VersionManager, rel *GitHubRelease, cons
 	case canaryActivated:
 		return channelOutcome{updated: true}, true
 	case canaryPending:
-		logger.Warnf("Aborting the fallback chain after a canary network error on %s", ver)
+		logger.Debugf("Aborting the fallback chain after a canary network error on %s", ver)
 		return channelOutcome{}, true
 	default:
 		return channelOutcome{}, false
@@ -432,7 +432,7 @@ func runUpdateCheck() {
 	if err != nil {
 		logger.Errorf("Background update check failed: %v", err)
 	} else if updated {
-		logger.Info("Background update found new version")
+		logger.Debug("Background update found new version")
 	}
 
 	versionmanager.Cleanup()
@@ -529,7 +529,7 @@ func AutoUpdate() {
 		logger.Errorf("Auto-update check failed: %v", err)
 		logger.Warn("Continuing with existing version")
 	} else if updated {
-		logger.Info("Auto-update completed successfully")
+		logger.Debug("Auto-update completed successfully")
 	}
 
 	if versionmanager := GetVersionManager(); versionmanager != nil {

@@ -179,7 +179,7 @@ func sendEndMessage(session *discordgo.Session, guildID, reason string, isLeavin
 	}
 
 	if _, err := session.ChannelMessageSendEmbed(textChannelID, playbackEndEmbed(guildID, reason, isLeaving)); err != nil {
-		logger.Debugf("Failed to send playback end message: %v", err)
+		logger.Warnf("Failed to send playback end message: %v", err)
 	}
 }
 

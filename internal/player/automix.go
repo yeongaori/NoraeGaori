@@ -254,7 +254,7 @@ func (cs *crossfadeState) createPlan(player *GuildPlayer, es *ffmpeg.EndState, s
 	bArgs := ffmpeg.Args(nextURL, placement.bSeekSec, normalization, placement.bTempo)
 	bStream, err := player.startStream(bArgs, fade.autoMix || fade.trimSilence)
 	if err != nil {
-		scope.Debugf("failed to start next stream for guild %s: %v", guildID, err)
+		scope.Warnf("failed to start next stream for guild %s: %v", guildID, err)
 		return nil
 	}
 

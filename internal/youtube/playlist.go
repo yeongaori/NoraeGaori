@@ -106,7 +106,7 @@ func GetPlaylistInfo(url, requesterName, requesterID string) (*PlaylistInfo, err
 		playlistInfo.Videos = append(playlistInfo.Videos, playlistSong(domain, entry, requesterName, requesterID))
 	}
 
-	logger.Infof("Retrieved playlist: %s (%d videos)", playlistInfo.Title, len(playlistInfo.Videos))
+	logger.Debugf("Retrieved playlist: %s (%d videos)", playlistInfo.Title, len(playlistInfo.Videos))
 	return playlistInfo, nil
 }
 

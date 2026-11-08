@@ -45,7 +45,7 @@ func findSystemFFmpeg() (*Binary, bool) {
 		return nil, false
 	}
 	if _, err := runVersionCommand(binaryPath, ffmpegTool.versionFlag); err != nil {
-		logger.Warnf("Skipping the system ffmpeg at %s: %v", binaryPath, err)
+		logger.Debugf("Skipping the system ffmpeg at %s: %v", binaryPath, err)
 		return nil, false
 	}
 	return &Binary{Tool: ffmpegTool.name, Path: binaryPath, isSystem: true}, true

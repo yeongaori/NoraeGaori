@@ -19,7 +19,7 @@ func IsGuildAdmin(s *discordgo.Session, guildID string, member *discordgo.Member
 	if err != nil {
 		guild, err = s.Guild(guildID)
 		if err != nil {
-			logger.Debugf("Failed to get guild %s: %v", guildID, err)
+			logger.Warnf("Failed to get guild %s: %v", guildID, err)
 			return false
 		}
 	}

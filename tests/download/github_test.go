@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"noraegaori/internal/download"
+	"noraegaori/internal/logger"
+	"noraegaori/tests/testutil"
 	"noraegaori/tests/testutil/logtest"
 	"noraegaori/tests/testutil/releasetest"
 )
@@ -59,6 +61,7 @@ func TestLatestReleaseUsesAPI(t *testing.T) {
 }
 
 func TestLatestReleaseRateLimited(t *testing.T) {
+	testutil.Swap(t, logger.HookDebugMode, true)
 	read := logtest.Capture(t)
 	gh := serveGitHub(t)
 	name := fmt.Sprintf("owner/limited-%d", time.Now().UnixNano())

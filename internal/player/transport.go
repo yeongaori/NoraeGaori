@@ -250,7 +250,7 @@ func resumeInternal(session *discordgo.Session, guildID string) error {
 				player.Paused = false
 				player.mu.Unlock()
 
-				logger.Infof("Skipping to next song after ended live stream")
+				logger.Debugf("Skipping to next song after ended live stream")
 				return startPlaybackSession(session, guildID)
 			}
 		}

@@ -84,7 +84,7 @@ func resumeLiveSong(s *discordgo.Session, i *discordgo.InteractionCreate, curren
 		logger.Warnf("Error checking live stream status: %v", err)
 
 	} else if !isStillLive {
-		logger.Infof("Live stream has ended, skipping to next song")
+		logger.Debugf("Live stream has ended, skipping to next song")
 
 		if err := queue.RemoveSong(i.GuildID, 0); err != nil {
 			discord.UpdateErrorEmbed(s, i, messages.T(i.GuildID).Music.PlaybackStartError)

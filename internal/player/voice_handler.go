@@ -45,7 +45,7 @@ func HandleVoiceState(session *discordgo.Session, vsu *discordgo.VoiceStateUpdat
 		if player != nil {
 			player.mu.Lock()
 			if player.VoiceChannelID != "" && player.VoiceChannelID != botVoiceChannelID {
-				logger.Infof("Bot was moved from %s to %s in guild: %s", player.VoiceChannelID, botVoiceChannelID, vsu.GuildID)
+				logger.Debugf("Bot was moved from %s to %s in guild: %s", player.VoiceChannelID, botVoiceChannelID, vsu.GuildID)
 				player.VoiceChannelID = botVoiceChannelID
 				player.mu.Unlock()
 				if err := queue.UpdateVoiceChannel(vsu.GuildID, botVoiceChannelID); err != nil {
@@ -101,7 +101,7 @@ func resumeForListener(session *discordgo.Session, vsu *discordgo.VoiceStateUpda
 	if err := queue.UpdateVoiceChannel(guildID, vsu.ChannelID); err != nil {
 		logger.Errorf("Failed to update queue voice channel before auto-resume: %v", err)
 	}
-	logger.Infof("Auto-resuming playback for guild: %s", guildID)
+	logger.Debugf("Auto-resuming playback for guild: %s", guildID)
 	resumeAutoPaused(session, guildID)
 }
 
@@ -146,7 +146,7 @@ func pauseForEmptyChannel(session *discordgo.Session, guildID, channelID string)
 		logger.Debugf("Auto-pause was turned off before the timer fired for guild: %s", guildID)
 		return
 	}
-	logger.Infof("Auto-pausing playback for guild: %s", guildID)
+	logger.Debugf("Auto-pausing playback for guild: %s", guildID)
 
 	player := GetPlayer(guildID)
 	if player == nil {

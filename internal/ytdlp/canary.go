@@ -111,7 +111,7 @@ func (versionmanager *VersionManager) RunCanary(version string) (passed bool, ne
 		result := versionmanager.testExtraction(binaryPath, id)
 		switch {
 		case result.success:
-			logger.Infof("Canary PASSED for %s", version)
+			logger.Debugf("Canary PASSED for %s", version)
 			return true, false
 		case result.network:
 			logger.Debugf("Canary network error for %s: %s", version, result.errMsg)
@@ -126,7 +126,7 @@ func (versionmanager *VersionManager) RunCanary(version string) (passed bool, ne
 			if !isFixedCanaryID(id) {
 				ringFailCount++
 				if ringFailCount >= ringFailureQuorum {
-					logger.Warnf("Canary FAILED for %s: %d recently played videos failed: %s", version, ringFailCount, lastFailure)
+					logger.Debugf("Canary FAILED for %s: %d recently played videos failed: %s", version, ringFailCount, lastFailure)
 					return false, false
 				}
 			}
@@ -134,17 +134,17 @@ func (versionmanager *VersionManager) RunCanary(version string) (passed bool, ne
 	}
 
 	if hardFailCount > 0 {
-		logger.Warnf("Canary FAILED for %s (%d/%d videos): %s", version, hardFailCount, len(ids), lastFailure)
+		logger.Debugf("Canary FAILED for %s (%d/%d videos): %s", version, hardFailCount, len(ids), lastFailure)
 		return false, false
 	}
 
 	if networkCount > 0 && inconclusiveCount == 0 {
 
-		logger.Warnf("All canary tests for %s hit network errors; version stays pending", version)
+		logger.Debugf("All canary tests for %s hit network errors; version stays pending", version)
 		return false, true
 	}
 
-	logger.Warnf("Canary inconclusive for %s — no testable videos but no evidence of binary breakage", version)
+	logger.Debugf("Canary inconclusive for %s — no testable videos but no evidence of binary breakage", version)
 	return true, false
 }
 

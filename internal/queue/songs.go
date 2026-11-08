@@ -80,7 +80,7 @@ func DeleteGuildData(guildID string) error {
 
 	InvalidateCache(guildID)
 	guild.InvalidateCaches(guildID)
-	logger.Infof("All data deleted for guild: %s", guildID)
+	logger.Debugf("All data deleted for guild: %s", guildID)
 	return nil
 }
 

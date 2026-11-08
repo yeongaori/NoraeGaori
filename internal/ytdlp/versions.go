@@ -134,7 +134,7 @@ func (versionmanager *VersionManager) RegisterVersion(version, path string) {
 	defer versionmanager.mu.Unlock()
 
 	if _, exists := versionmanager.state.Versions[version]; exists {
-		logger.Warnf("Version %s already registered, skipping", version)
+		logger.Debugf("Version %s already registered, skipping", version)
 		return
 	}
 
@@ -292,7 +292,7 @@ func (versionmanager *VersionManager) SaveSuccess(version, videoID string) {
 	}
 
 	if version == versionmanager.state.ActiveVersion && entry.Successes == stableSuccessCount {
-		logger.Infof("Active version %s reached %d successes, running cleanup", version, stableSuccessCount)
+		logger.Debugf("Active version %s reached %d successes, running cleanup", version, stableSuccessCount)
 		versionmanager.cleanupOldVersions()
 	}
 
@@ -337,7 +337,7 @@ func (versionmanager *VersionManager) SaveError(version, videoID string, errMsg 
 		Time:    now,
 	})
 
-	logger.Warnf("Saved error for version %s (video: %s), %d errors in window", version, videoID, len(entry.Errors))
+	logger.Debugf("Saved error for version %s (video: %s), %d errors in window", version, videoID, len(entry.Errors))
 	versionmanager.persist()
 }
 
@@ -529,7 +529,7 @@ func (versionmanager *VersionManager) cleanupOldVersions() {
 
 		dir := filepath.Dir(entry.Path)
 		if err := os.RemoveAll(dir); err != nil {
-			logger.Warnf("Failed to remove directory %s: %v", dir, err)
+			logger.Debugf("Failed to remove directory %s: %v", dir, err)
 		} else {
 			logger.Debugf("Removed version directory: %s", dir)
 		}
@@ -539,6 +539,6 @@ func (versionmanager *VersionManager) cleanupOldVersions() {
 
 	if len(toDelete) > 0 {
 		versionmanager.persist()
-		logger.Infof("Cleanup complete: removed %d version(s), %d remaining", len(toDelete), len(versionmanager.state.Versions))
+		logger.Debugf("Cleanup complete: removed %d version(s), %d remaining", len(toDelete), len(versionmanager.state.Versions))
 	}
 }

@@ -75,7 +75,7 @@ func (cs *crossfadeState) refetchNextStream(player *GuildPlayer) {
 
 		stream, err := player.startStream(ffmpeg.Args(freshURL, seekSec, normalization, tempo), collectTail)
 		if err != nil {
-			cs.scope.Debugf("refetched stream failed to start for guild %s: %v", guildID, err)
+			cs.scope.Warnf("refetched stream failed to start for guild %s: %v", guildID, err)
 			return
 		}
 		if cs.bAborted.Load() {
@@ -97,7 +97,7 @@ func (cs *crossfadeState) cancel(reason string) {
 	cs.abort()
 	cs.armed = false
 	cs.cancelled = true
-	cs.scope.Debugf("crossfade cancelled (%s)", reason)
+	cs.scope.Warnf("crossfade cancelled (%s)", reason)
 }
 
 func (cs *crossfadeState) pullBFrame() []int16 {

@@ -59,7 +59,7 @@ func parseOptionValue(opt *discordgo.ApplicationCommandOption, args []string, ar
 		intVal, err := strconv.ParseInt(args[argIndex], 10, 64)
 		if err != nil {
 
-			logger.Warnf("Invalid integer: %s", args[argIndex])
+			logger.Debugf("Invalid integer: %s", args[argIndex])
 			return nil, 0, false
 		}
 
@@ -166,7 +166,7 @@ func (mr *MessageResponse) resolveReply() *discordgo.Message {
 
 	recent, err := mr.Session.ChannelMessages(mr.ChannelID, 10, "", mr.OriginalMsgID, "")
 	if err != nil {
-		logger.Debugf("Failed to look up the reply to message %s: %v", mr.OriginalMsgID, err)
+		logger.Warnf("Failed to look up the reply to message %s: %v", mr.OriginalMsgID, err)
 		return nil
 	}
 

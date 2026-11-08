@@ -280,7 +280,7 @@ func playSingleSong(session *discordgo.Session, guildID string) playResult {
 		return playStop
 	}
 
-	logger.Infof("Starting playback: %s", p.song.Title)
+	logger.Debugf("Starting playback: %s", p.song.Title)
 
 	p.bitrate = lookupVoiceChannelBitrate(session, p.queue.VoiceChannelID)
 

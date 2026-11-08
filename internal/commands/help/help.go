@@ -106,7 +106,7 @@ func guildPrefix(guildID string) string {
 
 	stored, err := guild.GetPrefix(guildID)
 	if err != nil {
-		logger.Debugf("failed to get guild prefix for %s: %v", guildID, err)
+		logger.Warnf("failed to get guild prefix for %s: %v", guildID, err)
 		return prefix
 	}
 	if stored != "" {

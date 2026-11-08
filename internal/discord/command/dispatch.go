@@ -109,7 +109,7 @@ func commandPrefix(guildID string) string {
 	prefix := cfg.Prefix
 	if guildID != "" {
 		if guildPrefix, err := guild.GetPrefix(guildID); err != nil {
-			logger.Debugf("failed to get guild prefix for %s: %v", guildID, err)
+			logger.Warnf("failed to get guild prefix for %s: %v", guildID, err)
 		} else if guildPrefix != "" {
 			prefix = guildPrefix
 		}

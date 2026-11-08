@@ -194,7 +194,7 @@ func loadAdmins() error {
 
 	adminsConf.Store(&admins)
 
-	logger.Infof("Loaded %d admin users", len(admins.Admins))
+	logger.Debugf("Loaded %d admin users", len(admins.Admins))
 	return nil
 }
 

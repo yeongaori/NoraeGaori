@@ -26,7 +26,7 @@ var (
 )
 
 func extractWithProgress(name, archivePath string, found *mirror.Candidate, destination string) error {
-	logger.Infof("Extracting %s", name)
+	logger.Debugf("Extracting %s", name)
 	defer endProgress()
 
 	report := func(percent int) {
@@ -36,7 +36,7 @@ func extractWithProgress(name, archivePath string, found *mirror.Candidate, dest
 		return err
 	}
 
-	logger.Infof("Extracted %s", name)
+	logger.Debugf("Extracted %s", name)
 	return nil
 }
 

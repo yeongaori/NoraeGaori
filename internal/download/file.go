@@ -116,6 +116,6 @@ func SaveFile(url, destination string) (string, error) {
 		return "", fmt.Errorf("failed to flush file: %w", err)
 	}
 
-	logger.Infof("Downloaded %s", name)
+	logger.Debugf("Downloaded %s", name)
 	return hex.EncodeToString(hasher.Sum(nil)), nil
 }

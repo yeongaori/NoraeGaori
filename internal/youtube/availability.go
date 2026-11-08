@@ -282,7 +282,7 @@ func HasLiveStreamEnded(url string) (bool, error) {
 		(info.LiveStatus != nil && *info.LiveStatus == ytdlp.ExtractedLiveStatusIsLive)
 
 	if !isStillLive {
-		logger.Infof("Live stream has ended: %s", url)
+		logger.Debugf("Live stream has ended: %s", url)
 		return true, nil
 	}
 

@@ -149,7 +149,7 @@ func onVoiceStateUpdate(s *discordgo.Session, vsu *discordgo.VoiceStateUpdate) {
 }
 
 func onGuildDelete(s *discordgo.Session, g *discordgo.GuildDelete) {
-	logger.Infof("Bot removed from guild: %s - cleaning up data", g.ID)
+	logger.Debugf("Bot removed from guild: %s - cleaning up data", g.ID)
 
 	if err := player.Teardown(g.ID); err != nil {
 		logger.Debugf("Failed to stop player for guild %s: %v", g.ID, err)
@@ -158,7 +158,7 @@ func onGuildDelete(s *discordgo.Session, g *discordgo.GuildDelete) {
 	if err := queue.DeleteGuildData(g.ID); err != nil {
 		logger.Errorf("Failed to delete guild data for %s: %v", g.ID, err)
 	} else {
-		logger.Infof("Successfully cleaned up all data for guild: %s", g.ID)
+		logger.Debugf("Successfully cleaned up all data for guild: %s", g.ID)
 	}
 }
 

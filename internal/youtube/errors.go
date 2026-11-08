@@ -167,7 +167,7 @@ func (cb *circuitBreaker) canAttempt() error {
 			cb.mu.Lock()
 			cb.state = circuitHalfOpen
 			cb.mu.Unlock()
-			logger.Info("Cooldown complete, entering half-open state (testing)")
+			logger.Debug("Cooldown complete, entering half-open state (testing)")
 			return nil
 		}
 		return fmt.Errorf("%w, please wait %v before trying again",

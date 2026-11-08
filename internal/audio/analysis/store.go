@@ -28,7 +28,7 @@ func PruneTrackAnalysis() error {
 		cutoff, analysisVersion,
 	)
 	if err != nil {
-		logger.Warnf("Failed to prune stored analysis: %v", err)
+		logger.Debugf("Failed to prune stored analysis: %v", err)
 		return err
 	}
 
