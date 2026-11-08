@@ -67,10 +67,14 @@ func TestLatestReleaseRateLimited(t *testing.T) {
 	name := fmt.Sprintf("owner/limited-%d", time.Now().UnixNano())
 	gh.rateLimit(name)
 	repo := gh.repo(name)
+	warning := "GitHub API rate limit reached, reading " + name + " from github.com instead"
 
 	release, err := repo.FetchLatest("checksums.sha256", "checksums.sha256.sig")
 	if err != nil {
 		t.Fatalf("FetchLatest returned %v, want the github.com release", err)
+	}
+	if count := strings.Count(read(), warning); count != 1 {
+		t.Errorf("got %d warnings after the first call, want 1", count)
 	}
 	if _, err := repo.FetchLatest("checksums.sha256"); err != nil {
 		t.Fatalf("second FetchLatest returned %v, want nil", err)
@@ -91,7 +95,7 @@ func TestLatestReleaseRateLimited(t *testing.T) {
 	if len(release.Assets) != 4 {
 		t.Errorf("got %d assets, want the two listed builds, the checksum file and its signature", len(release.Assets))
 	}
-	if count := strings.Count(read(), "GitHub API rate limit reached, reading "+name+" from github.com instead"); count != 1 {
+	if count := strings.Count(read(), warning); count != 1 {
 		t.Errorf("warned %d times, want once per repository", count)
 	}
 }
