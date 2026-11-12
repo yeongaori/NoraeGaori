@@ -146,6 +146,9 @@ func checkPositions(guildID string, positions ...int) error {
 	if err != nil {
 		return fmt.Errorf("failed to load queue: %w", err)
 	}
+	if q == nil {
+		return fmt.Errorf("invalid positions")
+	}
 
 	for _, position := range positions {
 		if position < 0 || position >= len(q.Songs) {

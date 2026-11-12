@@ -13,6 +13,7 @@ import (
 	"noraegaori/internal/messages"
 	"noraegaori/internal/player"
 	"noraegaori/internal/queue"
+	"noraegaori/internal/recovery"
 	"noraegaori/internal/shutdown"
 	"noraegaori/internal/youtube"
 	ytdlpUpdater "noraegaori/internal/ytdlp"
@@ -47,7 +48,7 @@ func handlePurePlaylist(s *discordgo.Session, i *discordgo.InteractionCreate, pl
 	}
 
 	waitForConfirmation := confirmPlaylist(s, i, msg, playlistInfo, voiceChannelID)
-	go waitForConfirmation()
+	recovery.Go("playlist confirmation", waitForConfirmation)
 
 	err = s.MessageReactionAdd(msg.ChannelID, msg.ID, "✅")
 	if err != nil {
@@ -175,7 +176,7 @@ func handlePlaylistVideo(s *discordgo.Session, i *discordgo.InteractionCreate, v
 	}
 	timeoutEmbed := playlistTimeoutEmbed(i.GuildID, song, isDuplicate)
 	waitForConfirmation := confirmPlaylistRest(s, i, msg, analysis.PlaylistID, excludeVideoID, voiceChannelID, timeoutEmbed)
-	go waitForConfirmation()
+	recovery.Go("playlist confirmation", waitForConfirmation)
 
 	err = s.MessageReactionAdd(msg.ChannelID, msg.ID, "⬇️")
 	if err != nil {
@@ -243,7 +244,7 @@ func confirmPlaylist(s *discordgo.Session, originalInteraction *discordgo.Intera
 
 		discord.ClearPromptReactions(s, msg.ChannelID, msg.ID, "✅")
 
-		go addPlaylistSongs(s, originalInteraction, playlistInfo, voiceChannelID, msg.ID)
+		startPlaylistImport(s, originalInteraction, playlistInfo, voiceChannelID, msg.ID)
 	}
 
 	removeHandler := s.AddHandler(reactionHandler)
@@ -336,7 +337,7 @@ func confirmPlaylistRest(s *discordgo.Session, originalInteraction *discordgo.In
 
 		discord.ClearPromptReactions(s, msg.ChannelID, msg.ID, "⬇️")
 
-		go addPlaylistSongs(s, originalInteraction, playlistInfo, voiceChannelID, msg.ID)
+		startPlaylistImport(s, originalInteraction, playlistInfo, voiceChannelID, msg.ID)
 	}
 
 	removeHandler := s.AddHandler(reactionHandler)
@@ -353,6 +354,12 @@ func confirmPlaylistRest(s *discordgo.Session, originalInteraction *discordgo.In
 			discord.ClearPromptReactions(s, msg.ChannelID, msg.ID, "⬇️")
 		}
 	}
+}
+
+func startPlaylistImport(s *discordgo.Session, i *discordgo.InteractionCreate, playlistInfo *youtube.PlaylistInfo, voiceChannelID string, messageID string) {
+	recovery.Go("playlist import", func() {
+		addPlaylistSongs(s, i, playlistInfo, voiceChannelID, messageID)
+	})
 }
 
 func addPlaylistSongs(s *discordgo.Session, i *discordgo.InteractionCreate, playlistInfo *youtube.PlaylistInfo, voiceChannelID string, messageID string) {

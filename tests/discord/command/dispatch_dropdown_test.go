@@ -11,6 +11,24 @@ import (
 	"noraegaori/tests/testutil/discordtest"
 )
 
+func TestHandleInteractionSurvivesPanickingRoute(t *testing.T) {
+	hasRun := false
+	discord.RegisterRoute("dispatch_panic", func(_ *discordgo.Session, _ *discordgo.InteractionCreate, arguments []string) {
+		hasRun = true
+		_ = arguments[len(arguments)]
+	})
+
+	command.HandleInteraction(nil, &discordgo.InteractionCreate{Interaction: &discordgo.Interaction{
+		Type:    discordgo.InteractionMessageComponent,
+		GuildID: "guild",
+		Data:    discordgo.MessageComponentInteractionData{CustomID: "dispatch_panic:1"},
+	}})
+
+	if !hasRun {
+		t.Error("the panicking route did not run")
+	}
+}
+
 func TestHandleInteractionRoutes(t *testing.T) {
 	called := registerProbeCommand(t, "dispatch_probe", false)
 

@@ -38,7 +38,7 @@ func HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 	q, _ := queue.GetQueue(i.GuildID, true)
 
-	isFirstSong := len(q.Songs) == 1
+	isFirstSong := q != nil && len(q.Songs) == 1
 
 	var embed *discordgo.MessageEmbed
 	if isFirstSong {

@@ -79,6 +79,11 @@ func failingHandler(*discordgo.Session, *discordgo.InteractionCreate) error {
 	return errors.New("probe failed")
 }
 
+func panickingHandler(*discordgo.Session, *discordgo.InteractionCreate) error {
+	var member *discordgo.Member
+	return errors.New(member.Nick)
+}
+
 func TestHandleInteractionUnknown(t *testing.T) {
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 
@@ -217,6 +222,23 @@ func TestHandleMessageReportsFailure(t *testing.T) {
 		t.Fatalf("sent %v, want the error posted to the channel", sent)
 	}
 	wantChannelReply(t, &sent[0], "probe failed")
+}
+
+func TestHandleMessageReportsPanic(t *testing.T) {
+	session, requests := dispatchSession(t)
+	called := registerProbe(t, "probepanic", false, panickingHandler)
+	registerProbeAlias(t, "probepanic", "probepanic")
+
+	command.HandleMessage(session, textMessage("!probepanic"))
+
+	if !*called {
+		t.Error("the panicking handler did not run")
+	}
+	sent := requests()
+	if len(sent) != 1 || sent[0].Method != "POST" || sent[0].Path != "/channels/222/messages" {
+		t.Fatalf("sent %v, want the error posted to the channel", sent)
+	}
+	wantChannelReply(t, &sent[0], "probepanic panicked")
 }
 
 func TestHandleMessageQuietOnReply(t *testing.T) {

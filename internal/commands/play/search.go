@@ -13,6 +13,7 @@ import (
 	"noraegaori/internal/messages"
 	"noraegaori/internal/player"
 	"noraegaori/internal/queue"
+	"noraegaori/internal/recovery"
 	"noraegaori/internal/youtube"
 )
 
@@ -72,7 +73,9 @@ func HandleSearch(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	}
 	selection.panelMsg = searchMsg
 
-	go expireSearch(s, selection, cancelSelection)
+	recovery.Go("search expiry", func() {
+		expireSearch(s, selection, cancelSelection)
+	})
 
 	return nil
 }

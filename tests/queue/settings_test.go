@@ -296,6 +296,20 @@ func TestAddSongsBatchNoQueue(t *testing.T) {
 	}
 }
 
+func TestReorderNoQueue(t *testing.T) {
+	setupTestDB(t)
+
+	if err := queue.DeleteQueue("guild1"); err != nil {
+		t.Fatalf("DeleteQueue: %v", err)
+	}
+	if err := queue.SwapSongs("guild1", 0, 1); err == nil {
+		t.Error("SwapSongs on missing queue should error")
+	}
+	if err := queue.MoveSong("guild1", 0, 1); err == nil {
+		t.Error("MoveSong on missing queue should error")
+	}
+}
+
 func TestRemoveSongsByIDs(t *testing.T) {
 	setupTestDB(t)
 

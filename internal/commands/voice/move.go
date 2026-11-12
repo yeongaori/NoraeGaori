@@ -8,6 +8,7 @@ import (
 	"noraegaori/internal/logger"
 	"noraegaori/internal/player"
 	"noraegaori/internal/queue"
+	"noraegaori/internal/recovery"
 )
 
 var errQueueUpdate = errors.New("failed to update the queue voice channel")
@@ -40,11 +41,11 @@ func moveToChannel(s *discordgo.Session, guildID, channelID string) error {
 	}
 
 	if wasActive {
-		go func() {
+		recovery.Go("resume after move", func() {
 			if err := resumePlayback(s, guildID); err != nil {
 				logger.Errorf("Failed to resume playback after moving channels in guild %s: %v", guildID, err)
 			}
-		}()
+		})
 	}
 	return nil
 }

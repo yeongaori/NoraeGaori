@@ -47,6 +47,26 @@ func focusedQuery(value any, optionType discordgo.ApplicationCommandOptionType) 
 	return &discordgo.ApplicationCommandInteractionDataOption{Name: "query", Type: optionType, Value: value, Focused: true}
 }
 
+func TestHandleInteractionSurvivesPanickingAutocomplete(t *testing.T) {
+	hasRun := false
+	registerTestCommand(t, &command.Command{
+		Name: "probepanic",
+		AutocompleteHandler: func(request command.AutocompleteRequest) []*discordgo.ApplicationCommandOptionChoice {
+			hasRun = true
+			var choices []*discordgo.ApplicationCommandOptionChoice
+			return choices[:len(request.Query)+1]
+		},
+	})
+	session, _ := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
+	member := &discordgo.Member{User: &discordgo.User{ID: "member-user"}}
+
+	command.HandleInteraction(session, createAutocomplete("probepanic", member, nil, focusedQuery("abc", discordgo.ApplicationCommandOptionString)))
+
+	if !hasRun {
+		t.Error("the panicking autocomplete did not run")
+	}
+}
+
 func TestAutocompleteFocusedQuery(t *testing.T) {
 	received := registerChoiceProbe(t, "probecomplete", 30)
 	session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))

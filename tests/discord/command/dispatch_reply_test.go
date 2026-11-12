@@ -35,6 +35,7 @@ func TestHandleInteractionRefusals(t *testing.T) {
 		"an admin command for the owner":    {ic: slashProbe("probeadmin", owner), wantRun: "probeadmin", wantNoReply: true},
 		"a member command":                  {ic: slashProbe("probe", plain), wantRun: "probe", wantNoReply: true},
 		"a failing command":                 {ic: slashProbe("probefail", plain), wantRun: "probefail", wantReply: "probe failed"},
+		"a panicking command":               {ic: slashProbe("probepanic", plain), wantRun: "probepanic", wantReply: "probepanic panicked"},
 		"a ping":                            {ic: &discordgo.InteractionCreate{Interaction: &discordgo.Interaction{Type: discordgo.InteractionPing, GuildID: replyGuildID}}, wantNoReply: true},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -42,6 +43,7 @@ func TestHandleInteractionRefusals(t *testing.T) {
 				"probe":      registerProbeCommand(t, "probe", false),
 				"probeadmin": registerProbeCommand(t, "probeadmin", true),
 				"probefail":  registerProbe(t, "probefail", false, failingHandler),
+				"probepanic": registerProbe(t, "probepanic", false, panickingHandler),
 			}
 			session, requests := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
 			discordtest.AddGuild(t, session, replyGuildID)

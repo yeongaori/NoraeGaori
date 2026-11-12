@@ -11,6 +11,7 @@ import (
 	"noraegaori/internal/guild"
 	"noraegaori/internal/logger"
 	"noraegaori/internal/messages"
+	"noraegaori/internal/recovery"
 )
 
 var beforeCommand atomic.Pointer[func(guildID string)]
@@ -29,16 +30,22 @@ func runBeforeCommand(guildID string) {
 
 func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if i.Type == discordgo.InteractionApplicationCommandAutocomplete {
-		HandleAutocomplete(s, i)
+		_ = recovery.Run("autocomplete", func() error {
+			HandleAutocomplete(s, i)
+			return nil
+		})
 		return
 	}
 
 	runBeforeCommand(i.GuildID)
 
 	if i.Type == discordgo.InteractionMessageComponent || i.Type == discordgo.InteractionModalSubmit {
-		if !discord.HandleComponentRoute(s, i) && i.Type == discordgo.InteractionMessageComponent {
-			discord.HandleDropdownPick(s, i)
-		}
+		_ = recovery.Run("component", func() error {
+			if !discord.HandleComponentRoute(s, i) && i.Type == discordgo.InteractionMessageComponent {
+				discord.HandleDropdownPick(s, i)
+			}
+			return nil
+		})
 		return
 	}
 
@@ -68,7 +75,9 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	logger.Debugf("Executing command: %s (user: %s, guild: %s)",
 		cmdName, member.User.Username, i.GuildID)
 
-	if err := cmd.Handler(s, i); err != nil {
+	if err := recovery.Run(cmdName, func() error {
+		return cmd.Handler(s, i)
+	}); err != nil {
 		logger.Errorf("Command %s failed: %v", cmdName, err)
 		discord.RespondErrorEmbed(s, i, fmt.Sprintf(messages.T(i.GuildID).Errors.CommandExecutionError, err))
 	}
@@ -155,7 +164,9 @@ func runTextCommand(s *discordgo.Session, m *discordgo.MessageCreate, member *di
 
 	defer discord.RegisterResponder(pseudoInteraction.Token, messageResponder)()
 
-	if err := cmd.Handler(s, pseudoInteraction); err != nil {
+	if err := recovery.Run(cmd.Name, func() error {
+		return cmd.Handler(s, pseudoInteraction)
+	}); err != nil {
 		logger.Errorf("Text command %s failed: %v", cmd.Name, err)
 
 		if messageResponder.Message == nil {

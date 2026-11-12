@@ -9,6 +9,7 @@ import (
 
 	"noraegaori/internal/logger"
 	"noraegaori/internal/queue"
+	"noraegaori/internal/recovery"
 	"noraegaori/internal/youtube"
 )
 
@@ -108,7 +109,7 @@ func StartBackfill(guildID string, bitrate int) {
 	backfillWorkers[guildID] = worker
 	backfillWorkersMu.Unlock()
 
-	go func() {
+	recovery.Go("analysis backfill", func() {
 		defer func() {
 			backfillWorkersMu.Lock()
 			if current, exists := backfillWorkers[guildID]; exists && current.generation == worker.generation {
@@ -118,7 +119,7 @@ func StartBackfill(guildID string, bitrate int) {
 			cancel()
 		}()
 		runAnalysisBackfill(ctx, guildID, bitrate)
-	}()
+	})
 }
 
 func StopAnalysisBackfill(guildID string) {

@@ -8,6 +8,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/logger"
 	"noraegaori/internal/messages"
+	"noraegaori/internal/recovery"
 )
 
 func replyVoteInProgress(s *discordgo.Session, i *discordgo.InteractionCreate, title string, snapshot voteSnapshot) {
@@ -75,7 +76,9 @@ func Start(s *discordgo.Session, i *discordgo.InteractionCreate, request *Reques
 		return nil
 	}
 
-	go awaitVoteOutcome(s, session)
+	recovery.Go("vote outcome", func() {
+		awaitVoteOutcome(s, session)
+	})
 	if tally.passed {
 		passVote(s, session, tally)
 	}
