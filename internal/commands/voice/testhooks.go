@@ -3,6 +3,7 @@
 package voice
 
 var HookCancelSkipVotes = &cancelSkipVotes
+var HookConfirmVoiceAction = confirmVoiceAction
 var HookIsPlaybackActive = &isPlaybackActive
 var HookJoinVoice = &joinVoice
 var HookResumePlayback = &resumePlayback

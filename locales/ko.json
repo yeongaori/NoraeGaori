@@ -408,7 +408,16 @@
     "switch_failed_queue": "대기열 업데이트 중 오류가 발생했습니다.",
     "switch_success_title": "전환 완료",
     "switch_success_desc": "음성 채널을 전환했습니다.",
-    "switch_success_channel": "**%s**(으)로 이동했습니다."
+    "switch_success_channel": "**%s**(으)로 이동했습니다.",
+    "confirm_title": "사용 중인 봇",
+    "confirm_leave_desc": "**%s**에서 듣고 있는 멤버가 있습니다. 그래도 연결을 끊을까요?",
+    "confirm_move_desc": "**%s**에서 듣고 있는 멤버가 있습니다. 그래도 **%s**(으)로 옮길까요?",
+    "confirm_leave_button": "연결 끊기",
+    "confirm_move_button": "옮기기",
+    "confirm_cancel_button": "취소",
+    "confirm_cancelled": "취소되었습니다.",
+    "confirm_stale": "요청 이후 봇이 이동했습니다.",
+    "connect_denied": "해당 채널에 접속할 권한이 없습니다."
   },
 
   "admin": {

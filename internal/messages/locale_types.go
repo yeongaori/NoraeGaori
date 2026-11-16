@@ -194,6 +194,15 @@ type VoiceMessages struct {
 	SwitchSuccessTitle   string `json:"switch_success_title"`
 	SwitchSuccessDesc    string `json:"switch_success_desc"`
 	SwitchSuccessChannel string `json:"switch_success_channel"`
+	ConfirmTitle         string `json:"confirm_title"`
+	ConfirmLeaveDesc     string `json:"confirm_leave_desc"`
+	ConfirmMoveDesc      string `json:"confirm_move_desc"`
+	ConfirmLeaveButton   string `json:"confirm_leave_button"`
+	ConfirmMoveButton    string `json:"confirm_move_button"`
+	ConfirmCancelButton  string `json:"confirm_cancel_button"`
+	ConfirmCancelled     string `json:"confirm_cancelled"`
+	ConfirmStale         string `json:"confirm_stale"`
+	ConnectDenied        string `json:"connect_denied"`
 }
 
 type AdminMessages struct {

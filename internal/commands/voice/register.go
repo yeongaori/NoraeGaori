@@ -1,6 +1,7 @@
 package voice
 
 import (
+	"noraegaori/internal/discord"
 	"noraegaori/internal/discord/command"
 	"noraegaori/internal/messages"
 
@@ -8,6 +9,7 @@ import (
 )
 
 func Register(cmd func(string) messages.CommandStrings) {
+	discord.RegisterRoute(voiceConfirmRoute, confirmVoiceAction)
 	command.RegisterLocalized(cmd, &command.Command{
 		Name:    "join",
 		Options: []*discordgo.ApplicationCommandOption{command.VoiceChannelOption(cmd("join").Options["channel"])},

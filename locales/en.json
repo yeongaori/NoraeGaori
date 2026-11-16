@@ -408,7 +408,16 @@
     "switch_failed_queue": "An error occurred while updating the queue.",
     "switch_success_title": "Switched",
     "switch_success_desc": "Switched voice channels.",
-    "switch_success_channel": "Moved to **%s**."
+    "switch_success_channel": "Moved to **%s**.",
+    "confirm_title": "Bot In Use",
+    "confirm_leave_desc": "Members are listening in **%s**. Disconnect the bot anyway?",
+    "confirm_move_desc": "Members are listening in **%s**. Move the bot to **%s** anyway?",
+    "confirm_leave_button": "Disconnect",
+    "confirm_move_button": "Move",
+    "confirm_cancel_button": "Cancel",
+    "confirm_cancelled": "Cancelled.",
+    "confirm_stale": "The bot has moved since this was asked.",
+    "connect_denied": "You do not have permission to connect to that channel."
   },
 
   "admin": {

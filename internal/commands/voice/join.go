@@ -15,6 +15,9 @@ func HandleJoin(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Voice.EnterVoiceChannel)
 		return nil
 	}
+	if !guardVoiceAccess(s, i, moveAction, voiceChannelID, botVoiceChannelID(s, i.GuildID)) {
+		return nil
+	}
 
 	discord.DeferResponse(s, i)
 

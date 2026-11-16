@@ -12,18 +12,27 @@ import (
 var cancelSkipVotes = vote.CancelSkipVotes
 
 func HandleLeave(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	if botVoiceChannelID(s, i.GuildID) == "" {
+	botChannelID := botVoiceChannelID(s, i.GuildID)
+	if botChannelID == "" {
 		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Voice.BotNotInVoice)
+		return nil
+	}
+	if !guardVoiceAccess(s, i, leaveAction, "", botChannelID) {
 		return nil
 	}
 
 	discord.DeferResponse(s, i)
+	leaveVoice(s, i)
+	return nil
+}
+
+func leaveVoice(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	cancelSkipVotes(i.GuildID)
 
 	if err := suspendPlayback(i.GuildID); err != nil {
 		logger.Errorf("Failed to leave voice for guild %s: %v", i.GuildID, err)
 		_ = discord.UpdateResponseEmbed(s, i, messages.CreateErrorEmbed(messages.T(i.GuildID).Voice.LeaveFailedTitle, messages.T(i.GuildID).Voice.LeaveFailedDesc))
-		return nil
+		return
 	}
 
 	description := messages.T(i.GuildID).Voice.LeaveSuccessDesc
@@ -31,7 +40,6 @@ func HandleLeave(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		description = messages.T(i.GuildID).Voice.LeavePausedDesc
 	}
 	_ = discord.UpdateResponseEmbed(s, i, messages.CreateSuccessEmbed(messages.T(i.GuildID).Voice.LeaveSuccessTitle, description))
-	return nil
 }
 
 func hasQueuedSongs(guildID string) bool {
