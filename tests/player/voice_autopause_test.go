@@ -243,6 +243,8 @@ func TestHandleVoiceStateCachesBotLookup(t *testing.T) {
 	preparedPlayer(t, guildID, 1)
 	setAutoPause(t, guildID, true)
 	t.Cleanup(func() { player.HookCancelAutoPauseTimer(guildID) })
+	player.HookBotFlags.Clear()
+	t.Cleanup(player.HookBotFlags.Clear)
 
 	var lookups atomic.Int32
 	session, _ := discordtest.StubAPIResponder(t, func(r *http.Request) (int, string) {

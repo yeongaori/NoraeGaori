@@ -91,6 +91,7 @@ var HookAutoPausedChannel = autoPausedChannel
 var HookAutoPausedChannels = &autoPausedChannels
 var HookAwaitingDiscord = &awaitingDiscord
 var HookAwaitingDiscordMu = &awaitingDiscordMu
+var HookBotFlags = &botFlags
 var HookCancelAutoPauseTimer = cancelAutoPauseTimer
 var HookClassifyDrain = classifyDrain
 var HookClearAnnounced = clearAnnounced
