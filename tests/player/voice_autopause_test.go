@@ -59,6 +59,13 @@ func countAutoResumes(t *testing.T) *atomic.Int32 {
 	return &resumes
 }
 
+func hasAutoPauseTimer(guildID string) bool {
+	player.HookAutoPauseTimersMu.Lock()
+	defer player.HookAutoPauseTimersMu.Unlock()
+	_, hasTimer := (*player.HookAutoPauseTimers)[guildID]
+	return hasTimer
+}
+
 func autoPausedPlayer(t *testing.T, guildID, channelID string) *player.GuildPlayer {
 	t.Helper()
 
@@ -148,7 +155,6 @@ func TestHandleVoiceStateIgnoresJoins(t *testing.T) {
 func ignoredJoinCases() []ignoredJoinCase {
 	return []ignoredJoinCase{
 		{name: "a bot account", userID: "bot-other", channelID: "voice", wantRemember: true},
-		{name: "an unknown user", userID: "ghost", channelID: "voice", wantRemember: true},
 		{
 			name: "an empty queue", userID: "listener", channelID: "voice",
 			prepare: func(t *testing.T, guildID string, _ *player.GuildPlayer) {
@@ -197,13 +203,120 @@ func TestHandleVoiceStateStartsTimer(t *testing.T) {
 
 			player.HandleVoiceState(session, joinEvent(guildID, "listener", ""))
 
-			player.HookAutoPauseTimersMu.Lock()
-			_, hasTimer := (*player.HookAutoPauseTimers)[guildID]
-			player.HookAutoPauseTimersMu.Unlock()
-			if hasTimer != isEnabled {
+			if hasTimer := hasAutoPauseTimer(guildID); hasTimer != isEnabled {
 				t.Errorf("auto-pause timer started = %v, want %v", hasTimer, isEnabled)
 			}
 		})
+	}
+}
+
+func TestHandleVoiceStateCountsListeners(t *testing.T) {
+	cases := []struct {
+		name       string
+		voiceState *discordgo.VoiceState
+	}{
+		{name: "a listener the lookup fails for", voiceState: discordtest.VoiceState("", "ghost", "voice", false)},
+		{name: "an unknown user without member data", voiceState: &discordgo.VoiceState{UserID: "ghost", ChannelID: "voice"}},
+	}
+
+	for i := range cases {
+		testCase := &cases[i]
+		t.Run(testCase.name, func(t *testing.T) {
+			guildID := fmt.Sprintf("autopause-listeners-%d", i)
+			preparedPlayer(t, guildID, 1)
+			setAutoPause(t, guildID, true)
+			t.Cleanup(func() { player.HookCancelAutoPauseTimer(guildID) })
+			testCase.voiceState.GuildID = guildID
+			session := voiceSession(t, guildID, discordtest.VoiceState(guildID, "bot", "voice", true), testCase.voiceState)
+
+			player.HandleVoiceState(session, joinEvent(guildID, "listener", ""))
+
+			if hasTimer := hasAutoPauseTimer(guildID); hasTimer {
+				t.Errorf("auto-pause timer started = %v, want %v", hasTimer, false)
+			}
+		})
+	}
+}
+
+func TestHandleVoiceStateCachesBotLookup(t *testing.T) {
+	guildID := "autopause-lookup"
+	preparedPlayer(t, guildID, 1)
+	setAutoPause(t, guildID, true)
+	t.Cleanup(func() { player.HookCancelAutoPauseTimer(guildID) })
+
+	var lookups atomic.Int32
+	session, _ := discordtest.StubAPIResponder(t, func(r *http.Request) (int, string) {
+		if r.URL.Path == "/users/lookup-once" {
+			lookups.Add(1)
+		}
+		return respondAsDiscord(r)
+	})
+	session.State.User = &discordgo.User{ID: "bot"}
+	discordtest.AddGuild(t, session, guildID,
+		discordtest.VoiceState(guildID, "bot", "voice", true),
+		&discordgo.VoiceState{GuildID: guildID, UserID: "lookup-once", ChannelID: "voice"})
+
+	player.HandleVoiceState(session, joinEvent(guildID, "listener", ""))
+	player.HandleVoiceState(session, joinEvent(guildID, "listener", ""))
+
+	if got := lookups.Load(); got != 1 {
+		t.Errorf("looked up %s %d times, want 1", "lookup-once", got)
+	}
+	if hasTimer := hasAutoPauseTimer(guildID); hasTimer {
+		t.Errorf("auto-pause timer started = %v, want %v", hasTimer, false)
+	}
+}
+
+func TestHandleVoiceStateTrustsKnownBots(t *testing.T) {
+	cases := []struct {
+		name       string
+		voiceState *discordgo.VoiceState
+		member     *discordgo.Member
+	}{
+		{name: "a bot by member data", voiceState: discordtest.VoiceState("", "helper", "voice", true)},
+		{
+			name:       "a bot in the member cache",
+			voiceState: &discordgo.VoiceState{UserID: "helper", ChannelID: "voice"},
+			member:     &discordgo.Member{User: &discordgo.User{ID: "helper", Bot: true}},
+		},
+	}
+
+	for i := range cases {
+		testCase := &cases[i]
+		t.Run(testCase.name, func(t *testing.T) {
+			guildID := fmt.Sprintf("autopause-known-bot-%d", i)
+			preparedPlayer(t, guildID, 1)
+			setAutoPause(t, guildID, true)
+			t.Cleanup(func() { player.HookCancelAutoPauseTimer(guildID) })
+			testCase.voiceState.GuildID = guildID
+			session := voiceSession(t, guildID, discordtest.VoiceState(guildID, "bot", "voice", true), testCase.voiceState)
+			if testCase.member != nil {
+				testCase.member.GuildID = guildID
+				if err := session.State.MemberAdd(testCase.member); err != nil {
+					t.Fatalf("failed to seed member %s: %v", testCase.member.User.ID, err)
+				}
+			}
+
+			player.HandleVoiceState(session, joinEvent(guildID, "listener", ""))
+
+			if hasTimer := hasAutoPauseTimer(guildID); !hasTimer {
+				t.Errorf("auto-pause timer started = %v, want %v", hasTimer, true)
+			}
+		})
+	}
+}
+
+func TestHandleVoiceStateResumesForUnknownUser(t *testing.T) {
+	guildID := "autoresume-unknown"
+	autoPausedPlayer(t, guildID, "voice")
+	resumes := countAutoResumes(t)
+	voiceState := &discordgo.VoiceState{GuildID: guildID, UserID: "ghost", ChannelID: "voice"}
+	session := voiceSession(t, guildID, voiceState)
+
+	player.HandleVoiceState(session, &discordgo.VoiceStateUpdate{VoiceState: voiceState})
+
+	if got := resumes.Load(); got != 1 {
+		t.Errorf("resumed %d times, want 1", got)
 	}
 }
 

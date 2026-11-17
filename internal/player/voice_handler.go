@@ -17,6 +17,7 @@ var (
 	autoPauseTimers    = make(map[string]*time.Timer)
 	autoPausedChannels = make(map[string]string)
 	autoPauseTimersMu  sync.Mutex
+	botFlags           sync.Map
 )
 
 func HandleVoiceState(session *discordgo.Session, vsu *discordgo.VoiceStateUpdate) {
@@ -59,7 +60,7 @@ func HandleVoiceState(session *discordgo.Session, vsu *discordgo.VoiceStateUpdat
 
 	humanCount := 0
 	for _, vs := range guild.VoiceStates {
-		if vs.ChannelID == botVoiceChannelID && isHumanListener(session, vs.UserID) {
+		if vs.ChannelID == botVoiceChannelID && isHumanListener(session, vs) {
 			humanCount++
 		}
 	}
@@ -78,12 +79,25 @@ func HandleVoiceState(session *discordgo.Session, vsu *discordgo.VoiceStateUpdat
 	}
 }
 
-func isHumanListener(session *discordgo.Session, userID string) bool {
-	if userID == session.State.User.ID {
+func isHumanListener(session *discordgo.Session, voiceState *discordgo.VoiceState) bool {
+	if voiceState.UserID == session.State.User.ID {
 		return false
 	}
-	user, err := session.User(userID)
-	return err == nil && !user.Bot
+	if voiceState.Member != nil && voiceState.Member.User != nil {
+		return !voiceState.Member.User.Bot
+	}
+	if member, err := session.State.Member(voiceState.GuildID, voiceState.UserID); err == nil && member.User != nil {
+		return !member.User.Bot
+	}
+	if isBot, ok := botFlags.Load(voiceState.UserID); ok {
+		return !isBot.(bool)
+	}
+	user, err := session.User(voiceState.UserID)
+	if err != nil {
+		return true
+	}
+	botFlags.Store(voiceState.UserID, user.Bot)
+	return !user.Bot
 }
 
 func resumeForListener(session *discordgo.Session, vsu *discordgo.VoiceStateUpdate) {
@@ -91,7 +105,7 @@ func resumeForListener(session *discordgo.Session, vsu *discordgo.VoiceStateUpda
 	if vsu.ChannelID == "" || autoPausedChannel(guildID) != vsu.ChannelID {
 		return
 	}
-	if !isHumanListener(session, vsu.UserID) || !shouldAutoResume(guildID) {
+	if !isHumanListener(session, vsu.VoiceState) || !shouldAutoResume(guildID) {
 		return
 	}
 	if !claimAutoPause(guildID, vsu.ChannelID) || !hasPausedSongs(guildID) {
