@@ -2,6 +2,7 @@ package youtube
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -345,6 +346,10 @@ func CheckAvailability(url string) (available bool, isLive bool, err error) {
 	available, isLive, err = client.CheckAvailability(url)
 
 	if err != nil {
+		var videoErr *VideoError
+		if errors.As(err, &videoErr) && videoErr.Restriction.IsDefinitive() {
+			return false, false, videoErr
+		}
 
 		logger.Warnf("Innertube failed, falling back to yt-dlp: %v", err)
 

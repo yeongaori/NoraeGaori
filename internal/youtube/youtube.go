@@ -2,6 +2,7 @@ package youtube
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -165,6 +166,11 @@ func GetVideoInfo(guildID, url, requesterName, requesterID string) (*Song, error
 	if innertubeErr == nil {
 
 		return song, nil
+	}
+
+	var videoErr *VideoError
+	if errors.As(innertubeErr, &videoErr) && videoErr.Restriction.IsDefinitive() {
+		return nil, videoErr
 	}
 
 	logger.Warnf("Innertube failed, falling back to yt-dlp: %v", innertubeErr)

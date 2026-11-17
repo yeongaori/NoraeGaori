@@ -4,6 +4,9 @@ import "strings"
 
 func IsDefinitiveUnavailable(errorMsg string) bool {
 	errorLower := strings.ToLower(errorMsg)
+	if strings.Contains(errorLower, "requested format is not available") {
+		return false
+	}
 	definitivePatterns := []string{
 		"video unavailable",
 		"not available",

@@ -13,8 +13,9 @@ import (
 )
 
 type VideoError struct {
-	Message string
-	Reason  string
+	Message     string
+	Reason      string
+	Restriction Restriction
 }
 
 func (e *VideoError) Error() string {

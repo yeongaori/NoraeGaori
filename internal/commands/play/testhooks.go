@@ -71,6 +71,10 @@ func (c *searchSelection) HookPanelMsg() **discordgo.Message {
 	return &c.panelMsg
 }
 
+func HookSendSkipNotice(s *discordgo.Session, guildID, channelID, title, url, errorText string, restriction youtube.Restriction) {
+	sendSkipNotice(s, guildID, channelID, []skippedSong{{Title: title, URL: url, Error: errorText, Restriction: restriction}})
+}
+
 func HookEnqueueAvailable(guildID string, songs []*youtube.Song, results []youtube.BatchResult) (int, int, []string) {
 	outcome := enqueueAvailable(guildID, songs, results, false)
 	skippedURLs := make([]string, 0, len(outcome.skippedSongs))

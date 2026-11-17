@@ -56,6 +56,22 @@ func TestCheckBatchOrdersByIndex(t *testing.T) {
 	}
 }
 
+func TestCheckBatchKeepsRestriction(t *testing.T) {
+	pool := newTestPool(1, func(string) (bool, bool, error) {
+		return false, false, &youtube.VideoError{Restriction: youtube.RestrictionMembersOnly}
+	})
+	defer pool.Close()
+
+	results := pool.CheckBatch(testJobs("a"))
+
+	if len(results) != 1 {
+		t.Fatalf("got %d results, want %d", len(results), 1)
+	}
+	if results[0].Restriction != youtube.RestrictionMembersOnly {
+		t.Errorf("Restriction = %v, want %v", results[0].Restriction, youtube.RestrictionMembersOnly)
+	}
+}
+
 func TestCheckBatchEmpty(t *testing.T) {
 	pool := newTestPool(2, alwaysAvailable)
 	defer pool.Close()

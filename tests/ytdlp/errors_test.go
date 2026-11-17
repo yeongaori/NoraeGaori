@@ -18,15 +18,16 @@ func checkErrorClassifier(t *testing.T, name string, classify func(message strin
 
 func TestIsDefinitiveUnavailable(t *testing.T) {
 	checkErrorClassifier(t, "IsDefinitiveUnavailable", ytdlp.IsDefinitiveUnavailable, map[string]bool{
-		"ERROR: Video unavailable":                    true,
-		"This is a private video":                     true,
-		"Sign in to confirm your age":                 true,
-		"Video is not available in your country":      true,
-		"members-only content":                        true,
-		"This video has been removed by the uploader": true,
-		"HTTP Error 429: Too Many Requests":           false,
-		"connection refused":                          false,
-		"":                                            false,
+		"ERROR: Video unavailable":                                true,
+		"This is a private video":                                 true,
+		"Sign in to confirm your age":                             true,
+		"Video is not available in your country":                  true,
+		"members-only content":                                    true,
+		"This video has been removed by the uploader":             true,
+		"HTTP Error 429: Too Many Requests":                       false,
+		"connection refused":                                      false,
+		"ERROR: [youtube] abc: Requested format is not available": false,
+		"": false,
 	})
 }
 

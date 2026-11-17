@@ -1,6 +1,7 @@
 package youtube
 
 import (
+	"errors"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -26,6 +27,7 @@ type BatchResult struct {
 	Available   bool
 	IsLive      bool
 	Error       string
+	Restriction Restriction
 	ShouldRetry bool
 	BatchID     uint64
 }
@@ -115,6 +117,10 @@ func (p *AvailabilityPool) worker(id int) {
 			IsLive:      isLive,
 			ShouldRetry: false,
 			BatchID:     job.BatchID,
+		}
+		var videoErr *VideoError
+		if errors.As(err, &videoErr) {
+			result.Restriction = videoErr.Restriction
 		}
 
 		if err != nil && p.retryIfNeeded(scope, &job, err, &result) {

@@ -2,7 +2,10 @@
 
 package youtube
 
-import "time"
+import (
+	"net/http"
+	"time"
+)
 
 const HookAvailabilityCacheCapacity = availabilityCacheCapacity
 const HookAvailabilityCacheTTL = availabilityCacheTTL
@@ -18,6 +21,7 @@ type HookCircuitBreakerFields struct {
 
 type HookInnertubeClientFields struct {
 	ClientName string
+	HTTPClient *http.Client
 }
 
 var HookAvailabilityCacheEntries = &availabilityCacheEntries
@@ -35,6 +39,7 @@ var HookInnertubeOnce = &innertubeOnce
 var HookLastThumbnail = lastThumbnail
 var HookLoadAvailability = loadAvailability
 var HookNewAvailabilityPool = newAvailabilityPool
+var HookParseRestriction = parseRestriction
 var HookParseYouTubeURL = parseYouTubeURL
 var HookResetCache = resetCache
 var HookRunYtDlpAvailability = &runYtDlpAvailability
@@ -48,7 +53,7 @@ func HookCreateCircuitBreaker(fields *HookCircuitBreakerFields) *circuitBreaker 
 }
 
 func HookCreateInnertubeClient(fields *HookInnertubeClientFields) *InnertubeClient {
-	return &InnertubeClient{clientName: fields.ClientName}
+	return &InnertubeClient{clientName: fields.ClientName, httpClient: fields.HTTPClient}
 }
 
 func (a *availabilityCacheEntry) HookTimestamp() *time.Time {

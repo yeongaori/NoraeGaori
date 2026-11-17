@@ -8,13 +8,15 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/logger"
 	"noraegaori/internal/messages"
+	"noraegaori/internal/youtube"
 )
 
 type skippedSong struct {
-	Title     string
-	URL       string
-	Thumbnail string
-	Error     string
+	Title       string
+	URL         string
+	Thumbnail   string
+	Error       string
+	Restriction youtube.Restriction
 }
 
 func sendSkipNotice(s *discordgo.Session, guildID, channelID string, skipped []skippedSong) {
@@ -31,7 +33,11 @@ func sendSkipNotice(s *discordgo.Session, guildID, channelID string, skipped []s
 		} else {
 			titlePart = "**" + messages.EscapeMarkdown(sk.Title) + "**"
 		}
-		lines = append(lines, fmt.Sprintf("• %s — %s", titlePart, cleanErrorMessage(guildID, sk.Error)))
+		label := cleanErrorMessage(guildID, sk.Error)
+		if sk.Restriction.IsDefinitive() {
+			label = restrictionLabel(guildID, sk.Restriction)
+		}
+		lines = append(lines, fmt.Sprintf("• %s — %s", titlePart, label))
 	}
 
 	for _, chunk := range discord.SplitLinesIntoChunks(lines, 3900) {
@@ -44,6 +50,27 @@ func sendSkipNotice(s *discordgo.Session, guildID, channelID string, skipped []s
 			logger.Errorf("Failed to send batched skip notification: %v", err)
 		}
 	}
+}
+
+func restrictionLabel(guildID string, restriction youtube.Restriction) string {
+	music := &messages.T(guildID).Music
+	switch restriction {
+	case youtube.RestrictionPrivateVideo:
+		return music.ErrorPrivateVideo
+	case youtube.RestrictionAgeRestricted:
+		return music.ErrorAgeRestricted
+	case youtube.RestrictionGeoRestricted:
+		return music.ErrorGeoRestricted
+	case youtube.RestrictionMembersOnly:
+		return music.ErrorMembersOnly
+	case youtube.RestrictionPremiumOnly:
+		return music.ErrorPremiumOnly
+	case youtube.RestrictionCopyright:
+		return music.ErrorCopyright
+	case youtube.RestrictionDeletedVideo:
+		return music.ErrorDeletedVideo
+	}
+	return music.ErrorUnavailable
 }
 
 func cleanErrorMessage(guildID, errorMsg string) string {

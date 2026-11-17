@@ -4,13 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"regexp"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -215,10 +213,14 @@ func (c *InnertubeClient) CheckAvailability(url string) (bool, bool, error) {
 	}
 
 	reason := resp.PlayabilityStatus.Reason
-	errorMsg := classifyRestriction("", status, reason, resp.PlayabilityStatus.Messages)
+	restriction := parseRestriction(status, reason, resp.PlayabilityStatus.Messages)
 
 	logger.Debugf("Video unavailable: %s (status: %s, reason: %s)", videoID, status, reason)
-	return false, false, errors.New(errorMsg)
+	return false, false, &VideoError{
+		Message:     restriction.Message("", reason),
+		Reason:      reason,
+		Restriction: restriction,
+	}
 }
 
 func (c *InnertubeClient) GetVideoInfo(guildID, url, requesterName, requesterID string) (*Song, error) {
@@ -241,12 +243,10 @@ func (c *InnertubeClient) GetVideoInfo(guildID, url, requesterName, requesterID 
 	status := resp.PlayabilityStatus.Status
 	if status != "OK" {
 		reason := resp.PlayabilityStatus.Reason
-		errorMsg := classifyRestriction(guildID, status, reason, resp.PlayabilityStatus.Messages)
+		restriction := parseRestriction(status, reason, resp.PlayabilityStatus.Messages)
+		errorMsg := restriction.Message(guildID, reason)
 		logger.Debugf("Video unavailable: %s (%v)", errorMsg, duration)
-		return nil, &VideoError{
-			Message: errorMsg,
-			Reason:  reason,
-		}
+		return nil, &VideoError{Message: errorMsg, Reason: reason, Restriction: restriction}
 	}
 
 	vd := &resp.VideoDetails
@@ -312,7 +312,7 @@ func (c *InnertubeClient) CheckVideoAvailability(guildID, url string) (*Availabi
 	}
 
 	reason := resp.PlayabilityStatus.Reason
-	errorMsg := classifyRestriction(guildID, status, reason, resp.PlayabilityStatus.Messages)
+	errorMsg := parseRestriction(status, reason, resp.PlayabilityStatus.Messages).Message(guildID, reason)
 
 	logger.Debugf("Video unavailable: %s (%v)", errorMsg, duration)
 	return &AvailabilityResult{
@@ -320,63 +320,4 @@ func (c *InnertubeClient) CheckVideoAvailability(guildID, url string) (*Availabi
 		Error:     errorMsg,
 		IsLive:    false,
 	}, nil
-}
-
-func classifyRestriction(guildID, status, reason string, msgs []string) string {
-	reasonLower := strings.ToLower(reason)
-	messagesStr := strings.ToLower(strings.Join(msgs, " "))
-	yt := &messages.T(guildID).YouTube
-
-	switch status {
-	case "LOGIN_REQUIRED":
-
-		if strings.Contains(reasonLower, "private") || strings.Contains(messagesStr, "private") {
-			return yt.ErrorPrivateVideo
-		}
-
-		return yt.ErrorAgeRestricted
-
-	case "UNPLAYABLE":
-
-		if strings.Contains(reasonLower, "country") || strings.Contains(reasonLower, "region") {
-			return yt.ErrorGeoRestricted
-		}
-
-		if strings.Contains(reasonLower, "members") || strings.Contains(reasonLower, "membership") {
-			return yt.ErrorMembersOnly
-		}
-
-		if strings.Contains(reasonLower, "premium") {
-			return yt.ErrorPremiumOnly
-		}
-
-		if strings.Contains(reasonLower, "copyright") {
-			return yt.ErrorCopyright
-		}
-
-		if reason != "" {
-			return fmt.Sprintf(yt.ErrorUnplayableReason, reason)
-		}
-		return yt.ErrorUnplayable
-
-	case "ERROR":
-
-		if strings.Contains(reasonLower, "unavailable") {
-			return yt.ErrorDeletedVideo
-		}
-		if reason != "" {
-			return fmt.Sprintf(yt.ErrorUnavailableReason, reason)
-		}
-		return yt.ErrorUnavailable
-
-	case "CONTENT_CHECK_REQUIRED":
-		return yt.ErrorContentCheck
-
-	default:
-
-		if reason != "" {
-			return fmt.Sprintf(yt.ErrorUnplayableReason, reason)
-		}
-		return yt.ErrorUnavailable
-	}
 }

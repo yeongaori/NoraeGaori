@@ -562,12 +562,12 @@ func enqueueAvailable(guildID string, songs []*youtube.Song, results []youtube.B
 		result := &results[i]
 		song := songs[result.Index]
 
-		if !result.Available && ytdlpUpdater.IsDefinitiveUnavailable(result.Error) {
+		if !result.Available && (result.Restriction.IsDefinitive() || ytdlpUpdater.IsDefinitiveUnavailable(result.Error)) {
 			logger.Debugf("Skipping definitively unavailable: %s - %s",
 				song.Title, result.Error)
 			outcome.skipped++
 			outcome.skippedSongs = append(outcome.skippedSongs, skippedSong{
-				Title: song.Title, URL: song.URL, Thumbnail: song.Thumbnail, Error: result.Error,
+				Title: song.Title, URL: song.URL, Thumbnail: song.Thumbnail, Error: result.Error, Restriction: result.Restriction,
 			})
 			continue
 		}
