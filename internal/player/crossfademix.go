@@ -86,8 +86,8 @@ func (cs *crossfadeState) refetchNextStream(player *GuildPlayer) {
 			previous.stream.Stop()
 		}
 		if cs.bAborted.Load() {
-			if orphan := cs.bRefetch.Swap(nil); orphan != nil {
-				orphan.stream.Stop()
+			if pending := cs.bRefetch.Swap(nil); pending != nil {
+				pending.stream.Stop()
 			}
 		}
 	}()
