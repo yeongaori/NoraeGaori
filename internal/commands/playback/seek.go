@@ -97,11 +97,13 @@ func HandleSeek(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return nil
 	}
 
+	discord.DeferResponse(s, i)
+
 	if err := player.Seek(i.GuildID, posMs); errors.Is(err, player.ErrNotPlaying) {
-		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Music.NotPlayingOrLoading)
+		discord.UpdateErrorEmbed(s, i, messages.T(i.GuildID).Music.NotPlayingOrLoading)
 		return nil
 	} else if err != nil {
-		discord.RespondErrorEmbed(s, i, fmt.Sprintf(messages.T(i.GuildID).Music.SeekFailed, err))
+		discord.UpdateErrorEmbed(s, i, fmt.Sprintf(messages.T(i.GuildID).Music.SeekFailed, err))
 		return err
 	}
 
@@ -112,6 +114,6 @@ func HandleSeek(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 			messages.FormatDuration(posMs/1000),
 			currentSong.Duration),
 	)
-	discord.RespondEmbed(s, i, embed)
+	_ = discord.UpdateResponseEmbed(s, i, embed)
 	return nil
 }

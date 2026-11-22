@@ -1,10 +1,60 @@
 package playback_test
 
 import (
+	"net/http"
+	"strings"
 	"testing"
 
+	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/commands/playback"
+	"noraegaori/internal/messages"
+	"noraegaori/internal/player"
+	"noraegaori/tests/testutil/commandtest"
+	"noraegaori/tests/testutil/discordtest"
+	"noraegaori/tests/testutil/queuetest"
 )
+
+func TestSeekDefersResponse(t *testing.T) {
+	fixture := commandtest.NewFixture(t, []string{commandtest.CallerID}, queuetest.SongsBy(commandtest.CallerID, 1)...)
+	interaction := discordtest.SlashInteraction(commandtest.GuildID, "seek", discordtest.Member(commandtest.GuildID, commandtest.CallerID),
+		discordtest.StringOption("position", "0:30"))
+
+	if err := playback.HandleSeek(fixture.Session, interaction); err != nil {
+		t.Errorf("the handler returned %v, want nil", err)
+	}
+
+	requests := fixture.Requests()
+	commandtest.WantReplyText(t, requests, messages.T(commandtest.GuildID).Music.NotPlayingOrLoading)
+	if got, want := discordtest.ResponseType(&requests[0]), discordgo.InteractionResponseDeferredChannelMessageWithSource; got != want {
+		t.Errorf("first response type = %d, want %d", got, want)
+	}
+	wantDeferredEdit(t, requests)
+}
+
+func TestSeekEditsSuccess(t *testing.T) {
+	fixture := commandtest.NewFixture(t, []string{commandtest.CallerID}, queuetest.SongsBy(commandtest.CallerID, 1)...)
+	player.GetPlayer(commandtest.GuildID).Playing = true
+	t.Cleanup(func() { player.DeletePlayer(commandtest.GuildID) })
+	interaction := discordtest.SlashInteraction(commandtest.GuildID, "seek", discordtest.Member(commandtest.GuildID, commandtest.CallerID),
+		discordtest.StringOption("position", "0:30"))
+
+	if err := playback.HandleSeek(fixture.Session, interaction); err != nil {
+		t.Errorf("the handler returned %v, want nil", err)
+	}
+
+	requests := fixture.Requests()
+	commandtest.WantReplyText(t, requests, messages.T(commandtest.GuildID).Music.SeekedTitle)
+	wantDeferredEdit(t, requests)
+}
+
+func wantDeferredEdit(t *testing.T, requests []discordtest.Request) {
+	t.Helper()
+
+	last := commandtest.LastRequest(t, requests)
+	if last.Method != http.MethodPatch || !strings.HasSuffix(last.Path, "/messages/@original") {
+		t.Errorf("last request = %s %s, want an edit of the deferred reply", last.Method, last.Path)
+	}
+}
 
 func TestParseSeekPosition(t *testing.T) {
 	valid := []struct {
