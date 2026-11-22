@@ -75,11 +75,18 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	logger.Debugf("Executing command: %s (user: %s, guild: %s)",
 		cmdName, member.User.Username, i.GuildID)
 
+	defer discord.TrackAnswers(i)()
+
 	if err := recovery.Run(cmdName, func() error {
 		return cmd.Handler(s, i)
 	}); err != nil {
 		logger.Errorf("Command %s failed: %v", cmdName, err)
-		discord.RespondErrorEmbed(s, i, fmt.Sprintf(messages.T(i.GuildID).Errors.CommandExecutionError, err))
+		text := fmt.Sprintf(messages.T(i.GuildID).Errors.CommandExecutionError, err)
+		if discord.IsDeferred(i) {
+			discord.UpdateErrorEmbed(s, i, text)
+		} else if !discord.HasAnswered(i) {
+			discord.RespondErrorEmbed(s, i, text)
+		}
 	}
 }
 
@@ -163,16 +170,18 @@ func runTextCommand(s *discordgo.Session, m *discordgo.MessageCreate, member *di
 	}
 
 	defer discord.RegisterResponder(pseudoInteraction.Token, messageResponder)()
+	defer discord.TrackAnswers(pseudoInteraction)()
 
 	if err := recovery.Run(cmd.Name, func() error {
 		return cmd.Handler(s, pseudoInteraction)
 	}); err != nil {
 		logger.Errorf("Text command %s failed: %v", cmd.Name, err)
+		text := fmt.Sprintf(messages.T(m.GuildID).Errors.CommandExecutionError, err)
 
-		if messageResponder.Message == nil {
-			embed := messages.CreateErrorEmbed(messages.T(m.GuildID).Titles.Error, fmt.Sprintf(messages.T(m.GuildID).Errors.CommandExecutionError, err))
-
-			replyErrorEmbed(s, m, embed)
+		if discord.IsDeferred(pseudoInteraction) {
+			discord.UpdateErrorEmbed(s, pseudoInteraction, text)
+		} else if messageResponder.Message == nil {
+			replyErrorEmbed(s, m, messages.CreateErrorEmbed(messages.T(m.GuildID).Titles.Error, text))
 		}
 	}
 }

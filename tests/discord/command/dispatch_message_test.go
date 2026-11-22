@@ -241,6 +241,61 @@ func TestHandleMessageReportsPanic(t *testing.T) {
 	wantChannelReply(t, &sent[0], "probepanic panicked")
 }
 
+func TestHandleInteractionQuietOnReply(t *testing.T) {
+	session, requests := dispatchSession(t)
+	called := registerProbe(t, "probereply", false, func(s *discordgo.Session, i *discordgo.InteractionCreate) error {
+		discord.RespondEmbed(s, i, &discordgo.MessageEmbed{Title: "partial"})
+		return errors.New("probe failed after replying")
+	})
+
+	command.HandleInteraction(session, discordtest.SlashInteraction(dispatchGuildID, "probereply", discordtest.Member(dispatchGuildID, "plain")))
+
+	if !*called {
+		t.Error("the handler did not run")
+	}
+	if sent := requests(); len(sent) != 1 {
+		t.Errorf("sent %d requests, want only the handler's own reply", len(sent))
+	}
+}
+
+func deferringPanicHandler(s *discordgo.Session, i *discordgo.InteractionCreate) error {
+	discord.DeferResponse(s, i)
+	return panickingHandler(s, i)
+}
+
+func TestHandleInteractionEditsAfterDefer(t *testing.T) {
+	session, requests := dispatchSession(t)
+	registerProbe(t, "probedefer", false, deferringPanicHandler)
+
+	command.HandleInteraction(session, discordtest.SlashInteraction(dispatchGuildID, "probedefer", discordtest.Member(dispatchGuildID, "plain")))
+
+	sent := requests()
+	last := &sent[len(sent)-1]
+	if last.Method != http.MethodPatch || !strings.HasSuffix(last.Path, "/messages/@original") {
+		t.Errorf("last request = %s %s, want an edit of the deferred reply", last.Method, last.Path)
+	}
+	if text := discordtest.EmbedText(discordtest.ReplyEmbed(t, last)); !strings.Contains(text, "probedefer panicked") {
+		t.Errorf("the reply %q does not contain %q", text, "probedefer panicked")
+	}
+}
+
+func TestHandleMessageEditsAfterDefer(t *testing.T) {
+	session, requests := dispatchSession(t)
+	registerProbe(t, "probedefer", false, deferringPanicHandler)
+	registerProbeAlias(t, "probedefer", "probedefer")
+
+	command.HandleMessage(session, textMessage("!probedefer"))
+
+	sent := requests()
+	last := &sent[len(sent)-1]
+	if last.Method != http.MethodPatch || !strings.HasPrefix(last.Path, "/channels/222/messages/") {
+		t.Errorf("last request = %s %s, want an edit of the loading message", last.Method, last.Path)
+	}
+	if text := discordtest.EmbedText(discordtest.ReplyEmbed(t, last)); !strings.Contains(text, "probedefer panicked") {
+		t.Errorf("the reply %q does not contain %q", text, "probedefer panicked")
+	}
+}
+
 func TestHandleMessageQuietOnReply(t *testing.T) {
 	session, requests := dispatchSession(t)
 	called := registerProbe(t, "probereply", false, func(s *discordgo.Session, i *discordgo.InteractionCreate) error {

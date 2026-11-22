@@ -122,6 +122,65 @@ func TestReplyHelpersPaths(t *testing.T) {
 	})
 }
 
+func TestTrackAnswers(t *testing.T) {
+	embed := &discordgo.MessageEmbed{Title: "answer"}
+	cases := []struct {
+		name         string
+		respond      func(s *discordgo.Session, i *discordgo.InteractionCreate)
+		wantAnswered bool
+		wantDeferred bool
+	}{
+		{name: "RespondEmbed", respond: func(s *discordgo.Session, i *discordgo.InteractionCreate) { discord.RespondEmbed(s, i, embed) }, wantAnswered: true},
+		{name: "RespondEphemeral", respond: func(s *discordgo.Session, i *discordgo.InteractionCreate) { _ = discord.RespondEphemeral(s, i, embed) }, wantAnswered: true},
+		{name: "UpdatePanel", respond: func(s *discordgo.Session, i *discordgo.InteractionCreate) { _ = discord.UpdatePanel(s, i, embed, nil) }, wantAnswered: true},
+		{name: "SendPanel", respond: func(s *discordgo.Session, i *discordgo.InteractionCreate) { _, _ = discord.SendPanel(s, i, embed, nil) }, wantAnswered: true},
+		{name: "DeferResponse", respond: func(s *discordgo.Session, i *discordgo.InteractionCreate) { discord.DeferResponse(s, i) }, wantDeferred: true},
+		{
+			name: "DeferResponse then UpdateResponseEmbed",
+			respond: func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+				discord.DeferResponse(s, i)
+				_ = discord.UpdateResponseEmbed(s, i, embed)
+			},
+			wantAnswered: true,
+		},
+		{
+			name: "DeferResponse then UpdateResponsePanel",
+			respond: func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+				discord.DeferResponse(s, i)
+				_ = discord.UpdateResponsePanel(s, i, embed, nil)
+			},
+			wantAnswered: true,
+		},
+	}
+
+	for i := range cases {
+		testCase := &cases[i]
+		t.Run(testCase.name, func(t *testing.T) {
+			session, _ := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
+			ic := replyInteraction(false)
+			check := func(wantAnswered, wantDeferred bool) {
+				t.Helper()
+				if got := discord.HasAnswered(ic); got != wantAnswered {
+					t.Errorf("%s: HasAnswered = %v, want %v", testCase.name, got, wantAnswered)
+				}
+				if got := discord.IsDeferred(ic); got != wantDeferred {
+					t.Errorf("%s: IsDeferred = %v, want %v", testCase.name, got, wantDeferred)
+				}
+			}
+
+			testCase.respond(session, ic)
+			check(false, false)
+
+			release := discord.TrackAnswers(ic)
+			testCase.respond(session, ic)
+			check(testCase.wantAnswered, testCase.wantDeferred)
+
+			release()
+			check(false, false)
+		})
+	}
+}
+
 func TestUpdateResponseEmbedPaths(t *testing.T) {
 	embed := &discordgo.MessageEmbed{Title: "final"}
 

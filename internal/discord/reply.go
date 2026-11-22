@@ -3,17 +3,57 @@ package discord
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/bwmarrin/discordgo"
 	"noraegaori/internal/logger"
 	"noraegaori/internal/messages"
 )
 
+type answerState int
+
+const (
+	answerDeferred answerState = iota + 1
+	answerReplied
+)
+
+var answeredInteractions sync.Map
+
+func TrackAnswers(i *discordgo.InteractionCreate) func() {
+	answeredInteractions.Store(i.Token, answerState(0))
+	return func() {
+		answeredInteractions.Delete(i.Token)
+	}
+}
+
+func HasAnswered(i *discordgo.InteractionCreate) bool {
+	state, _ := answeredInteractions.Load(i.Token)
+	return state == answerReplied
+}
+
+func IsDeferred(i *discordgo.InteractionCreate) bool {
+	state, _ := answeredInteractions.Load(i.Token)
+	return state == answerDeferred
+}
+
+func markReplied(i *discordgo.InteractionCreate) {
+	if _, ok := answeredInteractions.Load(i.Token); ok {
+		answeredInteractions.Store(i.Token, answerReplied)
+	}
+}
+
+func markDeferred(i *discordgo.InteractionCreate) {
+	if _, ok := answeredInteractions.Load(i.Token); ok {
+		answeredInteractions.Store(i.Token, answerDeferred)
+	}
+}
+
 func IsMessageCommand(i *discordgo.InteractionCreate) bool {
 	return strings.HasPrefix(i.Token, "message_")
 }
 
 func RespondEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) {
+	markReplied(i)
 	if IsMessageCommand(i) {
 		if mr, ok := messageResponders.Load(i.Token); ok {
 			mr.(*MessageResponse).SendEmbed(embed)
@@ -33,6 +73,7 @@ func RespondErrorEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, tex
 }
 
 func RespondEphemeral(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, components ...discordgo.MessageComponent) error {
+	markReplied(i)
 	return s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
@@ -47,6 +88,7 @@ func UpdatePanel(s *discordgo.Session, i *discordgo.InteractionCreate, embed *di
 	if components == nil {
 		components = []discordgo.MessageComponent{}
 	}
+	markReplied(i)
 	return s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseUpdateMessage,
 		Data: &discordgo.InteractionResponseData{
@@ -57,6 +99,7 @@ func UpdatePanel(s *discordgo.Session, i *discordgo.InteractionCreate, embed *di
 }
 
 func SendPanel(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, components []discordgo.MessageComponent) (*discordgo.Message, error) {
+	markReplied(i)
 	if IsMessageCommand(i) {
 		if mr, ok := messageResponders.Load(i.Token); ok {
 			return mr.(*MessageResponse).SendPanel(embed, components)
@@ -74,6 +117,7 @@ func SendPanel(s *discordgo.Session, i *discordgo.InteractionCreate, embed *disc
 }
 
 func DeferResponse(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	markDeferred(i)
 	if IsMessageCommand(i) {
 
 		if mr, ok := messageResponders.Load(i.Token); ok {
@@ -116,6 +160,7 @@ func FollowUpEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *
 }
 
 func UpdateResponseEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error {
+	markReplied(i)
 	if IsMessageCommand(i) {
 
 		if mr, ok := messageResponders.Load(i.Token); ok {
@@ -143,6 +188,7 @@ func UpdateErrorEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, text
 }
 
 func UpdateResponsePanel(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, components []discordgo.MessageComponent) error {
+	markReplied(i)
 	if IsMessageCommand(i) {
 
 		if mr, ok := messageResponders.Load(i.Token); ok {
