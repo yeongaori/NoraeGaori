@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -30,6 +31,9 @@ var (
 	resumeAfterReconnect = resumePlayers
 	resumeWaitingPlayers = player.ResumeAfterReconnect
 	reconnectResumeDelay = 2 * time.Second
+	registerDispatcher   = vote.RegisterDispatcher
+	startRPC             = rpc.UpdateRPC
+	readyOnce            sync.Once
 )
 
 const closeAuthenticationFailed = 4004
@@ -97,19 +101,21 @@ func onReady(s *discordgo.Session, r *discordgo.Ready) {
 	logger.Infof("Logged in as %s#%s (ID: %s)", r.User.Username, r.User.Discriminator, r.User.ID)
 	logger.Infof("Connected to %d guilds", len(r.Guilds))
 
-	commands.InitializeCommands()
+	readyOnce.Do(func() {
+		commands.InitializeCommands()
 
-	player.SetOnSongStart(vote.CancelSkipVotes)
-	player.SetOnPlaybackEnded(vote.CancelOnPlaybackEnd)
-	command.SetBeforeCommand(player.ReconcileState)
+		player.SetOnSongStart(vote.CancelSkipVotes)
+		player.SetOnPlaybackEnded(vote.CancelOnPlaybackEnd)
+		command.SetBeforeCommand(player.ReconcileState)
 
-	vote.RegisterDispatcher(s)
+		registerDispatcher(s)
+	})
 
 	if err := command.SyncSlashCommands(s); err != nil {
 		logger.Errorf("Failed to register slash commands: %v", err)
 	}
 
-	go rpc.UpdateRPC(s)
+	go startRPC(s)
 
 	logger.Info("Bot is ready and operational")
 }

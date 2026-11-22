@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -14,6 +16,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"noraegaori/tests/testutil"
+	"noraegaori/tests/testutil/discordtest"
 	"noraegaori/tests/testutil/logtest"
 
 	"noraegaori/internal/app"
@@ -22,6 +25,23 @@ import (
 	"noraegaori/internal/queue"
 	"noraegaori/tests/testutil/dbtest"
 )
+
+func TestOnReadyRegistersOnce(t *testing.T) {
+	*app.HookReadyOnce = sync.Once{}
+	t.Cleanup(func() { *app.HookReadyOnce = sync.Once{} })
+	calls := 0
+	testutil.Swap(t, app.HookRegisterDispatcher, func(*discordgo.Session) { calls++ })
+	testutil.Swap(t, app.HookStartRPC, func(*discordgo.Session) {})
+	session, _ := discordtest.StubAPI(t, discordtest.Status(http.StatusOK))
+	session.State.User = &discordgo.User{ID: "bot"}
+
+	app.HookOnReady(session, &discordgo.Ready{User: session.State.User})
+	app.HookOnReady(session, &discordgo.Ready{User: session.State.User})
+
+	if calls != 1 {
+		t.Errorf("registered the vote dispatcher %d times, want 1", calls)
+	}
+}
 
 func TestOnGuildDeleteDropsPlayer(t *testing.T) {
 	const guildID = "removed-guild"
