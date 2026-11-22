@@ -26,7 +26,7 @@ func Initialize() error {
 	logger.Debugf("Opening database at: %s", dbPath)
 
 	var err error
-	DB, err = sql.Open("sqlite", fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)", dbPath))
+	DB, err = sql.Open("sqlite", fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=synchronous(NORMAL)&_txlock=immediate", dbPath))
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
@@ -179,6 +179,17 @@ func runMigrations() error {
 		}
 	}
 
+	return deleteSongsWithoutQueue()
+}
+
+func deleteSongsWithoutQueue() error {
+	result, err := DB.Exec(`DELETE FROM songs WHERE guild_id NOT IN (SELECT guild_id FROM queues)`)
+	if err != nil {
+		return fmt.Errorf("failed to delete songs without a queue: %w", err)
+	}
+	if deleted, _ := result.RowsAffected(); deleted > 0 {
+		logger.Infof("Deleted %d songs without a queue", deleted)
+	}
 	return nil
 }
 

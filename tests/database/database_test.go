@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func useTestDB(t *testing.T, db *sql.DB) {
@@ -132,6 +133,89 @@ func TestInitializeEnablesWAL(t *testing.T) {
 	}
 }
 
+func TestInitializeEnforcesForeignKeys(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Cleanup(func() {
+		database.Close()
+		database.DB = nil
+	})
+
+	if err := database.Initialize(); err != nil {
+		t.Fatalf("Initialize returned %v, want nil", err)
+	}
+
+	var foreignKeys int
+	if err := database.DB.QueryRow("PRAGMA foreign_keys").Scan(&foreignKeys); err != nil {
+		t.Fatalf("failed to read foreign_keys: %v", err)
+	}
+	if foreignKeys != 1 {
+		t.Errorf("got foreign_keys %d, want 1 so deleting a queue also deletes its songs", foreignKeys)
+	}
+
+	var synchronous int
+	if err := database.DB.QueryRow("PRAGMA synchronous").Scan(&synchronous); err != nil {
+		t.Fatalf("failed to read synchronous: %v", err)
+	}
+	if synchronous != 1 {
+		t.Errorf("got synchronous %d, want 1 so WAL commits skip the extra fsync", synchronous)
+	}
+
+	_, err := database.DB.Exec(`INSERT INTO songs (guild_id, url, title, requested_by_id, requested_by_tag, queue_position)
+		VALUES (?, ?, ?, ?, ?, 0)`, "queueless-guild", "queueless-guild", "queueless-guild", "queueless-guild", "queueless-guild")
+	if err == nil {
+		t.Error("a song without a queue was inserted, want a foreign key error")
+	}
+}
+
+func TestInitializeLocksTransactionsEarly(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Cleanup(func() {
+		database.Close()
+		database.DB = nil
+	})
+
+	if err := database.Initialize(); err != nil {
+		t.Fatalf("Initialize returned %v, want nil", err)
+	}
+
+	first, err := database.DB.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	began := make(chan *sql.Tx, 1)
+	go func() {
+		second, err := database.DB.Begin()
+		if err != nil {
+			began <- nil
+			return
+		}
+		began <- second
+	}()
+
+	select {
+	case second := <-began:
+		if second != nil {
+			_ = second.Rollback()
+		}
+		_ = first.Rollback()
+		t.Fatal("a second transaction began while the first was open, want it to wait for the write lock")
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	if err := first.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case second := <-began:
+		if second == nil {
+			t.Fatal("the second transaction never began after the first ended")
+		}
+		_ = second.Rollback()
+	case <-time.After(2 * time.Second):
+		t.Fatal("the second transaction never began after the first ended")
+	}
+}
+
 func TestInitializeCreatesSchema(t *testing.T) {
 	t.Chdir(t.TempDir())
 	t.Cleanup(func() {
@@ -201,6 +285,38 @@ func TestRunMigrationsAddsColumns(t *testing.T) {
 	}
 
 	assertMigrated(t, db)
+}
+
+func TestRunMigrationsDeletesSongsWithoutQueue(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "legacy.sqlite")
+	createLegacySchema(t, dbPath)
+
+	db := openTestDB(t, "file:"+dbPath)
+	useTestDB(t, db)
+	if _, err := db.Exec(`INSERT INTO queues (guild_id, text_channel_id, voice_channel_id) VALUES (?, ?, ?)`,
+		"kept-guild", "kept-guild", "kept-guild"); err != nil {
+		t.Fatalf("failed to seed queue state: %v", err)
+	}
+	for i, guildID := range []string{"kept-guild", "queueless-guild"} {
+		if _, err := db.Exec(`INSERT INTO songs (guild_id, url, title, queue_position) VALUES (?, ?, ?, 0)`,
+			guildID, guildID, guildID); err != nil {
+			t.Fatalf("failed to seed song %d: %v", i, err)
+		}
+	}
+
+	if err := database.HookRunMigrations(); err != nil {
+		t.Fatalf("runMigrations returned %v, want nil", err)
+	}
+
+	for guildID, want := range map[string]int{"kept-guild": 1, "queueless-guild": 0} {
+		var got int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM songs WHERE guild_id = ?`, guildID).Scan(&got); err != nil {
+			t.Fatalf("failed to count songs: %v", err)
+		}
+		if got != want {
+			t.Errorf("got %d songs for %s, want %d", got, guildID, want)
+		}
+	}
 }
 
 func TestRunMigrationsDefaults(t *testing.T) {
