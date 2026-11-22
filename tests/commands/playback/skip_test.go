@@ -100,15 +100,21 @@ func TestSkipLastEndsStopVote(t *testing.T) {
 	queueEnded := messages.T(guildID).Votes.QueueEnded
 	deadline := time.Now().Add(2 * time.Second)
 	for {
+		hasEnded, hasCleared := false, false
 		sent := requests()
 		for i := range sent {
 			request := &sent[i]
-			if strings.Contains(string(request.RawBody), queueEnded) {
-				return
-			}
+			hasEnded = hasEnded || strings.Contains(string(request.RawBody), queueEnded)
+			hasCleared = hasCleared || (request.Method == http.MethodDelete && strings.HasSuffix(request.Path, "/reactions"))
+		}
+		if hasEnded && hasCleared {
+			return
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("the stop vote was never ended with %q after the queue emptied", queueEnded)
+			if !hasEnded {
+				t.Fatalf("the stop vote was never ended with %q after the queue emptied", queueEnded)
+			}
+			t.Fatal("the stop vote's reactions were never cleared")
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
