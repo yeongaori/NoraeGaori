@@ -42,6 +42,7 @@ var HookNewAvailabilityPool = newAvailabilityPool
 var HookParseRestriction = parseRestriction
 var HookParseYouTubeURL = parseYouTubeURL
 var HookResetCache = resetCache
+var HookRetryWithBackoff = retryWithBackoff
 var HookRunYtDlpAvailability = &runYtDlpAvailability
 var HookSaveAvailability = saveAvailability
 var HookSaveVersionResult = saveVersionResult

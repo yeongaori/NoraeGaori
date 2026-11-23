@@ -129,8 +129,6 @@ func retryWithBackoff(operation func() error, operationName string) error {
 		errorMsg := strings.ToLower(err.Error())
 		isRetryable := strings.Contains(errorMsg, "network") ||
 			strings.Contains(errorMsg, "timeout") ||
-			strings.Contains(errorMsg, "rate limit") ||
-			strings.Contains(errorMsg, "too many requests") ||
 			strings.Contains(errorMsg, "connection") ||
 			strings.Contains(errorMsg, "temporary failure")
 

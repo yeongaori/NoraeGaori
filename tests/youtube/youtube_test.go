@@ -14,6 +14,21 @@ import (
 	"noraegaori/tests/testutil"
 )
 
+func TestRetryWithBackoffSkipsRateLimits(t *testing.T) {
+	for _, err := range []error{errors.New("HTTP Error 429: Too Many Requests"), youtube.ErrRateLimited} {
+		calls := 0
+
+		_ = youtube.HookRetryWithBackoff(func() error {
+			calls++
+			return err
+		}, "probe")
+
+		if calls != 1 {
+			t.Errorf("called %d times, want 1 for a rate limit error", calls)
+		}
+	}
+}
+
 func useVersionManager(t *testing.T) {
 	t.Helper()
 
