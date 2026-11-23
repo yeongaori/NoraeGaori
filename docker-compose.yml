@@ -10,6 +10,7 @@ services:
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
       - DEBUG_MODE=${DEBUG_MODE:-false}
       - DISCORDGO_DEBUG=${DISCORDGO_DEBUG:-false}
+      - GOMEMLIMIT=${GOMEMLIMIT:-320MiB}
 
     # Mount volumes for persistence
     volumes:
