@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
+	"noraegaori/internal/discord"
 )
 
 const defaultResponseBody = `{"id":"333","username":"fetched-user","channel_id":"222","user":{"id":"fetched"},"roles":["fetched-role"]}`
@@ -71,6 +72,7 @@ func StubAPIResponder(t *testing.T, respond func(*http.Request) (int, string)) (
 	if err != nil {
 		t.Fatalf("discordgo.New returned %v, want nil", err)
 	}
+	session.MaxRestRetries = discord.RequestRetries
 
 	return session, func() []Request {
 		mu.Lock()

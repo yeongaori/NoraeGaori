@@ -14,6 +14,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/gorilla/websocket"
 	"noraegaori/internal/commands"
+	"noraegaori/internal/discord"
 	"noraegaori/internal/discord/command"
 	"noraegaori/internal/logger"
 	"noraegaori/internal/player"
@@ -45,6 +46,7 @@ func Start(token string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create Discord session: %w", err)
 	}
+	session.MaxRestRetries = discord.RequestRetries
 
 	if os.Getenv("DISCORDGO_DEBUG") == "true" {
 		session.LogLevel = discordgo.LogDebug

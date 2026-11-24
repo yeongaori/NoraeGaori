@@ -10,6 +10,8 @@ import (
 	"noraegaori/internal/messages"
 )
 
+const RequestRetries = 1
+
 type answerState int
 
 const (
