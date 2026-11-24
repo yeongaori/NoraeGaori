@@ -81,7 +81,7 @@ func TestCreateSettingModalEmpty(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s modal component is %T, want discordgo.TextInput", check.key, row.Components[0])
 		}
-		if input.Required != check.required {
+		if input.Required == nil || *input.Required != check.required {
 			t.Errorf("%s modal input required=%v, want %v", check.key, input.Required, check.required)
 		}
 	}

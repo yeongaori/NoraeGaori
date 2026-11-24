@@ -48,6 +48,7 @@ func stubReplies(t *testing.T, postStatuses []int, recent string) *replyStub {
 		return http.StatusOK, `{"id":"1000","channel_id":"c"}`
 	})
 	session.State.User = &discordgo.User{ID: "bot"}
+	session.MaxRestRetries = 0
 
 	stub := &replyStub{
 		session:     session,

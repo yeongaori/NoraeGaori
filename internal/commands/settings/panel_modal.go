@@ -41,13 +41,14 @@ func settingModalField(guildID, label string, spec *settingSpec, current string)
 		}
 	}
 
+	isRequired := spec.kind != settingText
 	input := discordgo.TextInput{
 		CustomID:    modalValueID,
 		Label:       discord.TruncateRunes(label, modalLabelLimit),
 		Style:       discordgo.TextInputShort,
 		Placeholder: discord.TruncateRunes(settingHint(guildID, spec.key), modalPlaceholderLimit),
 		Value:       current,
-		Required:    spec.kind != settingText,
+		Required:    &isRequired,
 	}
 	if spec.kind == settingText {
 		input.MaxLength = int(spec.max)
