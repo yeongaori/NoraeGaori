@@ -85,7 +85,7 @@ func announceSystemJs(binary *Binary) {
 		logger.Infof("Using the system %s %s for yt-dlp", t.displayName, binary.Version)
 		return
 	}
-	logger.Warnf("Using the system %s %s for yt-dlp; install Deno for the best YouTube support", t.displayName, binary.Version)
+	logger.Warnf("Using the system %s %s for yt-dlp; install Deno for the best yt-dlp support", t.displayName, binary.Version)
 }
 
 func announceDownloadedJs(binary *Binary, results []probeResult, target *mirror.Platform) {

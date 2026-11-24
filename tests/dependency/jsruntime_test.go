@@ -58,7 +58,7 @@ func TestPrepareJsRuntimeSystemFirst(t *testing.T) {
 	if deno.calls.Load() != 0 {
 		t.Error("the mirrors were checked although a system runtime exists")
 	}
-	if !strings.Contains(read(), "Using the system Node.js 24.14.1 for yt-dlp; install Deno for the best YouTube support") {
+	if !strings.Contains(read(), "Using the system Node.js 24.14.1 for yt-dlp; install Deno for the best yt-dlp support") {
 		t.Errorf("got log %q, want the system-not-Deno warning", read())
 	}
 }
