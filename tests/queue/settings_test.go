@@ -1,6 +1,7 @@
 package queue_test
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"testing"
@@ -302,8 +303,8 @@ func TestReorderNoQueue(t *testing.T) {
 	if err := queue.DeleteQueue("guild1"); err != nil {
 		t.Fatalf("DeleteQueue: %v", err)
 	}
-	if err := queue.SwapSongs("guild1", 0, 1); err == nil {
-		t.Error("SwapSongs on missing queue should error")
+	if err := queue.SwapSongsByIDs("guild1", 1, 2); err == nil {
+		t.Error("SwapSongsByIDs on missing queue should error")
 	}
 	if err := queue.MoveSong("guild1", 0, 1); err == nil {
 		t.Error("MoveSong on missing queue should error")
@@ -339,17 +340,35 @@ func TestRemoveSongsByIDs(t *testing.T) {
 	}
 }
 
-func TestSkipToPosition(t *testing.T) {
+func TestSkipToSong(t *testing.T) {
 	setupTestDB(t)
 
 	guildID := "guild1"
 	seedSongs(t, guildID, 5)
-
-	if err := queue.SkipToPosition(guildID, 2); err != nil {
-		t.Fatalf("SkipToPosition: %v", err)
+	q, err := queue.GetQueue(guildID, true)
+	if err != nil {
+		t.Fatalf("GetQueue: %v", err)
 	}
 
-	q, err := queue.GetQueue(guildID, true)
+	if err := queue.SkipToSong(guildID, 0); !errors.Is(err, queue.ErrSongNotInQueue) {
+		t.Errorf("SkipToSong returned %v, want %v", err, queue.ErrSongNotInQueue)
+	}
+	if err := queue.SkipToSong(guildID, q.Songs[0].ID); !errors.Is(err, queue.ErrSongIsCurrent) {
+		t.Errorf("SkipToSong returned %v, want %v", err, queue.ErrSongIsCurrent)
+	}
+	unchanged, err := queue.GetQueue(guildID, true)
+	if err != nil {
+		t.Fatalf("GetQueue: %v", err)
+	}
+	if len(unchanged.Songs) != 5 {
+		t.Errorf("got %d songs for %s, want %d", len(unchanged.Songs), guildID, 5)
+	}
+
+	if err := queue.SkipToSong(guildID, q.Songs[2].ID); err != nil {
+		t.Fatalf("SkipToSong returned %v, want %v", err, nil)
+	}
+
+	q, err = queue.GetQueue(guildID, true)
 	if err != nil {
 		t.Fatalf("GetQueue: %v", err)
 	}

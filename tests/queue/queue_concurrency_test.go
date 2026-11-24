@@ -103,6 +103,10 @@ func TestConcurrentSwapAndMove(t *testing.T) {
 
 	guildID := "guild1"
 	seedSongs(t, guildID, 5)
+	seeded, err := queue.GetQueue(guildID, true)
+	if err != nil {
+		t.Fatalf("Failed to get queue: %v", err)
+	}
 
 	var wg sync.WaitGroup
 	for i := 0; i < 20; i++ {
@@ -110,7 +114,7 @@ func TestConcurrentSwapAndMove(t *testing.T) {
 		go func(idx int) {
 			defer wg.Done()
 			if idx%2 == 0 {
-				queue.SwapSongs(guildID, idx%5, (idx+2)%5)
+				queue.SwapSongsByIDs(guildID, seeded.Songs[idx%5].ID, seeded.Songs[(idx+2)%5].ID)
 			} else {
 				queue.MoveSong(guildID, idx%5, (idx+3)%5)
 			}

@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"errors"
 	"fmt"
 	"noraegaori/internal/discord"
 
@@ -29,7 +30,10 @@ func HandleSwap(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	song1Title := q.Songs[pos1].Title
 	song2Title := q.Songs[pos2].Title
 
-	if err := queue.SwapSongs(i.GuildID, pos1, pos2); err != nil {
+	if err := queue.SwapSongsByIDs(i.GuildID, q.Songs[pos1].ID, q.Songs[pos2].ID); errors.Is(err, queue.ErrSongIsCurrent) {
+		discord.RespondErrorEmbed(s, i, messages.T(i.GuildID).Queue.CannotSwapCurrent)
+		return nil
+	} else if err != nil {
 		discord.RespondErrorEmbed(s, i, fmt.Sprintf(messages.T(i.GuildID).Queue.SwapFailed, err))
 		return err
 	}

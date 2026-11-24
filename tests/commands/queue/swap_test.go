@@ -8,6 +8,7 @@ import (
 	queuecommand "noraegaori/internal/commands/queue"
 	"noraegaori/internal/messages"
 	"noraegaori/tests/testutil/commandtest"
+	"noraegaori/tests/testutil/discordtest"
 	"noraegaori/tests/testutil/queuetest"
 )
 
@@ -16,6 +17,30 @@ func TestSwap(t *testing.T) {
 		swapInputCases(),
 		swapQueueCases(),
 	))
+}
+
+func TestSwapUsesCheckedSongs(t *testing.T) {
+	caller, other := commandtest.CallerID, commandtest.OtherID
+	fixture := commandtest.NewFixture(t, nil, queuetest.Songs(other, caller, caller, other)...)
+	advanceQueueBehindCache(t)
+
+	_ = queuecommand.HandleSwap(fixture.Session,
+		discordtest.SlashInteraction(commandtest.GuildID, "swap", discordtest.Member(commandtest.GuildID, caller), swapOptions(2, 3)...))
+
+	commandtest.WantTitles("Song 3", "Song 2", "Song 4")(t, nil)
+}
+
+func TestSwapRefusesNewCurrentSong(t *testing.T) {
+	caller := commandtest.CallerID
+	fixture := commandtest.NewFixture(t, nil, queuetest.SongsBy(caller, 4)...)
+	commandtest.Playing(t)
+	advanceQueueBehindCache(t)
+
+	_ = queuecommand.HandleSwap(fixture.Session,
+		discordtest.SlashInteraction(commandtest.GuildID, "swap", discordtest.Member(commandtest.GuildID, caller), swapOptions(2, 3)...))
+
+	commandtest.WantReplyText(t, fixture.Requests(), messages.T(commandtest.GuildID).Queue.CannotSwapCurrent)
+	commandtest.WantTitles("Song 2", "Song 3", "Song 4")(t, nil)
 }
 
 func swapInputCases() []commandtest.Case {

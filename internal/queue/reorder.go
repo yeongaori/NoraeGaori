@@ -2,24 +2,18 @@ package queue
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
+	"slices"
 
 	"noraegaori/internal/database"
 	"noraegaori/internal/guild"
 	"noraegaori/internal/logger"
 )
 
-func SwapSongs(guildID string, pos1, pos2 int) error {
+func SwapSongsByIDs(guildID string, firstID, secondID int) error {
 	release := guild.AcquireLock(guildID)
 	defer release()
-
-	if err := checkPositions(guildID, pos1, pos2); err != nil {
-		return err
-	}
-
-	if pos1 == pos2 {
-		return nil
-	}
 
 	tx, err := database.DB.Begin()
 	if err != nil {
@@ -27,13 +21,21 @@ func SwapSongs(guildID string, pos1, pos2 int) error {
 	}
 	defer tx.Rollback()
 
-	song1ID, err := songIDAt(tx, guildID, pos1)
+	pos1, err := songPosition(tx, guildID, firstID)
 	if err != nil {
 		return err
 	}
 
-	song2ID, err := songIDAt(tx, guildID, pos2)
+	pos2, err := songPosition(tx, guildID, secondID)
 	if err != nil {
+		return err
+	}
+
+	if pos1 == pos2 {
+		return nil
+	}
+
+	if err := requireNotCurrent(tx, guildID, pos1, pos2); err != nil {
 		return err
 	}
 
@@ -41,21 +43,21 @@ func SwapSongs(guildID string, pos1, pos2 int) error {
 
 	_, err = tx.Exec(
 		`UPDATE songs SET queue_position = ? WHERE id = ?`,
-		tempPos, song1ID)
+		tempPos, firstID)
 	if err != nil {
 		return fmt.Errorf("failed to move song1 to temp: %w", err)
 	}
 
 	_, err = tx.Exec(
 		`UPDATE songs SET queue_position = ? WHERE id = ?`,
-		pos1, song2ID)
+		pos1, secondID)
 	if err != nil {
 		return fmt.Errorf("failed to move song2 to pos1: %w", err)
 	}
 
 	_, err = tx.Exec(
 		`UPDATE songs SET queue_position = ? WHERE id = ?`,
-		pos2, song1ID)
+		pos2, firstID)
 	if err != nil {
 		return fmt.Errorf("failed to move song1 to pos2: %w", err)
 	}
@@ -156,6 +158,41 @@ func checkPositions(guildID string, positions ...int) error {
 		}
 	}
 	return nil
+}
+
+func songPosition(tx *sql.Tx, guildID string, songID int) (int, error) {
+	var position int
+	err := tx.QueryRow(
+		`SELECT queue_position FROM songs WHERE guild_id = ? AND id = ?`,
+		guildID, songID,
+	).Scan(&position)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, ErrSongNotInQueue
+	}
+	return position, err
+}
+
+func requireNotCurrent(tx *sql.Tx, guildID string, positions ...int) error {
+	if !slices.Contains(positions, 0) {
+		return nil
+	}
+	isPlaying, err := isQueuePlaying(tx, guildID)
+	if err != nil {
+		return err
+	}
+	if isPlaying {
+		return ErrSongIsCurrent
+	}
+	return nil
+}
+
+func isQueuePlaying(tx *sql.Tx, guildID string) (bool, error) {
+	var isPlaying bool
+	err := tx.QueryRow(
+		`SELECT COALESCE(playing, 0) OR COALESCE(loading, 0) FROM queues WHERE guild_id = ?`,
+		guildID,
+	).Scan(&isPlaying)
+	return isPlaying, err
 }
 
 func songIDAt(tx *sql.Tx, guildID string, position int) (int, error) {

@@ -7,8 +7,32 @@ import (
 	queuecommand "noraegaori/internal/commands/queue"
 	"noraegaori/internal/messages"
 	"noraegaori/tests/testutil/commandtest"
+	"noraegaori/tests/testutil/discordtest"
 	"noraegaori/tests/testutil/queuetest"
 )
+
+func TestSkipToUsesCheckedSong(t *testing.T) {
+	caller := commandtest.CallerID
+	fixture := commandtest.NewFixture(t, []string{caller}, queuetest.SongsBy(caller, 5)...)
+	advanceQueueBehindCache(t)
+
+	_ = queuecommand.HandleSkipTo(fixture.Session,
+		discordtest.SlashInteraction(commandtest.GuildID, "skipto", discordtest.Member(commandtest.GuildID, caller), skipToOption(4)...))
+
+	commandtest.WantTitles("Song 4", "Song 5")(t, nil)
+}
+
+func TestSkipToRefusesNewCurrentSong(t *testing.T) {
+	caller := commandtest.CallerID
+	fixture := commandtest.NewFixture(t, []string{caller}, queuetest.SongsBy(caller, 3)...)
+	advanceQueueBehindCache(t)
+
+	_ = queuecommand.HandleSkipTo(fixture.Session,
+		discordtest.SlashInteraction(commandtest.GuildID, "skipto", discordtest.Member(commandtest.GuildID, caller), skipToOption(2)...))
+
+	commandtest.WantReplyText(t, fixture.Requests(), messages.T(commandtest.GuildID).Queue.SkipToCurrent)
+	commandtest.WantTitles("Song 2", "Song 3")(t, nil)
+}
 
 func TestSkipTo(t *testing.T) {
 	inVoice := []string{commandtest.CallerID}

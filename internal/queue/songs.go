@@ -12,6 +12,7 @@ import (
 )
 
 var ErrSongInQueue = errors.New("song already in queue")
+var ErrSongIsCurrent = errors.New("song is the current song")
 
 func CreateQueue(guildID, textChannelID, voiceChannelID string) error {
 	release := guild.AcquireLock(guildID)
@@ -324,7 +325,7 @@ func RemoveSong(guildID string, position int) error {
 	return nil
 }
 
-func SkipToPosition(guildID string, targetIndex int) error {
+func SkipToSong(guildID string, songID int) error {
 	release := guild.AcquireLock(guildID)
 	defer release()
 
@@ -333,6 +334,14 @@ func SkipToPosition(guildID string, targetIndex int) error {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
+
+	targetIndex, err := songPosition(tx, guildID, songID)
+	if err != nil {
+		return err
+	}
+	if targetIndex == 0 {
+		return ErrSongIsCurrent
+	}
 
 	rows, err := tx.Query(
 		`SELECT id FROM songs WHERE guild_id = ? AND queue_position < ? ORDER BY queue_position ASC`,

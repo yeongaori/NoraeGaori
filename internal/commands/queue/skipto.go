@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"errors"
 	"fmt"
 	"noraegaori/internal/discord"
 
@@ -43,7 +44,10 @@ func HandleSkipTo(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 
 	targetSong := q.Songs[position-1]
 
-	if err := queue.SkipToPosition(i.GuildID, position-1); err != nil {
+	if err := queue.SkipToSong(i.GuildID, targetSong.ID); errors.Is(err, queue.ErrSongIsCurrent) {
+		discord.UpdateErrorEmbed(s, i, messages.T(i.GuildID).Queue.SkipToCurrent)
+		return nil
+	} else if err != nil {
 		discord.UpdateErrorEmbed(s, i, fmt.Sprintf(messages.T(i.GuildID).Queue.SkipToFailed, err))
 		return err
 	}
@@ -55,18 +59,20 @@ func HandleSkipTo(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		}
 	}
 
-	embed := &discordgo.MessageEmbed{
-		Color: messages.ColorSuccess,
-		Title: messages.T(i.GuildID).Queue.SkipToCompleteTitle,
-		Description: fmt.Sprintf(messages.T(i.GuildID).Queue.SkipToCompleteDesc,
-			messages.FormatBoldMaskedLink(targetSong.Title, targetSong.URL)),
-		Fields: []*discordgo.MessageEmbedField{
-			{Name: messages.T(i.GuildID).Queue.SkipToSkippedSongs, Value: fmt.Sprintf(messages.T(i.GuildID).Queue.SkipToSongsCount, position-1), Inline: true},
-			{Name: messages.T(i.GuildID).Fields.Requester, Value: messages.EscapeMarkdown(targetSong.RequestedByTag), Inline: true},
-		},
-		Thumbnail: &discordgo.MessageEmbedThumbnail{URL: targetSong.Thumbnail},
-	}
-
-	_ = discord.UpdateResponseEmbed(s, i, embed)
+	_ = discord.UpdateResponseEmbed(s, i, skipToEmbed(i.GuildID, targetSong, position-1))
 	return nil
+}
+
+func skipToEmbed(guildID string, song *queue.Song, skipped int) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Color: messages.ColorSuccess,
+		Title: messages.T(guildID).Queue.SkipToCompleteTitle,
+		Description: fmt.Sprintf(messages.T(guildID).Queue.SkipToCompleteDesc,
+			messages.FormatBoldMaskedLink(song.Title, song.URL)),
+		Fields: []*discordgo.MessageEmbedField{
+			{Name: messages.T(guildID).Queue.SkipToSkippedSongs, Value: fmt.Sprintf(messages.T(guildID).Queue.SkipToSongsCount, skipped), Inline: true},
+			{Name: messages.T(guildID).Fields.Requester, Value: messages.EscapeMarkdown(song.RequestedByTag), Inline: true},
+		},
+		Thumbnail: &discordgo.MessageEmbedThumbnail{URL: song.Thumbnail},
+	}
 }

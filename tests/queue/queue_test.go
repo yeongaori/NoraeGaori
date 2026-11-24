@@ -1,6 +1,8 @@
 package queue_test
 
 import (
+	"errors"
+	"slices"
 	"testing"
 
 	"noraegaori/internal/queue"
@@ -135,45 +137,66 @@ func TestRemoveSong(t *testing.T) {
 	}
 }
 
-func TestSwapSongs(t *testing.T) {
-	setupTestDB(t)
+func queueTitles(t *testing.T, guildID string) []string {
+	t.Helper()
 
-	guildID := "guild1"
-	songs := []string{"Song A", "Song B", "Song C", "Song D"}
-	for _, title := range songs {
-		song := &queue.Song{
-			URL:            "https://youtube.com/watch?v=" + title,
-			Title:          title,
-			Duration:       "3:00",
-			RequestedByID:  "user1",
-			RequestedByTag: "User#1234",
-		}
-		if err := queue.AddSong(guildID, song, -1); err != nil {
-			t.Fatalf("Failed to add song: %v", err)
-		}
+	q, err := queue.GetQueue(guildID, true)
+	if err != nil {
+		t.Fatalf("GetQueue: %v", err)
 	}
+	titles := make([]string, 0, len(q.Songs))
+	for _, song := range q.Songs {
+		titles = append(titles, song.Title)
+	}
+	return titles
+}
 
-	testCases := []struct {
-		name      string
-		pos1      int
-		pos2      int
-		expectErr bool
+func TestSwapSongsByIDs(t *testing.T) {
+	titles := []string{"Song 1", "Song 2", "Song 3", "Song 4"}
+	cases := []struct {
+		name       string
+		first      int
+		second     int
+		isPlaying  bool
+		isLoading  bool
+		wantErr    error
+		wantTitles []string
 	}{
-		{"Swap valid positions", 0, 2, false},
-		{"Swap same position", 1, 1, false},
-		{"Swap out of bounds", 0, 100, true},
-		{"Swap negative position", -1, 1, true},
+		{name: "Swap valid songs", first: 0, second: 2, wantTitles: []string{"Song 3", "Song 2", "Song 1", "Song 4"}},
+		{name: "Swap the same song", first: 1, second: 1, wantTitles: titles},
+		{name: "Swap a missing song", first: 0, second: 4, wantErr: queue.ErrSongNotInQueue, wantTitles: titles},
+		{name: "Swap the current song while playing", first: 0, second: 1, isPlaying: true, wantErr: queue.ErrSongIsCurrent, wantTitles: titles},
+		{name: "Swap with the current song while playing", first: 1, second: 0, isPlaying: true, wantErr: queue.ErrSongIsCurrent, wantTitles: titles},
+		{name: "Swap the current song while loading", first: 0, second: 1, isLoading: true, wantErr: queue.ErrSongIsCurrent, wantTitles: titles},
+		{name: "Swap the current song while paused", first: 0, second: 1, wantTitles: []string{"Song 2", "Song 1", "Song 3", "Song 4"}},
 	}
 
-	for i := range testCases {
-		tc := &testCases[i]
-		t.Run(tc.name, func(t *testing.T) {
-			err := queue.SwapSongs(guildID, tc.pos1, tc.pos2)
-			if tc.expectErr && err == nil {
-				t.Error("Expected error but got none")
+	for i := range cases {
+		testCase := &cases[i]
+		t.Run(testCase.name, func(t *testing.T) {
+			guildID := "guild1"
+			seeded := queuetest.Seed(t, guildID, queuetest.SongsBy("user1", len(titles))...)
+			ids := make([]int, len(seeded.Songs)+1)
+			for i, song := range seeded.Songs {
+				ids[i] = song.ID
 			}
-			if !tc.expectErr && err != nil {
-				t.Errorf("Unexpected error: %v", err)
+			if testCase.isPlaying {
+				if err := queue.SetPlaying(guildID, true); err != nil {
+					t.Fatalf("failed to update the queue state: %v", err)
+				}
+			}
+			if testCase.isLoading {
+				if err := queue.SetLoading(guildID, true); err != nil {
+					t.Fatalf("failed to update the queue state: %v", err)
+				}
+			}
+
+			if err := queue.SwapSongsByIDs(guildID, ids[testCase.first], ids[testCase.second]); !errors.Is(err, testCase.wantErr) {
+				t.Errorf("SwapSongsByIDs returned %v, want %v", err, testCase.wantErr)
+			}
+
+			if got := queueTitles(t, guildID); !slices.Equal(got, testCase.wantTitles) {
+				t.Errorf("queue = %v, want %v", got, testCase.wantTitles)
 			}
 		})
 	}
